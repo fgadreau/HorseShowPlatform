@@ -1,6 +1,7 @@
 export type Organization = {
   id: string;
   name: string;
+  short_name: string | null;
   slug: string;
   description: string | null;
   primary_contact_name: string | null;
@@ -9,6 +10,8 @@ export type Organization = {
   city: string | null;
   state: string | null;
   country: string | null;
+  logo_url: string | null;
+  website_url: string | null;
   timezone: string;
   currency: string;
   tax_rate: number;
@@ -24,6 +27,7 @@ export type Show = {
   name: string;
   slug: string;
   description: string | null;
+  venue: string | null;
   start_date: string;
   end_date: string;
   location: string | null;
@@ -105,12 +109,55 @@ export type ClassRecord = {
   id: string;
   organization_id: string;
   show_id: string;
+  show_day_id: string | null;
   name: string;
   code: string | null;
+  arena: string | null;
+  pattern: string | null;
+  custom_pattern: Record<string, unknown> | null;
+  judge_name: string | null;
+  sort_order: number;
   entry_fee: number | null;
   status: "open" | "closed" | "running" | "finished";
   is_public: boolean;
   created_at: string;
+};
+
+export type ShowDay = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  day_date: string;
+  day_name: string | null;
+  day_number: number | null;
+  sort_order: number;
+  start_time: string | null;
+  end_time: string | null;
+  created_at: string;
+};
+
+export type ShowScoreClassSetup = {
+  class_id: string;
+  organization_id: string;
+  show_id: string;
+  show_day_id: string | null;
+  pattern: string | null;
+  custom_pattern: Record<string, unknown> | null;
+  runs: Array<Record<string, unknown>>;
+  schedule_details: Record<string, unknown>;
+  judges: Array<Record<string, unknown>>;
+  is_draw_imported: boolean;
+  started_at: string | null;
+  drag_interval: number | null;
+  drag_duration_minutes: number;
+  locked_at: string | null;
+  locked_by_user_id: string | null;
+  locked_by_label: string | null;
+  finalized: boolean;
+  finalized_at: string | null;
+  finalized_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Division = {
@@ -135,6 +182,7 @@ export type Entry = {
   rider_contact_id: string | null;
   payer_contact_id: string;
   status: "draft" | "pending_checkout" | "active" | "scratched_pending_refund" | "scratched" | "completed" | "cancelled";
+  entry_number: number | null;
   base_fee: number | null;
   total_fees: number | null;
   created_at: string;
@@ -143,6 +191,7 @@ export type Entry = {
 export type OrganizationInput = {
   name: string;
   slug: string;
+  short_name?: string;
   primary_contact_email?: string;
   timezone?: string;
   currency?: string;
@@ -154,7 +203,18 @@ export type ShowInput = {
   slug: string;
   start_date: string;
   end_date: string;
+  venue?: string;
   location?: string;
+  status?: Show["status"];
+};
+
+export type ShowUpdateInput = {
+  name?: string;
+  slug?: string;
+  start_date?: string;
+  end_date?: string;
+  venue?: string | null;
+  location?: string | null;
   status?: Show["status"];
 };
 
@@ -168,6 +228,15 @@ export type ContactInput = {
   barn_name?: string;
 };
 
+export type ContactUpdateInput = {
+  type?: Contact["type"];
+  first_name?: string;
+  last_name?: string;
+  email?: string | null;
+  phone?: string | null;
+  barn_name?: string | null;
+};
+
 export type HorseInput = {
   organization_id: string;
   name: string;
@@ -179,12 +248,41 @@ export type HorseInput = {
   registration_number?: string;
 };
 
+export type HorseUpdateInput = {
+  name?: string;
+  primary_owner_contact_id?: string;
+  breed?: string | null;
+  color?: string | null;
+  gender?: Horse["gender"];
+  birth_year?: number | null;
+  registration_number?: string | null;
+};
+
 export type ClassInput = {
   organization_id: string;
   show_id: string;
   name: string;
+  show_day_id?: string;
   code?: string;
+  arena?: string;
+  pattern?: string;
+  custom_pattern?: Record<string, unknown> | null;
+  judge_name?: string;
+  sort_order?: number;
   entry_fee?: number;
+};
+
+export type ClassUpdateInput = {
+  name?: string;
+  code?: string | null;
+  show_day_id?: string | null;
+  arena?: string | null;
+  pattern?: string | null;
+  custom_pattern?: Record<string, unknown> | null;
+  judge_name?: string | null;
+  sort_order?: number;
+  entry_fee?: number | null;
+  status?: ClassRecord["status"];
 };
 
 export type DivisionInput = {
@@ -194,6 +292,14 @@ export type DivisionInput = {
   name: string;
   level?: number;
   entry_fee?: number;
+};
+
+export type DivisionUpdateInput = {
+  class_id?: string;
+  show_id?: string;
+  name?: string;
+  level?: number | null;
+  entry_fee?: number | null;
 };
 
 export type EntryInput = {
@@ -206,4 +312,15 @@ export type EntryInput = {
   rider_contact_id?: string;
   payer_contact_id: string;
   base_fee?: number;
+};
+
+export type EntryUpdateInput = {
+  horse_id?: string;
+  division_id?: string;
+  owner_contact_id?: string;
+  rider_contact_id?: string | null;
+  payer_contact_id?: string;
+  status?: Entry["status"];
+  base_fee?: number | null;
+  total_fees?: number | null;
 };

@@ -12,6 +12,7 @@ import {
   Plus,
   RefreshCw,
   ShieldCheck,
+  Trophy,
   Users,
   UserRound,
 } from "lucide-react";
@@ -28,10 +29,18 @@ import {
   createOrganization,
   createShow,
   loadAppContext,
+  prepareShowScoreClassSetup,
   slugify,
+  updateClass,
+  updateContact,
+  updateDivision,
+  updateEntry,
+  updateHorse,
+  updateShow,
   type AppContext,
 } from "./services/supabaseServices";
-import type { ClassRecord, Contact, Division, Entry, Horse, Organization, Show } from "./types/domain";
+import type { ClassRecord, Contact, Division, Entry, Horse, Organization, Show, ShowDay, ShowScoreClassSetup } from "./types/domain";
+import { buildShowScoreRunsForClass } from "./services/showScoreAdapters";
 
 type ViewKey =
   | "overview"
@@ -39,6 +48,7 @@ type ViewKey =
   | "people"
   | "classes"
   | "entries"
+  | "scoring"
   | "billing"
   | "settings"
   | "my-horses"
@@ -63,6 +73,7 @@ const associationNavigation: NavItem[] = [
   { key: "people", labelKey: "people", icon: Users },
   { key: "classes", labelKey: "classes", icon: BookOpen },
   { key: "entries", labelKey: "entries", icon: ClipboardList },
+  { key: "scoring", labelKey: "scoring", icon: Trophy },
   { key: "billing", labelKey: "billing", icon: CircleDollarSign },
   { key: "settings", labelKey: "settings", icon: ShieldCheck },
 ];
@@ -205,9 +216,19 @@ export default function App() {
         setNotice({ tone: "success", message: "Show created." });
         await refreshContext();
       }}
+      onUpdateShow={async (id, input) => {
+        await updateShow(id, input);
+        setNotice({ tone: "success", message: "Show updated." });
+        await refreshContext();
+      }}
       onCreateContact={async (input) => {
         await createContact(input);
         setNotice({ tone: "success", message: "Contact created." });
+        await refreshContext();
+      }}
+      onUpdateContact={async (id, input) => {
+        await updateContact(id, input);
+        setNotice({ tone: "success", message: "Contact updated." });
         await refreshContext();
       }}
       onCreateHorse={async (input) => {
@@ -215,9 +236,19 @@ export default function App() {
         setNotice({ tone: "success", message: "Horse created." });
         await refreshContext();
       }}
+      onUpdateHorse={async (id, input) => {
+        await updateHorse(id, input);
+        setNotice({ tone: "success", message: "Horse updated." });
+        await refreshContext();
+      }}
       onCreateClass={async (input) => {
         await createClass(input);
         setNotice({ tone: "success", message: "Class created." });
+        await refreshContext();
+      }}
+      onUpdateClass={async (id, input) => {
+        await updateClass(id, input);
+        setNotice({ tone: "success", message: "Class updated." });
         await refreshContext();
       }}
       onCreateDivision={async (input) => {
@@ -225,9 +256,38 @@ export default function App() {
         setNotice({ tone: "success", message: "Division created." });
         await refreshContext();
       }}
+      onUpdateDivision={async (id, input) => {
+        await updateDivision(id, input);
+        setNotice({ tone: "success", message: "Division updated." });
+        await refreshContext();
+      }}
       onCreateEntry={async (input) => {
         await createEntry(input);
         setNotice({ tone: "success", message: "Entry draft created." });
+        await refreshContext();
+      }}
+      onPrepareShowScoreClass={async (classRecord) => {
+        if (!context) {
+          return;
+        }
+
+        try {
+          const setup = await prepareShowScoreClassSetup({
+            classRecord,
+            contacts: context.contacts,
+            divisions: context.divisions,
+            entries: context.entries,
+            horses: context.horses,
+          });
+          setNotice({ tone: "success", message: `ShowScore setup prepared with ${setup.runs.length} run${setup.runs.length === 1 ? "" : "s"}.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onUpdateEntry={async (id, input) => {
+        await updateEntry(id, input);
+        setNotice({ tone: "success", message: "Entry updated." });
         await refreshContext();
       }}
       onRefresh={() => refreshContext()}
@@ -386,8 +446,15 @@ function Dashboard({
   onCreateOrganization,
   onCreateShow,
   onLocaleChange,
+  onPrepareShowScoreClass,
   onRefresh,
   onSignOut,
+  onUpdateClass,
+  onUpdateContact,
+  onUpdateDivision,
+  onUpdateEntry,
+  onUpdateHorse,
+  onUpdateShow,
   onViewChange,
 }: {
   activeView: ViewKey;
@@ -406,13 +473,22 @@ function Dashboard({
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
+  onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
   onRefresh: () => void;
   onSignOut: () => void;
+  onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+  onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
+  onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
+  onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
+  onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onViewChange: (view: ViewKey) => void;
 }) {
   const organizations = context?.organizations ?? [];
   const organizationMembers = context?.organizationMembers ?? [];
   const shows = context?.shows ?? [];
+  const showDays = context?.showDays ?? [];
+  const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const contacts = context?.contacts ?? [];
   const horses = context?.horses ?? [];
   const classes = context?.classes ?? [];
@@ -427,6 +503,12 @@ function Dashboard({
   const effectiveView = canManageAssociation || !associationViewKeys.has(activeView) ? activeView : "my-horses";
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationShowDays = selectedOrganization
+    ? showDays.filter((day) => day.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationShowScoreSetups = selectedOrganization
+    ? showScoreClassSetups.filter((setup) => setup.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
@@ -529,7 +611,7 @@ function Dashboard({
         ) : null}
 
         {effectiveView === "shows" ? (
-          <ShowsView organization={selectedOrganization} shows={selectedOrganizationShows} onCreateShow={onCreateShow} />
+          <ShowsView organization={selectedOrganization} shows={selectedOrganizationShows} onCreateShow={onCreateShow} onUpdateShow={onUpdateShow} />
         ) : null}
 
         {effectiveView === "people" ? (
@@ -539,6 +621,8 @@ function Dashboard({
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onUpdateContact={onUpdateContact}
+            onUpdateHorse={onUpdateHorse}
           />
         ) : null}
 
@@ -550,6 +634,8 @@ function Dashboard({
             shows={selectedOrganizationShows}
             onCreateClass={onCreateClass}
             onCreateDivision={onCreateDivision}
+            onUpdateClass={onUpdateClass}
+            onUpdateDivision={onUpdateDivision}
           />
         ) : null}
 
@@ -564,6 +650,21 @@ function Dashboard({
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
             onCreateEntry={onCreateEntry}
+            onUpdateEntry={onUpdateEntry}
+          />
+        ) : null}
+
+        {effectiveView === "scoring" ? (
+          <ScoringView
+            classes={selectedOrganizationClasses}
+            contacts={selectedOrganizationContacts}
+            divisions={selectedOrganizationDivisions}
+            entries={selectedOrganizationEntries}
+            horses={selectedOrganizationHorses}
+            showDays={selectedOrganizationShowDays}
+            showScoreClassSetups={selectedOrganizationShowScoreSetups}
+            shows={selectedOrganizationShows}
+            onPrepareShowScoreClass={onPrepareShowScoreClass}
           />
         ) : null}
 
@@ -690,14 +791,29 @@ function ShowsView({
   organization,
   shows,
   onCreateShow,
+  onUpdateShow,
 }: {
   organization: Organization | null;
   shows: Show[];
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
+  onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
 }) {
+  const [editingShow, setEditingShow] = useState<Show | null>(null);
+
   return (
     <div className="content-grid">
       <ShowForm organization={organization} onCreateShow={onCreateShow} />
+
+      {editingShow ? (
+        <ShowEditForm
+          show={editingShow}
+          onCancel={() => setEditingShow(null)}
+          onUpdateShow={async (id, input) => {
+            await onUpdateShow(id, input);
+            setEditingShow(null);
+          }}
+        />
+      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -711,7 +827,7 @@ function ShowsView({
             <span>Name</span>
             <span>Dates</span>
             <span>Status</span>
-            <span>Location</span>
+            <span>Action</span>
           </div>
           {shows.map((show) => (
             <div className="table-row" key={show.id}>
@@ -720,7 +836,9 @@ function ShowsView({
                 {formatDate(show.start_date)} - {formatDate(show.end_date)}
               </span>
               <span className={`badge ${show.status}`}>{show.status}</span>
-              <span>{show.location || "Unassigned"}</span>
+              <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
+                Edit
+              </button>
             </div>
           ))}
           {!shows.length ? <EmptyState label="Create the first show for this organization." /> : null}
@@ -736,17 +854,47 @@ function PeopleView({
   organization,
   onCreateContact,
   onCreateHorse,
+  onUpdateContact,
+  onUpdateHorse,
 }: {
   contacts: Contact[];
   horses: Horse[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<void>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
+  onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
+  const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+
   return (
     <div className="content-grid">
       <ContactForm organization={organization} onCreateContact={onCreateContact} />
       <HorseForm contacts={contacts} organization={organization} onCreateHorse={onCreateHorse} />
+
+      {editingContact ? (
+        <ContactEditForm
+          contact={editingContact}
+          onCancel={() => setEditingContact(null)}
+          onUpdateContact={async (id, input) => {
+            await onUpdateContact(id, input);
+            setEditingContact(null);
+          }}
+        />
+      ) : null}
+
+      {editingHorse ? (
+        <HorseEditForm
+          contacts={contacts}
+          horse={editingHorse}
+          onCancel={() => setEditingHorse(null)}
+          onUpdateHorse={async (id, input) => {
+            await onUpdateHorse(id, input);
+            setEditingHorse(null);
+          }}
+        />
+      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -760,14 +908,16 @@ function PeopleView({
             <span>Name</span>
             <span>Type</span>
             <span>Email</span>
-            <span>Barn</span>
+            <span>Action</span>
           </div>
           {contacts.map((contact) => (
             <div className="table-row" key={contact.id}>
               <strong>{contactLabel(contact)}</strong>
               <span className="badge">{contact.type}</span>
               <span>{contact.email || "No email"}</span>
-              <span>{contact.barn_name || "None"}</span>
+              <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
+                Edit
+              </button>
             </div>
           ))}
           {!contacts.length ? <EmptyState label="Create an owner or rider contact first." /> : null}
@@ -786,14 +936,16 @@ function PeopleView({
             <span>Name</span>
             <span>Owner</span>
             <span>Gender</span>
-            <span>Registration</span>
+            <span>Action</span>
           </div>
           {horses.map((horse) => (
             <div className="table-row" key={horse.id}>
               <strong>{horse.name}</strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
-              <span>{horse.registration_number || "None"}</span>
+              <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                Edit
+              </button>
             </div>
           ))}
           {!horses.length ? <EmptyState label="Create a horse after adding an owner contact." /> : null}
@@ -810,6 +962,8 @@ function ClassesView({
   shows,
   onCreateClass,
   onCreateDivision,
+  onUpdateClass,
+  onUpdateDivision,
 }: {
   classes: ClassRecord[];
   divisions: Division[];
@@ -817,11 +971,39 @@ function ClassesView({
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
+  onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+  onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
+  const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
+  const [editingDivision, setEditingDivision] = useState<Division | null>(null);
+
   return (
     <div className="content-grid">
       <ClassForm organization={organization} shows={shows} onCreateClass={onCreateClass} />
       <DivisionForm classes={classes} organization={organization} shows={shows} onCreateDivision={onCreateDivision} />
+
+      {editingClass ? (
+        <ClassEditForm
+          classRecord={editingClass}
+          onCancel={() => setEditingClass(null)}
+          onUpdateClass={async (id, input) => {
+            await onUpdateClass(id, input);
+            setEditingClass(null);
+          }}
+        />
+      ) : null}
+
+      {editingDivision ? (
+        <DivisionEditForm
+          classes={classes}
+          division={editingDivision}
+          onCancel={() => setEditingDivision(null)}
+          onUpdateDivision={async (id, input) => {
+            await onUpdateDivision(id, input);
+            setEditingDivision(null);
+          }}
+        />
+      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -835,7 +1017,7 @@ function ClassesView({
             <span>Class</span>
             <span>Show</span>
             <span>Fee</span>
-            <span>Divisions</span>
+            <span>Action</span>
           </div>
           {classes.map((classRecord) => {
             const classDivisions = divisions.filter((division) => division.class_id === classRecord.id);
@@ -844,11 +1026,41 @@ function ClassesView({
                 <strong>{classRecord.name}</strong>
                 <span>{showLabel(findById(shows, classRecord.show_id))}</span>
                 <span>{classRecord.entry_fee == null ? "No fee" : formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}</span>
-                <span>{classDivisions.length ? classDivisions.map((division) => division.name).join(", ") : "None"}</span>
+                <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
+                  Edit
+                </button>
               </div>
             );
           })}
           {!classes.length ? <EmptyState label="Create the first class for a show." /> : null}
+        </div>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Divisions</h2>
+            <p>{divisions.length ? `${divisions.length} division${divisions.length === 1 ? "" : "s"} configured.` : "Divisions sit under classes."}</p>
+          </div>
+        </div>
+        <div className="table">
+          <div className="table-row table-head">
+            <span>Division</span>
+            <span>Class</span>
+            <span>Fee</span>
+            <span>Action</span>
+          </div>
+          {divisions.map((division) => (
+            <div className="table-row" key={division.id}>
+              <strong>{division.name}</strong>
+              <span>{findById(classes, division.class_id)?.name ?? "Unknown class"}</span>
+              <span>{division.entry_fee == null ? "Class fee" : formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}</span>
+              <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
+                Edit
+              </button>
+            </div>
+          ))}
+          {!divisions.length ? <EmptyState label="Create a division after creating a class." /> : null}
         </div>
       </section>
     </div>
@@ -865,6 +1077,7 @@ function EntriesView({
   profileId,
   shows,
   onCreateEntry,
+  onUpdateEntry,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
@@ -875,7 +1088,10 @@ function EntriesView({
   profileId: string;
   shows: Show[];
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
+  const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+
   return (
     <div className="content-grid">
       <EntryForm
@@ -889,6 +1105,21 @@ function EntriesView({
         onCreateEntry={onCreateEntry}
       />
 
+      {editingEntry ? (
+        <EntryEditForm
+          classes={classes}
+          contacts={contacts}
+          divisions={divisions}
+          entry={editingEntry}
+          horses={horses}
+          onCancel={() => setEditingEntry(null)}
+          onUpdateEntry={async (id, input) => {
+            await onUpdateEntry(id, input);
+            setEditingEntry(null);
+          }}
+        />
+      ) : null}
+
       <section className="panel span-2">
         <div className="panel-header">
           <div>
@@ -901,17 +1132,138 @@ function EntriesView({
             <span>Horse</span>
             <span>Division</span>
             <span>Owner</span>
-            <span>Status</span>
+            <span>Action</span>
           </div>
           {entries.map((entry) => (
             <div className="table-row" key={entry.id}>
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
-              <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
+              <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
+                Edit
+              </button>
             </div>
           ))}
           {!entries.length ? <EmptyState label="Create a draft entry after adding contacts, horses, classes and divisions." /> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ScoringView({
+  classes,
+  contacts,
+  divisions,
+  entries,
+  horses,
+  showDays,
+  showScoreClassSetups,
+  shows,
+  onPrepareShowScoreClass,
+}: {
+  classes: ClassRecord[];
+  contacts: Contact[];
+  divisions: Division[];
+  entries: Entry[];
+  horses: Horse[];
+  showDays: ShowDay[];
+  showScoreClassSetups: ShowScoreClassSetup[];
+  shows: Show[];
+  onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
+}) {
+  const [showId, setShowId] = useState("");
+  const [busyClassId, setBusyClassId] = useState("");
+  const selectedShowId = showId || shows[0]?.id || "";
+  const visibleClasses = selectedShowId ? classes.filter((classRecord) => classRecord.show_id === selectedShowId) : classes;
+  const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.class_id));
+  const totalRuns = visibleClasses.reduce(
+    (sum, classRecord) =>
+      sum +
+      buildShowScoreRunsForClass(classRecord.id, entries, {
+        contacts,
+        divisions,
+        horses,
+      }).length,
+    0,
+  );
+
+  async function handlePrepare(classRecord: ClassRecord) {
+    setBusyClassId(classRecord.id);
+
+    try {
+      await onPrepareShowScoreClass(classRecord);
+    } finally {
+      setBusyClassId("");
+    }
+  }
+
+  return (
+    <div className="content-grid">
+      <section className="metric-grid span-2">
+        <Metric label="Scoring classes" value={String(visibleClasses.length)} />
+        <Metric label="Runs from entries" value={String(totalRuns)} />
+        <Metric label="Prepared setups" value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>ShowScore bridge</h2>
+            <p>Prepare scoring setup runs from HSP entries while keeping associations, classes, horses and riders aligned.</p>
+          </div>
+          <select value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
+            {shows.map((show) => (
+              <option key={show.id} value={show.id}>
+                {show.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="table scoring-table">
+          <div className="table-row table-head">
+            <span>Class</span>
+            <span>Schedule</span>
+            <span>Runs</span>
+            <span>ShowScore</span>
+          </div>
+          {visibleClasses.map((classRecord) => {
+            const setup = showScoreClassSetups.find((candidate) => candidate.class_id === classRecord.id);
+            const runs = buildShowScoreRunsForClass(classRecord.id, entries, {
+              contacts,
+              divisions,
+              horses,
+            });
+            const day = findById(showDays, classRecord.show_day_id);
+            const show = findById(shows, classRecord.show_id);
+            const preparedRunCount = setup?.runs.length ?? 0;
+            const status = setup?.finalized ? "Finalized" : setup ? "Prepared" : runs.length ? "Ready" : "No entries";
+            const canPrepare = runs.length > 0 && !setup?.locked_at && !setup?.finalized;
+
+            return (
+              <div className="table-row" key={classRecord.id}>
+                <div>
+                  <strong>{classRecord.name}</strong>
+                  <span className="muted-line">{classRecord.code || "No code"}</span>
+                </div>
+                <div>
+                  <span>{showLabel(show)}</span>
+                  <span className="muted-line">{day ? `${day.day_name || "Day"} - ${formatDate(day.day_date)}` : "No day assigned"}</span>
+                </div>
+                <div>
+                  <strong>{runs.length}</strong>
+                  <span className="muted-line">{preparedRunCount ? `${preparedRunCount} saved` : "Not saved yet"}</span>
+                </div>
+                <div className="row-actions">
+                  <span className={`badge ${status.toLowerCase().replace(" ", "-")}`}>{status}</span>
+                  <button className="text-button" disabled={!canPrepare || busyClassId === classRecord.id} type="button" onClick={() => handlePrepare(classRecord)}>
+                    {busyClassId === classRecord.id ? "Preparing" : setup ? "Refresh setup" : "Prepare setup"}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!visibleClasses.length ? <EmptyState label="Create classes before preparing ShowScore setups." /> : null}
         </div>
       </section>
     </div>
@@ -1244,6 +1596,89 @@ function ShowForm({
   );
 }
 
+function ShowEditForm({
+  show,
+  onCancel,
+  onUpdateShow,
+}: {
+  show: Show;
+  onCancel: () => void;
+  onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
+}) {
+  const [name, setName] = useState(show.name);
+  const [slug, setSlug] = useState(show.slug);
+  const [startDate, setStartDate] = useState(show.start_date);
+  const [endDate, setEndDate] = useState(show.end_date);
+  const [location, setLocation] = useState(show.location ?? "");
+  const [status, setStatus] = useState<Show["status"]>(show.status);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+
+    try {
+      await onUpdateShow(show.id, {
+        name,
+        slug: slug || slugify(name),
+        start_date: startDate,
+        end_date: endDate,
+        location: location || null,
+        status,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit show</h2>
+          <p>{show.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Name
+          <input required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label>
+          Slug
+          <input value={slug} onChange={(event) => setSlug(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            Start
+            <input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+          </label>
+          <label>
+            End
+            <input required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Status
+            <select value={status} onChange={(event) => setStatus(event.target.value as Show["status"])}>
+              <option value="draft">Draft</option>
+              <option value="open">Open</option>
+              <option value="closed">Closed</option>
+              <option value="archived">Archived</option>
+            </select>
+          </label>
+          <label>
+            Location
+            <input value={location} onChange={(event) => setLocation(event.target.value)} />
+          </label>
+        </div>
+        <FormActions busy={busy} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
 function ContactForm({
   organization,
   onCreateContact,
@@ -1356,7 +1791,7 @@ function HorseForm({
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [busy, setBusy] = useState(false);
-  const selectedOwnerId = ownerContactId || ownerContacts[0]?.id || "";
+  const selectedOwnerId = ownerContactId;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1400,13 +1835,13 @@ function HorseForm({
         </label>
         <label>
           Owner
-          <select disabled={!organization || !ownerContacts.length} value={selectedOwnerId} onChange={(event) => setOwnerContactId(event.target.value)}>
-            {ownerContacts.map((contact) => (
-              <option key={contact.id} value={contact.id}>
-                {contactLabel(contact)}
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            disabled={!organization || !ownerContacts.length}
+            items={ownerContacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+            placeholder="Search owner"
+            value={selectedOwnerId}
+            onChange={setOwnerContactId}
+          />
         </label>
         <div className="form-grid">
           <label>
@@ -1431,6 +1866,173 @@ function HorseForm({
           <Plus size={18} />
           Create horse
         </button>
+      </form>
+    </section>
+  );
+}
+
+function ContactEditForm({
+  contact,
+  onCancel,
+  onUpdateContact,
+}: {
+  contact: Contact;
+  onCancel: () => void;
+  onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
+}) {
+  const [type, setType] = useState<Contact["type"]>(contact.type);
+  const [firstName, setFirstName] = useState(contact.first_name);
+  const [lastName, setLastName] = useState(contact.last_name);
+  const [email, setEmail] = useState(contact.email ?? "");
+  const [phone, setPhone] = useState(contact.phone ?? "");
+  const [barnName, setBarnName] = useState(contact.barn_name ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+
+    try {
+      await onUpdateContact(contact.id, {
+        type,
+        first_name: firstName,
+        last_name: lastName,
+        email: email || null,
+        phone: phone || null,
+        barn_name: barnName || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit contact</h2>
+          <p>{contactLabel(contact)}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Type
+          <select value={type} onChange={(event) => setType(event.target.value as Contact["type"])}>
+            <option value="owner">Owner</option>
+            <option value="agent">Agent</option>
+            <option value="rider">Rider</option>
+            <option value="payer">Payer</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <div className="form-grid">
+          <label>
+            First name
+            <input required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+          </label>
+          <label>
+            Last name
+            <input required value={lastName} onChange={(event) => setLastName(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Email
+            <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+          </label>
+          <label>
+            Phone
+            <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          Barn
+          <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
+        </label>
+        <FormActions busy={busy} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
+function HorseEditForm({
+  contacts,
+  horse,
+  onCancel,
+  onUpdateHorse,
+}: {
+  contacts: Contact[];
+  horse: Horse;
+  onCancel: () => void;
+  onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+}) {
+  const ownerContacts = contacts.filter((contact) => ["owner", "agent", "payer"].includes(contact.type));
+  const [name, setName] = useState(horse.name);
+  const [ownerContactId, setOwnerContactId] = useState(horse.primary_owner_contact_id);
+  const [breed, setBreed] = useState(horse.breed ?? "");
+  const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>(horse.gender ?? "");
+  const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+
+    try {
+      await onUpdateHorse(horse.id, {
+        name,
+        primary_owner_contact_id: ownerContactId,
+        breed: breed || null,
+        gender: gender || null,
+        registration_number: registrationNumber || null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit horse</h2>
+          <p>{horse.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Horse name
+          <input required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label>
+          Owner
+          <SearchSelect
+            items={ownerContacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+            placeholder="Search owner"
+            value={ownerContactId}
+            onChange={setOwnerContactId}
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Breed
+            <input value={breed} onChange={(event) => setBreed(event.target.value)} />
+          </label>
+          <label>
+            Gender
+            <select value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
+              <option value="">Unset</option>
+              <option value="M">M</option>
+              <option value="F">F</option>
+              <option value="G">G</option>
+            </select>
+          </label>
+        </div>
+        <label>
+          Registration
+          <input value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
+        </label>
+        <FormActions busy={busy || !ownerContactId} onCancel={onCancel} />
       </form>
     </section>
   );
@@ -1534,7 +2136,7 @@ function DivisionForm({
   const [name, setName] = useState("");
   const [entryFee, setEntryFee] = useState("");
   const [busy, setBusy] = useState(false);
-  const selectedClass = findById(classes, classId) ?? classes[0] ?? null;
+  const selectedClass = findById(classes, classId) ?? null;
   const selectedShow = selectedClass ? findById(shows, selectedClass.show_id) : null;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1572,13 +2174,13 @@ function DivisionForm({
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           Class
-          <select disabled={!organization || !classes.length} value={selectedClass?.id ?? ""} onChange={(event) => setClassId(event.target.value)}>
-            {classes.map((classRecord) => (
-              <option key={classRecord.id} value={classRecord.id}>
-                {classRecord.name}
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            disabled={!organization || !classes.length}
+            items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: showLabel(findById(shows, classRecord.show_id)) }))}
+            placeholder="Search class"
+            value={selectedClass?.id ?? ""}
+            onChange={setClassId}
+          />
         </label>
         <label>
           Division name
@@ -1592,6 +2194,145 @@ function DivisionForm({
           <Plus size={18} />
           Create division
         </button>
+      </form>
+    </section>
+  );
+}
+
+function ClassEditForm({
+  classRecord,
+  onCancel,
+  onUpdateClass,
+}: {
+  classRecord: ClassRecord;
+  onCancel: () => void;
+  onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+}) {
+  const [name, setName] = useState(classRecord.name);
+  const [code, setCode] = useState(classRecord.code ?? "");
+  const [entryFee, setEntryFee] = useState(classRecord.entry_fee == null ? "" : String(classRecord.entry_fee));
+  const [status, setStatus] = useState<ClassRecord["status"]>(classRecord.status);
+  const [busy, setBusy] = useState(false);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+
+    try {
+      await onUpdateClass(classRecord.id, {
+        name,
+        code: code || null,
+        entry_fee: numericValue(entryFee) ?? null,
+        status,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit class</h2>
+          <p>{classRecord.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Class name
+          <input required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            Code
+            <input value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+          <label>
+            Entry fee
+            <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          Status
+          <select value={status} onChange={(event) => setStatus(event.target.value as ClassRecord["status"])}>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
+            <option value="running">Running</option>
+            <option value="finished">Finished</option>
+          </select>
+        </label>
+        <FormActions busy={busy} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
+function DivisionEditForm({
+  classes,
+  division,
+  onCancel,
+  onUpdateDivision,
+}: {
+  classes: ClassRecord[];
+  division: Division;
+  onCancel: () => void;
+  onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
+}) {
+  const [classId, setClassId] = useState(division.class_id);
+  const [name, setName] = useState(division.name);
+  const [entryFee, setEntryFee] = useState(division.entry_fee == null ? "" : String(division.entry_fee));
+  const [busy, setBusy] = useState(false);
+  const selectedClass = findById(classes, classId);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedClass) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onUpdateDivision(division.id, {
+        class_id: selectedClass.id,
+        show_id: selectedClass.show_id,
+        name,
+        entry_fee: numericValue(entryFee) ?? null,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit division</h2>
+          <p>{division.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Class
+          <SearchSelect
+            items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: classRecord.code ?? "" }))}
+            placeholder="Search class"
+            value={classId}
+            onChange={setClassId}
+          />
+        </label>
+        <label>
+          Division name
+          <input required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <label>
+          Fee override
+          <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <FormActions busy={busy || !selectedClass} onCancel={onCancel} />
       </form>
     </section>
   );
@@ -1624,8 +2365,8 @@ function EntryForm({
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const availableDivisions = selectedShowId ? divisions.filter((division) => division.show_id === selectedShowId) : divisions;
-  const selectedHorse = findById(horses, horseId) ?? horses[0] ?? null;
-  const selectedDivision = findById(availableDivisions, divisionId) ?? availableDivisions[0] ?? null;
+  const selectedHorse = findById(horses, horseId) ?? null;
+  const selectedDivision = findById(availableDivisions, divisionId) ?? null;
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
   const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId);
@@ -1680,45 +2421,45 @@ function EntryForm({
         </label>
         <label>
           Horse
-          <select disabled={!horses.length} value={selectedHorse?.id ?? ""} onChange={(event) => setHorseId(event.target.value)}>
-            {horses.map((horse) => (
-              <option key={horse.id} value={horse.id}>
-                {horse.name}
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            disabled={!horses.length}
+            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+            placeholder="Search horse"
+            value={selectedHorse?.id ?? ""}
+            onChange={setHorseId}
+          />
         </label>
         <label>
           Division
-          <select disabled={!availableDivisions.length} value={selectedDivision?.id ?? ""} onChange={(event) => setDivisionId(event.target.value)}>
-            {availableDivisions.map((division) => (
-              <option key={division.id} value={division.id}>
-                {divisionLabel(division, classes)}
-              </option>
-            ))}
-          </select>
+          <SearchSelect
+            disabled={!availableDivisions.length}
+            items={availableDivisions.map((division) => ({ id: division.id, label: divisionLabel(division, classes), detail: "" }))}
+            placeholder="Search division"
+            value={selectedDivision?.id ?? ""}
+            onChange={setDivisionId}
+          />
         </label>
         <div className="form-grid">
           <label>
             Rider
-            <select disabled={!contacts.length} value={riderContactId} onChange={(event) => setRiderContactId(event.target.value)}>
-              <option value="">None</option>
-              {contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contactLabel(contact)}
-                </option>
-              ))}
-            </select>
+            <SearchSelect
+              allowEmpty
+              disabled={!contacts.length}
+              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+              placeholder="Search rider"
+              value={riderContactId}
+              onChange={setRiderContactId}
+            />
           </label>
           <label>
             Payer
-            <select disabled={!contacts.length} value={selectedPayerId} onChange={(event) => setPayerContactId(event.target.value)}>
-              {contacts.map((contact) => (
-                <option key={contact.id} value={contact.id}>
-                  {contactLabel(contact)}
-                </option>
-              ))}
-            </select>
+            <SearchSelect
+              disabled={!contacts.length}
+              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+              placeholder="Search payer"
+              value={selectedPayerId}
+              onChange={setPayerContactId}
+            />
           </label>
         </div>
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
@@ -1727,6 +2468,209 @@ function EntryForm({
         </button>
       </form>
     </section>
+  );
+}
+
+function EntryEditForm({
+  classes,
+  contacts,
+  divisions,
+  entry,
+  horses,
+  onCancel,
+  onUpdateEntry,
+}: {
+  classes: ClassRecord[];
+  contacts: Contact[];
+  divisions: Division[];
+  entry: Entry;
+  horses: Horse[];
+  onCancel: () => void;
+  onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
+}) {
+  const [horseId, setHorseId] = useState(entry.horse_id);
+  const [divisionId, setDivisionId] = useState(entry.division_id);
+  const [riderContactId, setRiderContactId] = useState(entry.rider_contact_id ?? "");
+  const [payerContactId, setPayerContactId] = useState(entry.payer_contact_id);
+  const [status, setStatus] = useState<Entry["status"]>(entry.status);
+  const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
+  const [busy, setBusy] = useState(false);
+  const selectedHorse = findById(horses, horseId);
+  const selectedDivision = findById(divisions, divisionId);
+  const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
+  const effectiveFee = numericValue(baseFee) ?? selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? null;
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedHorse || !selectedDivision || !payerContactId) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onUpdateEntry(entry.id, {
+        horse_id: selectedHorse.id,
+        division_id: selectedDivision.id,
+        owner_contact_id: selectedHorse.primary_owner_contact_id,
+        rider_contact_id: riderContactId || null,
+        payer_contact_id: payerContactId,
+        status,
+        base_fee: effectiveFee,
+        total_fees: effectiveFee,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel">
+      <div className="panel-header">
+        <div>
+          <h2>Edit entry</h2>
+          <p>{horseLabel(selectedHorse)}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Horse
+          <SearchSelect
+            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+            placeholder="Search horse"
+            value={horseId}
+            onChange={setHorseId}
+          />
+        </label>
+        <label>
+          Division
+          <SearchSelect
+            items={divisions.map((division) => ({ id: division.id, label: divisionLabel(division, classes), detail: "" }))}
+            placeholder="Search division"
+            value={divisionId}
+            onChange={setDivisionId}
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Rider
+            <SearchSelect
+              allowEmpty
+              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+              placeholder="Search rider"
+              value={riderContactId}
+              onChange={setRiderContactId}
+            />
+          </label>
+          <label>
+            Payer
+            <SearchSelect
+              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
+              placeholder="Search payer"
+              value={payerContactId}
+              onChange={setPayerContactId}
+            />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Status
+            <select value={status} onChange={(event) => setStatus(event.target.value as Entry["status"])}>
+              <option value="draft">Draft</option>
+              <option value="pending_checkout">Pending checkout</option>
+              <option value="active">Active</option>
+              <option value="scratched_pending_refund">Scratch pending refund</option>
+              <option value="scratched">Scratched</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </label>
+          <label>
+            Base fee
+            <input min="0" step="0.01" type="number" value={baseFee} onChange={(event) => setBaseFee(event.target.value)} />
+          </label>
+        </div>
+        <FormActions busy={busy || !selectedHorse || !selectedDivision || !payerContactId} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
+function SearchSelect({
+  allowEmpty = false,
+  disabled = false,
+  items,
+  placeholder,
+  value,
+  onChange,
+}: {
+  allowEmpty?: boolean;
+  disabled?: boolean;
+  items: Array<{ id: string; label: string; detail?: string }>;
+  placeholder: string;
+  value: string;
+  onChange: (id: string) => void;
+}) {
+  const listId = useMemo(() => `search-${Math.random().toString(36).slice(2)}`, []);
+  const selectedItem = findById(items, value);
+  const [query, setQuery] = useState(selectedItem ? itemSearchLabel(selectedItem) : "");
+
+  useEffect(() => {
+    const nextItem = findById(items, value);
+    setQuery(nextItem ? itemSearchLabel(nextItem) : "");
+  }, [items, value]);
+
+  const normalizedQuery = query.trim().toLowerCase();
+  const visibleItems = items
+    .filter((item) => itemSearchLabel(item).toLowerCase().includes(normalizedQuery))
+    .slice(0, 30);
+
+  function handleInput(nextQuery: string) {
+    setQuery(nextQuery);
+
+    if (allowEmpty && !nextQuery.trim()) {
+      onChange("");
+      return;
+    }
+
+    const exactMatch = items.find((item) => itemSearchLabel(item).toLowerCase() === nextQuery.trim().toLowerCase());
+    onChange(exactMatch?.id ?? "");
+  }
+
+  return (
+    <div className="search-select">
+      <input
+        disabled={disabled}
+        list={listId}
+        placeholder={placeholder}
+        value={query}
+        onBlur={() => {
+          if (!allowEmpty && !findById(items, value)) {
+            setQuery("");
+          }
+        }}
+        onChange={(event) => handleInput(event.target.value)}
+      />
+      <datalist id={listId}>
+        {visibleItems.map((item) => (
+          <option key={item.id} value={itemSearchLabel(item)} />
+        ))}
+      </datalist>
+    </div>
+  );
+}
+
+function FormActions({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+  return (
+    <div className="form-actions">
+      <button className="primary-button" disabled={busy} type="submit">
+        Save changes
+      </button>
+      <button className="ghost-button" disabled={busy} type="button" onClick={onCancel}>
+        Cancel
+      </button>
+    </div>
   );
 }
 
@@ -1790,6 +2734,10 @@ function divisionLabel(division: Division | undefined, classes: ClassRecord[]) {
 
   const classRecord = findById(classes, division.class_id);
   return classRecord ? `${classRecord.name} / ${division.name}` : division.name;
+}
+
+function itemSearchLabel(item: { label: string; detail?: string }) {
+  return item.detail ? `${item.label} - ${item.detail}` : item.label;
 }
 
 function numericValue(value: string) {

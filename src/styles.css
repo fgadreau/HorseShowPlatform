@@ -378,6 +378,10 @@ button:focus-visible {
   padding: 18px;
 }
 
+.edit-panel {
+  border-color: #9dd6cc;
+}
+
 .panel-header {
   align-items: flex-start;
   display: flex;
@@ -429,6 +433,36 @@ button:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.search-select {
+  display: grid;
+}
+
+.text-button {
+  background: transparent;
+  border: 0;
+  color: #0f766e;
+  font-weight: 900;
+  justify-content: flex-start;
+  min-height: 32px;
+  padding: 0;
+}
+
+.text-button:hover {
+  text-decoration: underline;
+}
+
+.text-button:disabled {
+  color: #8a9994;
+  cursor: not-allowed;
+  text-decoration: none;
+}
+
 .table {
   border: 1px solid #dce5e1;
   border-radius: 8px;
@@ -455,6 +489,24 @@ button:focus-visible {
   font-weight: 800;
   min-height: 40px;
   text-transform: uppercase;
+}
+
+.scoring-table .table-row {
+  grid-template-columns: 1.2fr 1fr 0.7fr 1.1fr;
+}
+
+.muted-line {
+  color: #70807a;
+  display: block;
+  font-size: 12px;
+  margin-top: 3px;
+}
+
+.row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .badge {
