@@ -8,4 +8,5 @@ dist
 *.tsbuildinfo
 .vercel
 .supabase
+supabase/.temp
 coverage

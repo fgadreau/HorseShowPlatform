@@ -65,3 +65,5 @@ MVP starter for a multi-tenant horse show management platform.
 3. Add contacts, horses, entries and invoice creation workflows.
 4. Add Edge Functions for Stripe checkout/webhook and Resend email.
 5. Connect Vercel environment variables and deploy the frontend.
+
+Deployment notes live in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
