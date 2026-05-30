@@ -252,7 +252,20 @@ button:focus-visible {
 
 .nav-list {
   display: grid;
+  gap: 18px;
+}
+
+.nav-section {
+  display: grid;
   gap: 6px;
+}
+
+.nav-section > span {
+  color: #75837d;
+  font-size: 11px;
+  font-weight: 900;
+  padding: 0 10px;
+  text-transform: uppercase;
 }
 
 .nav-list button {
@@ -267,6 +280,38 @@ button:focus-visible {
   background: #e8f4f1;
   color: #0f766e;
   font-weight: 800;
+}
+
+.language-toggle {
+  align-items: center;
+  background: #f2f6f4;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  grid-template-columns: 20px 1fr 1fr;
+  padding: 4px;
+}
+
+.language-toggle svg {
+  color: #64736d;
+  justify-self: center;
+}
+
+.language-toggle button {
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #53645e;
+  font-size: 12px;
+  font-weight: 900;
+  min-height: 32px;
+}
+
+.language-toggle button.active {
+  background: #ffffff;
+  color: #0f766e;
+  box-shadow: 0 3px 10px rgba(24, 44, 38, 0.08);
 }
 
 .sidebar-action {
@@ -523,10 +568,6 @@ button:focus-visible {
     border-right: 0;
   }
 
-  .nav-list {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .nav-list button {
     justify-content: center;
   }
@@ -561,8 +602,12 @@ button:focus-visible {
     min-width: 0;
   }
 
-  .nav-list {
+  .nav-section {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .nav-section > span {
+    grid-column: span 2;
   }
 
   .table-row {
