@@ -17,6 +17,7 @@ import type {
   HorseInput,
   HorseUpdateInput,
   Invoice,
+  InvoiceLineItem,
   Organization,
   OrganizationInput,
   OrganizationMember,
@@ -25,6 +26,12 @@ import type {
   ShowScoreClassSetup,
   ShowInput,
   ShowUpdateInput,
+  StallBooking,
+  StallBookingInput,
+  StallBookingUpdateInput,
+  StallOption,
+  StallOptionInput,
+  StallOptionUpdateInput,
   UserProfile,
 } from "../types/domain";
 import { buildShowScoreRunsForClass } from "./showScoreAdapters";
@@ -41,7 +48,10 @@ export type AppContext = {
   classes: ClassRecord[];
   divisions: Division[];
   entries: Entry[];
+  stallOptions: StallOption[];
+  stallBookings: StallBooking[];
   invoices: Invoice[];
+  invoiceLineItems: InvoiceLineItem[];
 };
 
 export function slugify(value: string) {
@@ -103,9 +113,11 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     classesResult,
     divisionsResult,
     entriesResult,
+    stallOptionsResult,
+    stallBookingsResult,
     invoicesResult,
-  ] =
-    await Promise.all([
+    invoiceLineItemsResult,
+  ] = await Promise.all([
     client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
     client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
     client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(),
@@ -115,7 +127,10 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
     client.from("divisions").select("*").order("created_at", { ascending: false }).returns<Division[]>(),
     client.from("entries").select("*").order("created_at", { ascending: false }).returns<Entry[]>(),
+    client.from("stall_options").select("*").order("created_at", { ascending: false }).returns<StallOption[]>(),
+    client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(),
     client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(),
+    client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
 
@@ -155,8 +170,20 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw entriesResult.error;
   }
 
+  if (stallOptionsResult.error) {
+    throw stallOptionsResult.error;
+  }
+
+  if (stallBookingsResult.error) {
+    throw stallBookingsResult.error;
+  }
+
   if (invoicesResult.error) {
     throw invoicesResult.error;
+  }
+
+  if (invoiceLineItemsResult.error) {
+    throw invoiceLineItemsResult.error;
   }
 
   return {
@@ -171,7 +198,10 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     classes: classesResult.data ?? [],
     divisions: divisionsResult.data ?? [],
     entries: entriesResult.data ?? [],
+    stallOptions: stallOptionsResult.data ?? [],
+    stallBookings: stallBookingsResult.data ?? [],
     invoices: invoicesResult.data ?? [],
+    invoiceLineItems: invoiceLineItemsResult.data ?? [],
   };
 }
 
@@ -268,6 +298,8 @@ export async function createContact(input: ContactInput) {
       email: input.email || null,
       phone: input.phone || null,
       barn_name: input.barn_name || null,
+      linked_user_id: input.linked_user_id || null,
+      created_by_user_id: input.created_by_user_id || null,
     })
     .select("*")
     .single<Contact>();
@@ -308,6 +340,7 @@ export async function createHorse(input: HorseInput) {
       gender: input.gender || null,
       birth_year: input.birth_year || null,
       registration_number: input.registration_number || null,
+      created_by_user_id: input.created_by_user_id || null,
     })
     .select("*")
     .single<Horse>();
@@ -468,6 +501,96 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
     .eq("id", id)
     .select("*")
     .single<Entry>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function createStallOption(input: StallOptionInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("stall_options")
+    .insert({
+      organization_id: input.organization_id,
+      show_id: input.show_id,
+      name: input.name,
+      description: input.description || null,
+      price: input.price,
+      total_quantity: input.total_quantity,
+      available_quantity: input.available_quantity ?? input.total_quantity,
+      duration_days: input.duration_days ?? null,
+      show_day_start_id: input.show_day_start_id || null,
+      show_day_end_id: input.show_day_end_id || null,
+      category: input.category || null,
+      notes: input.notes || null,
+    })
+    .select("*")
+    .single<StallOption>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateStallOption(id: string, input: StallOptionUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("stall_options")
+    .update(cleanPayload(input))
+    .eq("id", id)
+    .select("*")
+    .single<StallOption>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function createStallBooking(input: StallBookingInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("stall_bookings")
+    .insert({
+      organization_id: input.organization_id,
+      show_id: input.show_id,
+      stall_option_id: input.stall_option_id,
+      horse_id: input.horse_id || null,
+      created_by_user_id: input.created_by_user_id,
+      booker_contact_id: input.booker_contact_id,
+      payer_contact_id: input.payer_contact_id,
+      status: input.status ?? "requested",
+      show_day_start_id: input.show_day_start_id,
+      show_day_end_id: input.show_day_end_id,
+      quantity: input.quantity,
+      unit_price: input.unit_price ?? null,
+      total_price: input.total_price ?? null,
+      notes: input.notes || null,
+    })
+    .select("*")
+    .single<StallBooking>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateStallBooking(id: string, input: StallBookingUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("stall_bookings")
+    .update(cleanPayload(input))
+    .eq("id", id)
+    .select("*")
+    .single<StallBooking>();
 
   if (error) {
     throw error;

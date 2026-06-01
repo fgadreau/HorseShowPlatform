@@ -143,6 +143,42 @@ set
   start_time = excluded.start_time,
   updated_at = now();
 
+insert into public.stall_options (
+  id,
+  organization_id,
+  show_id,
+  name,
+  description,
+  price,
+  total_quantity,
+  available_quantity,
+  duration_days,
+  show_day_start_id,
+  show_day_end_id,
+  category,
+  notes
+)
+values
+  ('c0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Stall', 'Standard show stall for the event.', 175.00, 40, 40, 3, '41000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'stall', null),
+  ('c0000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Tack stall', 'Extra stall for tack and equipment.', 150.00, 12, 12, 3, '41000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'stall', null),
+  ('c0000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Ripe / shavings', 'Bedding bags available on site.', 10.00, 120, 120, null, '41000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'extra', null),
+  ('c0000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Foin / hay', 'Hay bales available on site.', 14.00, 80, 80, null, '41000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'extra', null),
+  ('c0000000-0000-0000-0000-000000000005', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'Camping', 'Weekend camping spot.', 95.00, 25, 25, 3, '41000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'camping', null),
+  ('c0000000-0000-0000-0000-000000000006', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', 'Stall', 'Standard show stall for the event.', 170.00, 30, 30, 3, '41000000-0000-0000-0000-000000000002', '41000000-0000-0000-0000-000000000002', 'stall', null)
+on conflict (id) do update
+set
+  name = excluded.name,
+  description = excluded.description,
+  price = excluded.price,
+  total_quantity = excluded.total_quantity,
+  available_quantity = excluded.available_quantity,
+  duration_days = excluded.duration_days,
+  show_day_start_id = excluded.show_day_start_id,
+  show_day_end_id = excluded.show_day_end_id,
+  category = excluded.category,
+  notes = excluded.notes,
+  updated_at = now();
+
 insert into public.classes (
   id,
   organization_id,

@@ -188,6 +188,11 @@ input:disabled {
   color: #83908a;
 }
 
+select:disabled {
+  background: #eef2f0;
+  color: #83908a;
+}
+
 input:focus,
 select:focus,
 button:focus-visible {
@@ -480,6 +485,21 @@ button:focus-visible {
 
 .table-row + .table-row {
   border-top: 1px solid #e7eeeb;
+}
+
+.invoice-group + .invoice-group {
+  border-top: 1px solid #e7eeeb;
+}
+
+.invoice-group .table-row + .table-row {
+  border-top: 1px solid #edf3f0;
+}
+
+.invoice-line-row {
+  background: #fbfdfc;
+  color: #4c5f58;
+  grid-template-columns: 1.2fr 0.5fr 0.7fr 1fr;
+  min-height: 48px;
 }
 
 .table-head {

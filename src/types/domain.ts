@@ -79,6 +79,21 @@ export type Invoice = {
   created_at: string;
 };
 
+export type InvoiceLineItem = {
+  id: string;
+  organization_id: string;
+  invoice_id: string;
+  item_type: "entry" | "stall" | "extra" | "membership" | "fee" | "discount" | "tax" | "manual";
+  item_id: string | null;
+  description: string;
+  quantity: number;
+  unit_price: number;
+  total_price: number;
+  tax_applicable: boolean;
+  tax_amount: number;
+  created_at: string;
+};
+
 export type Contact = {
   id: string;
   organization_id: string;
@@ -188,6 +203,42 @@ export type Entry = {
   created_at: string;
 };
 
+export type StallOption = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  total_quantity: number;
+  available_quantity: number;
+  duration_days: number | null;
+  show_day_start_id: string | null;
+  show_day_end_id: string | null;
+  category: "stall" | "camping" | "parking" | "extra" | null;
+  notes: string | null;
+  created_at: string;
+};
+
+export type StallBooking = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  stall_option_id: string;
+  horse_id: string | null;
+  created_by_user_id: string;
+  booker_contact_id: string;
+  payer_contact_id: string;
+  status: "requested" | "reserved" | "active" | "cancelled" | "completed";
+  show_day_start_id: string;
+  show_day_end_id: string;
+  quantity: number;
+  unit_price: number | null;
+  total_price: number | null;
+  notes: string | null;
+  created_at: string;
+};
+
 export type OrganizationInput = {
   name: string;
   slug: string;
@@ -226,6 +277,8 @@ export type ContactInput = {
   email?: string;
   phone?: string;
   barn_name?: string;
+  linked_user_id?: string;
+  created_by_user_id?: string;
 };
 
 export type ContactUpdateInput = {
@@ -246,6 +299,7 @@ export type HorseInput = {
   gender?: Horse["gender"];
   birth_year?: number;
   registration_number?: string;
+  created_by_user_id?: string;
 };
 
 export type HorseUpdateInput = {
@@ -323,4 +377,63 @@ export type EntryUpdateInput = {
   status?: Entry["status"];
   base_fee?: number | null;
   total_fees?: number | null;
+};
+
+export type StallOptionInput = {
+  organization_id: string;
+  show_id: string;
+  name: string;
+  description?: string;
+  price: number;
+  total_quantity: number;
+  available_quantity?: number;
+  duration_days?: number;
+  show_day_start_id?: string;
+  show_day_end_id?: string;
+  category?: StallOption["category"];
+  notes?: string;
+};
+
+export type StallOptionUpdateInput = {
+  name?: string;
+  description?: string | null;
+  price?: number;
+  total_quantity?: number;
+  available_quantity?: number;
+  duration_days?: number | null;
+  show_day_start_id?: string | null;
+  show_day_end_id?: string | null;
+  category?: StallOption["category"];
+  notes?: string | null;
+};
+
+export type StallBookingInput = {
+  organization_id: string;
+  show_id: string;
+  stall_option_id: string;
+  horse_id?: string;
+  created_by_user_id: string;
+  booker_contact_id: string;
+  payer_contact_id: string;
+  status?: StallBooking["status"];
+  show_day_start_id: string;
+  show_day_end_id: string;
+  quantity: number;
+  unit_price?: number;
+  total_price?: number;
+  notes?: string;
+};
+
+export type StallBookingUpdateInput = {
+  stall_option_id?: string;
+  horse_id?: string | null;
+  booker_contact_id?: string;
+  payer_contact_id?: string;
+  status?: StallBooking["status"];
+  show_day_start_id?: string;
+  show_day_end_id?: string;
+  quantity?: number;
+  unit_price?: number | null;
+  total_price?: number | null;
+  notes?: string | null;
 };
