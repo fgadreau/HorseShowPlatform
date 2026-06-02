@@ -1,7 +1,21 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { Building2, CalendarDays, CircleDollarSign, ClipboardList, LogOut, Plus, RefreshCw } from "lucide-react";
-import { EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, WorkflowStep } from "../../components/ui";
+import {
+  AlertCircle,
+  CalendarDays,
+  CheckCircle2,
+  CircleDollarSign,
+  ClipboardList,
+  LogOut,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Tent,
+  Trophy,
+  Users,
+  Warehouse,
+} from "lucide-react";
+import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import type { Locale, Translation } from "../../lib/i18n";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
@@ -28,7 +42,7 @@ import {
   updateStallOption,
   type AppContext,
 } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, Division, Entry, Horse, Organization, Show, ShowDay, ShowScoreClassSetup } from "../../types/domain";
+import type { ClassRecord, Contact, ContactRole, Division, Entry, Horse, Organization, Show, ShowDay, ShowScoreClassSetup } from "../../types/domain";
 import type { NavItem, Notice, ViewKey } from "../../types/ui";
 
 export function Dashboard({
@@ -72,7 +86,7 @@ export function Dashboard({
   t: Translation;
   onChangeOrganization: (organizationId: string) => void;
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
-  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<void>;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
@@ -100,6 +114,7 @@ export function Dashboard({
   const showDays = context?.showDays ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const contacts = context?.contacts ?? [];
+  const contactRoles = context?.contactRoles ?? [];
   const horses = context?.horses ?? [];
   const classes = context?.classes ?? [];
   const divisions = context?.divisions ?? [];
@@ -128,6 +143,9 @@ export function Dashboard({
     : [];
   const selectedOrganizationContacts = selectedOrganization
     ? contacts.filter((contact) => contact.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationContactRoles = selectedOrganization
+    ? contactRoles.filter((role) => role.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationHorses = selectedOrganization
     ? horses.filter((horse) => horse.organization_id === selectedOrganization.id)
@@ -234,7 +252,11 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             contacts={selectedOrganizationContacts}
             horses={selectedOrganizationHorses}
+            classes={selectedOrganizationClasses}
             entries={selectedOrganizationEntries}
+            stallOptions={selectedOrganizationStallOptions}
+            stallBookings={selectedOrganizationStallBookings}
+            invoices={selectedOrganizationInvoices}
             unpaidBalance={unpaidBalance}
             onCreateOrganization={onCreateOrganization}
           />
@@ -247,6 +269,7 @@ export function Dashboard({
         {effectiveView === "people" ? (
           <PeopleView
             contacts={selectedOrganizationContacts}
+            contactRoles={selectedOrganizationContactRoles}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
@@ -273,12 +296,14 @@ export function Dashboard({
           <EntriesView
             classes={selectedOrganizationClasses}
             contacts={selectedOrganizationContacts}
+            contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
+            onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
             onUpdateEntry={onUpdateEntry}
           />
@@ -288,6 +313,7 @@ export function Dashboard({
           <StallsView
             bookings={selectedOrganizationStallBookings}
             contacts={selectedOrganizationContacts}
+            contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
@@ -295,6 +321,7 @@ export function Dashboard({
             showDays={selectedOrganizationShowDays}
             shows={selectedOrganizationShows}
             stallOptions={selectedOrganizationStallOptions}
+            onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onCreateStallOption={onCreateStallOption}
             onUpdateStallBooking={onUpdateStallBooking}
@@ -328,9 +355,11 @@ export function Dashboard({
         {effectiveView === "my-horses" ? (
           <MyHorsesView
             contacts={personalContacts}
+            contactRoles={selectedOrganizationContactRoles}
             horses={personalHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
+            onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
             onUpdateHorse={onUpdateHorse}
           />
@@ -339,6 +368,7 @@ export function Dashboard({
         {effectiveView === "my-riders" ? (
           <MyContactsView
             contacts={personalContacts}
+            contactRoles={selectedOrganizationContactRoles}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
@@ -350,12 +380,14 @@ export function Dashboard({
           <MyEntriesView
             classes={selectedOrganizationClasses}
             contacts={personalContacts}
+            contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={personalEntries}
             horses={personalHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
+            onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
             onUpdateEntry={onUpdateEntry}
           />
@@ -365,6 +397,7 @@ export function Dashboard({
           <MyStallsView
             bookings={personalStallBookings}
             contacts={personalContacts}
+            contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horses={personalHorses}
             organization={selectedOrganization}
@@ -372,6 +405,7 @@ export function Dashboard({
             showDays={selectedOrganizationShowDays}
             shows={selectedOrganizationShows}
             stallOptions={selectedOrganizationStallOptions}
+            onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onUpdateStallBooking={onUpdateStallBooking}
           />
@@ -427,7 +461,11 @@ function OverviewView({
   shows,
   contacts,
   horses,
+  classes,
   entries,
+  stallOptions,
+  stallBookings,
+  invoices,
   unpaidBalance,
   onCreateOrganization,
 }: {
@@ -436,43 +474,199 @@ function OverviewView({
   shows: Show[];
   contacts: Contact[];
   horses: Horse[];
+  classes: ClassRecord[];
   entries: Entry[];
+  stallOptions: AppContext["stallOptions"];
+  stallBookings: AppContext["stallBookings"];
+  invoices: AppContext["invoices"];
   unpaidBalance: number;
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
 }) {
-  const upcomingShow = useMemo(
-    () => shows.filter((show) => show.status !== "archived").sort((a, b) => a.start_date.localeCompare(b.start_date))[0],
+  const upcomingShows = useMemo(
+    () =>
+      shows
+        .filter((show) => show.status !== "archived")
+        .sort((a, b) => a.start_date.localeCompare(b.start_date))
+        .slice(0, 3),
     [shows],
   );
+  const upcomingShow = upcomingShows[0] ?? null;
+  const activeShowId = upcomingShow?.id ?? "";
+  const currency = organization?.currency ?? "CAD";
+  const showEntries = activeShowId ? entries.filter((entry) => entry.show_id === activeShowId) : entries;
+  const showClasses = activeShowId ? classes.filter((classRecord) => classRecord.show_id === activeShowId) : classes;
+  const showStallOptions = activeShowId ? stallOptions.filter((option) => option.show_id === activeShowId) : stallOptions;
+  const showStallBookings = activeShowId ? stallBookings.filter((booking) => booking.show_id === activeShowId) : stallBookings;
+  const showInvoices = activeShowId ? invoices.filter((invoice) => invoice.show_id === activeShowId) : invoices;
+  const draftEntries = entries.filter((entry) => entry.status === "draft").length;
+  const activeEntries = showEntries.filter((entry) => entry.status === "active" || entry.status === "pending_checkout").length;
+  const stallCapacity = showStallOptions.reduce((sum, option) => sum + Number(option.total_quantity ?? 0), 0);
+  const stallsAvailable = showStallOptions.reduce((sum, option) => sum + Number(option.available_quantity ?? 0), 0);
+  const stallsBooked = Math.max(0, stallCapacity - stallsAvailable);
+  const stallUsage = stallCapacity ? Math.min(100, Math.round((stallsBooked / stallCapacity) * 100)) : 0;
+  const invoiceBalance = showInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const paidInvoices = showInvoices.filter((invoice) => invoice.status === "paid").length;
+  const invoiceProgress = showInvoices.length ? Math.round((paidInvoices / showInvoices.length) * 100) : 0;
+  const entryProgress = showClasses.length ? Math.min(100, Math.round((showEntries.length / showClasses.length) * 100)) : 0;
+  const showLocation = upcomingShow ? [upcomingShow.venue, upcomingShow.location].filter(Boolean).join(" - ") : "";
+  const actionItems = [
+    {
+      detail: upcomingShow
+        ? `${upcomingShows.length} upcoming show${upcomingShows.length === 1 ? "" : "s"} on the calendar.`
+        : "Create dates, venue and open status before inviting exhibitors.",
+      icon: upcomingShow ? CheckCircle2 : AlertCircle,
+      state: upcomingShow ? "Ready" : "Next",
+      title: upcomingShow ? "Calendar is started" : "Create the first show",
+    },
+    {
+      detail: contacts.length && horses.length ? `${contacts.length} contacts and ${horses.length} horses available.` : "Add owners, riders and horses before entries.",
+      icon: contacts.length && horses.length ? CheckCircle2 : Users,
+      state: contacts.length && horses.length ? "Ready" : "Build",
+      title: "People and horses",
+    },
+    {
+      detail: showEntries.length ? `${activeEntries} active or pending entries for the next show.` : "Classes are ready, but no entries have been started.",
+      icon: showEntries.length ? CheckCircle2 : ClipboardList,
+      state: showEntries.length ? "Moving" : "Waiting",
+      title: "Entry pipeline",
+    },
+    {
+      detail: stallCapacity ? `${stallsBooked} of ${stallCapacity} units reserved across stalls, extras and camping.` : "Publish reservation options for stalls, bedding, hay or camping.",
+      icon: stallCapacity ? Warehouse : Tent,
+      state: stallCapacity ? `${stallUsage}%` : "Setup",
+      title: "Reservations",
+    },
+  ];
 
   return (
-    <div className="content-grid">
-      <section className="metric-grid span-2">
-        <Metric label="Open shows" value={String(openShows)} />
-        <Metric label="Contacts" value={String(contacts.length)} />
-        <Metric label="Horses" value={String(horses.length)} />
-        <Metric label="Draft entries" value={String(entries.filter((entry) => entry.status === "draft").length)} />
-        <Metric label="Balance due" value={formatCurrency(unpaidBalance, organization?.currency ?? "CAD")} />
-      </section>
-
-      <section className="panel span-2">
-        <div className="panel-header">
-          <div>
-            <h2>Operations board</h2>
-            <p>{upcomingShow ? `${upcomingShow.name} starts ${formatDate(upcomingShow.start_date)}.` : "No show scheduled yet."}</p>
+    <div className="overview-layout">
+      <section className="overview-command span-2">
+        <div className="overview-command-main">
+          <p className="eyebrow">Command center</p>
+          <h2>{upcomingShow?.name ?? organization?.name ?? "Build the show office"}</h2>
+          <p>
+            {upcomingShow
+              ? `${formatDate(upcomingShow.start_date)} to ${formatDate(upcomingShow.end_date)}${showLocation ? ` at ${showLocation}` : ""}.`
+              : "Create the first association and show to unlock entries, reservations, scoring and billing."}
+          </p>
+          <div className="show-meta">
+            <span>
+              <CalendarDays size={16} />
+              {upcomingShow ? upcomingShow.status : "No show yet"}
+            </span>
+            <span>
+              <MapPin size={16} />
+              {showLocation || organization?.primary_contact_email || "Venue pending"}
+            </span>
+            <span>
+              <Trophy size={16} />
+              {showClasses.length} class{showClasses.length === 1 ? "" : "es"}
+            </span>
           </div>
         </div>
-        <div className="workflow-strip">
-          <WorkflowStep icon={Building2} label="Organization" state={organization ? "Ready" : "Needed"} />
-          <WorkflowStep icon={CalendarDays} label="Shows" state={shows.length ? "Ready" : "Next"} />
-          <WorkflowStep icon={ClipboardList} label="Entries" state="Schema ready" />
-          <WorkflowStep icon={CircleDollarSign} label="Invoices" state="Schema ready" />
+        <div className="overview-command-aside">
+          <span className={`badge ${upcomingShow?.status ?? "draft"}`}>{upcomingShow ? upcomingShow.status : "setup"}</span>
+          <strong>{formatCurrency(invoiceBalance || unpaidBalance, currency)}</strong>
+          <small>{upcomingShow ? "Balance tied to next show" : "Total open balance"}</small>
+        </div>
+      </section>
+
+      <section className="metric-grid span-2">
+        <Metric detail={upcomingShow ? `Next: ${formatDate(upcomingShow.start_date)}` : "No active calendar"} icon={CalendarDays} label="Open shows" value={String(openShows)} />
+        <Metric detail={`${contacts.length} people, ${horses.length} horses`} icon={Users} label="Registry" value={String(contacts.length + horses.length)} />
+        <Metric detail={`${draftEntries} draft${draftEntries === 1 ? "" : "s"} need review`} icon={ClipboardList} label="Entries" value={String(entries.length)} />
+        <Metric detail={`${stallsBooked} reserved of ${stallCapacity || 0}`} icon={Warehouse} label="Reservation usage" value={`${stallUsage}%`} />
+        <Metric detail={`${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} in scope`} icon={CircleDollarSign} label="Balance due" value={formatCurrency(unpaidBalance, currency)} />
+      </section>
+
+      <section className="panel action-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Action queue</h2>
+            <p>The next useful moves for this workspace.</p>
+          </div>
+        </div>
+        <div className="action-list">
+          {actionItems.map((item) => {
+            const Icon = item.icon;
+            return (
+              <div className="action-row" key={item.title}>
+                <div className="action-icon">
+                  <Icon size={18} />
+                </div>
+                <div>
+                  <strong>{item.title}</strong>
+                  <span>{item.detail}</span>
+                </div>
+                <small>{item.state}</small>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section className="panel schedule-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Upcoming shows</h2>
+            <p>{upcomingShows.length ? "The visible runway for secretaries and exhibitors." : "No upcoming shows yet."}</p>
+          </div>
+        </div>
+        <div className="timeline-list">
+          {upcomingShows.map((show) => (
+            <div className="timeline-row" key={show.id}>
+              <div>
+                <strong>{show.name}</strong>
+                <span>{show.location || show.venue || "Location pending"}</span>
+              </div>
+              <div>
+                <span>{formatDate(show.start_date)}</span>
+                <span className={`badge ${show.status}`}>{show.status}</span>
+              </div>
+            </div>
+          ))}
+          {!upcomingShows.length ? <EmptyState label="Create a show to start the operating calendar." /> : null}
+        </div>
+      </section>
+
+      <section className="panel capacity-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Operational pulse</h2>
+            <p>Quick read on the next show's readiness.</p>
+          </div>
+        </div>
+        <div className="progress-stack">
+          <ProgressMeter label="Entries vs classes" value={entryProgress} detail={`${showEntries.length} entries across ${showClasses.length} classes`} />
+          <ProgressMeter label="Reservation inventory used" value={stallUsage} detail={`${stallsBooked} booked, ${stallsAvailable} available`} />
+          <ProgressMeter label="Invoices paid" value={invoiceProgress} detail={`${paidInvoices} paid of ${showInvoices.length} invoices`} />
         </div>
       </section>
 
       <OrganizationForm onCreateOrganization={onCreateOrganization} />
     </div>
   );
+}
+
+function ProgressMeter({ detail, label, value }: { detail: string; label: string; value: number }) {
+  return (
+    <div className="progress-meter">
+      <div>
+        <strong>{label}</strong>
+        <span>{detail}</span>
+      </div>
+      <div className="progress-track" aria-label={`${label}: ${value}%`}>
+        <span style={{ width: `${value}%` }} />
+      </div>
+    </div>
+  );
+}
+
+function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
+  const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => role.role);
+  const unique = Array.from(new Set(roles.length ? roles : [contact.type]));
+
+  return unique.map((role) => role.replace("_", " ")).join(" / ");
 }
 
 function ShowsView({
@@ -490,6 +684,16 @@ function ShowsView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Calendrier"
+        title="Shows"
+        description="Planifie les concours, leurs dates et leur statut public avant d'ouvrir les inscriptions."
+        stats={[
+          { label: "Shows", value: String(shows.length) },
+          { label: "Ouverts", value: String(shows.filter((show) => show.status === "open").length) },
+        ]}
+      />
+
       <ShowForm organization={organization} onCreateShow={onCreateShow} />
 
       {editingShow ? (
@@ -538,6 +742,7 @@ function ShowsView({
 
 function PeopleView({
   contacts,
+  contactRoles,
   horses,
   organization,
   onCreateContact,
@@ -546,9 +751,10 @@ function PeopleView({
   onUpdateHorse,
 }: {
   contacts: Contact[];
+  contactRoles: ContactRole[];
   horses: Horse[];
   organization: Organization | null;
-  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<void>;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
@@ -558,8 +764,18 @@ function PeopleView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Registre"
+        title="Contacts et chevaux"
+        description="Centralise les proprietaires, cavaliers, payeurs et chevaux qui serviront aux inscriptions."
+        stats={[
+          { label: "Contacts", value: String(contacts.length) },
+          { label: "Chevaux", value: String(horses.length) },
+        ]}
+      />
+
       <ContactForm organization={organization} onCreateContact={onCreateContact} />
-      <HorseForm contacts={contacts} organization={organization} onCreateHorse={onCreateHorse} />
+      <HorseForm contacts={contacts} contactRoles={contactRoles} organization={organization} onCreateContact={onCreateContact} onCreateHorse={onCreateHorse} />
 
       {editingContact ? (
         <ContactEditForm
@@ -575,8 +791,11 @@ function PeopleView({
       {editingHorse ? (
         <HorseEditForm
           contacts={contacts}
+          contactRoles={contactRoles}
+          organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
+          onCreateContact={onCreateContact}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
             setEditingHorse(null);
@@ -594,14 +813,14 @@ function PeopleView({
         <div className="table">
           <div className="table-row table-head">
             <span>Name</span>
-            <span>Type</span>
+            <span>Roles</span>
             <span>Email</span>
             <span>Action</span>
           </div>
           {contacts.map((contact) => (
             <div className="table-row" key={contact.id}>
               <strong>{contactLabel(contact)}</strong>
-              <span className="badge">{contact.type}</span>
+              <span>{contactRoleSummary(contact, contactRoles)}</span>
               <span>{contact.email || "No email"}</span>
               <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                 Edit
@@ -667,6 +886,16 @@ function ClassesView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Programme"
+        title="Classes et divisions"
+        description="Structure le programme sportif: classes, divisions, frais et statuts d'ouverture."
+        stats={[
+          { label: "Classes", value: String(classes.length) },
+          { label: "Divisions", value: String(divisions.length) },
+        ]}
+      />
+
       <ClassForm organization={organization} shows={shows} onCreateClass={onCreateClass} />
       <DivisionForm classes={classes} organization={organization} shows={shows} onCreateDivision={onCreateDivision} />
 
@@ -758,23 +987,27 @@ function ClassesView({
 function EntriesView({
   classes,
   contacts,
+  contactRoles,
   divisions,
   entries,
   horses,
   organization,
   profileId,
   shows,
+  onCreateContact,
   onCreateEntry,
   onUpdateEntry,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
@@ -782,14 +1015,26 @@ function EntriesView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Inscriptions"
+        title="Gestion des inscriptions"
+        description="Cree et ajuste les brouillons avant checkout, facturation ou preparation du scoring."
+        stats={[
+          { label: "Inscriptions", value: String(entries.length) },
+          { label: "Brouillons", value: String(entries.filter((entry) => entry.status === "draft").length) },
+        ]}
+      />
+
       <EntryForm
         classes={classes}
         contacts={contacts}
+        contactRoles={contactRoles}
         divisions={divisions}
         horses={horses}
         organization={organization}
         profileId={profileId}
         shows={shows}
+        onCreateContact={onCreateContact}
         onCreateEntry={onCreateEntry}
       />
 
@@ -797,10 +1042,14 @@ function EntriesView({
         <EntryEditForm
           classes={classes}
           contacts={contacts}
+          contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
           horses={horses}
+          organization={organization}
+          profileId={profileId}
           onCancel={() => setEditingEntry(null)}
+          onCreateContact={onCreateContact}
           onUpdateEntry={async (id, input) => {
             await onUpdateEntry(id, input);
             setEditingEntry(null);
@@ -888,6 +1137,16 @@ function ScoringView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Scoring"
+        title="Preparation ShowScore"
+        description="Prepare les classes, runs, chevaux et cavaliers qui doivent etre envoyes vers le scoring."
+        stats={[
+          { label: "Classes", value: String(visibleClasses.length) },
+          { label: "Runs", value: String(totalRuns) },
+        ]}
+      />
+
       <section className="metric-grid span-2">
         <Metric label="Scoring classes" value={String(visibleClasses.length)} />
         <Metric label="Runs from entries" value={String(totalRuns)} />
@@ -960,16 +1219,20 @@ function ScoringView({
 
 function MyHorsesView({
   contacts,
+  contactRoles,
   horses,
   organization,
   profileId,
+  onCreateContact,
   onCreateHorse,
   onUpdateHorse,
 }: {
   contacts: Contact[];
+  contactRoles: ContactRole[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
@@ -977,18 +1240,34 @@ function MyHorsesView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Mon espace"
+        title="Mes chevaux"
+        description="Gere les chevaux lies a ton profil avant de les inscrire a un show."
+        stats={[
+          { label: "Chevaux", value: String(horses.length) },
+          { label: "Contacts", value: String(contacts.length) },
+        ]}
+      />
+
       <HorseForm
         contacts={contacts}
+        contactRoles={contactRoles}
         createdByUserId={profileId}
         organization={organization}
+        onCreateContact={onCreateContact}
         onCreateHorse={onCreateHorse}
       />
 
       {editingHorse ? (
         <HorseEditForm
           contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={profileId}
+          organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
+          onCreateContact={onCreateContact}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
             setEditingHorse(null);
@@ -1029,15 +1308,17 @@ function MyHorsesView({
 
 function MyContactsView({
   contacts,
+  contactRoles,
   organization,
   profileId,
   onCreateContact,
   onUpdateContact,
 }: {
   contacts: Contact[];
+  contactRoles: ContactRole[];
   organization: Organization | null;
   profileId: string;
-  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<void>;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -1045,6 +1326,13 @@ function MyContactsView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Mon espace"
+        title="Mes cavaliers et contacts"
+        description="Gere le contact lie a ton compte pour les inscriptions, reservations et factures."
+        stats={[{ label: "Contacts", value: String(contacts.length) }]}
+      />
+
       {canCreateLinkedContact ? (
         <ContactForm
           createdByUserId={profileId}
@@ -1078,14 +1366,14 @@ function MyContactsView({
         <div className="table">
           <div className="table-row table-head">
             <span>Nom</span>
-            <span>Type</span>
+            <span>Roles</span>
             <span>Email</span>
             <span>Action</span>
           </div>
           {contacts.map((contact) => (
             <div className="table-row" key={contact.id}>
               <strong>{contactLabel(contact)}</strong>
-              <span className="badge">{contact.type}</span>
+              <span>{contactRoleSummary(contact, contactRoles)}</span>
               <span>{contact.email || "No email"}</span>
               <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                 Edit
@@ -1102,23 +1390,27 @@ function MyContactsView({
 function MyEntriesView({
   classes,
   contacts,
+  contactRoles,
   divisions,
   entries,
   horses,
   organization,
   profileId,
   shows,
+  onCreateContact,
   onCreateEntry,
   onUpdateEntry,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
@@ -1126,14 +1418,26 @@ function MyEntriesView({
 
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Mon espace"
+        title="Mes inscriptions"
+        description="Consulte et modifie les inscriptions rattachees a tes chevaux ou contacts."
+        stats={[
+          { label: "Inscriptions", value: String(entries.length) },
+          { label: "Chevaux", value: String(horses.length) },
+        ]}
+      />
+
       <EntryForm
         classes={classes}
         contacts={contacts}
+        contactRoles={contactRoles}
         divisions={divisions}
         horses={horses}
         organization={organization}
         profileId={profileId}
         shows={shows}
+        onCreateContact={onCreateContact}
         onCreateEntry={onCreateEntry}
       />
 
@@ -1141,10 +1445,14 @@ function MyEntriesView({
         <EntryEditForm
           classes={classes}
           contacts={contacts}
+          contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
           horses={horses}
+          organization={organization}
+          profileId={profileId}
           onCancel={() => setEditingEntry(null)}
+          onCreateContact={onCreateContact}
           onUpdateEntry={async (id, input) => {
             await onUpdateEntry(id, input);
             setEditingEntry(null);
@@ -1196,6 +1504,16 @@ function BillingView({
 }) {
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Facturation"
+        title="Factures"
+        description="Suis les factures, soldes ouverts et lignes creees par les inscriptions ou reservations."
+        stats={[
+          { label: "Factures", value: String(invoices.length) },
+          { label: "Solde", value: formatCurrency(unpaidBalance, currency) },
+        ]}
+      />
+
       <section className="metric-grid span-2">
         <Metric label="Invoices" value={String(invoices.length)} />
         <Metric label="Open balance" value={formatCurrency(unpaidBalance, currency)} />
@@ -1250,6 +1568,12 @@ function BillingView({
 function SettingsView({ context, organization }: { context: AppContext | null; organization: Organization | null }) {
   return (
     <div className="content-grid">
+      <ViewIntro
+        eyebrow="Parametres"
+        title="Profil et association"
+        description="Verifie le profil connecte, le role, la devise, la taxe et le plan de l'association."
+      />
+
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -1531,7 +1855,7 @@ function ContactForm({
   linkedUserId?: string;
   organization: Organization | null;
   title?: string;
-  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<void>;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
 }) {
   const [type, setType] = useState<Contact["type"]>(defaultType);
   const [firstName, setFirstName] = useState("");
@@ -1626,16 +1950,19 @@ function ContactForm({
 
 function HorseForm({
   contacts,
+  contactRoles,
   createdByUserId,
   organization,
+  onCreateContact,
   onCreateHorse,
 }: {
   contacts: Contact[];
+  contactRoles: ContactRole[];
   createdByUserId?: string;
   organization: Organization | null;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
 }) {
-  const ownerContacts = contacts.filter((contact) => ["owner", "agent", "payer"].includes(contact.type));
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
   const [breed, setBreed] = useState("");
@@ -1677,32 +2004,34 @@ function HorseForm({
       <div className="panel-header">
         <div>
           <h2>New horse</h2>
-          <p>{ownerContacts.length ? "Connect a horse to an owner." : "Create an owner contact first."}</p>
+          <p>{contacts.length ? "Connect a horse to an owner." : "Create an owner contact from this form."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           Horse name
-          <input disabled={!organization || !ownerContacts.length} required value={name} onChange={(event) => setName(event.target.value)} />
+          <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <label>
-          Owner
-          <SearchSelect
-            disabled={!organization || !ownerContacts.length}
-            items={ownerContacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-            placeholder="Search owner"
-            value={selectedOwnerId}
-            onChange={setOwnerContactId}
-          />
-        </label>
+        <ContactPicker
+          contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          disabled={!organization}
+          label="Owner"
+          organization={organization}
+          role="owner"
+          value={selectedOwnerId}
+          onChange={setOwnerContactId}
+          onCreateContact={onCreateContact}
+        />
         <div className="form-grid">
           <label>
             Breed
-            <input disabled={!organization || !ownerContacts.length} value={breed} onChange={(event) => setBreed(event.target.value)} />
+            <input disabled={!organization} value={breed} onChange={(event) => setBreed(event.target.value)} />
           </label>
           <label>
             Gender
-            <select disabled={!organization || !ownerContacts.length} value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
+            <select disabled={!organization} value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
               <option value="">Unset</option>
               <option value="M">M</option>
               <option value="F">F</option>
@@ -1712,9 +2041,9 @@ function HorseForm({
         </div>
         <label>
           Registration
-          <input disabled={!organization || !ownerContacts.length} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
+          <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
-        <button className="primary-button" disabled={busy || !organization || !ownerContacts.length} type="submit">
+        <button className="primary-button" disabled={busy || !organization || !selectedOwnerId} type="submit">
           <Plus size={18} />
           Create horse
         </button>
@@ -1809,16 +2138,23 @@ function ContactEditForm({
 
 function HorseEditForm({
   contacts,
+  contactRoles,
+  createdByUserId,
   horse,
+  organization,
   onCancel,
+  onCreateContact,
   onUpdateHorse,
 }: {
   contacts: Contact[];
+  contactRoles: ContactRole[];
+  createdByUserId?: string;
   horse: Horse;
+  organization: Organization | null;
   onCancel: () => void;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
-  const ownerContacts = contacts.filter((contact) => ["owner", "agent", "payer"].includes(contact.type));
   const [name, setName] = useState(horse.name);
   const [ownerContactId, setOwnerContactId] = useState(horse.primary_owner_contact_id);
   const [breed, setBreed] = useState(horse.breed ?? "");
@@ -1856,15 +2192,17 @@ function HorseEditForm({
           Horse name
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
-        <label>
-          Owner
-          <SearchSelect
-            items={ownerContacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-            placeholder="Search owner"
-            value={ownerContactId}
-            onChange={setOwnerContactId}
-          />
-        </label>
+        <ContactPicker
+          contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          label="Owner"
+          organization={organization}
+          role="owner"
+          value={ownerContactId}
+          onChange={setOwnerContactId}
+          onCreateContact={onCreateContact}
+        />
         <div className="form-grid">
           <label>
             Breed
@@ -2193,20 +2531,24 @@ function DivisionEditForm({
 function EntryForm({
   classes,
   contacts,
+  contactRoles,
   divisions,
   horses,
   organization,
   profileId,
   shows,
+  onCreateContact,
   onCreateEntry,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   divisions: Division[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
@@ -2292,27 +2634,31 @@ function EntryForm({
           />
         </label>
         <div className="form-grid">
-          <label>
-            Rider
-            <SearchSelect
-              allowEmpty
-              disabled={!contacts.length}
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search rider"
-              value={riderContactId}
-              onChange={setRiderContactId}
-            />
-          </label>
-          <label>
-            Payer
-            <SearchSelect
-              disabled={!contacts.length}
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search payer"
-              value={selectedPayerId}
-              onChange={setPayerContactId}
-            />
-          </label>
+          <ContactPicker
+            allowEmpty
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            disabled={!organization}
+            label="Rider"
+            organization={organization}
+            role="rider"
+            value={riderContactId}
+            onChange={setRiderContactId}
+            onCreateContact={onCreateContact}
+          />
+          <ContactPicker
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            disabled={!organization}
+            label="Payer"
+            organization={organization}
+            role="payer"
+            value={selectedPayerId}
+            onChange={setPayerContactId}
+            onCreateContact={onCreateContact}
+          />
         </div>
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
@@ -2326,18 +2672,26 @@ function EntryForm({
 function EntryEditForm({
   classes,
   contacts,
+  contactRoles,
   divisions,
   entry,
   horses,
+  organization,
+  profileId,
   onCancel,
+  onCreateContact,
   onUpdateEntry,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   divisions: Division[];
   entry: Entry;
   horses: Horse[];
+  organization: Organization | null;
+  profileId: string;
   onCancel: () => void;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
   const [horseId, setHorseId] = useState(entry.horse_id);
@@ -2405,25 +2759,29 @@ function EntryEditForm({
           />
         </label>
         <div className="form-grid">
-          <label>
-            Rider
-            <SearchSelect
-              allowEmpty
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search rider"
-              value={riderContactId}
-              onChange={setRiderContactId}
-            />
-          </label>
-          <label>
-            Payer
-            <SearchSelect
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search payer"
-              value={payerContactId}
-              onChange={setPayerContactId}
-            />
-          </label>
+          <ContactPicker
+            allowEmpty
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            label="Rider"
+            organization={organization}
+            role="rider"
+            value={riderContactId}
+            onChange={setRiderContactId}
+            onCreateContact={onCreateContact}
+          />
+          <ContactPicker
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            label="Payer"
+            organization={organization}
+            role="payer"
+            value={payerContactId}
+            onChange={setPayerContactId}
+            onCreateContact={onCreateContact}
+          />
         </div>
         <div className="form-grid">
           <label>

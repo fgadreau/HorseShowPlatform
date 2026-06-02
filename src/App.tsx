@@ -168,9 +168,10 @@ export default function App() {
         await refreshContext();
       }}
       onCreateContact={async (input) => {
-        await createContact(input);
+        const contact = await createContact(input);
         setNotice({ tone: "success", message: "Contact created." });
         await refreshContext();
+        return contact;
       }}
       onUpdateContact={async (id, input) => {
         await updateContact(id, input);

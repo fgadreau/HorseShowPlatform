@@ -1,15 +1,17 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { Plus } from "lucide-react";
-import { EmptyState, FormActions, Metric, SearchSelect } from "../../components/ui";
+import type { ComponentType } from "react";
+import { ClipboardList, Plus, Warehouse } from "lucide-react";
+import { ContactPicker, EmptyState, FormActions, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import {
   createStallBooking,
+  createContact,
   createStallOption,
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
-import type { Contact, Horse, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import type { Contact, ContactRole, Horse, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
 
 const stallPresets = [
   { key: "stall", label: "Stall", name: "Stall", category: "stall" },
@@ -22,9 +24,13 @@ const stallPresets = [
 
 const bookingStatuses: StallBooking["status"][] = ["requested", "reserved", "active", "cancelled", "completed"];
 
+type AssociationReservationTab = "reservations" | "new-reservation" | "options";
+type PersonalReservationTab = "my-reservations" | "new-reservation" | "available-options";
+
 export function StallsView({
   bookings,
   contacts,
+  contactRoles,
   currency,
   horses,
   organization,
@@ -32,6 +38,7 @@ export function StallsView({
   showDays,
   shows,
   stallOptions,
+  onCreateContact,
   onCreateStallBooking,
   onCreateStallOption,
   onUpdateStallBooking,
@@ -39,6 +46,7 @@ export function StallsView({
 }: {
   bookings: StallBooking[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   currency: string;
   horses: Horse[];
   organization: Organization | null;
@@ -46,6 +54,7 @@ export function StallsView({
   showDays: ShowDay[];
   shows: Show[];
   stallOptions: StallOption[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
@@ -53,66 +62,127 @@ export function StallsView({
 }) {
   const [editingOption, setEditingOption] = useState<StallOption | null>(null);
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
+  const [activeTab, setActiveTab] = useState<AssociationReservationTab>("reservations");
   const reservedQuantity = bookings
     .filter((booking) => booking.status !== "cancelled")
     .reduce((sum, booking) => sum + Number(booking.quantity ?? 1), 0);
   const billableTotal = bookings.reduce((sum, booking) => sum + Number(booking.total_price ?? 0), 0);
+  const associationTabs: Array<ReservationTabItem<AssociationReservationTab>> = [
+    {
+      count: bookings.length,
+      detail: "Demandes, reservations et statuts.",
+      icon: ClipboardList,
+      key: "reservations",
+      label: "Reservations",
+    },
+    {
+      detail: "Ajouter une demande pour un exposant.",
+      icon: Plus,
+      key: "new-reservation",
+      label: "Nouvelle reservation",
+    },
+    {
+      count: stallOptions.length,
+      detail: "Stalls, camping et extras disponibles.",
+      icon: Warehouse,
+      key: "options",
+      label: "Options reservables",
+    },
+  ];
 
   return (
     <div className="content-grid">
-      <section className="metric-grid span-2">
-        <Metric label="Options" value={String(stallOptions.length)} />
-        <Metric label="Reserved units" value={String(reservedQuantity)} />
-        <Metric label="Billable" value={formatCurrency(billableTotal, currency)} />
-      </section>
-
-      <StallOptionForm organization={organization} showDays={showDays} shows={shows} onCreateStallOption={onCreateStallOption} />
-      <StallBookingForm
-        contacts={contacts}
-        currency={currency}
-        defaultStatus="reserved"
-        horses={horses}
-        organization={organization}
-        profileId={profileId}
-        showDays={showDays}
-        shows={shows}
-        stallOptions={stallOptions}
-        title="New reservation"
-        onCreateStallBooking={onCreateStallBooking}
+      <ViewIntro
+        eyebrow="Reservations"
+        title="Reservations et options reservables"
+        description="Gere les demandes de stalls, camping et extras, puis garde l'inventaire disponible a jour."
+        stats={[
+          { label: "Reservations", value: String(bookings.length) },
+          { label: "Options", value: String(stallOptions.length) },
+        ]}
       />
 
-      {editingOption ? (
-        <StallOptionEditForm
+      <section className="metric-grid span-2">
+        <Metric label="Options reservables" value={String(stallOptions.length)} />
+        <Metric label="Unites reservees" value={String(reservedQuantity)} />
+        <Metric label="Facturable" value={formatCurrency(billableTotal, currency)} />
+      </section>
+
+      <ReservationTabs
+        activeTab={activeTab}
+        items={associationTabs}
+        onChange={(tab) => {
+          setActiveTab(tab);
+          setEditingBooking(null);
+          setEditingOption(null);
+        }}
+      />
+
+      {activeTab === "reservations" ? (
+        <>
+          {editingBooking ? (
+            <StallBookingEditForm
+              booking={editingBooking}
+              contacts={contacts}
+              contactRoles={contactRoles}
+              currency={currency}
+              horses={horses}
+              organization={organization}
+              profileId={profileId}
+              showDays={showDays}
+              stallOptions={stallOptions}
+              onCancel={() => setEditingBooking(null)}
+              onCreateContact={onCreateContact}
+              onUpdateStallBooking={async (id, input) => {
+                await onUpdateStallBooking(id, input);
+                setEditingBooking(null);
+              }}
+            />
+          ) : null}
+
+          <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} options={stallOptions} onEdit={setEditingBooking} />
+        </>
+      ) : null}
+
+      {activeTab === "new-reservation" ? (
+        <StallBookingForm
+          contacts={contacts}
+          contactRoles={contactRoles}
           currency={currency}
-          option={editingOption}
+          defaultStatus="reserved"
+          horses={horses}
+          organization={organization}
+          profileId={profileId}
           showDays={showDays}
           shows={shows}
-          onCancel={() => setEditingOption(null)}
-          onUpdateStallOption={async (id, input) => {
-            await onUpdateStallOption(id, input);
-            setEditingOption(null);
-          }}
-        />
-      ) : null}
-
-      {editingBooking ? (
-        <StallBookingEditForm
-          booking={editingBooking}
-          contacts={contacts}
-          currency={currency}
-          horses={horses}
-          showDays={showDays}
           stallOptions={stallOptions}
-          onCancel={() => setEditingBooking(null)}
-          onUpdateStallBooking={async (id, input) => {
-            await onUpdateStallBooking(id, input);
-            setEditingBooking(null);
-          }}
+          title="Nouvelle reservation"
+          onCreateContact={onCreateContact}
+          onCreateStallBooking={onCreateStallBooking}
         />
       ) : null}
 
-      <StallOptionsTable currency={currency} options={stallOptions} shows={shows} onEdit={setEditingOption} />
-      <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} options={stallOptions} onEdit={setEditingBooking} />
+      {activeTab === "options" ? (
+        <>
+          <StallOptionForm organization={organization} showDays={showDays} shows={shows} onCreateStallOption={onCreateStallOption} />
+
+          {editingOption ? (
+            <StallOptionEditForm
+              currency={currency}
+              option={editingOption}
+              showDays={showDays}
+              shows={shows}
+              onCancel={() => setEditingOption(null)}
+              onUpdateStallOption={async (id, input) => {
+                await onUpdateStallOption(id, input);
+                setEditingOption(null);
+              }}
+            />
+          ) : null}
+
+          <StallOptionsTable currency={currency} options={stallOptions} shows={shows} onEdit={setEditingOption} />
+        </>
+      ) : null}
     </div>
   );
 }
@@ -120,6 +190,7 @@ export function StallsView({
 export function MyStallsView({
   bookings,
   contacts,
+  contactRoles,
   currency,
   horses,
   organization,
@@ -127,11 +198,13 @@ export function MyStallsView({
   showDays,
   shows,
   stallOptions,
+  onCreateContact,
   onCreateStallBooking,
   onUpdateStallBooking,
 }: {
   bookings: StallBooking[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   currency: string;
   horses: Horse[];
   organization: Organization | null;
@@ -139,61 +212,157 @@ export function MyStallsView({
   showDays: ShowDay[];
   shows: Show[];
   stallOptions: StallOption[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
 }) {
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
+  const [activeTab, setActiveTab] = useState<PersonalReservationTab>("my-reservations");
   const billableTotal = bookings.reduce((sum, booking) => sum + Number(booking.total_price ?? 0), 0);
+  const availableOptions = stallOptions.filter((option) => option.available_quantity > 0);
+  const personalTabs: Array<ReservationTabItem<PersonalReservationTab>> = [
+    {
+      count: bookings.length,
+      detail: "Mes demandes et reservations actives.",
+      icon: ClipboardList,
+      key: "my-reservations",
+      label: "Mes reservations",
+    },
+    {
+      detail: "Demander un stall, camping ou extra.",
+      icon: Plus,
+      key: "new-reservation",
+      label: "Nouvelle reservation",
+    },
+    {
+      count: availableOptions.length,
+      detail: "Ce qui peut etre reserve.",
+      icon: Warehouse,
+      key: "available-options",
+      label: "Options disponibles",
+    },
+  ];
 
   return (
     <div className="content-grid">
-      <section className="metric-grid span-2">
-        <Metric label="Reservations" value={String(bookings.length)} />
-        <Metric label="Available options" value={String(stallOptions.filter((option) => option.available_quantity > 0).length)} />
-        <Metric label="Billable" value={formatCurrency(billableTotal, currency)} />
-      </section>
-
-      <StallBookingForm
-        allowStatusEdit={false}
-        contacts={contacts}
-        currency={currency}
-        defaultStatus="requested"
-        horses={horses}
-        organization={organization}
-        profileId={profileId}
-        showDays={showDays}
-        shows={shows}
-        stallOptions={stallOptions}
-        title="Nouvelle reservation"
-        onCreateStallBooking={onCreateStallBooking}
+      <ViewIntro
+        eyebrow="Mon espace"
+        title="Mes reservations"
+        description="Reserve les options disponibles pour tes chevaux et suis les demandes liees a ton compte."
+        stats={[
+          { label: "Reservations", value: String(bookings.length) },
+          { label: "Disponibles", value: String(availableOptions.length) },
+        ]}
       />
 
-      {editingBooking ? (
-        <StallBookingEditForm
-          booking={editingBooking}
+      <section className="metric-grid span-2">
+        <Metric label="Reservations" value={String(bookings.length)} />
+        <Metric label="Options disponibles" value={String(availableOptions.length)} />
+        <Metric label="Facturable" value={formatCurrency(billableTotal, currency)} />
+      </section>
+
+      <ReservationTabs
+        activeTab={activeTab}
+        items={personalTabs}
+        onChange={(tab) => {
+          setActiveTab(tab);
+          setEditingBooking(null);
+        }}
+      />
+
+      {activeTab === "my-reservations" ? (
+        <>
+          {editingBooking ? (
+            <StallBookingEditForm
+              booking={editingBooking}
+              contacts={contacts}
+              contactRoles={contactRoles}
+              currency={currency}
+              horses={horses}
+              organization={organization}
+              profileId={profileId}
+              showDays={showDays}
+              stallOptions={stallOptions}
+              onCancel={() => setEditingBooking(null)}
+              onCreateContact={onCreateContact}
+              onUpdateStallBooking={async (id, input) => {
+                await onUpdateStallBooking(id, input);
+                setEditingBooking(null);
+              }}
+            />
+          ) : null}
+
+          <StallBookingsTable
+            bookings={bookings}
+            contacts={contacts}
+            currency={currency}
+            horses={horses}
+            options={stallOptions}
+            title="Mes reservations"
+            onEdit={setEditingBooking}
+          />
+        </>
+      ) : null}
+
+      {activeTab === "new-reservation" ? (
+        <StallBookingForm
+          allowStatusEdit={false}
           contacts={contacts}
+          contactRoles={contactRoles}
           currency={currency}
+          defaultStatus="requested"
           horses={horses}
+          organization={organization}
+          profileId={profileId}
           showDays={showDays}
+          shows={shows}
           stallOptions={stallOptions}
-          onCancel={() => setEditingBooking(null)}
-          onUpdateStallBooking={async (id, input) => {
-            await onUpdateStallBooking(id, input);
-            setEditingBooking(null);
-          }}
+          title="Nouvelle reservation"
+          onCreateContact={onCreateContact}
+          onCreateStallBooking={onCreateStallBooking}
         />
       ) : null}
 
-      <StallBookingsTable
-        bookings={bookings}
-        contacts={contacts}
-        currency={currency}
-        horses={horses}
-        options={stallOptions}
-        title="Mes reservations"
-        onEdit={setEditingBooking}
-      />
+      {activeTab === "available-options" ? <StallOptionsTable currency={currency} options={availableOptions} shows={shows} /> : null}
     </div>
+  );
+}
+
+type ReservationTabItem<T extends string> = {
+  count?: number;
+  detail: string;
+  icon: ComponentType<{ size?: number }>;
+  key: T;
+  label: string;
+};
+
+function ReservationTabs<T extends string>({
+  activeTab,
+  items,
+  onChange,
+}: {
+  activeTab: T;
+  items: Array<ReservationTabItem<T>>;
+  onChange: (tab: T) => void;
+}) {
+  return (
+    <section className="reservation-tabs span-2" aria-label="Reservation sections">
+      {items.map((item) => {
+        const Icon = item.icon;
+        return (
+          <button className={activeTab === item.key ? "active" : ""} key={item.key} type="button" onClick={() => onChange(item.key)}>
+            <Icon size={18} />
+            <span>
+              <strong>
+                {item.label}
+                {typeof item.count === "number" ? <small>{item.count}</small> : null}
+              </strong>
+              <em>{item.detail}</em>
+            </span>
+          </button>
+        );
+      })}
+    </section>
   );
 }
 
@@ -206,22 +375,24 @@ function StallOptionsTable({
   currency: string;
   options: StallOption[];
   shows: Show[];
-  onEdit: (option: StallOption) => void;
+  onEdit?: (option: StallOption) => void;
 }) {
+  const title = onEdit ? "Options reservables" : "Options disponibles";
+
   return (
     <section className="panel span-2">
       <div className="panel-header">
         <div>
-          <h2>Stalls & extras</h2>
-          <p>{options.length ? `${options.length} reservable option${options.length === 1 ? "" : "s"}.` : "Create stalls, tack stalls, bedding, hay or camping."}</p>
+          <h2>{title}</h2>
+          <p>{options.length ? `${options.length} option${options.length === 1 ? "" : "s"} available for reservations.` : "Create stalls, tack stalls, bedding, hay or camping."}</p>
         </div>
       </div>
-      <div className="table stalls-table">
+      <div className={`table stalls-table ${onEdit ? "" : "read-only-table"}`}>
         <div className="table-row table-head">
           <span>Option</span>
           <span>Show</span>
           <span>Availability</span>
-          <span>Action</span>
+          {onEdit ? <span>Action</span> : null}
         </div>
         {options.map((option) => (
           <div className="table-row" key={option.id}>
@@ -235,12 +406,14 @@ function StallOptionsTable({
             <span>
               {option.available_quantity} / {option.total_quantity}
             </span>
-            <button className="text-button" type="button" onClick={() => onEdit(option)}>
-              Edit
-            </button>
+            {onEdit ? (
+              <button className="text-button" type="button" onClick={() => onEdit(option)}>
+                Modifier
+              </button>
+            ) : null}
           </div>
         ))}
-        {!options.length ? <EmptyState label="Add your first stall or extra option." /> : null}
+        {!options.length ? <EmptyState label="Add the first reservable option." /> : null}
       </div>
     </section>
   );
@@ -292,12 +465,12 @@ function StallBookingsTable({
               <span>{contactLabel(findById(contacts, booking.booker_contact_id))}</span>
               <span className={`badge ${booking.status}`}>{booking.status}</span>
               <button className="text-button" type="button" onClick={() => onEdit(booking)}>
-                Edit
+                Modifier
               </button>
             </div>
           );
         })}
-        {!bookings.length ? <EmptyState label="No stall or extra reservations yet." /> : null}
+        {!bookings.length ? <EmptyState label="No reservations yet." /> : null}
       </div>
     </section>
   );
@@ -386,8 +559,8 @@ function StallOptionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New option</h2>
-          <p>{shows.length ? "Create stall, tack, bedding, hay or camping inventory." : "Create a show first."}</p>
+          <h2>Nouvelle option reservable</h2>
+          <p>{shows.length ? "Creer l'inventaire reservable: stall, tack, ripe, foin ou camping." : "Create a show first."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -478,7 +651,7 @@ function StallOptionForm({
         </label>
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
-          Create option
+          Creer option
         </button>
       </form>
     </section>
@@ -543,7 +716,7 @@ function StallOptionEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit option</h2>
+          <h2>Modifier option</h2>
           <p>
             {showLabel(show)} / {formatCurrency(option.price, currency)}
           </p>
@@ -624,6 +797,7 @@ function StallOptionEditForm({
 function StallBookingForm({
   allowStatusEdit = true,
   contacts,
+  contactRoles,
   currency,
   defaultStatus,
   horses,
@@ -633,10 +807,12 @@ function StallBookingForm({
   shows,
   stallOptions,
   title,
+  onCreateContact,
   onCreateStallBooking,
 }: {
   allowStatusEdit?: boolean;
   contacts: Contact[];
+  contactRoles: ContactRole[];
   currency: string;
   defaultStatus: StallBooking["status"];
   horses: Horse[];
@@ -646,6 +822,7 @@ function StallBookingForm({
   shows: Show[];
   stallOptions: StallOption[];
   title: string;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
 }) {
   const firstReservableOption = stallOptions.find((option) => option.available_quantity > 0) ?? stallOptions[0] ?? null;
@@ -777,27 +954,31 @@ function StallBookingForm({
           />
         </label>
         <div className="form-grid">
-          <label>
-            Booker
-            <SearchSelect
-              disabled={!contacts.length}
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search booker"
+            <ContactPicker
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={profileId}
+              disabled={!organization}
+              label="Booker"
+              organization={organization}
+              role="booker"
               value={selectedBookerId}
               onChange={setBookerContactId}
+              onCreateContact={onCreateContact}
             />
-          </label>
-          <label>
-            Payer
-            <SearchSelect
-              disabled={!contacts.length}
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search payer"
+            <ContactPicker
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={profileId}
+              disabled={!organization}
+              label="Payer"
+              organization={organization}
+              role="payer"
               value={selectedPayerId}
               onChange={setPayerContactId}
+              onCreateContact={onCreateContact}
             />
-          </label>
-        </div>
+          </div>
         <div className="form-grid">
           <label>
             Start day
@@ -826,7 +1007,7 @@ function StallBookingForm({
         </label>
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
-          Create reservation
+          Creer reservation
         </button>
       </form>
     </section>
@@ -836,20 +1017,28 @@ function StallBookingForm({
 function StallBookingEditForm({
   booking,
   contacts,
+  contactRoles,
   currency,
   horses,
+  organization,
+  profileId,
   showDays,
   stallOptions,
   onCancel,
+  onCreateContact,
   onUpdateStallBooking,
 }: {
   booking: StallBooking;
   contacts: Contact[];
+  contactRoles: ContactRole[];
   currency: string;
   horses: Horse[];
+  organization: Organization | null;
+  profileId: string;
   showDays: ShowDay[];
   stallOptions: StallOption[];
   onCancel: () => void;
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
 }) {
   const [optionId, setOptionId] = useState(booking.stall_option_id);
@@ -905,7 +1094,7 @@ function StallBookingEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit reservation</h2>
+          <h2>Modifier reservation</h2>
           <p>Invoice draft line: {formatCurrency(totalPrice, currency)}.</p>
         </div>
       </div>
@@ -950,24 +1139,28 @@ function StallBookingEditForm({
           />
         </label>
         <div className="form-grid">
-          <label>
-            Booker
-            <SearchSelect
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search booker"
-              value={bookerContactId}
-              onChange={setBookerContactId}
-            />
-          </label>
-          <label>
-            Payer
-            <SearchSelect
-              items={contacts.map((contact) => ({ id: contact.id, label: contactLabel(contact), detail: contact.email ?? contact.type }))}
-              placeholder="Search payer"
-              value={payerContactId}
-              onChange={setPayerContactId}
-            />
-          </label>
+          <ContactPicker
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            label="Booker"
+            organization={organization}
+            role="booker"
+            value={bookerContactId}
+            onChange={setBookerContactId}
+            onCreateContact={onCreateContact}
+          />
+          <ContactPicker
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            label="Payer"
+            organization={organization}
+            role="payer"
+            value={payerContactId}
+            onChange={setPayerContactId}
+            onCreateContact={onCreateContact}
+          />
         </div>
         <div className="form-grid">
           <label>

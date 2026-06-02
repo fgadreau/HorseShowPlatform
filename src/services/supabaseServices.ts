@@ -6,6 +6,8 @@ import type {
   ClassUpdateInput,
   Contact,
   ContactInput,
+  ContactRole,
+  ContactRoleName,
   ContactUpdateInput,
   Division,
   DivisionInput,
@@ -44,6 +46,7 @@ export type AppContext = {
   showDays: ShowDay[];
   showScoreClassSetups: ShowScoreClassSetup[];
   contacts: Contact[];
+  contactRoles: ContactRole[];
   horses: Horse[];
   classes: ClassRecord[];
   divisions: Division[];
@@ -109,6 +112,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showsResult,
     showDaysResult,
     contactsResult,
+    contactRolesResult,
     horsesResult,
     classesResult,
     divisionsResult,
@@ -123,6 +127,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(),
     client.from("show_days").select("*").order("day_date", { ascending: true }).returns<ShowDay[]>(),
     client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(),
+    client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(),
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
     client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
     client.from("divisions").select("*").order("created_at", { ascending: false }).returns<Division[]>(),
@@ -152,6 +157,16 @@ export async function loadAppContext(user: User): Promise<AppContext> {
 
   if (contactsResult.error) {
     throw contactsResult.error;
+  }
+
+  const contactRoles = contactRolesResult.error
+    ? isMissingSchemaError(contactRolesResult.error, "contact_roles")
+      ? deriveContactRolesFromContacts(contactsResult.data ?? [])
+      : null
+    : contactRolesResult.data ?? [];
+
+  if (!contactRoles) {
+    throw contactRolesResult.error;
   }
 
   if (horsesResult.error) {
@@ -194,6 +209,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showDays: showDaysResult.data ?? [],
     showScoreClassSetups,
     contacts: contactsResult.data ?? [],
+    contactRoles,
     horses: horsesResult.data ?? [],
     classes: classesResult.data ?? [],
     divisions: divisionsResult.data ?? [],
@@ -308,6 +324,13 @@ export async function createContact(input: ContactInput) {
     throw error;
   }
 
+  await ensureContactRoles({
+    organization_id: data.organization_id,
+    contact_id: data.id,
+    roles: uniqueRoles([input.type, ...(input.roles ?? [])]),
+    source: input.roles?.length ? "manual" : "contact_type",
+  });
+
   return data;
 }
 
@@ -322,6 +345,15 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
 
   if (error) {
     throw error;
+  }
+
+  if (input.type) {
+    await ensureContactRole({
+      organization_id: data.organization_id,
+      contact_id: data.id,
+      role: input.type,
+      source: "contact_type",
+    });
   }
 
   return data;
@@ -364,6 +396,13 @@ export async function createHorse(input: HorseInput) {
     throw relationError;
   }
 
+  await ensureContactRole({
+    organization_id: input.organization_id,
+    contact_id: input.primary_owner_contact_id,
+    role: "owner",
+    source: "horse",
+  });
+
   return horse;
 }
 
@@ -378,6 +417,15 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
 
   if (error) {
     throw error;
+  }
+
+  if (input.primary_owner_contact_id) {
+    await ensureContactRole({
+      organization_id: data.organization_id,
+      contact_id: input.primary_owner_contact_id,
+      role: "owner",
+      source: "horse",
+    });
   }
 
   return data;
@@ -490,6 +538,27 @@ export async function createEntry(input: EntryInput) {
     throw error;
   }
 
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.owner_contact_id,
+    role: "owner",
+    source: "entry",
+  });
+  if (data.rider_contact_id) {
+    await ensureContactRole({
+      organization_id: data.organization_id,
+      contact_id: data.rider_contact_id,
+      role: "rider",
+      source: "entry",
+    });
+  }
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.payer_contact_id,
+    role: "payer",
+    source: "entry",
+  });
+
   return data;
 }
 
@@ -505,6 +574,27 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
   if (error) {
     throw error;
   }
+
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.owner_contact_id,
+    role: "owner",
+    source: "entry",
+  });
+  if (data.rider_contact_id) {
+    await ensureContactRole({
+      organization_id: data.organization_id,
+      contact_id: data.rider_contact_id,
+      role: "rider",
+      source: "entry",
+    });
+  }
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.payer_contact_id,
+    role: "payer",
+    source: "entry",
+  });
 
   return data;
 }
@@ -580,6 +670,19 @@ export async function createStallBooking(input: StallBookingInput) {
     throw error;
   }
 
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.booker_contact_id,
+    role: "booker",
+    source: "reservation",
+  });
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.payer_contact_id,
+    role: "payer",
+    source: "reservation",
+  });
+
   return data;
 }
 
@@ -595,6 +698,19 @@ export async function updateStallBooking(id: string, input: StallBookingUpdateIn
   if (error) {
     throw error;
   }
+
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.booker_contact_id,
+    role: "booker",
+    source: "reservation",
+  });
+  await ensureContactRole({
+    organization_id: data.organization_id,
+    contact_id: data.payer_contact_id,
+    role: "payer",
+    source: "reservation",
+  });
 
   return data;
 }
@@ -661,6 +777,76 @@ export async function prepareShowScoreClassSetup(input: {
   return data;
 }
 
+export async function ensureContactRole(input: {
+  organization_id: string;
+  contact_id: string;
+  role: ContactRoleName;
+  source: ContactRole["source"];
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("contact_roles")
+    .upsert(
+      {
+        organization_id: input.organization_id,
+        contact_id: input.contact_id,
+        role: input.role,
+        source: input.source,
+      },
+      { onConflict: "organization_id,contact_id,role" },
+    )
+    .select("*")
+    .single<ContactRole>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "contact_roles")) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+export async function ensureContactRoles(input: {
+  organization_id: string;
+  contact_id: string;
+  roles: ContactRoleName[];
+  source: ContactRole["source"];
+}) {
+  const roles = uniqueRoles(input.roles);
+  const ensured: Array<ContactRole | null> = [];
+
+  for (const role of roles) {
+    ensured.push(
+      await ensureContactRole({
+        organization_id: input.organization_id,
+        contact_id: input.contact_id,
+        role,
+        source: input.source,
+      }),
+    );
+  }
+
+  return ensured;
+}
+
+function uniqueRoles(roles: ContactRoleName[]) {
+  return Array.from(new Set(roles.filter(Boolean)));
+}
+
+function deriveContactRolesFromContacts(contacts: Contact[]): ContactRole[] {
+  return contacts.map((contact) => ({
+    id: `${contact.id}-${contact.type}`,
+    organization_id: contact.organization_id,
+    contact_id: contact.id,
+    role: contact.type,
+    source: "contact_type",
+    created_at: contact.created_at,
+  }));
+}
+
 function titleCase(value: string) {
   if (!value) {
     return null;
@@ -678,6 +864,10 @@ function cleanPayload<T extends Record<string, unknown>>(input: T) {
 }
 
 function isMissingShowScoreSchemaError(error: { code?: string; message?: string }) {
+  return isMissingSchemaError(error, "show_score_class_setups");
+}
+
+function isMissingSchemaError(error: { code?: string; message?: string }, relationName: string) {
   const message = String(error.message || "").toLowerCase();
-  return error.code === "42P01" || (message.includes("schema cache") && message.includes("show_score_class_setups"));
+  return error.code === "42P01" || (message.includes("schema cache") && message.includes(relationName));
 }

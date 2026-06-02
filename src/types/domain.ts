@@ -107,6 +107,17 @@ export type Contact = {
   created_at: string;
 };
 
+export type ContactRoleName = "owner" | "agent" | "rider" | "payer" | "booker" | "other";
+
+export type ContactRole = {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  role: ContactRoleName;
+  source: "manual" | "contact_type" | "horse" | "entry" | "reservation";
+  created_at: string;
+};
+
 export type Horse = {
   id: string;
   organization_id: string;
@@ -272,6 +283,7 @@ export type ShowUpdateInput = {
 export type ContactInput = {
   organization_id: string;
   type: Contact["type"];
+  roles?: ContactRoleName[];
   first_name: string;
   last_name: string;
   email?: string;
