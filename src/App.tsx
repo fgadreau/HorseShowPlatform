@@ -210,7 +210,12 @@ export default function App() {
       }}
       onCreateEntry={async (input) => {
         await createEntry(input);
-        setNotice({ tone: "success", message: "Entry draft created." });
+        setNotice({ tone: "success", message: "Entry draft created and invoice draft updated." });
+        await refreshContext();
+      }}
+      onUpdateEntry={async (id, input) => {
+        await updateEntry(id, input);
+        setNotice({ tone: "success", message: "Entry and invoice draft updated." });
         await refreshContext();
       }}
       onCreateStallOption={async (input) => {
@@ -251,11 +256,6 @@ export default function App() {
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
         }
-      }}
-      onUpdateEntry={async (id, input) => {
-        await updateEntry(id, input);
-        setNotice({ tone: "success", message: "Entry updated." });
-        await refreshContext();
       }}
       onRefresh={() => refreshContext()}
       onSignOut={handleSignOut}

@@ -226,6 +226,8 @@ export type StallOption = {
   duration_days: number | null;
   show_day_start_id: string | null;
   show_day_end_id: string | null;
+  requires_horse_assignment: boolean;
+  limit_per_horse_stalls: number | null;
   category: "stall" | "camping" | "parking" | "extra" | null;
   notes: string | null;
   created_at: string;
@@ -241,8 +243,8 @@ export type StallBooking = {
   booker_contact_id: string;
   payer_contact_id: string;
   status: "requested" | "reserved" | "active" | "cancelled" | "completed";
-  show_day_start_id: string;
-  show_day_end_id: string;
+  show_day_start_id: string | null;
+  show_day_end_id: string | null;
   quantity: number;
   unit_price: number | null;
   total_price: number | null;
@@ -400,8 +402,10 @@ export type StallOptionInput = {
   total_quantity: number;
   available_quantity?: number;
   duration_days?: number;
-  show_day_start_id?: string;
-  show_day_end_id?: string;
+  show_day_start_id?: string | null;
+  show_day_end_id?: string | null;
+  requires_horse_assignment?: boolean;
+  limit_per_horse_stalls?: number | null;
   category?: StallOption["category"];
   notes?: string;
 };
@@ -415,6 +419,8 @@ export type StallOptionUpdateInput = {
   duration_days?: number | null;
   show_day_start_id?: string | null;
   show_day_end_id?: string | null;
+  requires_horse_assignment?: boolean;
+  limit_per_horse_stalls?: number | null;
   category?: StallOption["category"];
   notes?: string | null;
 };
@@ -428,8 +434,8 @@ export type StallBookingInput = {
   booker_contact_id: string;
   payer_contact_id: string;
   status?: StallBooking["status"];
-  show_day_start_id: string;
-  show_day_end_id: string;
+  show_day_start_id?: string | null;
+  show_day_end_id?: string | null;
   quantity: number;
   unit_price?: number;
   total_price?: number;
@@ -442,8 +448,8 @@ export type StallBookingUpdateInput = {
   booker_contact_id?: string;
   payer_contact_id?: string;
   status?: StallBooking["status"];
-  show_day_start_id?: string;
-  show_day_end_id?: string;
+  show_day_start_id?: string | null;
+  show_day_end_id?: string | null;
   quantity?: number;
   unit_price?: number | null;
   total_price?: number | null;

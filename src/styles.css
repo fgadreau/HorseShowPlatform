@@ -510,6 +510,200 @@ button:focus-visible {
   min-width: 190px;
 }
 
+.form-section {
+  background: #f8fbfa;
+  border: 1px solid #e3ebe8;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+}
+
+.form-section-header {
+  align-items: end;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.form-section-header strong {
+  color: #13201d;
+}
+
+.form-section-header span {
+  color: #687873;
+  font-size: 13px;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.reservation-product-summary {
+  align-items: stretch;
+  background: #ffffff;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(0, 1fr) minmax(120px, auto) minmax(120px, auto);
+  padding: 12px;
+}
+
+.reservation-product-summary.empty {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.reservation-product-summary.warning {
+  background: #fff7ed;
+  border-color: #fed7aa;
+}
+
+.reservation-product-summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.reservation-product-summary strong {
+  color: #14221e;
+  overflow-wrap: anywhere;
+}
+
+.reservation-product-summary small {
+  color: #687873;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.contact-role-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.contact-role-option,
+.horse-reservation-main,
+.horse-addons label {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+}
+
+.contact-role-option {
+  background: #ffffff;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.contact-role-option input,
+.horse-reservation-main input,
+.horse-addons input[type="checkbox"] {
+  flex: 0 0 auto;
+  margin-top: 3px;
+  min-height: auto;
+  width: auto;
+}
+
+.contact-role-option span,
+.horse-reservation-main span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.contact-role-option small,
+.horse-reservation-main small,
+.horse-addons {
+  color: #687873;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.horse-reservation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.horse-reservation-row {
+  background: #ffffff;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.horse-reservation-row.selected {
+  border-color: #0f766e;
+  box-shadow: inset 3px 0 0 #0f766e;
+}
+
+.horse-reservation-row.unavailable {
+  background: #f3f6f5;
+  border-color: #d6dfdc;
+  opacity: 0.82;
+}
+
+.horse-reservation-row.unavailable .horse-reservation-main {
+  cursor: not-allowed;
+}
+
+.horse-reservation-main strong {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.horse-reservation-status {
+  background: #e7efec;
+  border-radius: 999px;
+  color: #51615d;
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1;
+  padding: 4px 7px;
+  text-transform: uppercase;
+}
+
+.horse-addons {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding-left: 28px;
+}
+
+.horse-addons input[type="number"] {
+  max-width: 110px;
+}
+
+.reservation-total-summary {
+  background: #13201d;
+  border-radius: 8px;
+  color: #ffffff;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  padding: 12px;
+}
+
+.reservation-total-summary span {
+  display: grid;
+  gap: 3px;
+}
+
+.reservation-total-summary strong {
+  color: #ffffff;
+  font-size: 22px;
+}
+
+.reservation-total-summary small {
+  color: #c8d7d2;
+  font-size: 12px;
+}
+
 .edit-panel {
   background: #fbfffe;
   border-color: #8bd4c9;
@@ -892,6 +1086,84 @@ button:focus-visible {
 
 .search-select {
   display: grid;
+  position: relative;
+}
+
+.search-select-control {
+  align-items: center;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.search-select-control input {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  padding-right: 38px;
+}
+
+.search-select-clear {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #687873;
+  display: inline-flex;
+  grid-column: 2;
+  grid-row: 1;
+  height: 30px;
+  justify-content: center;
+  margin-right: 6px;
+  width: 30px;
+  z-index: 1;
+}
+
+.search-select-menu {
+  background: #ffffff;
+  border: 1px solid #cbd8d2;
+  border-radius: 8px;
+  box-shadow: 0 14px 32px rgba(19, 32, 29, 0.14);
+  display: grid;
+  left: 0;
+  max-height: 260px;
+  overflow: auto;
+  padding: 6px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+}
+
+.search-select-menu button {
+  align-items: start;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  color: #14221e;
+  display: grid;
+  gap: 3px;
+  justify-items: start;
+  min-height: 44px;
+  padding: 8px;
+  text-align: left;
+  width: 100%;
+}
+
+.search-select-menu button.active,
+.search-select-menu button:hover {
+  background: #eef7f5;
+}
+
+.search-select-menu button.selected {
+  background: #e1f3ef;
+}
+
+.search-select-menu small,
+.search-select-empty {
+  color: #687873;
+  font-size: 12px;
+}
+
+.search-select-empty {
+  padding: 10px;
 }
 
 .text-button {
@@ -1185,6 +1457,30 @@ button:focus-visible {
   .progress-meter > div:first-child {
     align-items: flex-start;
     display: grid;
+  }
+
+  .form-section-header {
+    align-items: flex-start;
+    display: grid;
+  }
+
+  .form-section-header span {
+    text-align: left;
+  }
+
+  .reservation-product-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .contact-role-grid,
+  .reservation-total-summary {
+    grid-template-columns: 1fr;
+  }
+
+  .horse-addons {
+    align-items: flex-start;
+    display: grid;
+    padding-left: 0;
   }
 
   .panel form.stack .primary-button {

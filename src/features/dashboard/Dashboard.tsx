@@ -1515,22 +1515,22 @@ function BillingView({
       />
 
       <section className="metric-grid span-2">
-        <Metric label="Invoices" value={String(invoices.length)} />
-        <Metric label="Open balance" value={formatCurrency(unpaidBalance, currency)} />
-        <Metric label="Paid invoices" value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
+        <Metric label="Factures" value={String(invoices.length)} />
+        <Metric label="Solde ouvert" value={formatCurrency(unpaidBalance, currency)} />
+        <Metric label="Payees" value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Recent invoices</h2>
-            <p>Draft, sent, partial and paid invoice records.</p>
+            <h2>Factures recentes</h2>
+            <p>Brouillons, factures envoyees, paiements partiels et factures payees.</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Invoice</span>
-            <span>Status</span>
+            <span>Facture</span>
+            <span>Statut</span>
             <span>Total</span>
             <span>Balance</span>
           </div>
@@ -1558,7 +1558,7 @@ function BillingView({
               </div>
             );
           })}
-          {!invoices.length ? <EmptyState label="Invoice records will appear after checkout or manual billing." /> : null}
+          {!invoices.length ? <EmptyState label="Aucune facture pour l'instant. Les inscriptions et reservations creeront maintenant des brouillons de facture." /> : null}
         </div>
       </section>
     </div>

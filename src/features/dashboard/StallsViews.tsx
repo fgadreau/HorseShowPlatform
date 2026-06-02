@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { ComponentType } from "react";
 import { ClipboardList, Plus, Warehouse } from "lucide-react";
@@ -8,10 +8,11 @@ import {
   createStallBooking,
   createContact,
   createStallOption,
+  ensureContactRoles,
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
-import type { Contact, ContactRole, Horse, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import type { Contact, ContactRole, ContactRoleName, Horse, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
 
 const stallPresets = [
   { key: "stall", label: "Stall", name: "Stall", category: "stall" },
@@ -23,6 +24,13 @@ const stallPresets = [
 ] as const;
 
 const bookingStatuses: StallBooking["status"][] = ["requested", "reserved", "active", "cancelled", "completed"];
+const requiredReservationContactRoles: ContactRoleName[] = ["booker", "payer"];
+const reservationContactRoleChoices: Array<{ detail: string; label: string; role: ContactRoleName }> = [
+  { detail: "Personne qui fait la demande.", label: "Booker", role: "booker" },
+  { detail: "Personne liee a la facture.", label: "Payer", role: "payer" },
+  { detail: "Role ajoute au contact, sans changer le proprietaire du cheval.", label: "Owner", role: "owner" },
+];
+type ReservationPeriodMode = "full_show" | "daily";
 
 type AssociationReservationTab = "reservations" | "new-reservation" | "options";
 type PersonalReservationTab = "my-reservations" | "new-reservation" | "available-options";
@@ -146,6 +154,7 @@ export function StallsView({
 
       {activeTab === "new-reservation" ? (
         <StallBookingForm
+          bookings={bookings}
           contacts={contacts}
           contactRoles={contactRoles}
           currency={currency}
@@ -307,6 +316,7 @@ export function MyStallsView({
       {activeTab === "new-reservation" ? (
         <StallBookingForm
           allowStatusEdit={false}
+          bookings={bookings}
           contacts={contacts}
           contactRoles={contactRoles}
           currency={currency}
@@ -399,7 +409,7 @@ function StallOptionsTable({
             <div>
               <strong>{option.name}</strong>
               <span className="muted-line">
-                {categoryLabel(option.category)} / {formatCurrency(option.price, currency)}
+                {categoryLabel(option.category)} / {formatCurrency(option.price, currency)} / {stallOptionAssignmentLabel(option)}
               </span>
             </div>
             <span>{showLabel(findById(shows, option.show_id))}</span>
@@ -495,6 +505,9 @@ function StallOptionForm({
   const [price, setPrice] = useState("");
   const [totalQuantity, setTotalQuantity] = useState("1");
   const [availableQuantity, setAvailableQuantity] = useState("");
+  const [requiresHorseAssignment, setRequiresHorseAssignment] = useState(true);
+  const [limitPerHorseStalls, setLimitPerHorseStalls] = useState("");
+  const [reservationPeriodMode, setReservationPeriodMode] = useState<ReservationPeriodMode>("full_show");
   const [durationDays, setDurationDays] = useState("");
   const [startDayId, setStartDayId] = useState("");
   const [endDayId, setEndDayId] = useState("");
@@ -502,9 +515,10 @@ function StallOptionForm({
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const dayOptions = showDays.filter((day) => day.show_id === selectedShowId);
-  const selectedStartDayId = validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "";
-  const selectedEndDayId = validDayId(endDayId, dayOptions) || selectedStartDayId || dayOptions[dayOptions.length - 1]?.id || "";
-  const canCreate = Boolean(organization && selectedShowId);
+  const usesDailyReservations = reservationPeriodMode === "daily";
+  const selectedStartDayId = usesDailyReservations ? validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "" : "";
+  const selectedEndDayId = usesDailyReservations ? validDayId(endDayId, dayOptions) || selectedStartDayId || dayOptions[dayOptions.length - 1]?.id || "" : "";
+  const canCreate = Boolean(organization && selectedShowId && (!usesDailyReservations || dayOptions.length));
 
   function handlePresetChange(nextPresetKey: string) {
     setPresetKey(nextPresetKey);
@@ -513,6 +527,8 @@ function StallOptionForm({
     if (preset && preset.key !== "custom") {
       setName(preset.name);
       setCategory(preset.category);
+      setRequiresHorseAssignment(preset.key !== "tack-stall");
+      setLimitPerHorseStalls("");
     }
   }
 
@@ -524,6 +540,7 @@ function StallOptionForm({
     }
 
     const total = integerValue(totalQuantity, 1);
+    const optionRequiresHorseAssignment = category === "stall" ? requiresHorseAssignment : false;
     setBusy(true);
 
     try {
@@ -535,9 +552,11 @@ function StallOptionForm({
         price: numericValue(price) ?? 0,
         total_quantity: total,
         available_quantity: Math.min(integerValue(availableQuantity, total), total),
-        duration_days: integerValue(durationDays, 0) || undefined,
-        show_day_start_id: selectedStartDayId || undefined,
-        show_day_end_id: selectedEndDayId || undefined,
+        duration_days: usesDailyReservations ? integerValue(durationDays, 0) || undefined : undefined,
+        show_day_start_id: usesDailyReservations ? selectedStartDayId || null : null,
+        show_day_end_id: usesDailyReservations ? selectedEndDayId || null : null,
+        requires_horse_assignment: optionRequiresHorseAssignment,
+        limit_per_horse_stalls: optionRequiresHorseAssignment ? null : integerValue(limitPerHorseStalls, 0) || null,
         category,
         notes,
       });
@@ -547,7 +566,12 @@ function StallOptionForm({
       setPrice("");
       setTotalQuantity("1");
       setAvailableQuantity("");
+      setRequiresHorseAssignment(true);
+      setLimitPerHorseStalls("");
+      setReservationPeriodMode("full_show");
       setDurationDays("");
+      setStartDayId("");
+      setEndDayId("");
       setNotes("");
       setPresetKey("stall");
     } finally {
@@ -566,7 +590,15 @@ function StallOptionForm({
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           Show
-          <select disabled={!organization || !shows.length} value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
+          <select
+            disabled={!organization || !shows.length}
+            value={selectedShowId}
+            onChange={(event) => {
+              setShowId(event.target.value);
+              setStartDayId("");
+              setEndDayId("");
+            }}
+          >
             {shows.map((show) => (
               <option key={show.id} value={show.id}>
                 {show.name}
@@ -613,33 +645,80 @@ function StallOptionForm({
             <input disabled={!canCreate} min="0" step="1" type="number" value={availableQuantity} onChange={(event) => setAvailableQuantity(event.target.value)} />
           </label>
         </div>
-        <div className="form-grid">
-          <label>
-            Start day
-            <select disabled={!canCreate || !dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            End day
-            <select disabled={!canCreate || !dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
-          </label>
+        {category === "stall" ? (
+          <div className="form-section">
+            <div className="form-section-header">
+              <strong>Assignation</strong>
+              <span>{requiresHorseAssignment ? "Chaque reservation sera liee a un cheval." : "Reservation non attitree a un cheval."}</span>
+            </div>
+            <div className="segmented-control">
+              <button className={requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(true)}>
+                Par cheval
+              </button>
+              <button className={!requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(false)}>
+                Non attitree
+              </button>
+            </div>
+            {!requiresHorseAssignment ? (
+              <label>
+                Limite optionnelle
+                <input
+                  min="0"
+                  placeholder="1 tack stall par X stalls chevaux"
+                  step="1"
+                  type="number"
+                  value={limitPerHorseStalls}
+                  onChange={(event) => setLimitPerHorseStalls(event.target.value)}
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>Periode offerte</strong>
+            <span>{usesDailyReservations ? "Les exposants choisiront les journees." : "Reservation pour tout le show, sans choix de journee."}</span>
+          </div>
+          <div className="segmented-control">
+            <button className={reservationPeriodMode === "full_show" ? "active" : ""} type="button" onClick={() => setReservationPeriodMode("full_show")}>
+              Show complet
+            </button>
+            <button className={reservationPeriodMode === "daily" ? "active" : ""} disabled={!dayOptions.length} type="button" onClick={() => setReservationPeriodMode("daily")}>
+              A la journee
+            </button>
+          </div>
+          {usesDailyReservations ? (
+            <>
+              <div className="form-grid">
+                <label>
+                  Jour debut
+                  <select disabled={!canCreate || !dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
+                    {dayOptions.map((day) => (
+                      <option key={day.id} value={day.id}>
+                        {dayLabel(day)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Jour fin
+                  <select disabled={!canCreate || !dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
+                    {dayOptions.map((day) => (
+                      <option key={day.id} value={day.id}>
+                        {dayLabel(day)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Duree jours
+                <input disabled={!canCreate} min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
+              </label>
+            </>
+          ) : null}
         </div>
         <div className="form-grid">
-          <label>
-            Duration days
-            <input disabled={!canCreate} min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
-          </label>
           <label>
             Notes
             <input disabled={!canCreate} value={notes} onChange={(event) => setNotes(event.target.value)} />
@@ -679,19 +758,24 @@ function StallOptionEditForm({
   const [price, setPrice] = useState(String(option.price));
   const [totalQuantity, setTotalQuantity] = useState(String(option.total_quantity));
   const [availableQuantity, setAvailableQuantity] = useState(String(option.available_quantity));
+  const [requiresHorseAssignment, setRequiresHorseAssignment] = useState(option.requires_horse_assignment !== false && !isTackStallName(option));
+  const [limitPerHorseStalls, setLimitPerHorseStalls] = useState(option.limit_per_horse_stalls == null ? "" : String(option.limit_per_horse_stalls));
+  const [reservationPeriodMode, setReservationPeriodMode] = useState<ReservationPeriodMode>(option.show_day_start_id || option.show_day_end_id ? "daily" : "full_show");
   const [durationDays, setDurationDays] = useState(option.duration_days == null ? "" : String(option.duration_days));
   const [startDayId, setStartDayId] = useState(option.show_day_start_id ?? "");
   const [endDayId, setEndDayId] = useState(option.show_day_end_id ?? "");
   const [notes, setNotes] = useState(option.notes ?? "");
   const [busy, setBusy] = useState(false);
   const dayOptions = showDays.filter((day) => day.show_id === option.show_id);
-  const selectedStartDayId = validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "";
-  const selectedEndDayId = validDayId(endDayId, dayOptions) || selectedStartDayId || dayOptions[dayOptions.length - 1]?.id || "";
+  const usesDailyReservations = reservationPeriodMode === "daily";
+  const selectedStartDayId = usesDailyReservations ? validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "" : "";
+  const selectedEndDayId = usesDailyReservations ? validDayId(endDayId, dayOptions) || selectedStartDayId || dayOptions[dayOptions.length - 1]?.id || "" : "";
   const show = findById(shows, option.show_id);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const total = integerValue(totalQuantity, option.total_quantity);
+    const optionRequiresHorseAssignment = category === "stall" ? requiresHorseAssignment : false;
     setBusy(true);
 
     try {
@@ -702,9 +786,11 @@ function StallOptionEditForm({
         price: numericValue(price) ?? option.price,
         total_quantity: total,
         available_quantity: Math.min(integerValue(availableQuantity, option.available_quantity), total),
-        duration_days: integerValue(durationDays, 0) || null,
-        show_day_start_id: selectedStartDayId || null,
-        show_day_end_id: selectedEndDayId || null,
+        duration_days: usesDailyReservations ? integerValue(durationDays, 0) || null : null,
+        show_day_start_id: usesDailyReservations ? selectedStartDayId || null : null,
+        show_day_end_id: usesDailyReservations ? selectedEndDayId || null : null,
+        requires_horse_assignment: optionRequiresHorseAssignment,
+        limit_per_horse_stalls: optionRequiresHorseAssignment ? null : integerValue(limitPerHorseStalls, 0) || null,
         notes: notes || null,
       });
     } finally {
@@ -752,33 +838,80 @@ function StallOptionEditForm({
             <input min="0" required step="1" type="number" value={availableQuantity} onChange={(event) => setAvailableQuantity(event.target.value)} />
           </label>
         </div>
-        <div className="form-grid">
-          <label>
-            Start day
-            <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            End day
-            <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
-          </label>
+        {category === "stall" ? (
+          <div className="form-section">
+            <div className="form-section-header">
+              <strong>Assignation</strong>
+              <span>{requiresHorseAssignment ? "Chaque reservation sera liee a un cheval." : "Reservation non attitree a un cheval."}</span>
+            </div>
+            <div className="segmented-control">
+              <button className={requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(true)}>
+                Par cheval
+              </button>
+              <button className={!requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(false)}>
+                Non attitree
+              </button>
+            </div>
+            {!requiresHorseAssignment ? (
+              <label>
+                Limite optionnelle
+                <input
+                  min="0"
+                  placeholder="1 tack stall par X stalls chevaux"
+                  step="1"
+                  type="number"
+                  value={limitPerHorseStalls}
+                  onChange={(event) => setLimitPerHorseStalls(event.target.value)}
+                />
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>Periode offerte</strong>
+            <span>{usesDailyReservations ? "Reservation a la journee." : "Reservation pour tout le show."}</span>
+          </div>
+          <div className="segmented-control">
+            <button className={reservationPeriodMode === "full_show" ? "active" : ""} type="button" onClick={() => setReservationPeriodMode("full_show")}>
+              Show complet
+            </button>
+            <button className={reservationPeriodMode === "daily" ? "active" : ""} disabled={!dayOptions.length} type="button" onClick={() => setReservationPeriodMode("daily")}>
+              A la journee
+            </button>
+          </div>
+          {usesDailyReservations ? (
+            <>
+              <div className="form-grid">
+                <label>
+                  Jour debut
+                  <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
+                    {dayOptions.map((day) => (
+                      <option key={day.id} value={day.id}>
+                        {dayLabel(day)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Jour fin
+                  <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
+                    {dayOptions.map((day) => (
+                      <option key={day.id} value={day.id}>
+                        {dayLabel(day)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+              <label>
+                Duree jours
+                <input min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
+              </label>
+            </>
+          ) : null}
         </div>
         <div className="form-grid">
-          <label>
-            Duration days
-            <input min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
-          </label>
           <label>
             Notes
             <input value={notes} onChange={(event) => setNotes(event.target.value)} />
@@ -796,6 +929,7 @@ function StallOptionEditForm({
 
 function StallBookingForm({
   allowStatusEdit = true,
+  bookings,
   contacts,
   contactRoles,
   currency,
@@ -811,6 +945,7 @@ function StallBookingForm({
   onCreateStallBooking,
 }: {
   allowStatusEdit?: boolean;
+  bookings: StallBooking[];
   contacts: Contact[];
   contactRoles: ContactRole[];
   currency: string;
@@ -825,65 +960,345 @@ function StallBookingForm({
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
 }) {
-  const firstReservableOption = stallOptions.find((option) => option.available_quantity > 0) ?? stallOptions[0] ?? null;
+  const firstStallOption = stallOptions.find((option) => isStallReservationOption(option));
   const [showId, setShowId] = useState("");
-  const [optionId, setOptionId] = useState("");
-  const [horseId, setHorseId] = useState("");
-  const [bookerContactId, setBookerContactId] = useState("");
-  const [payerContactId, setPayerContactId] = useState("");
+  const [stallOptionId, setStallOptionId] = useState("");
+  const [tackOptionId, setTackOptionId] = useState("");
+  const [tackQuantity, setTackQuantity] = useState("0");
+  const [beddingOptionId, setBeddingOptionId] = useState("");
+  const [hayOptionId, setHayOptionId] = useState("");
+  const [hayQuantity, setHayQuantity] = useState("0");
+  const [campingOptionId, setCampingOptionId] = useState("");
+  const [campingQuantity, setCampingQuantity] = useState("0");
+  const [selectedHorseIds, setSelectedHorseIds] = useState<string[]>([]);
+  const [beddingHorseIds, setBeddingHorseIds] = useState<string[]>([]);
+  const [beddingQuantities, setBeddingQuantities] = useState<Record<string, string>>({});
+  const [responsibleContactId, setResponsibleContactId] = useState("");
+  const [selectedContactRoles, setSelectedContactRoles] = useState<ContactRoleName[]>(requiredReservationContactRoles);
   const [status, setStatus] = useState<StallBooking["status"]>(defaultStatus);
-  const [quantity, setQuantity] = useState("1");
   const [startDayId, setStartDayId] = useState("");
   const [endDayId, setEndDayId] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
-  const selectedShowId = showId || firstReservableOption?.show_id || shows[0]?.id || "";
-  const optionChoices = stallOptions.filter((option) => option.show_id === selectedShowId && option.available_quantity > 0);
-  const selectedOption = findById(optionChoices, optionId) ?? optionChoices[0] ?? null;
-  const selectedHorse = findById(horses, horseId) ?? null;
-  const selectedBookerId = bookerContactId || contacts[0]?.id || "";
-  const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || selectedBookerId;
-  const dayOptions = showDays.filter((day) => day.show_id === (selectedOption?.show_id ?? selectedShowId));
-  const selectedStartDayId = validDayId(startDayId, dayOptions) || selectedOption?.show_day_start_id || dayOptions[0]?.id || "";
-  const selectedEndDayId = validDayId(endDayId, dayOptions) || selectedOption?.show_day_end_id || selectedStartDayId || "";
-  const quantityNumber = positiveIntegerValue(quantity, 1);
-  const unitPrice = Number(selectedOption?.price ?? 0);
-  const totalPrice = status === "cancelled" ? 0 : unitPrice * quantityNumber;
-  const canCreate = Boolean(organization && profileId && selectedOption && selectedBookerId && selectedPayerId && selectedStartDayId && selectedEndDayId);
+  const selectedShowId = showId || firstStallOption?.show_id || shows[0]?.id || "";
+  const stallChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isStallReservationOption(option));
+  const tackChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isTackStallOption(option));
+  const beddingChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isBeddingOption(option));
+  const hayChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isHayOption(option));
+  const campingChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isCampingOption(option));
+  const selectedStallOption = findById(stallChoices, stallOptionId) ?? null;
+  const selectedTackOption = findById(tackChoices, tackOptionId) ?? null;
+  const selectedBeddingOption = findById(beddingChoices, beddingOptionId) ?? (beddingChoices.length === 1 ? beddingChoices[0] : null);
+  const selectedHayOption = findById(hayChoices, hayOptionId) ?? null;
+  const selectedCampingOption = findById(campingChoices, campingOptionId) ?? null;
+  const reservedHorseBookingById = new Map<string, StallBooking>();
+  bookings.forEach((booking) => {
+    if (booking.horse_id && isActiveHorseStallBookingForShow(booking, selectedShowId, stallOptions)) {
+      reservedHorseBookingById.set(booking.horse_id, booking);
+    }
+  });
+  const reservedHorseIdsKey = Array.from(reservedHorseBookingById.keys()).sort().join("|");
+  const selectedReservedHorseCount = selectedHorseIds.filter((horseId) => reservedHorseBookingById.has(horseId)).length;
+  const availableHorseCount = horses.filter((horse) => !reservedHorseBookingById.has(horse.id)).length;
+  const selectedHorses = selectedHorseIds
+    .filter((horseId) => !reservedHorseBookingById.has(horseId))
+    .map((horseId) => findById(horses, horseId))
+    .filter((horse): horse is Horse => Boolean(horse));
+  const dailyReservationOption = [selectedStallOption, selectedTackOption, selectedHayOption, selectedCampingOption].find(optionUsesDailyReservations) ?? null;
+  const reservationUsesDailyReservations = Boolean(dailyReservationOption);
+  const dayOptions = showDays.filter((day) => day.show_id === (selectedStallOption?.show_id ?? selectedShowId));
+  const selectedStartDayId = reservationUsesDailyReservations ? validDayId(startDayId, dayOptions) || dailyReservationOption?.show_day_start_id || dayOptions[0]?.id || "" : "";
+  const selectedEndDayId = reservationUsesDailyReservations ? validDayId(endDayId, dayOptions) || dailyReservationOption?.show_day_end_id || selectedStartDayId || "" : "";
+  const stallCount = selectedHorses.length;
+  const stallUnitPrice = Number(selectedStallOption?.price ?? 0);
+  const tackUnitPrice = Number(selectedTackOption?.price ?? 0);
+  const tackQuantityNumber = selectedTackOption ? integerValue(tackQuantity, 0) : 0;
+  const tackLimitRatio = selectedTackOption?.limit_per_horse_stalls ?? null;
+  const allowedTackQuantity = tackLimitRatio ? Math.floor(stallCount / tackLimitRatio) : null;
+  const tackQuantityMax = selectedTackOption ? Math.min(selectedTackOption.available_quantity, allowedTackQuantity ?? selectedTackOption.available_quantity) : undefined;
+  const beddingUnitPrice = Number(selectedBeddingOption?.price ?? 0);
+  const hayUnitPrice = Number(selectedHayOption?.price ?? 0);
+  const campingUnitPrice = Number(selectedCampingOption?.price ?? 0);
+  const beddingTotalQuantity = selectedHorseIds.reduce((sum, horseId) => (beddingHorseIds.includes(horseId) ? sum + positiveIntegerValue(beddingQuantities[horseId] ?? "1", 1) : sum), 0);
+  const hayTotalQuantity = selectedTackOption ? integerValue(hayQuantity, 0) : 0;
+  const campingQuantityNumber = selectedCampingOption ? integerValue(campingQuantity, 0) : 0;
+  const stallTotal = status === "cancelled" ? 0 : stallCount * stallUnitPrice;
+  const tackTotal = status === "cancelled" ? 0 : tackQuantityNumber * tackUnitPrice;
+  const beddingTotal = status === "cancelled" ? 0 : beddingTotalQuantity * beddingUnitPrice;
+  const hayTotal = status === "cancelled" ? 0 : hayTotalQuantity * hayUnitPrice;
+  const campingTotal = status === "cancelled" ? 0 : campingQuantityNumber * campingUnitPrice;
+  const totalPrice = stallTotal + tackTotal + beddingTotal + hayTotal + campingTotal;
+  const hasRequiredContactRoles = requiredReservationContactRoles.every((role) => selectedContactRoles.includes(role));
+  const hasHorseStallRequest = Boolean(selectedStallOption && selectedHorses.length);
+  const hasTackRequest = Boolean(selectedTackOption && tackQuantityNumber > 0);
+  const hasCampingRequest = Boolean(selectedCampingOption && campingQuantityNumber > 0);
+  const hasReservationItems = hasHorseStallRequest || hasTackRequest || hasCampingRequest;
+  const hasSelectedReservableProduct = Boolean(selectedStallOption || selectedTackOption || selectedCampingOption);
+  const stallAvailabilityTooLow = Boolean(selectedStallOption && stallCount > selectedStallOption.available_quantity);
+  const tackAvailabilityTooLow = Boolean(selectedTackOption && tackQuantityNumber > selectedTackOption.available_quantity);
+  const tackLimitTooHigh = allowedTackQuantity !== null && tackQuantityNumber > allowedTackQuantity;
+  const beddingAvailabilityTooLow = Boolean(selectedBeddingOption && beddingTotalQuantity > selectedBeddingOption.available_quantity);
+  const hayAvailabilityTooLow = Boolean(selectedHayOption && hayTotalQuantity > selectedHayOption.available_quantity);
+  const campingAvailabilityTooLow = Boolean(selectedCampingOption && campingQuantityNumber > selectedCampingOption.available_quantity);
+  const needsBeddingOption = beddingTotalQuantity > 0 && !selectedBeddingOption;
+  const needsHayOption = hayTotalQuantity > 0 && !selectedHayOption;
+  const needsStallOption = selectedHorseIds.length > 0 && !selectedStallOption;
+  const canCreate = Boolean(
+    organization &&
+      profileId &&
+      responsibleContactId &&
+      hasRequiredContactRoles &&
+      hasReservationItems &&
+      !needsStallOption &&
+      !selectedReservedHorseCount &&
+      (!reservationUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) &&
+      !stallAvailabilityTooLow &&
+      !tackAvailabilityTooLow &&
+      !tackLimitTooHigh &&
+      !beddingAvailabilityTooLow &&
+      !hayAvailabilityTooLow &&
+      !campingAvailabilityTooLow &&
+      !needsBeddingOption &&
+      !needsHayOption,
+  );
+  const availabilityLabel = selectedStallOption
+    ? `${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"}`
+    : stallChoices.length
+      ? `${stallChoices.length} produit${stallChoices.length === 1 ? "" : "s"} stall pour ce show.`
+      : "Aucun produit stall pour ce show.";
+  const formMessage = reservationCreateMessage({
+    canCreate,
+    allowedTackQuantity,
+    beddingAvailabilityTooLow,
+    beddingTotalQuantity,
+    campingAvailabilityTooLow,
+    campingQuantityNumber,
+    hayAvailabilityTooLow,
+    hayTotalQuantity,
+    dayOptions,
+    hasRequiredContactRoles,
+    hasReservationItems,
+    needsBeddingOption,
+    needsHayOption,
+    needsStallOption,
+    organization,
+    profileId,
+    responsibleContactId,
+    selectedReservedHorseCount,
+    selectedOptionUsesDailyReservations: reservationUsesDailyReservations,
+    selectedEndDayId,
+    selectedHorseCount: selectedHorses.length,
+    selectedStartDayId,
+    selectedStallOption,
+    stallAvailabilityTooLow,
+    tackAvailabilityTooLow,
+    tackLimitTooHigh,
+    tackQuantityNumber,
+    totalPrice,
+    currency,
+  });
+  const hasTackSection = Boolean(tackChoices.length);
+  const hasCampingSection = Boolean(campingChoices.length);
+  const campingSectionNumber = 4 + (hasTackSection ? 1 : 0);
+  const datesSectionNumber = 4 + (hasTackSection ? 1 : 0) + (hasCampingSection ? 1 : 0);
+
+  useEffect(() => {
+    if (stallOptionId && !stallChoices.some((option) => option.id === stallOptionId)) {
+      setStallOptionId("");
+      setStartDayId("");
+      setEndDayId("");
+    }
+  }, [stallChoices, stallOptionId]);
+
+  useEffect(() => {
+    if (beddingOptionId && !beddingChoices.some((option) => option.id === beddingOptionId)) {
+      setBeddingOptionId("");
+    }
+  }, [beddingChoices, beddingOptionId]);
+
+  useEffect(() => {
+    if (tackOptionId && !tackChoices.some((option) => option.id === tackOptionId)) {
+      setTackOptionId("");
+      setTackQuantity("0");
+    }
+  }, [tackChoices, tackOptionId]);
+
+  useEffect(() => {
+    if (hayOptionId && !hayChoices.some((option) => option.id === hayOptionId)) {
+      setHayOptionId("");
+      setHayQuantity("0");
+    }
+  }, [hayChoices, hayOptionId]);
+
+  useEffect(() => {
+    if (campingOptionId && !campingChoices.some((option) => option.id === campingOptionId)) {
+      setCampingOptionId("");
+      setCampingQuantity("0");
+    }
+  }, [campingChoices, campingOptionId]);
+
+  useEffect(() => {
+    setBeddingHorseIds((current) => current.filter((horseId) => selectedHorseIds.includes(horseId)));
+  }, [selectedHorseIds]);
+
+  useEffect(() => {
+    setSelectedHorseIds((current) => current.filter((horseId) => !reservedHorseBookingById.has(horseId)));
+  }, [reservedHorseIdsKey, selectedShowId]);
+
+  useEffect(() => {
+    if (!selectedTackOption || tackQuantityNumber <= 0) {
+      setHayOptionId("");
+      setHayQuantity("0");
+    }
+  }, [selectedTackOption, tackQuantityNumber]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!organization || !profileId || !selectedOption || !selectedBookerId || !selectedPayerId || !selectedStartDayId || !selectedEndDayId) {
+    if (!canCreate || !organization || !profileId || !responsibleContactId) {
       return;
     }
 
     setBusy(true);
 
     try {
-      await onCreateStallBooking({
+      await ensureContactRoles({
         organization_id: organization.id,
-        show_id: selectedOption.show_id,
-        stall_option_id: selectedOption.id,
-        horse_id: selectedHorse?.id,
-        created_by_user_id: profileId,
-        booker_contact_id: selectedBookerId,
-        payer_contact_id: selectedPayerId,
-        status: allowStatusEdit ? status : defaultStatus,
-        show_day_start_id: selectedStartDayId,
-        show_day_end_id: selectedEndDayId,
-        quantity: quantityNumber,
-        unit_price: unitPrice,
-        total_price: totalPrice,
-        notes,
+        contact_id: responsibleContactId,
+        roles: selectedContactRoles,
+        source: "manual",
       });
-      setHorseId("");
-      setPayerContactId("");
-      setQuantity("1");
+
+      if (selectedStallOption) {
+        for (const horse of selectedHorses) {
+          await onCreateStallBooking({
+            organization_id: organization.id,
+            show_id: selectedStallOption.show_id,
+            stall_option_id: selectedStallOption.id,
+            horse_id: horse.id,
+            created_by_user_id: profileId,
+            booker_contact_id: responsibleContactId,
+            payer_contact_id: responsibleContactId,
+            status: allowStatusEdit ? status : defaultStatus,
+            show_day_start_id: optionUsesDailyReservations(selectedStallOption) ? selectedStartDayId || null : null,
+            show_day_end_id: optionUsesDailyReservations(selectedStallOption) ? selectedEndDayId || null : null,
+            quantity: 1,
+            unit_price: stallUnitPrice,
+            total_price: status === "cancelled" ? 0 : stallUnitPrice,
+            notes: reservationLineNotes(notes, horse, "Stall"),
+          });
+
+          if (selectedBeddingOption && beddingHorseIds.includes(horse.id)) {
+            const beddingQuantity = positiveIntegerValue(beddingQuantities[horse.id] ?? "1", 1);
+
+            await onCreateStallBooking({
+              organization_id: organization.id,
+              show_id: selectedBeddingOption.show_id,
+              stall_option_id: selectedBeddingOption.id,
+              horse_id: horse.id,
+              created_by_user_id: profileId,
+              booker_contact_id: responsibleContactId,
+              payer_contact_id: responsibleContactId,
+              status: allowStatusEdit ? status : defaultStatus,
+              show_day_start_id: optionUsesDailyReservations(selectedBeddingOption) ? selectedBeddingOption.show_day_start_id || selectedStartDayId || null : null,
+              show_day_end_id: optionUsesDailyReservations(selectedBeddingOption) ? selectedBeddingOption.show_day_end_id || selectedEndDayId || null : null,
+              quantity: beddingQuantity,
+              unit_price: beddingUnitPrice,
+              total_price: status === "cancelled" ? 0 : beddingUnitPrice * beddingQuantity,
+              notes: reservationLineNotes(notes, horse, selectedBeddingOption.name),
+            });
+          }
+        }
+      }
+
+      if (selectedTackOption && tackQuantityNumber > 0) {
+        await onCreateStallBooking({
+          organization_id: organization.id,
+          show_id: selectedTackOption.show_id,
+          stall_option_id: selectedTackOption.id,
+          created_by_user_id: profileId,
+          booker_contact_id: responsibleContactId,
+          payer_contact_id: responsibleContactId,
+          status: allowStatusEdit ? status : defaultStatus,
+          show_day_start_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_start_id || selectedStartDayId || null : null,
+          show_day_end_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_end_id || selectedEndDayId || null : null,
+          quantity: tackQuantityNumber,
+          unit_price: tackUnitPrice,
+          total_price: status === "cancelled" ? 0 : tackUnitPrice * tackQuantityNumber,
+          notes: reservationStandaloneNotes(notes, selectedTackOption.name),
+        });
+
+        if (selectedHayOption && hayTotalQuantity > 0) {
+          await onCreateStallBooking({
+            organization_id: organization.id,
+            show_id: selectedHayOption.show_id,
+            stall_option_id: selectedHayOption.id,
+            created_by_user_id: profileId,
+            booker_contact_id: responsibleContactId,
+            payer_contact_id: responsibleContactId,
+            status: allowStatusEdit ? status : defaultStatus,
+            show_day_start_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_start_id || selectedStartDayId || null : null,
+            show_day_end_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_end_id || selectedEndDayId || null : null,
+            quantity: hayTotalQuantity,
+            unit_price: hayUnitPrice,
+            total_price: status === "cancelled" ? 0 : hayUnitPrice * hayTotalQuantity,
+            notes: reservationStandaloneNotes(notes, `${selectedHayOption.name} pour ${selectedTackOption.name}`),
+          });
+        }
+      }
+
+      if (selectedCampingOption && campingQuantityNumber > 0) {
+        await onCreateStallBooking({
+          organization_id: organization.id,
+          show_id: selectedCampingOption.show_id,
+          stall_option_id: selectedCampingOption.id,
+          created_by_user_id: profileId,
+          booker_contact_id: responsibleContactId,
+          payer_contact_id: responsibleContactId,
+          status: allowStatusEdit ? status : defaultStatus,
+          show_day_start_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_start_id || selectedStartDayId || null : null,
+          show_day_end_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_end_id || selectedEndDayId || null : null,
+          quantity: campingQuantityNumber,
+          unit_price: campingUnitPrice,
+          total_price: status === "cancelled" ? 0 : campingUnitPrice * campingQuantityNumber,
+          notes: reservationStandaloneNotes(notes, selectedCampingOption.name),
+        });
+      }
+
+      setStallOptionId("");
+      setTackOptionId("");
+      setTackQuantity("0");
+      setBeddingOptionId("");
+      setHayOptionId("");
+      setHayQuantity("0");
+      setCampingOptionId("");
+      setCampingQuantity("0");
+      setSelectedHorseIds([]);
+      setBeddingHorseIds([]);
+      setBeddingQuantities({});
+      setResponsibleContactId("");
+      setSelectedContactRoles(requiredReservationContactRoles);
       setNotes("");
     } finally {
       setBusy(false);
     }
+  }
+
+  function toggleHorse(horseId: string) {
+    if (reservedHorseBookingById.has(horseId)) {
+      return;
+    }
+
+    setSelectedHorseIds((current) => toggleValue(current, horseId));
+  }
+
+  function toggleBedding(horseId: string) {
+    setBeddingHorseIds((current) => toggleValue(current, horseId));
+    setBeddingQuantities((current) => (current[horseId] ? current : { ...current, [horseId]: "1" }));
+  }
+
+  function toggleContactRole(role: ContactRoleName) {
+    setSelectedContactRoles((current) => toggleValue(current, role));
   }
 
   return (
@@ -891,120 +1306,345 @@ function StallBookingForm({
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{canCreate ? `Invoice draft line: ${formatCurrency(totalPrice, currency)}.` : "Need show days, an option and a linked contact first."}</p>
+          <p>{formMessage}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Show
-          <select disabled={!shows.length} value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
-            {shows.map((show) => (
-              <option key={show.id} value={show.id}>
-                {show.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Option
-          <SearchSelect
-            disabled={!optionChoices.length}
-            items={optionChoices.map((option) => ({
-              id: option.id,
-              label: option.name,
-              detail: `${formatCurrency(option.price, currency)} / ${option.available_quantity} available`,
-            }))}
-            placeholder="Search option"
-            value={selectedOption?.id ?? ""}
-            onChange={setOptionId}
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>1. Contact</strong>
+            <span>Un seul contact responsable pour la demande.</span>
+          </div>
+          <ContactPicker
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            disabled={!organization}
+            label="Contact responsable"
+            organization={organization}
+            role="booker"
+            value={responsibleContactId}
+            onChange={setResponsibleContactId}
+            onCreateContact={onCreateContact}
           />
-        </label>
-        <div className="form-grid">
+          <div className="contact-role-grid" aria-label="Roles du contact">
+            {reservationContactRoleChoices.map((choice) => (
+              <label className="contact-role-option" key={choice.role}>
+                <input checked={selectedContactRoles.includes(choice.role)} type="checkbox" onChange={() => toggleContactRole(choice.role)} />
+                <span>
+                  <strong>{choice.label}</strong>
+                  <small>{choice.detail}</small>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>2. Stall</strong>
+            <span>{availabilityLabel}</span>
+          </div>
           <label>
-            Quantity
-            <input disabled={!selectedOption} min="1" step="1" type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            Show
+            <select
+              disabled={!shows.length}
+              value={selectedShowId}
+              onChange={(event) => {
+                setShowId(event.target.value);
+                setStallOptionId("");
+                setTackOptionId("");
+                setTackQuantity("0");
+                setBeddingOptionId("");
+                setHayOptionId("");
+                setHayQuantity("0");
+                setCampingOptionId("");
+                setCampingQuantity("0");
+                setSelectedHorseIds([]);
+                setBeddingHorseIds([]);
+                setBeddingQuantities({});
+                setStartDayId("");
+                setEndDayId("");
+              }}
+            >
+              {shows.map((show) => (
+                <option key={show.id} value={show.id}>
+                  {show.name}
+                </option>
+              ))}
+            </select>
           </label>
-          {allowStatusEdit ? (
+          <label>
+            Produit stall
+            <select
+              disabled={!stallChoices.length}
+              required
+              value={stallOptionId}
+              onChange={(event) => {
+                setStallOptionId(event.target.value);
+                setStartDayId("");
+                setEndDayId("");
+              }}
+            >
+              <option value="">Choisir le type de stall</option>
+              {stallChoices.map((option) => (
+                <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
+                  {reservationOptionSelectLabel(option, currency)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <ReservationProductSummary currency={currency} option={selectedStallOption} quantityNumber={Math.max(stallCount, 1)} quantityTooHigh={stallAvailabilityTooLow} totalPrice={stallTotal} />
+        </div>
+
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>3. Chevaux</strong>
+            <span>
+              {selectedHorses.length
+                ? `${selectedHorses.length} stall${selectedHorses.length === 1 ? "" : "s"} a reserver.`
+                : availableHorseCount
+                  ? `${availableHorseCount} cheval${availableHorseCount === 1 ? "" : "x"} disponible${availableHorseCount === 1 ? "" : "s"} pour ce show.`
+                  : "Tous les chevaux ont deja un stall pour ce show."}
+            </span>
+          </div>
+          {!horses.length ? <EmptyState label="Ajoute d'abord les chevaux avant de reserver des stalls." /> : null}
+          {horses.length && !availableHorseCount ? <EmptyState label="Tous les chevaux ont deja un stall pour ce show." /> : null}
+          <div className="horse-reservation-list">
+            {horses.map((horse) => {
+              const reservedBooking = reservedHorseBookingById.get(horse.id);
+              const reservedOption = reservedBooking ? findById(stallOptions, reservedBooking.stall_option_id) : null;
+              const alreadyReserved = Boolean(reservedBooking);
+              const selected = selectedHorseIds.includes(horse.id);
+              const beddingSelected = beddingHorseIds.includes(horse.id);
+
+              return (
+                <div className={`horse-reservation-row ${selected ? "selected" : ""} ${alreadyReserved ? "unavailable" : ""}`} key={horse.id}>
+                  <label className="horse-reservation-main">
+                    <input checked={selected && !alreadyReserved} disabled={alreadyReserved} type="checkbox" onChange={() => toggleHorse(horse.id)} />
+                    <span>
+                      <strong>
+                        {horse.name}
+                        {alreadyReserved ? <em className="horse-reservation-status">Deja reserve</em> : null}
+                      </strong>
+                      <small>{alreadyReserved ? `Stall deja reserve: ${reservedOption?.name ?? "Stall"}` : contactLabel(findById(contacts, horse.primary_owner_contact_id))}</small>
+                    </span>
+                  </label>
+                  {selected && !alreadyReserved ? (
+                    <div className="horse-addons">
+                      <label>
+                        <input checked={beddingSelected} disabled={!beddingChoices.length} type="checkbox" onChange={() => toggleBedding(horse.id)} />
+                        Ajouter de la ripe
+                      </label>
+                      {beddingSelected ? (
+                        <input
+                          aria-label={`Quantite de ripe pour ${horse.name}`}
+                          min="1"
+                          step="1"
+                          type="number"
+                          value={beddingQuantities[horse.id] ?? "1"}
+                          onChange={(event) => setBeddingQuantities((current) => ({ ...current, [horse.id]: event.target.value }))}
+                        />
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+          {beddingHorseIds.length ? (
             <label>
-              Status
-              <select disabled={!selectedOption} value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
-                {bookingStatuses.map((candidate) => (
-                  <option key={candidate} value={candidate}>
-                    {candidate}
+              Produit ripe
+              <select disabled={!beddingChoices.length} required value={selectedBeddingOption?.id ?? ""} onChange={(event) => setBeddingOptionId(event.target.value)}>
+                <option value="">Choisir la ripe</option>
+                {beddingChoices.map((option) => (
+                  <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
+                    {reservationOptionSelectLabel(option, currency)}
                   </option>
                 ))}
               </select>
             </label>
-          ) : (
-            <label>
-              Status
-              <input disabled value={defaultStatus} />
-            </label>
-          )}
+          ) : null}
         </div>
-        <label>
-          Horse
-          <SearchSelect
-            allowEmpty
-            disabled={!horses.length}
-            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
-            placeholder="Search horse"
-            value={selectedHorse?.id ?? ""}
-            onChange={setHorseId}
-          />
-        </label>
-        <div className="form-grid">
-            <ContactPicker
-              contacts={contacts}
-              contactRoles={contactRoles}
-              createdByUserId={profileId}
-              disabled={!organization}
-              label="Booker"
-              organization={organization}
-              role="booker"
-              value={selectedBookerId}
-              onChange={setBookerContactId}
-              onCreateContact={onCreateContact}
-            />
-            <ContactPicker
-              contacts={contacts}
-              contactRoles={contactRoles}
-              createdByUserId={profileId}
-              disabled={!organization}
-              label="Payer"
-              organization={organization}
-              role="payer"
-              value={selectedPayerId}
-              onChange={setPayerContactId}
-              onCreateContact={onCreateContact}
-            />
+
+        {tackChoices.length ? (
+          <div className="form-section">
+            <div className="form-section-header">
+              <strong>4. Tack stalls</strong>
+              <span>{selectedTackOption?.limit_per_horse_stalls ? `Limite: 1 tack stall par ${selectedTackOption.limit_per_horse_stalls} stall${selectedTackOption.limit_per_horse_stalls === 1 ? "" : "s"} chevaux.` : "Optionnel, non attitre a un cheval."}</span>
+            </div>
+            <div className="form-grid">
+              <label>
+                Produit tack
+                <select
+                  value={tackOptionId}
+                  onChange={(event) => {
+                    setTackOptionId(event.target.value);
+                    setTackQuantity(event.target.value ? "1" : "0");
+                  }}
+                >
+                  <option value="">Aucun tack stall</option>
+                  {tackChoices.map((option) => (
+                    <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
+                      {reservationOptionSelectLabel(option, currency)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Quantite
+                <input disabled={!selectedTackOption} max={tackQuantityMax} min="0" step="1" type="number" value={tackQuantity} onChange={(event) => setTackQuantity(event.target.value)} />
+              </label>
+            </div>
+            {selectedTackOption ? (
+              <ReservationProductSummary availableQuantity={tackQuantityMax} currency={currency} option={selectedTackOption} quantityNumber={Math.max(tackQuantityNumber, 0)} quantityTooHigh={tackAvailabilityTooLow || tackLimitTooHigh} totalPrice={tackTotal} />
+            ) : null}
+            {selectedTackOption && hayChoices.length ? (
+              <>
+                <div className="form-grid">
+                  <label>
+                    Foin pour tack stall
+                    <select
+                      value={hayOptionId}
+                      onChange={(event) => {
+                        setHayOptionId(event.target.value);
+                        setHayQuantity(event.target.value ? "1" : "0");
+                      }}
+                    >
+                      <option value="">Aucun foin</option>
+                      {hayChoices.map((option) => (
+                        <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
+                          {reservationOptionSelectLabel(option, currency)}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                  <label>
+                    Quantite foin
+                    <input disabled={!selectedHayOption} max={selectedHayOption?.available_quantity} min="0" step="1" type="number" value={hayQuantity} onChange={(event) => setHayQuantity(event.target.value)} />
+                  </label>
+                </div>
+                {selectedHayOption ? <ReservationProductSummary currency={currency} option={selectedHayOption} quantityNumber={Math.max(hayTotalQuantity, 0)} quantityTooHigh={hayAvailabilityTooLow} totalPrice={hayTotal} /> : null}
+              </>
+            ) : null}
           </div>
-        <div className="form-grid">
+        ) : null}
+
+        {campingChoices.length ? (
+          <div className="form-section">
+            <div className="form-section-header">
+              <strong>{campingSectionNumber}. Camping</strong>
+              <span>{selectedCampingOption ? `${selectedCampingOption.available_quantity} disponible${selectedCampingOption.available_quantity === 1 ? "" : "s"}.` : "Optionnel, non attitre a un cheval."}</span>
+            </div>
+            <div className="form-grid">
+              <label>
+                Produit camping
+                <select
+                  value={campingOptionId}
+                  onChange={(event) => {
+                    setCampingOptionId(event.target.value);
+                    setCampingQuantity(event.target.value ? "1" : "0");
+                  }}
+                >
+                  <option value="">Aucun camping</option>
+                  {campingChoices.map((option) => (
+                    <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
+                      {reservationOptionSelectLabel(option, currency)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Quantite
+                <input disabled={!selectedCampingOption} max={selectedCampingOption?.available_quantity} min="0" step="1" type="number" value={campingQuantity} onChange={(event) => setCampingQuantity(event.target.value)} />
+              </label>
+            </div>
+            {selectedCampingOption ? (
+              <ReservationProductSummary currency={currency} option={selectedCampingOption} quantityNumber={Math.max(campingQuantityNumber, 0)} quantityTooHigh={campingAvailabilityTooLow} totalPrice={campingTotal} />
+            ) : null}
+          </div>
+        ) : null}
+
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>{datesSectionNumber}. Dates et facture</strong>
+            <span>{canCreate ? `Total: ${formatCurrency(totalPrice, currency)}` : reservationUsesDailyReservations ? "Choisir les journees requises." : "Completer les informations requises."}</span>
+          </div>
+          <div className="form-grid">
+            {allowStatusEdit ? (
+              <label>
+                Statut
+                <select disabled={!hasSelectedReservableProduct} value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
+                  {bookingStatuses.map((candidate) => (
+                    <option key={candidate} value={candidate}>
+                      {candidate}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                Statut
+                <input disabled value={defaultStatus} />
+              </label>
+            )}
+          </div>
+          {reservationUsesDailyReservations ? (
+            <div className="form-grid">
+              <label>
+                Jour debut
+                <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
+                  {dayOptions.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {dayLabel(day)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Jour fin
+                <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
+                  {dayOptions.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {dayLabel(day)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
+          <div className="reservation-total-summary">
+            <span>
+              <strong>{stallCount}</strong>
+              <small>Stalls</small>
+            </span>
+            <span>
+              <strong>{tackQuantityNumber}</strong>
+              <small>Tack</small>
+            </span>
+            <span>
+              <strong>{beddingTotalQuantity}</strong>
+              <small>Ripe</small>
+            </span>
+            <span>
+              <strong>{hayTotalQuantity}</strong>
+              <small>Foin</small>
+            </span>
+            <span>
+              <strong>{campingQuantityNumber}</strong>
+              <small>Camping</small>
+            </span>
+            <span>
+              <strong>{formatCurrency(totalPrice, currency)}</strong>
+              <small>Total facture</small>
+            </span>
+          </div>
           <label>
-            Start day
-            <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label>
-            End day
-            <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
+            Notes
+            <input value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
         </div>
-        <label>
-          Notes
-          <input value={notes} onChange={(event) => setNotes(event.target.value)} />
-        </label>
+
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
           Creer reservation
@@ -1047,25 +1687,29 @@ function StallBookingEditForm({
   const [payerContactId, setPayerContactId] = useState(booking.payer_contact_id);
   const [status, setStatus] = useState<StallBooking["status"]>(booking.status);
   const [quantity, setQuantity] = useState(String(booking.quantity ?? 1));
-  const [startDayId, setStartDayId] = useState(booking.show_day_start_id);
-  const [endDayId, setEndDayId] = useState(booking.show_day_end_id);
+  const [startDayId, setStartDayId] = useState(booking.show_day_start_id ?? "");
+  const [endDayId, setEndDayId] = useState(booking.show_day_end_id ?? "");
   const [notes, setNotes] = useState(booking.notes ?? "");
   const [busy, setBusy] = useState(false);
   const optionChoices = stallOptions.filter((option) => option.show_id === booking.show_id);
   const selectedOption = findById(optionChoices, optionId) ?? findById(stallOptions, booking.stall_option_id);
   const selectedHorse = findById(horses, horseId) ?? null;
   const dayOptions = showDays.filter((day) => day.show_id === booking.show_id);
-  const selectedStartDayId = validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "";
-  const selectedEndDayId = validDayId(endDayId, dayOptions) || selectedStartDayId;
+  const selectedOptionUsesDailyReservations = optionUsesDailyReservations(selectedOption ?? null);
+  const selectedStartDayId = selectedOptionUsesDailyReservations ? validDayId(startDayId, dayOptions) || selectedOption?.show_day_start_id || dayOptions[0]?.id || "" : "";
+  const selectedEndDayId = selectedOptionUsesDailyReservations ? validDayId(endDayId, dayOptions) || selectedOption?.show_day_end_id || selectedStartDayId : "";
   const quantityNumber = positiveIntegerValue(quantity, 1);
   const unitPrice = Number(selectedOption?.price ?? booking.unit_price ?? 0);
   const totalPrice = status === "cancelled" ? 0 : unitPrice * quantityNumber;
-  const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && selectedStartDayId && selectedEndDayId);
+  const currentReservedQuantity = booking.status === "cancelled" ? 0 : Number(booking.quantity ?? 1);
+  const editableAvailability = selectedOption ? selectedOption.available_quantity + (selectedOption.id === booking.stall_option_id ? currentReservedQuantity : 0) : 0;
+  const quantityTooHigh = Boolean(selectedOption && status !== "cancelled" && quantityNumber > editableAvailability);
+  const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && (!selectedOptionUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) && !quantityTooHigh);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedOption || !bookerContactId || !payerContactId || !selectedStartDayId || !selectedEndDayId) {
+    if (!canUpdate || !selectedOption || !bookerContactId || !payerContactId) {
       return;
     }
 
@@ -1078,8 +1722,8 @@ function StallBookingEditForm({
         booker_contact_id: bookerContactId,
         payer_contact_id: payerContactId,
         status,
-        show_day_start_id: selectedStartDayId,
-        show_day_end_id: selectedEndDayId,
+        show_day_start_id: selectedOptionUsesDailyReservations ? selectedStartDayId || null : null,
+        show_day_end_id: selectedOptionUsesDailyReservations ? selectedEndDayId || null : null,
         quantity: quantityNumber,
         unit_price: unitPrice,
         total_price: totalPrice,
@@ -1095,103 +1739,385 @@ function StallBookingEditForm({
       <div className="panel-header">
         <div>
           <h2>Modifier reservation</h2>
-          <p>Invoice draft line: {formatCurrency(totalPrice, currency)}.</p>
+          <p>{quantityTooHigh ? `Seulement ${editableAvailability} disponible pour ce produit.` : `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Option
-          <SearchSelect
-            items={optionChoices.map((option) => ({
-              id: option.id,
-              label: option.name,
-              detail: `${formatCurrency(option.price, currency)} / ${option.available_quantity} available`,
-            }))}
-            placeholder="Search option"
-            value={selectedOption?.id ?? ""}
-            onChange={setOptionId}
-          />
-        </label>
-        <div className="form-grid">
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>1. Produit</strong>
+            <span>{selectedOption ? `Disponible pour edition: ${editableAvailability}` : "Choisir le produit a modifier."}</span>
+          </div>
           <label>
-            Quantity
-            <input min="1" step="1" type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
-          </label>
-          <label>
-            Status
-            <select value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
-              {bookingStatuses.map((candidate) => (
-                <option key={candidate} value={candidate}>
-                  {candidate}
+            Produit de reservation
+            <select disabled={!optionChoices.length} required value={optionId} onChange={(event) => setOptionId(event.target.value)}>
+              <option value="">Choisir un produit</option>
+              {optionChoices.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {reservationOptionSelectLabel(option, currency)}
                 </option>
               ))}
             </select>
           </label>
+          <ReservationProductSummary availableQuantity={editableAvailability} currency={currency} option={selectedOption ?? null} quantityNumber={quantityNumber} quantityTooHigh={quantityTooHigh} totalPrice={totalPrice} />
+          <div className="form-grid">
+            <label>
+              Quantite
+              <input max={editableAvailability || undefined} min="1" step="1" type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
+            </label>
+            <label>
+              Statut
+              <select value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
+                {bookingStatuses.map((candidate) => (
+                  <option key={candidate} value={candidate}>
+                    {candidate}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
         </div>
-        <label>
-          Horse
-          <SearchSelect
-            allowEmpty
-            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
-            placeholder="Search horse"
-            value={selectedHorse?.id ?? ""}
-            onChange={setHorseId}
-          />
-        </label>
-        <div className="form-grid">
-          <ContactPicker
-            contacts={contacts}
-            contactRoles={contactRoles}
-            createdByUserId={profileId}
-            label="Booker"
-            organization={organization}
-            role="booker"
-            value={bookerContactId}
-            onChange={setBookerContactId}
-            onCreateContact={onCreateContact}
-          />
-          <ContactPicker
-            contacts={contacts}
-            contactRoles={contactRoles}
-            createdByUserId={profileId}
-            label="Payer"
-            organization={organization}
-            role="payer"
-            value={payerContactId}
-            onChange={setPayerContactId}
-            onCreateContact={onCreateContact}
-          />
-        </div>
-        <div className="form-grid">
+
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>2. Contacts</strong>
+            <span>Roles booker et payer assignes automatiquement.</span>
+          </div>
           <label>
-            Start day
-            <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
+            Cheval
+            <SearchSelect
+              allowEmpty
+              items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+              placeholder="Search horse"
+              value={selectedHorse?.id ?? ""}
+              onChange={setHorseId}
+            />
           </label>
+          <div className="form-grid">
+            <ContactPicker
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={profileId}
+              label="Reserve par"
+              organization={organization}
+              role="booker"
+              value={bookerContactId}
+              onChange={setBookerContactId}
+              onCreateContact={onCreateContact}
+            />
+            <ContactPicker
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={profileId}
+              label="Facture a"
+              organization={organization}
+              role="payer"
+              value={payerContactId}
+              onChange={setPayerContactId}
+              onCreateContact={onCreateContact}
+            />
+          </div>
+        </div>
+
+        <div className="form-section">
+          <div className="form-section-header">
+            <strong>3. Dates et notes</strong>
+            <span>
+              {selectedOptionUsesDailyReservations
+                ? dayOptions.length
+                  ? `${dayOptions.length} jour${dayOptions.length === 1 ? "" : "s"} disponible${dayOptions.length === 1 ? "" : "s"}.`
+                  : "Aucun jour disponible."
+                : ""}
+            </span>
+          </div>
+          {selectedOptionUsesDailyReservations ? (
+            <div className="form-grid">
+              <label>
+                Jour debut
+                <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
+                  {dayOptions.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {dayLabel(day)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Jour fin
+                <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
+                  {dayOptions.map((day) => (
+                    <option key={day.id} value={day.id}>
+                      {dayLabel(day)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          ) : null}
           <label>
-            End day
-            <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
-              {dayOptions.map((day) => (
-                <option key={day.id} value={day.id}>
-                  {dayLabel(day)}
-                </option>
-              ))}
-            </select>
+            Notes
+            <input value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
         </div>
-        <label>
-          Notes
-          <input value={notes} onChange={(event) => setNotes(event.target.value)} />
-        </label>
         <FormActions busy={busy || !canUpdate} onCancel={onCancel} />
       </form>
     </section>
   );
+}
+
+function reservationCreateMessage({
+  allowedTackQuantity,
+  beddingAvailabilityTooLow,
+  beddingTotalQuantity,
+  canCreate,
+  campingAvailabilityTooLow,
+  campingQuantityNumber,
+  currency,
+  dayOptions,
+  hayAvailabilityTooLow,
+  hayTotalQuantity,
+  hasRequiredContactRoles,
+  hasReservationItems,
+  needsBeddingOption,
+  needsHayOption,
+  needsStallOption,
+  organization,
+  profileId,
+  responsibleContactId,
+  selectedOptionUsesDailyReservations,
+  selectedEndDayId,
+  selectedHorseCount,
+  selectedReservedHorseCount,
+  selectedStartDayId,
+  selectedStallOption,
+  stallAvailabilityTooLow,
+  tackAvailabilityTooLow,
+  tackLimitTooHigh,
+  tackQuantityNumber,
+  totalPrice,
+}: {
+  allowedTackQuantity: number | null;
+  beddingAvailabilityTooLow: boolean;
+  beddingTotalQuantity: number;
+  canCreate: boolean;
+  campingAvailabilityTooLow: boolean;
+  campingQuantityNumber: number;
+  currency: string;
+  dayOptions: ShowDay[];
+  hayAvailabilityTooLow: boolean;
+  hayTotalQuantity: number;
+  hasRequiredContactRoles: boolean;
+  hasReservationItems: boolean;
+  needsBeddingOption: boolean;
+  needsHayOption: boolean;
+  needsStallOption: boolean;
+  organization: Organization | null;
+  profileId: string;
+  responsibleContactId: string;
+  selectedOptionUsesDailyReservations: boolean;
+  selectedEndDayId: string;
+  selectedHorseCount: number;
+  selectedReservedHorseCount: number;
+  selectedStartDayId: string;
+  selectedStallOption: StallOption | null;
+  stallAvailabilityTooLow: boolean;
+  tackAvailabilityTooLow: boolean;
+  tackLimitTooHigh: boolean;
+  tackQuantityNumber: number;
+  totalPrice: number;
+}) {
+  if (canCreate) {
+    return `Reservation prete. Total: ${formatCurrency(totalPrice, currency)}.`;
+  }
+
+  if (!organization) {
+    return "Choisir une association avant de creer une reservation.";
+  }
+
+  if (!profileId) {
+    return "Le profil usager charge encore.";
+  }
+
+  if (!responsibleContactId) {
+    return "Choisir ou creer le contact responsable.";
+  }
+
+  if (!hasRequiredContactRoles) {
+    return "Le contact doit etre booker et payer pour creer la reservation.";
+  }
+
+  if (needsStallOption || (selectedHorseCount > 0 && !selectedStallOption)) {
+    return "Choisir le type de stall.";
+  }
+
+  if (selectedStallOption && !selectedHorseCount && !hasReservationItems) {
+    return "Choisir au moins un cheval pour reserver un stall.";
+  }
+
+  if (!hasReservationItems) {
+    return "Choisir au moins un stall, un tack stall ou du camping.";
+  }
+
+  if (selectedReservedHorseCount) {
+    return `${selectedReservedHorseCount} cheval${selectedReservedHorseCount === 1 ? "" : "x"} a deja un stall pour ce show.`;
+  }
+
+  if (stallAvailabilityTooLow && selectedStallOption) {
+    return `Seulement ${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"} pour ce produit.`;
+  }
+
+  if (tackLimitTooHigh) {
+    return `Limite de tack stalls: ${allowedTackQuantity ?? 0} permis pour ${selectedHorseCount} stall${selectedHorseCount === 1 ? "" : "s"} chevaux.`;
+  }
+
+  if (tackAvailabilityTooLow) {
+    return `Pas assez de tack stalls disponibles pour ${tackQuantityNumber} demande${tackQuantityNumber === 1 ? "" : "s"}.`;
+  }
+
+  if (needsBeddingOption) {
+    return "Choisir le produit de ripe a ajouter.";
+  }
+
+  if (beddingAvailabilityTooLow) {
+    return `Pas assez de ripe disponible pour ${beddingTotalQuantity} sac${beddingTotalQuantity === 1 ? "" : "s"}.`;
+  }
+
+  if (needsHayOption) {
+    return "Choisir le produit de foin a ajouter.";
+  }
+
+  if (hayAvailabilityTooLow) {
+    return `Pas assez de foin disponible pour ${hayTotalQuantity} unite${hayTotalQuantity === 1 ? "" : "s"}.`;
+  }
+
+  if (campingAvailabilityTooLow) {
+    return `Pas assez de camping disponible pour ${campingQuantityNumber} unite${campingQuantityNumber === 1 ? "" : "s"}.`;
+  }
+
+  if (selectedOptionUsesDailyReservations && (!dayOptions.length || !selectedStartDayId || !selectedEndDayId)) {
+    return "Ce show a besoin de jours avant de creer une reservation.";
+  }
+
+  return "Completer les informations de reservation.";
+}
+
+function isStallReservationOption(option: StallOption) {
+  return option.category === "stall" && !isTackStallOption(option);
+}
+
+function isTackStallOption(option: StallOption) {
+  return option.category === "stall" && (option.requires_horse_assignment === false || isTackStallName(option));
+}
+
+function isTackStallName(option: Pick<StallOption, "name" | "description">) {
+  return `${option.name} ${option.description ?? ""}`.toLowerCase().includes("tack");
+}
+
+function isBeddingOption(option: StallOption) {
+  const name = `${option.name} ${option.description ?? ""}`.toLowerCase();
+  return option.category === "extra" && (name.includes("ripe") || name.includes("shaving") || name.includes("bedding"));
+}
+
+function isHayOption(option: StallOption) {
+  const name = `${option.name} ${option.description ?? ""}`.toLowerCase();
+  return option.category === "extra" && (name.includes("foin") || name.includes("hay"));
+}
+
+function isCampingOption(option: StallOption) {
+  return option.category === "camping";
+}
+
+function isActiveHorseStallBookingForShow(booking: StallBooking, showId: string, options: StallOption[]) {
+  const option = findById(options, booking.stall_option_id);
+  return Boolean(showId && booking.show_id === showId && booking.horse_id && booking.status !== "cancelled" && option && isStallReservationOption(option));
+}
+
+function stallOptionAssignmentLabel(option: StallOption) {
+  if (option.category === "stall") {
+    if (isTackStallOption(option)) {
+      return option.limit_per_horse_stalls ? `Non attitre, limite 1/${option.limit_per_horse_stalls} stalls chevaux` : "Non attitre";
+    }
+
+    return "Par cheval";
+  }
+
+  return "Reservation simple";
+}
+
+function optionUsesDailyReservations(option: StallOption | null) {
+  return Boolean(option?.show_day_start_id || option?.show_day_end_id);
+}
+
+function toggleValue<T>(values: T[], value: T) {
+  return values.includes(value) ? values.filter((candidate) => candidate !== value) : [...values, value];
+}
+
+function reservationLineNotes(notes: string, horse: Horse, productName: string) {
+  const base = `${productName} pour ${horse.name}`;
+  return notes.trim() ? `${base}. ${notes.trim()}` : base;
+}
+
+function reservationStandaloneNotes(notes: string, productName: string) {
+  return notes.trim() ? `${productName}. ${notes.trim()}` : productName;
+}
+
+function ReservationProductSummary({
+  availableQuantity,
+  currency,
+  option,
+  quantityNumber,
+  quantityTooHigh,
+  totalPrice,
+}: {
+  availableQuantity?: number;
+  currency: string;
+  option: StallOption | null;
+  quantityNumber: number;
+  quantityTooHigh: boolean;
+  totalPrice: number;
+}) {
+  if (!option) {
+    return (
+      <div className="reservation-product-summary empty">
+        <span>
+          <strong>Aucun produit choisi</strong>
+          <small>Le prix, les dates et la facture se calculeront apres le choix du produit.</small>
+        </span>
+      </div>
+    );
+  }
+
+  const displayAvailability = availableQuantity ?? option.available_quantity;
+
+  return (
+    <div className={`reservation-product-summary ${quantityTooHigh ? "warning" : ""}`}>
+      <span>
+        <strong>{option.name}</strong>
+        <small>
+          {categoryLabel(option.category)} / {displayAvailability} disponible{displayAvailability === 1 ? "" : "s"}
+        </small>
+      </span>
+      <span>
+        <strong>{formatCurrency(option.price, currency)}</strong>
+        <small>Prix unitaire</small>
+      </span>
+      <span>
+        <strong>{formatCurrency(totalPrice, currency)}</strong>
+        <small>
+          {quantityNumber} x facture
+        </small>
+      </span>
+    </div>
+  );
+}
+
+function reservationOptionSelectLabel(option: StallOption, currency: string) {
+  const availability = option.available_quantity > 0 ? `${option.available_quantity}/${option.total_quantity} disponible` : "complet";
+  return `${option.name} - ${formatCurrency(option.price, currency)} - ${availability}`;
+}
+
+function reservationOptionAvailabilityLabel(option: StallOption, currency: string) {
+  return `${option.available_quantity} disponible${option.available_quantity === 1 ? "" : "s"} a ${formatCurrency(option.price, currency)}`;
 }
 
 function categoryLabel(category: StallOption["category"]) {

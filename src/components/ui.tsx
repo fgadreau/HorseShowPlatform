@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
-import { Globe2 } from "lucide-react";
-import type { ComponentType, FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Globe2, X } from "lucide-react";
+import type { ComponentType } from "react";
 import type { Locale } from "../lib/i18n";
 import { contactLabel, findById, itemSearchLabel } from "../lib/display";
 import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization } from "../types/domain";
@@ -37,47 +37,136 @@ export function SearchSelect({
 }) {
   const listId = useMemo(() => `search-${Math.random().toString(36).slice(2)}`, []);
   const selectedItem = findById(items, value);
-  const [query, setQuery] = useState(selectedItem ? itemSearchLabel(selectedItem) : "");
+  const selectedLabel = selectedItem ? itemSearchLabel(selectedItem) : "";
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [inputValue, setInputValue] = useState(selectedLabel);
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
   useEffect(() => {
-    const nextItem = findById(items, value);
-    setQuery(nextItem ? itemSearchLabel(nextItem) : "");
-  }, [items, value]);
+    if (!open) {
+      setInputValue(selectedLabel);
+    }
+  }, [open, selectedLabel]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleItems = items.filter((item) => itemSearchLabel(item).toLowerCase().includes(normalizedQuery)).slice(0, 30);
+  const visibleItems = (normalizedQuery ? items.filter((item) => itemSearchLabel(item).toLowerCase().includes(normalizedQuery)) : items).slice(0, 30);
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [query, items]);
 
   function handleInput(nextQuery: string) {
+    setInputValue(nextQuery);
     setQuery(nextQuery);
+    setOpen(true);
 
     if (allowEmpty && !nextQuery.trim()) {
       onChange("");
       return;
     }
 
-    const exactMatch = items.find((item) => itemSearchLabel(item).toLowerCase() === nextQuery.trim().toLowerCase());
-    onChange(exactMatch?.id ?? "");
+    if (value && nextQuery !== selectedLabel) {
+      onChange("");
+    }
+  }
+
+  function handleSelect(item: { id: string; label: string; detail?: string }) {
+    onChange(item.id);
+    setInputValue(itemSearchLabel(item));
+    setQuery("");
+    setOpen(false);
+  }
+
+  function handleClear() {
+    onChange("");
+    setInputValue("");
+    setQuery("");
+    setOpen(false);
+    inputRef.current?.focus();
   }
 
   return (
     <div className="search-select">
-      <input
-        disabled={disabled}
-        list={listId}
-        placeholder={placeholder}
-        value={query}
-        onBlur={() => {
-          if (!allowEmpty && !findById(items, value)) {
+      <div className="search-select-control">
+        <input
+          ref={inputRef}
+          aria-autocomplete="list"
+          aria-controls={listId}
+          aria-expanded={open}
+          aria-activedescendant={open && visibleItems[activeIndex] ? `${listId}-${visibleItems[activeIndex].id}` : undefined}
+          disabled={disabled}
+          placeholder={placeholder}
+          role="combobox"
+          value={inputValue}
+          onBlur={() => {
+            setOpen(false);
             setQuery("");
-          }
-        }}
-        onChange={(event) => handleInput(event.target.value)}
-      />
-      <datalist id={listId}>
-        {visibleItems.map((item) => (
-          <option key={item.id} value={itemSearchLabel(item)} />
-        ))}
-      </datalist>
+            setInputValue(selectedLabel);
+          }}
+          onChange={(event) => handleInput(event.target.value)}
+          onFocus={(event) => {
+            setOpen(true);
+            setQuery("");
+            setActiveIndex(0);
+            event.currentTarget.select();
+          }}
+          onKeyDown={(event) => {
+            if (event.key === "ArrowDown") {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((current) => Math.min(current + 1, Math.max(visibleItems.length - 1, 0)));
+            }
+
+            if (event.key === "ArrowUp") {
+              event.preventDefault();
+              setOpen(true);
+              setActiveIndex((current) => Math.max(current - 1, 0));
+            }
+
+            if (event.key === "Enter" && open && visibleItems[activeIndex]) {
+              event.preventDefault();
+              handleSelect(visibleItems[activeIndex]);
+            }
+
+            if (event.key === "Escape") {
+              setOpen(false);
+              setQuery("");
+              setInputValue(selectedLabel);
+            }
+          }}
+        />
+        {allowEmpty && selectedItem ? (
+          <button aria-label="Clear selection" className="search-select-clear" title="Clear selection" type="button" onMouseDown={(event) => event.preventDefault()} onClick={handleClear}>
+            <X size={14} />
+          </button>
+        ) : null}
+      </div>
+      {open && !disabled ? (
+        <div className="search-select-menu" id={listId} role="listbox">
+          {visibleItems.length ? (
+            visibleItems.map((item, index) => (
+              <button
+                aria-selected={item.id === value}
+                className={`${index === activeIndex ? "active" : ""} ${item.id === value ? "selected" : ""}`}
+                id={`${listId}-${item.id}`}
+                key={item.id}
+                role="option"
+                type="button"
+                onClick={() => handleSelect(item)}
+                onMouseDown={(event) => event.preventDefault()}
+                onMouseEnter={() => setActiveIndex(index)}
+              >
+                <span>{item.label}</span>
+                {item.detail ? <small>{item.detail}</small> : null}
+              </button>
+            ))
+          ) : (
+            <span className="search-select-empty">No matches</span>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -128,10 +217,8 @@ export function ContactPicker({
   }, [contacts, createdContact]);
   const roleLabel = contactRoleLabel(role);
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    if (!organization) {
+  async function handleCreate() {
+    if (!organization || !firstName.trim() || !lastName.trim()) {
       return;
     }
 
@@ -187,7 +274,7 @@ export function ContactPicker({
       </label>
 
       {creating ? (
-        <form className="contact-create-inline" onSubmit={handleCreate}>
+        <div className="contact-create-inline">
           <div className="inline-form-header">
             <strong>New {roleLabel.toLowerCase()}</strong>
             <span>This contact will receive the {roleLabel.toLowerCase()} role automatically.</span>
@@ -216,10 +303,10 @@ export function ContactPicker({
             Barn
             <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
           </label>
-          <button className="primary-button" disabled={busy} type="submit">
+          <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
             Create and select
           </button>
-        </form>
+        </div>
       ) : null}
     </div>
   );
