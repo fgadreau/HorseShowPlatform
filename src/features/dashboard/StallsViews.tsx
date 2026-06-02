@@ -24,13 +24,14 @@ const stallPresets = [
 ] as const;
 
 const bookingStatuses: StallBooking["status"][] = ["requested", "reserved", "active", "cancelled", "completed"];
-const requiredReservationContactRoles: ContactRoleName[] = ["booker", "payer"];
+const requiredReservationContactRoles: ContactRoleName[] = ["booker"];
 const reservationContactRoleChoices: Array<{ detail: string; label: string; role: ContactRoleName }> = [
   { detail: "Personne qui fait la demande.", label: "Booker", role: "booker" },
   { detail: "Personne liee a la facture.", label: "Payer", role: "payer" },
   { detail: "Role ajoute au contact, sans changer le proprietaire du cheval.", label: "Owner", role: "owner" },
 ];
 type ReservationPeriodMode = "full_show" | "daily";
+type TackBillingMode = "split_horses" | "single_contact";
 
 type AssociationReservationTab = "reservations" | "new-reservation" | "options";
 type PersonalReservationTab = "my-reservations" | "new-reservation" | "available-options";
@@ -72,7 +73,7 @@ export function StallsView({
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
   const [activeTab, setActiveTab] = useState<AssociationReservationTab>("reservations");
   const reservedQuantity = bookings
-    .filter((booking) => booking.status !== "cancelled")
+    .filter((booking) => booking.status !== "cancelled" && booking.affects_inventory !== false)
     .reduce((sum, booking) => sum + Number(booking.quantity ?? 1), 0);
   const billableTotal = bookings.reduce((sum, booking) => sum + Number(booking.total_price ?? 0), 0);
   const associationTabs: Array<ReservationTabItem<AssociationReservationTab>> = [
@@ -965,12 +966,16 @@ function StallBookingForm({
   const [stallOptionId, setStallOptionId] = useState("");
   const [tackOptionId, setTackOptionId] = useState("");
   const [tackQuantity, setTackQuantity] = useState("0");
+  const [tackBillingMode, setTackBillingMode] = useState<TackBillingMode>("split_horses");
+  const [tackPayerContactId, setTackPayerContactId] = useState("");
   const [beddingOptionId, setBeddingOptionId] = useState("");
   const [hayOptionId, setHayOptionId] = useState("");
   const [hayQuantity, setHayQuantity] = useState("0");
   const [campingOptionId, setCampingOptionId] = useState("");
   const [campingQuantity, setCampingQuantity] = useState("0");
+  const [campingPayerContactIds, setCampingPayerContactIds] = useState<Record<string, string>>({});
   const [selectedHorseIds, setSelectedHorseIds] = useState<string[]>([]);
+  const [horsePayerContactIds, setHorsePayerContactIds] = useState<Record<string, string>>({});
   const [beddingHorseIds, setBeddingHorseIds] = useState<string[]>([]);
   const [beddingQuantities, setBeddingQuantities] = useState<Record<string, string>>({});
   const [responsibleContactId, setResponsibleContactId] = useState("");
@@ -991,6 +996,11 @@ function StallBookingForm({
   const selectedBeddingOption = findById(beddingChoices, beddingOptionId) ?? (beddingChoices.length === 1 ? beddingChoices[0] : null);
   const selectedHayOption = findById(hayChoices, hayOptionId) ?? null;
   const selectedCampingOption = findById(campingChoices, campingOptionId) ?? null;
+  const contactItems = contacts.map((contact) => ({
+    id: contact.id,
+    label: contactLabel(contact),
+    detail: [contact.type, contact.email].filter(Boolean).join(" / "),
+  }));
   const reservedHorseBookingById = new Map<string, StallBooking>();
   bookings.forEach((booking) => {
     if (booking.horse_id && isActiveHorseStallBookingForShow(booking, selectedShowId, stallOptions)) {
@@ -1004,6 +1014,10 @@ function StallBookingForm({
     .filter((horseId) => !reservedHorseBookingById.has(horseId))
     .map((horseId) => findById(horses, horseId))
     .filter((horse): horse is Horse => Boolean(horse));
+  const selectedHorseBillingTargets = selectedHorses.map((horse) => ({
+    horse,
+    payerContactId: horsePayerContactIds[horse.id] || horse.primary_owner_contact_id,
+  }));
   const dailyReservationOption = [selectedStallOption, selectedTackOption, selectedHayOption, selectedCampingOption].find(optionUsesDailyReservations) ?? null;
   const reservationUsesDailyReservations = Boolean(dailyReservationOption);
   const dayOptions = showDays.filter((day) => day.show_id === (selectedStallOption?.show_id ?? selectedShowId));
@@ -1032,6 +1046,11 @@ function StallBookingForm({
   const hasHorseStallRequest = Boolean(selectedStallOption && selectedHorses.length);
   const hasTackRequest = Boolean(selectedTackOption && tackQuantityNumber > 0);
   const hasCampingRequest = Boolean(selectedCampingOption && campingQuantityNumber > 0);
+  const selectedTackPayerContactId = tackPayerContactId || responsibleContactId;
+  const needsTackPayer = hasTackRequest && tackBillingMode === "single_contact" && !selectedTackPayerContactId;
+  const needsTackSplitHorses = hasTackRequest && tackBillingMode === "split_horses" && !selectedHorses.length;
+  const campingPayerContactIdsList = Array.from({ length: Math.max(campingQuantityNumber, 0) }, (_, index) => campingPayerContactIds[String(index)] || responsibleContactId);
+  const missingCampingPayerCount = hasCampingRequest ? campingPayerContactIdsList.filter((contactId) => !contactId).length : 0;
   const hasReservationItems = hasHorseStallRequest || hasTackRequest || hasCampingRequest;
   const hasSelectedReservableProduct = Boolean(selectedStallOption || selectedTackOption || selectedCampingOption);
   const stallAvailabilityTooLow = Boolean(selectedStallOption && stallCount > selectedStallOption.available_quantity);
@@ -1050,6 +1069,9 @@ function StallBookingForm({
       hasRequiredContactRoles &&
       hasReservationItems &&
       !needsStallOption &&
+      !needsTackPayer &&
+      !needsTackSplitHorses &&
+      !missingCampingPayerCount &&
       !selectedReservedHorseCount &&
       (!reservationUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) &&
       !stallAvailabilityTooLow &&
@@ -1078,9 +1100,12 @@ function StallBookingForm({
     dayOptions,
     hasRequiredContactRoles,
     hasReservationItems,
+    missingCampingPayerCount,
     needsBeddingOption,
     needsHayOption,
     needsStallOption,
+    needsTackPayer,
+    needsTackSplitHorses,
     organization,
     profileId,
     responsibleContactId,
@@ -1139,7 +1164,12 @@ function StallBookingForm({
 
   useEffect(() => {
     setBeddingHorseIds((current) => current.filter((horseId) => selectedHorseIds.includes(horseId)));
+    setHorsePayerContactIds((current) => Object.fromEntries(Object.entries(current).filter(([horseId]) => selectedHorseIds.includes(horseId))));
   }, [selectedHorseIds]);
+
+  useEffect(() => {
+    setCampingPayerContactIds((current) => Object.fromEntries(Object.entries(current).filter(([index]) => Number(index) < campingQuantityNumber)));
+  }, [campingQuantityNumber]);
 
   useEffect(() => {
     setSelectedHorseIds((current) => current.filter((horseId) => !reservedHorseBookingById.has(horseId)));
@@ -1162,107 +1192,170 @@ function StallBookingForm({
     setBusy(true);
 
     try {
+      const activeOrganization = organization;
+
       await ensureContactRoles({
-        organization_id: organization.id,
+        organization_id: activeOrganization.id,
         contact_id: responsibleContactId,
         roles: selectedContactRoles,
         source: "manual",
       });
 
-      if (selectedStallOption) {
-        for (const horse of selectedHorses) {
+      const bookingStatus = allowStatusEdit ? status : defaultStatus;
+
+      async function createInventoryBooking(option: StallOption, quantity: number, productName: string) {
+        await onCreateStallBooking({
+          organization_id: activeOrganization.id,
+          show_id: option.show_id,
+          stall_option_id: option.id,
+          created_by_user_id: profileId,
+          booker_contact_id: responsibleContactId,
+          payer_contact_id: responsibleContactId,
+          status: bookingStatus,
+          show_day_start_id: optionUsesDailyReservations(option) ? option.show_day_start_id || selectedStartDayId || null : null,
+          show_day_end_id: optionUsesDailyReservations(option) ? option.show_day_end_id || selectedEndDayId || null : null,
+          quantity,
+          unit_price: Number(option.price ?? 0),
+          total_price: 0,
+          affects_inventory: true,
+          billable: false,
+          notes: reservationStandaloneNotes(notes, `${productName} - inventaire split`),
+        });
+      }
+
+      async function createSplitBookings(option: StallOption, totalAmount: number, productName: string) {
+        const splitAmounts = splitAmountEvenly(totalAmount, selectedHorseBillingTargets.length);
+
+        for (const [index, target] of selectedHorseBillingTargets.entries()) {
+          const splitAmount = splitAmounts[index] ?? 0;
+
           await onCreateStallBooking({
-            organization_id: organization.id,
-            show_id: selectedStallOption.show_id,
-            stall_option_id: selectedStallOption.id,
-            horse_id: horse.id,
+            organization_id: activeOrganization.id,
+            show_id: option.show_id,
+            stall_option_id: option.id,
+            horse_id: target.horse.id,
             created_by_user_id: profileId,
             booker_contact_id: responsibleContactId,
-            payer_contact_id: responsibleContactId,
-            status: allowStatusEdit ? status : defaultStatus,
+            payer_contact_id: target.payerContactId,
+            status: bookingStatus,
+            show_day_start_id: optionUsesDailyReservations(option) ? option.show_day_start_id || selectedStartDayId || null : null,
+            show_day_end_id: optionUsesDailyReservations(option) ? option.show_day_end_id || selectedEndDayId || null : null,
+            quantity: 1,
+            unit_price: splitAmount,
+            total_price: status === "cancelled" ? 0 : splitAmount,
+            affects_inventory: false,
+            billable: true,
+            notes: reservationLineNotes(notes, target.horse, `Partage ${productName}`),
+          });
+        }
+      }
+
+      if (selectedStallOption) {
+        for (const target of selectedHorseBillingTargets) {
+          await onCreateStallBooking({
+            organization_id: activeOrganization.id,
+            show_id: selectedStallOption.show_id,
+            stall_option_id: selectedStallOption.id,
+            horse_id: target.horse.id,
+            created_by_user_id: profileId,
+            booker_contact_id: responsibleContactId,
+            payer_contact_id: target.payerContactId,
+            status: bookingStatus,
             show_day_start_id: optionUsesDailyReservations(selectedStallOption) ? selectedStartDayId || null : null,
             show_day_end_id: optionUsesDailyReservations(selectedStallOption) ? selectedEndDayId || null : null,
             quantity: 1,
             unit_price: stallUnitPrice,
             total_price: status === "cancelled" ? 0 : stallUnitPrice,
-            notes: reservationLineNotes(notes, horse, "Stall"),
+            notes: reservationLineNotes(notes, target.horse, "Stall"),
           });
 
-          if (selectedBeddingOption && beddingHorseIds.includes(horse.id)) {
-            const beddingQuantity = positiveIntegerValue(beddingQuantities[horse.id] ?? "1", 1);
+          if (selectedBeddingOption && beddingHorseIds.includes(target.horse.id)) {
+            const beddingQuantity = positiveIntegerValue(beddingQuantities[target.horse.id] ?? "1", 1);
 
             await onCreateStallBooking({
-              organization_id: organization.id,
+              organization_id: activeOrganization.id,
               show_id: selectedBeddingOption.show_id,
               stall_option_id: selectedBeddingOption.id,
-              horse_id: horse.id,
+              horse_id: target.horse.id,
               created_by_user_id: profileId,
               booker_contact_id: responsibleContactId,
-              payer_contact_id: responsibleContactId,
-              status: allowStatusEdit ? status : defaultStatus,
+              payer_contact_id: target.payerContactId,
+              status: bookingStatus,
               show_day_start_id: optionUsesDailyReservations(selectedBeddingOption) ? selectedBeddingOption.show_day_start_id || selectedStartDayId || null : null,
               show_day_end_id: optionUsesDailyReservations(selectedBeddingOption) ? selectedBeddingOption.show_day_end_id || selectedEndDayId || null : null,
               quantity: beddingQuantity,
               unit_price: beddingUnitPrice,
               total_price: status === "cancelled" ? 0 : beddingUnitPrice * beddingQuantity,
-              notes: reservationLineNotes(notes, horse, selectedBeddingOption.name),
+              notes: reservationLineNotes(notes, target.horse, selectedBeddingOption.name),
             });
           }
         }
       }
 
       if (selectedTackOption && tackQuantityNumber > 0) {
-        await onCreateStallBooking({
-          organization_id: organization.id,
-          show_id: selectedTackOption.show_id,
-          stall_option_id: selectedTackOption.id,
-          created_by_user_id: profileId,
-          booker_contact_id: responsibleContactId,
-          payer_contact_id: responsibleContactId,
-          status: allowStatusEdit ? status : defaultStatus,
-          show_day_start_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_start_id || selectedStartDayId || null : null,
-          show_day_end_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_end_id || selectedEndDayId || null : null,
-          quantity: tackQuantityNumber,
-          unit_price: tackUnitPrice,
-          total_price: status === "cancelled" ? 0 : tackUnitPrice * tackQuantityNumber,
-          notes: reservationStandaloneNotes(notes, selectedTackOption.name),
-        });
-
-        if (selectedHayOption && hayTotalQuantity > 0) {
+        if (tackBillingMode === "split_horses") {
+          await createInventoryBooking(selectedTackOption, tackQuantityNumber, selectedTackOption.name);
+          await createSplitBookings(selectedTackOption, tackTotal, selectedTackOption.name);
+        } else {
           await onCreateStallBooking({
-            organization_id: organization.id,
-            show_id: selectedHayOption.show_id,
-            stall_option_id: selectedHayOption.id,
+            organization_id: activeOrganization.id,
+            show_id: selectedTackOption.show_id,
+            stall_option_id: selectedTackOption.id,
             created_by_user_id: profileId,
             booker_contact_id: responsibleContactId,
-            payer_contact_id: responsibleContactId,
-            status: allowStatusEdit ? status : defaultStatus,
-            show_day_start_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_start_id || selectedStartDayId || null : null,
-            show_day_end_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_end_id || selectedEndDayId || null : null,
-            quantity: hayTotalQuantity,
-            unit_price: hayUnitPrice,
-            total_price: status === "cancelled" ? 0 : hayUnitPrice * hayTotalQuantity,
-            notes: reservationStandaloneNotes(notes, `${selectedHayOption.name} pour ${selectedTackOption.name}`),
+            payer_contact_id: selectedTackPayerContactId,
+            status: bookingStatus,
+            show_day_start_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_start_id || selectedStartDayId || null : null,
+            show_day_end_id: optionUsesDailyReservations(selectedTackOption) ? selectedTackOption.show_day_end_id || selectedEndDayId || null : null,
+            quantity: tackQuantityNumber,
+            unit_price: tackUnitPrice,
+            total_price: status === "cancelled" ? 0 : tackUnitPrice * tackQuantityNumber,
+            notes: reservationStandaloneNotes(notes, selectedTackOption.name),
           });
+        }
+
+        if (selectedHayOption && hayTotalQuantity > 0) {
+          if (tackBillingMode === "split_horses") {
+            await createInventoryBooking(selectedHayOption, hayTotalQuantity, selectedHayOption.name);
+            await createSplitBookings(selectedHayOption, hayTotal, `${selectedHayOption.name} pour ${selectedTackOption.name}`);
+          } else {
+            await onCreateStallBooking({
+              organization_id: activeOrganization.id,
+              show_id: selectedHayOption.show_id,
+              stall_option_id: selectedHayOption.id,
+              created_by_user_id: profileId,
+              booker_contact_id: responsibleContactId,
+              payer_contact_id: selectedTackPayerContactId,
+              status: bookingStatus,
+              show_day_start_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_start_id || selectedStartDayId || null : null,
+              show_day_end_id: optionUsesDailyReservations(selectedHayOption) ? selectedHayOption.show_day_end_id || selectedEndDayId || null : null,
+              quantity: hayTotalQuantity,
+              unit_price: hayUnitPrice,
+              total_price: status === "cancelled" ? 0 : hayUnitPrice * hayTotalQuantity,
+              notes: reservationStandaloneNotes(notes, `${selectedHayOption.name} pour ${selectedTackOption.name}`),
+            });
+          }
         }
       }
 
       if (selectedCampingOption && campingQuantityNumber > 0) {
-        await onCreateStallBooking({
-          organization_id: organization.id,
-          show_id: selectedCampingOption.show_id,
-          stall_option_id: selectedCampingOption.id,
-          created_by_user_id: profileId,
-          booker_contact_id: responsibleContactId,
-          payer_contact_id: responsibleContactId,
-          status: allowStatusEdit ? status : defaultStatus,
-          show_day_start_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_start_id || selectedStartDayId || null : null,
-          show_day_end_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_end_id || selectedEndDayId || null : null,
-          quantity: campingQuantityNumber,
-          unit_price: campingUnitPrice,
-          total_price: status === "cancelled" ? 0 : campingUnitPrice * campingQuantityNumber,
-          notes: reservationStandaloneNotes(notes, selectedCampingOption.name),
-        });
+        for (const [index, payerContactId] of campingPayerContactIdsList.entries()) {
+          await onCreateStallBooking({
+            organization_id: activeOrganization.id,
+            show_id: selectedCampingOption.show_id,
+            stall_option_id: selectedCampingOption.id,
+            created_by_user_id: profileId,
+            booker_contact_id: responsibleContactId,
+            payer_contact_id: payerContactId,
+            status: bookingStatus,
+            show_day_start_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_start_id || selectedStartDayId || null : null,
+            show_day_end_id: optionUsesDailyReservations(selectedCampingOption) ? selectedCampingOption.show_day_end_id || selectedEndDayId || null : null,
+            quantity: 1,
+            unit_price: campingUnitPrice,
+            total_price: status === "cancelled" ? 0 : campingUnitPrice,
+            notes: reservationStandaloneNotes(notes, `${selectedCampingOption.name} #${index + 1}`),
+          });
+        }
       }
 
       setStallOptionId("");
@@ -1273,7 +1366,9 @@ function StallBookingForm({
       setHayQuantity("0");
       setCampingOptionId("");
       setCampingQuantity("0");
+      setCampingPayerContactIds({});
       setSelectedHorseIds([]);
+      setHorsePayerContactIds({});
       setBeddingHorseIds([]);
       setBeddingQuantities({});
       setResponsibleContactId("");
@@ -1355,12 +1450,15 @@ function StallBookingForm({
                 setStallOptionId("");
                 setTackOptionId("");
                 setTackQuantity("0");
+                setTackPayerContactId("");
                 setBeddingOptionId("");
                 setHayOptionId("");
                 setHayQuantity("0");
                 setCampingOptionId("");
                 setCampingQuantity("0");
+                setCampingPayerContactIds({});
                 setSelectedHorseIds([]);
+                setHorsePayerContactIds({});
                 setBeddingHorseIds([]);
                 setBeddingQuantities({});
                 setStartDayId("");
@@ -1431,22 +1529,35 @@ function StallBookingForm({
                     </span>
                   </label>
                   {selected && !alreadyReserved ? (
-                    <div className="horse-addons">
-                      <label>
-                        <input checked={beddingSelected} disabled={!beddingChoices.length} type="checkbox" onChange={() => toggleBedding(horse.id)} />
-                        Ajouter de la ripe
-                      </label>
-                      {beddingSelected ? (
-                        <input
-                          aria-label={`Quantite de ripe pour ${horse.name}`}
-                          min="1"
-                          step="1"
-                          type="number"
-                          value={beddingQuantities[horse.id] ?? "1"}
-                          onChange={(event) => setBeddingQuantities((current) => ({ ...current, [horse.id]: event.target.value }))}
-                        />
-                      ) : null}
-                    </div>
+                    <>
+                      <div className="horse-billing-grid">
+                        <label>
+                          Facturer a
+                          <SearchSelect
+                            items={contactItems}
+                            placeholder="Contact a facturer"
+                            value={horsePayerContactIds[horse.id] || horse.primary_owner_contact_id}
+                            onChange={(contactId) => setHorsePayerContactIds((current) => ({ ...current, [horse.id]: contactId }))}
+                          />
+                        </label>
+                      </div>
+                      <div className="horse-addons">
+                        <label>
+                          <input checked={beddingSelected} disabled={!beddingChoices.length} type="checkbox" onChange={() => toggleBedding(horse.id)} />
+                          Ajouter de la ripe
+                        </label>
+                        {beddingSelected ? (
+                          <input
+                            aria-label={`Quantite de ripe pour ${horse.name}`}
+                            min="1"
+                            step="1"
+                            type="number"
+                            value={beddingQuantities[horse.id] ?? "1"}
+                            onChange={(event) => setBeddingQuantities((current) => ({ ...current, [horse.id]: event.target.value }))}
+                          />
+                        ) : null}
+                      </div>
+                    </>
                   ) : null}
                 </div>
               );
@@ -1498,6 +1609,48 @@ function StallBookingForm({
             </div>
             {selectedTackOption ? (
               <ReservationProductSummary availableQuantity={tackQuantityMax} currency={currency} option={selectedTackOption} quantityNumber={Math.max(tackQuantityNumber, 0)} quantityTooHigh={tackAvailabilityTooLow || tackLimitTooHigh} totalPrice={tackTotal} />
+            ) : null}
+            {selectedTackOption ? (
+              <div className="form-section nested-section">
+                <div className="form-section-header">
+                  <strong>Facturation tack</strong>
+                  <span>{tackBillingMode === "split_horses" ? "Divise le tack et le foin entre les chevaux selectionnes." : "Facture le tack et le foin a un seul contact."}</span>
+                </div>
+                <div className="segmented-control">
+                  <button className={tackBillingMode === "split_horses" ? "active" : ""} disabled={!selectedHorses.length} type="button" onClick={() => setTackBillingMode("split_horses")}>
+                    Split chevaux
+                  </button>
+                  <button className={tackBillingMode === "single_contact" ? "active" : ""} type="button" onClick={() => setTackBillingMode("single_contact")}>
+                    Un contact
+                  </button>
+                </div>
+                {tackBillingMode === "single_contact" ? (
+                  <ContactPicker
+                    contacts={contacts}
+                    contactRoles={contactRoles}
+                    createdByUserId={profileId}
+                    disabled={!organization}
+                    label="Facturer tack a"
+                    organization={organization}
+                    role="payer"
+                    value={selectedTackPayerContactId}
+                    onChange={setTackPayerContactId}
+                    onCreateContact={onCreateContact}
+                  />
+                ) : (
+                  <div className="billing-preview-list">
+                    {selectedHorseBillingTargets.length ? (
+                      selectedHorseBillingTargets.map((target) => (
+                        <span key={target.horse.id}>
+                          {target.horse.name} / {contactLabel(findById(contacts, target.payerContactId))}
+                        </span>
+                      ))
+                    ) : (
+                      <span>Choisir les chevaux a inclure dans le split.</span>
+                    )}
+                  </div>
+                )}
+              </div>
             ) : null}
             {selectedTackOption && hayChoices.length ? (
               <>
@@ -1561,6 +1714,32 @@ function StallBookingForm({
             </div>
             {selectedCampingOption ? (
               <ReservationProductSummary currency={currency} option={selectedCampingOption} quantityNumber={Math.max(campingQuantityNumber, 0)} quantityTooHigh={campingAvailabilityTooLow} totalPrice={campingTotal} />
+            ) : null}
+            {selectedCampingOption && campingQuantityNumber > 0 ? (
+              <div className="camping-assignment-list">
+                {Array.from({ length: campingQuantityNumber }, (_, index) => {
+                  const key = String(index);
+                  const assignedContactId = campingPayerContactIds[key] || responsibleContactId;
+
+                  return (
+                    <div className="camping-assignment-row" key={key}>
+                      <strong>Camping #{index + 1}</strong>
+                      <ContactPicker
+                        contacts={contacts}
+                        contactRoles={contactRoles}
+                        createdByUserId={profileId}
+                        disabled={!organization}
+                        label="Facturer a"
+                        organization={organization}
+                        role="payer"
+                        value={assignedContactId}
+                        onChange={(contactId) => setCampingPayerContactIds((current) => ({ ...current, [key]: contactId }))}
+                        onCreateContact={onCreateContact}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
             ) : null}
           </div>
         ) : null}
@@ -1878,9 +2057,12 @@ function reservationCreateMessage({
   hayTotalQuantity,
   hasRequiredContactRoles,
   hasReservationItems,
+  missingCampingPayerCount,
   needsBeddingOption,
   needsHayOption,
   needsStallOption,
+  needsTackPayer,
+  needsTackSplitHorses,
   organization,
   profileId,
   responsibleContactId,
@@ -1908,9 +2090,12 @@ function reservationCreateMessage({
   hayTotalQuantity: number;
   hasRequiredContactRoles: boolean;
   hasReservationItems: boolean;
+  missingCampingPayerCount: number;
   needsBeddingOption: boolean;
   needsHayOption: boolean;
   needsStallOption: boolean;
+  needsTackPayer: boolean;
+  needsTackSplitHorses: boolean;
   organization: Organization | null;
   profileId: string;
   responsibleContactId: string;
@@ -1943,11 +2128,23 @@ function reservationCreateMessage({
   }
 
   if (!hasRequiredContactRoles) {
-    return "Le contact doit etre booker et payer pour creer la reservation.";
+    return "Le contact responsable doit etre booker pour creer la reservation.";
   }
 
   if (needsStallOption || (selectedHorseCount > 0 && !selectedStallOption)) {
     return "Choisir le type de stall.";
+  }
+
+  if (needsTackSplitHorses) {
+    return "Choisir les chevaux qui partageront les frais de tack.";
+  }
+
+  if (needsTackPayer) {
+    return "Choisir le contact a facturer pour le tack.";
+  }
+
+  if (missingCampingPayerCount) {
+    return `Assigner ${missingCampingPayerCount} camping${missingCampingPayerCount === 1 ? "" : "s"} a un contact.`;
   }
 
   if (selectedStallOption && !selectedHorseCount && !hasReservationItems) {
@@ -2050,6 +2247,18 @@ function optionUsesDailyReservations(option: StallOption | null) {
 
 function toggleValue<T>(values: T[], value: T) {
   return values.includes(value) ? values.filter((candidate) => candidate !== value) : [...values, value];
+}
+
+function splitAmountEvenly(totalAmount: number, parts: number) {
+  if (parts <= 0) {
+    return [];
+  }
+
+  const totalCents = Math.round(totalAmount * 100);
+  const baseCents = Math.floor(totalCents / parts);
+  const remainder = totalCents % parts;
+
+  return Array.from({ length: parts }, (_, index) => (baseCents + (index < remainder ? 1 : 0)) / 100);
 }
 
 function reservationLineNotes(notes: string, horse: Horse, productName: string) {

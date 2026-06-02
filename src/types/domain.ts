@@ -131,16 +131,87 @@ export type Horse = {
   created_at: string;
 };
 
+export type HorseContact = {
+  id: string;
+  organization_id: string;
+  horse_id: string;
+  contact_id: string;
+  role: "owner" | "co-owner" | "agent" | "rider" | "manager";
+  can_create_entries: boolean;
+  can_modify_entries: boolean;
+  can_book_stalls: boolean;
+  can_pay_invoices: boolean;
+  created_at: string;
+};
+
+export type BackNumberPolicy = "horse" | "horse_rider_team" | "entry" | "custom";
+
+export type SanctioningBody = {
+  code: string;
+  name: string;
+  back_number_policy: BackNumberPolicy;
+  rule_notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EligibilityRules = {
+  notes?: string;
+  [key: string]: unknown;
+};
+
+export type ClassTemplate = {
+  id: string;
+  organization_id: string;
+  name: string;
+  code: string | null;
+  block_label: string | null;
+  category: string | null;
+  default_pattern: string | null;
+  default_entry_fee: number | null;
+  sanctioning_body_codes: string[];
+  back_number_policy: BackNumberPolicy;
+  eligibility_rules: EligibilityRules;
+  sort_order: number;
+  is_active: boolean;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ClassTemplateDivision = {
+  id: string;
+  organization_id: string;
+  class_template_id: string;
+  name: string;
+  code: string | null;
+  level: number | null;
+  default_entry_fee: number | null;
+  sanctioning_body_codes: string[];
+  eligibility_rules: EligibilityRules;
+  sort_order: number;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type ClassRecord = {
   id: string;
   organization_id: string;
   show_id: string;
   show_day_id: string | null;
+  class_template_id: string | null;
   name: string;
   code: string | null;
+  block_label: string | null;
   arena: string | null;
   pattern: string | null;
   custom_pattern: Record<string, unknown> | null;
+  sanctioning_body_codes: string[];
+  back_number_policy: BackNumberPolicy;
+  nrha_slate_number: string | null;
+  eligibility_rules: EligibilityRules;
   judge_name: string | null;
   sort_order: number;
   entry_fee: number | null;
@@ -191,9 +262,13 @@ export type Division = {
   organization_id: string;
   show_id: string;
   class_id: string;
+  class_template_division_id: string | null;
   name: string;
   level: number | null;
+  code: string | null;
   entry_fee: number | null;
+  sanctioning_body_codes: string[];
+  eligibility_rules: EligibilityRules;
   created_at: string;
 };
 
@@ -248,6 +323,8 @@ export type StallBooking = {
   quantity: number;
   unit_price: number | null;
   total_price: number | null;
+  affects_inventory?: boolean;
+  billable?: boolean;
   notes: string | null;
   created_at: string;
 };
@@ -308,6 +385,7 @@ export type HorseInput = {
   organization_id: string;
   name: string;
   primary_owner_contact_id: string;
+  agent_contact_id?: string | null;
   breed?: string;
   color?: string;
   gender?: Horse["gender"];
@@ -319,6 +397,7 @@ export type HorseInput = {
 export type HorseUpdateInput = {
   name?: string;
   primary_owner_contact_id?: string;
+  agent_contact_id?: string | null;
   breed?: string | null;
   color?: string | null;
   gender?: Horse["gender"];
@@ -330,11 +409,17 @@ export type ClassInput = {
   organization_id: string;
   show_id: string;
   name: string;
+  class_template_id?: string | null;
   show_day_id?: string;
   code?: string;
+  block_label?: string;
   arena?: string;
   pattern?: string;
   custom_pattern?: Record<string, unknown> | null;
+  sanctioning_body_codes?: string[];
+  back_number_policy?: BackNumberPolicy;
+  nrha_slate_number?: string | null;
+  eligibility_rules?: EligibilityRules;
   judge_name?: string;
   sort_order?: number;
   entry_fee?: number;
@@ -343,10 +428,16 @@ export type ClassInput = {
 export type ClassUpdateInput = {
   name?: string;
   code?: string | null;
+  class_template_id?: string | null;
   show_day_id?: string | null;
+  block_label?: string | null;
   arena?: string | null;
   pattern?: string | null;
   custom_pattern?: Record<string, unknown> | null;
+  sanctioning_body_codes?: string[];
+  back_number_policy?: BackNumberPolicy;
+  nrha_slate_number?: string | null;
+  eligibility_rules?: EligibilityRules;
   judge_name?: string | null;
   sort_order?: number;
   entry_fee?: number | null;
@@ -358,16 +449,80 @@ export type DivisionInput = {
   show_id: string;
   class_id: string;
   name: string;
+  class_template_division_id?: string | null;
+  code?: string;
   level?: number;
   entry_fee?: number;
+  sanctioning_body_codes?: string[];
+  eligibility_rules?: EligibilityRules;
 };
 
 export type DivisionUpdateInput = {
   class_id?: string;
   show_id?: string;
   name?: string;
+  class_template_division_id?: string | null;
+  code?: string | null;
   level?: number | null;
   entry_fee?: number | null;
+  sanctioning_body_codes?: string[];
+  eligibility_rules?: EligibilityRules;
+};
+
+export type ClassTemplateInput = {
+  organization_id: string;
+  name: string;
+  code?: string;
+  block_label?: string;
+  category?: string;
+  default_pattern?: string;
+  default_entry_fee?: number;
+  sanctioning_body_codes?: string[];
+  back_number_policy?: BackNumberPolicy;
+  eligibility_rules?: EligibilityRules;
+  sort_order?: number;
+  is_active?: boolean;
+  notes?: string;
+};
+
+export type ClassTemplateUpdateInput = {
+  name?: string;
+  code?: string | null;
+  block_label?: string | null;
+  category?: string | null;
+  default_pattern?: string | null;
+  default_entry_fee?: number | null;
+  sanctioning_body_codes?: string[];
+  back_number_policy?: BackNumberPolicy;
+  eligibility_rules?: EligibilityRules;
+  sort_order?: number;
+  is_active?: boolean;
+  notes?: string | null;
+};
+
+export type ClassTemplateDivisionInput = {
+  organization_id: string;
+  class_template_id: string;
+  name: string;
+  code?: string;
+  level?: number;
+  default_entry_fee?: number;
+  sanctioning_body_codes?: string[];
+  eligibility_rules?: EligibilityRules;
+  sort_order?: number;
+  notes?: string;
+};
+
+export type ClassTemplateDivisionUpdateInput = {
+  class_template_id?: string;
+  name?: string;
+  code?: string | null;
+  level?: number | null;
+  default_entry_fee?: number | null;
+  sanctioning_body_codes?: string[];
+  eligibility_rules?: EligibilityRules;
+  sort_order?: number;
+  notes?: string | null;
 };
 
 export type EntryInput = {
@@ -439,6 +594,8 @@ export type StallBookingInput = {
   quantity: number;
   unit_price?: number;
   total_price?: number;
+  affects_inventory?: boolean;
+  billable?: boolean;
   notes?: string;
 };
 
@@ -453,5 +610,7 @@ export type StallBookingUpdateInput = {
   quantity?: number;
   unit_price?: number | null;
   total_price?: number | null;
+  affects_inventory?: boolean;
+  billable?: boolean;
   notes?: string | null;
 };

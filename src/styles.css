@@ -21,6 +21,7 @@ body {
 
 button,
 input,
+textarea,
 select {
   font: inherit;
 }
@@ -174,6 +175,7 @@ label {
 }
 
 input,
+textarea,
 select {
   background: #ffffff;
   border: 1px solid #cbd8d2;
@@ -184,17 +186,25 @@ select {
   width: 100%;
 }
 
+textarea {
+  min-height: 82px;
+  padding: 10px 12px;
+  resize: vertical;
+}
+
 input:disabled {
   background: #eef2f0;
   color: #83908a;
 }
 
+textarea:disabled,
 select:disabled {
   background: #eef2f0;
   color: #83908a;
 }
 
 input:focus,
+textarea:focus,
 select:focus,
 button:focus-visible {
   outline: 3px solid rgba(15, 118, 110, 0.22);
@@ -497,6 +507,7 @@ button:focus-visible {
 }
 
 .panel form.stack input,
+.panel form.stack textarea,
 .panel form.stack select {
   margin-top: 1px;
 }
@@ -535,6 +546,10 @@ button:focus-visible {
   font-size: 13px;
   line-height: 1.35;
   text-align: right;
+}
+
+.nested-section {
+  background: #ffffff;
 }
 
 .reservation-product-summary {
@@ -675,8 +690,44 @@ button:focus-visible {
   padding-left: 28px;
 }
 
+.horse-billing-grid {
+  display: grid;
+  padding-left: 28px;
+}
+
 .horse-addons input[type="number"] {
   max-width: 110px;
+}
+
+.billing-preview-list,
+.camping-assignment-list {
+  display: grid;
+  gap: 8px;
+}
+
+.billing-preview-list span {
+  background: #f4f8f6;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  color: #51615d;
+  font-size: 12px;
+  padding: 8px 10px;
+}
+
+.camping-assignment-row {
+  align-items: end;
+  background: #ffffff;
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: minmax(100px, auto) minmax(0, 1fr);
+  padding: 10px;
+}
+
+.camping-assignment-row strong {
+  color: #13201d;
+  padding-bottom: 10px;
 }
 
 .reservation-total-summary {
@@ -942,6 +993,43 @@ button:focus-visible {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.compact-stack {
+  gap: 10px;
+}
+
+.field-group {
+  background: #fbfdfc;
+  border: 1px solid #edf3f0;
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.checkbox-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.check-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e0e9e5;
+  border-radius: 6px;
+  display: flex;
+  font-size: 12px;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px;
+}
+
+.check-row input {
+  flex: 0 0 auto;
+  min-height: auto;
+  width: auto;
+}
+
 .form-actions {
   display: flex;
   flex-wrap: wrap;
@@ -1036,11 +1124,19 @@ button:focus-visible {
   gap: 10px;
 }
 
-.contact-picker > label {
+.contact-picker-field {
   background: #fbfdfc;
   border: 1px solid #edf3f0;
   border-radius: 8px;
+  display: grid;
+  gap: 6px;
   padding: 10px;
+}
+
+.contact-picker-label {
+  color: #14221e;
+  font-size: 13px;
+  font-weight: 700;
 }
 
 .contact-picker-row {
@@ -1072,6 +1168,17 @@ button:focus-visible {
 
 .contact-create-inline .primary-button {
   justify-self: start;
+}
+
+.inline-error {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  color: #991b1b;
+  font-size: 13px;
+  line-height: 1.4;
+  margin: 0;
+  padding: 9px 10px;
 }
 
 .inline-form-header {
@@ -1383,6 +1490,7 @@ button:focus-visible {
   }
 
   .content-grid,
+  .checkbox-grid,
   .metric-grid,
   .overview-command,
   .overview-layout,
@@ -1481,6 +1589,19 @@ button:focus-visible {
     align-items: flex-start;
     display: grid;
     padding-left: 0;
+  }
+
+  .horse-billing-grid {
+    padding-left: 0;
+  }
+
+  .camping-assignment-row {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .camping-assignment-row strong {
+    padding-bottom: 0;
   }
 
   .panel form.stack .primary-button {

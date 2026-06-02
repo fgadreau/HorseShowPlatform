@@ -23,6 +23,8 @@ import { MyStallsView, StallsView } from "./StallsViews";
 import { buildShowScoreRunsForClass } from "../../services/showScoreAdapters";
 import {
   createClass,
+  createClassTemplate,
+  createClassTemplateDivision,
   createContact,
   createDivision,
   createEntry,
@@ -33,6 +35,8 @@ import {
   createStallOption,
   slugify,
   updateClass,
+  updateClassTemplate,
+  updateClassTemplateDivision,
   updateContact,
   updateDivision,
   updateEntry,
@@ -42,7 +46,24 @@ import {
   updateStallOption,
   type AppContext,
 } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactRole, Division, Entry, Horse, Organization, Show, ShowDay, ShowScoreClassSetup } from "../../types/domain";
+import type {
+  BackNumberPolicy,
+  ClassRecord,
+  ClassTemplate,
+  ClassTemplateDivision,
+  Contact,
+  ContactRole,
+  Division,
+  EligibilityRules,
+  Entry,
+  Horse,
+  HorseContact,
+  Organization,
+  SanctioningBody,
+  Show,
+  ShowDay,
+  ShowScoreClassSetup,
+} from "../../types/domain";
 import type { NavItem, Notice, ViewKey } from "../../types/ui";
 
 export function Dashboard({
@@ -55,6 +76,8 @@ export function Dashboard({
   t,
   onChangeOrganization,
   onCreateClass,
+  onCreateClassTemplate,
+  onCreateClassTemplateDivision,
   onCreateContact,
   onCreateDivision,
   onCreateEntry,
@@ -68,6 +91,8 @@ export function Dashboard({
   onRefresh,
   onSignOut,
   onUpdateClass,
+  onUpdateClassTemplate,
+  onUpdateClassTemplateDivision,
   onUpdateContact,
   onUpdateDivision,
   onUpdateEntry,
@@ -86,6 +111,8 @@ export function Dashboard({
   t: Translation;
   onChangeOrganization: (organizationId: string) => void;
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
+  onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
+  onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
@@ -99,6 +126,8 @@ export function Dashboard({
   onRefresh: () => void;
   onSignOut: () => void;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+  onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
+  onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
@@ -117,7 +146,10 @@ export function Dashboard({
   const contactRoles = context?.contactRoles ?? [];
   const horses = context?.horses ?? [];
   const classes = context?.classes ?? [];
+  const classTemplates = context?.classTemplates ?? [];
+  const classTemplateDivisions = context?.classTemplateDivisions ?? [];
   const divisions = context?.divisions ?? [];
+  const sanctioningBodies = context?.sanctioningBodies ?? [];
   const entries = context?.entries ?? [];
   const stallOptions = context?.stallOptions ?? [];
   const stallBookings = context?.stallBookings ?? [];
@@ -150,8 +182,17 @@ export function Dashboard({
   const selectedOrganizationHorses = selectedOrganization
     ? horses.filter((horse) => horse.organization_id === selectedOrganization.id)
     : [];
+  const selectedOrganizationHorseContacts = selectedOrganization
+    ? context?.horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id) ?? []
+    : [];
   const selectedOrganizationClasses = selectedOrganization
     ? classes.filter((classRecord) => classRecord.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationClassTemplates = selectedOrganization
+    ? classTemplates.filter((template) => template.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationClassTemplateDivisions = selectedOrganization
+    ? classTemplateDivisions.filter((division) => division.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationDivisions = selectedOrganization
     ? divisions.filter((division) => division.organization_id === selectedOrganization.id)
@@ -170,7 +211,12 @@ export function Dashboard({
     : [];
   const personalContacts = selectedOrganizationContacts.filter((contact) => contact.linked_user_id === context?.profile.id);
   const personalContactIds = new Set(personalContacts.map((contact) => contact.id));
-  const personalHorses = selectedOrganizationHorses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id));
+  const personalHorseIdsFromContacts = new Set(
+    selectedOrganizationHorseContacts
+      .filter((horseContact) => personalContactIds.has(horseContact.contact_id) && (horseContact.role === "owner" || horseContact.role === "co-owner" || horseContact.role === "agent"))
+      .map((horseContact) => horseContact.horse_id),
+  );
+  const personalHorses = selectedOrganizationHorses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
   const personalEntries = selectedOrganizationEntries.filter(
     (entry) =>
@@ -270,7 +316,9 @@ export function Dashboard({
           <PeopleView
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
+            createdByUserId={context?.profile.id ?? ""}
             horses={selectedOrganizationHorses}
+            horseContacts={selectedOrganizationHorseContacts}
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
@@ -282,12 +330,19 @@ export function Dashboard({
         {effectiveView === "classes" ? (
           <ClassesView
             classes={selectedOrganizationClasses}
+            classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
+            classTemplates={selectedOrganizationClassTemplates}
             divisions={selectedOrganizationDivisions}
             organization={selectedOrganization}
+            sanctioningBodies={sanctioningBodies}
             shows={selectedOrganizationShows}
             onCreateClass={onCreateClass}
+            onCreateClassTemplate={onCreateClassTemplate}
+            onCreateClassTemplateDivision={onCreateClassTemplateDivision}
             onCreateDivision={onCreateDivision}
             onUpdateClass={onUpdateClass}
+            onUpdateClassTemplate={onUpdateClassTemplate}
+            onUpdateClassTemplateDivision={onUpdateClassTemplateDivision}
             onUpdateDivision={onUpdateDivision}
           />
         ) : null}
@@ -354,9 +409,10 @@ export function Dashboard({
 
         {effectiveView === "my-horses" ? (
           <MyHorsesView
-            contacts={personalContacts}
+            contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
             horses={personalHorses}
+            horseContacts={selectedOrganizationHorseContacts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
@@ -743,7 +799,9 @@ function ShowsView({
 function PeopleView({
   contacts,
   contactRoles,
+  createdByUserId,
   horses,
+  horseContacts,
   organization,
   onCreateContact,
   onCreateHorse,
@@ -752,7 +810,9 @@ function PeopleView({
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
+  createdByUserId: string;
   horses: Horse[];
+  horseContacts: HorseContact[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
@@ -775,7 +835,7 @@ function PeopleView({
       />
 
       <ContactForm organization={organization} onCreateContact={onCreateContact} />
-      <HorseForm contacts={contacts} contactRoles={contactRoles} organization={organization} onCreateContact={onCreateContact} onCreateHorse={onCreateHorse} />
+      <HorseForm contacts={contacts} contactRoles={contactRoles} createdByUserId={createdByUserId} organization={organization} onCreateContact={onCreateContact} onCreateHorse={onCreateHorse} />
 
       {editingContact ? (
         <ContactEditForm
@@ -792,6 +852,8 @@ function PeopleView({
         <HorseEditForm
           contacts={contacts}
           contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
@@ -864,25 +926,41 @@ function PeopleView({
 
 function ClassesView({
   classes,
+  classTemplateDivisions,
+  classTemplates,
   divisions,
   organization,
+  sanctioningBodies,
   shows,
   onCreateClass,
+  onCreateClassTemplate,
+  onCreateClassTemplateDivision,
   onCreateDivision,
   onUpdateClass,
+  onUpdateClassTemplate,
+  onUpdateClassTemplateDivision,
   onUpdateDivision,
 }: {
   classes: ClassRecord[];
+  classTemplateDivisions: ClassTemplateDivision[];
+  classTemplates: ClassTemplate[];
   divisions: Division[];
   organization: Organization | null;
+  sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
+  onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
+  onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+  onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
+  onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingDivision, setEditingDivision] = useState<Division | null>(null);
+  void onUpdateClassTemplate;
+  void onUpdateClassTemplateDivision;
 
   return (
     <div className="content-grid">
@@ -893,15 +971,24 @@ function ClassesView({
         stats={[
           { label: "Classes", value: String(classes.length) },
           { label: "Divisions", value: String(divisions.length) },
+          { label: "Presets", value: String(classTemplates.length) },
         ]}
       />
 
-      <ClassForm organization={organization} shows={shows} onCreateClass={onCreateClass} />
-      <DivisionForm classes={classes} organization={organization} shows={shows} onCreateDivision={onCreateDivision} />
+      <ClassTemplateForm organization={organization} sanctioningBodies={sanctioningBodies} onCreateClassTemplate={onCreateClassTemplate} />
+      <ClassTemplateDivisionForm
+        classTemplates={classTemplates}
+        organization={organization}
+        sanctioningBodies={sanctioningBodies}
+        onCreateClassTemplateDivision={onCreateClassTemplateDivision}
+      />
+      <ClassForm organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateClass={onCreateClass} />
+      <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} />
 
       {editingClass ? (
         <ClassEditForm
           classRecord={editingClass}
+          sanctioningBodies={sanctioningBodies}
           onCancel={() => setEditingClass(null)}
           onUpdateClass={async (id, input) => {
             await onUpdateClass(id, input);
@@ -914,6 +1001,7 @@ function ClassesView({
         <DivisionEditForm
           classes={classes}
           division={editingDivision}
+          sanctioningBodies={sanctioningBodies}
           onCancel={() => setEditingDivision(null)}
           onUpdateDivision={async (id, input) => {
             await onUpdateDivision(id, input);
@@ -921,6 +1009,38 @@ function ClassesView({
           }}
         />
       ) : null}
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Presets réguliers</h2>
+            <p>{classTemplates.length ? `${classTemplates.length} preset${classTemplates.length === 1 ? "" : "s"} configuré${classTemplates.length === 1 ? "" : "s"}.` : "Le catalogue de classes récurrentes de l'association."}</p>
+          </div>
+        </div>
+        <div className="table">
+          <div className="table-row table-head">
+            <span>Preset</span>
+            <span>Sanctions</span>
+            <span>Dossard</span>
+            <span>Divisions</span>
+          </div>
+          {classTemplates.map((template) => {
+            const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
+            return (
+              <div className="table-row" key={template.id}>
+                <div>
+                  <strong>{template.name}</strong>
+                  <span className="muted-line">{[template.block_label, template.default_pattern ? `Pattern ${template.default_pattern}` : null].filter(Boolean).join(" - ") || template.code || "Preset"}</span>
+                </div>
+                <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies)}</span>
+                <span>{backNumberPolicyLabel(template.back_number_policy)}</span>
+                <span>{templateDivisions.length ? templateDivisions.map((division) => division.name).join(", ") : "Aucune division"}</span>
+              </div>
+            );
+          })}
+          {!classTemplates.length ? <EmptyState label="Crée le premier preset régulier de cette association." /> : null}
+        </div>
+      </section>
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -933,16 +1053,33 @@ function ClassesView({
           <div className="table-row table-head">
             <span>Class</span>
             <span>Show</span>
-            <span>Fee</span>
+            <span>Programme</span>
             <span>Action</span>
           </div>
           {classes.map((classRecord) => {
             const classDivisions = divisions.filter((division) => division.class_id === classRecord.id);
             return (
               <div className="table-row" key={classRecord.id}>
-                <strong>{classRecord.name}</strong>
+                <div>
+                  <strong>{classRecord.name}</strong>
+                  <span className="muted-line">
+                    {classDivisions.length ? `${classDivisions.length} division${classDivisions.length === 1 ? "" : "s"}` : "No divisions"}
+                    {classRecord.entry_fee == null ? "" : ` - ${formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}`}
+                  </span>
+                </div>
                 <span>{showLabel(findById(shows, classRecord.show_id))}</span>
-                <span>{classRecord.entry_fee == null ? "No fee" : formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}</span>
+                <div>
+                  <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies)}</span>
+                  <span className="muted-line">
+                    {[
+                      classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
+                      isNrhaSanctioned(classRecord.sanctioning_body_codes) ? `NRHA slate ${classRecord.nrha_slate_number || "not set"}` : null,
+                      backNumberPolicyLabel(classRecord.back_number_policy),
+                    ]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </span>
+                </div>
                 <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
                   Edit
                 </button>
@@ -964,14 +1101,19 @@ function ClassesView({
           <div className="table-row table-head">
             <span>Division</span>
             <span>Class</span>
-            <span>Fee</span>
+            <span>Sanctions</span>
             <span>Action</span>
           </div>
           {divisions.map((division) => (
             <div className="table-row" key={division.id}>
-              <strong>{division.name}</strong>
+              <div>
+                <strong>{division.name}</strong>
+                <span className="muted-line">
+                  {[division.code ? `#${division.code}` : null, division.entry_fee == null ? "Class fee" : formatCurrency(division.entry_fee, organization?.currency ?? "CAD")].filter(Boolean).join(" - ")}
+                </span>
+              </div>
               <span>{findById(classes, division.class_id)?.name ?? "Unknown class"}</span>
-              <span>{division.entry_fee == null ? "Class fee" : formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}</span>
+              <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies)}</span>
               <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
                 Edit
               </button>
@@ -1221,6 +1363,7 @@ function MyHorsesView({
   contacts,
   contactRoles,
   horses,
+  horseContacts,
   organization,
   profileId,
   onCreateContact,
@@ -1230,6 +1373,7 @@ function MyHorsesView({
   contacts: Contact[];
   contactRoles: ContactRole[];
   horses: Horse[];
+  horseContacts: HorseContact[];
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -1264,6 +1408,7 @@ function MyHorsesView({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={profileId}
+          horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
@@ -1550,7 +1695,7 @@ function BillingView({
                       <strong>{item.description}</strong>
                       <span className="muted-line">{item.item_type}</span>
                     </div>
-                    <span>{Number(item.quantity).toLocaleString("en-CA")} x</span>
+                    <span>{Number(item.quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 })} x</span>
                     <span>{formatCurrency(item.unit_price, currency)}</span>
                     <span>{formatCurrency(item.total_price + item.tax_amount, currency)}</span>
                   </div>
@@ -1965,11 +2110,15 @@ function HorseForm({
 }) {
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
+  const [agentContactId, setAgentContactId] = useState<string | null>(null);
   const [breed, setBreed] = useState("");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [busy, setBusy] = useState(false);
-  const selectedOwnerId = ownerContactId;
+  const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
+  const selectedOwnerId = ownerContactId || currentUserContact?.id || "";
+  const defaultAgentId = currentUserContact && selectedOwnerId !== currentUserContact.id ? currentUserContact.id : "";
+  const selectedAgentId = agentContactId ?? defaultAgentId;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1985,12 +2134,15 @@ function HorseForm({
         organization_id: organization.id,
         name,
         primary_owner_contact_id: selectedOwnerId,
+        agent_contact_id: selectedAgentId && selectedAgentId !== selectedOwnerId ? selectedAgentId : null,
         breed,
         gender: gender || null,
         registration_number: registrationNumber,
         created_by_user_id: createdByUserId,
       });
       setName("");
+      setOwnerContactId("");
+      setAgentContactId(null);
       setBreed("");
       setGender("");
       setRegistrationNumber("");
@@ -2022,6 +2174,19 @@ function HorseForm({
           role="owner"
           value={selectedOwnerId}
           onChange={setOwnerContactId}
+          onCreateContact={onCreateContact}
+        />
+        <ContactPicker
+          allowEmpty
+          contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          disabled={!organization}
+          label="Agent"
+          organization={organization}
+          role="agent"
+          value={selectedAgentId}
+          onChange={setAgentContactId}
           onCreateContact={onCreateContact}
         />
         <div className="form-grid">
@@ -2141,6 +2306,7 @@ function HorseEditForm({
   contactRoles,
   createdByUserId,
   horse,
+  horseContacts,
   organization,
   onCancel,
   onCreateContact,
@@ -2150,17 +2316,24 @@ function HorseEditForm({
   contactRoles: ContactRole[];
   createdByUserId?: string;
   horse: Horse;
+  horseContacts: HorseContact[];
   organization: Organization | null;
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
+  const currentAgentContactId = horseContacts.find((horseContact) => horseContact.horse_id === horse.id && horseContact.role === "agent")?.contact_id ?? "";
   const [name, setName] = useState(horse.name);
   const [ownerContactId, setOwnerContactId] = useState(horse.primary_owner_contact_id);
+  const [agentContactId, setAgentContactId] = useState<string | null>(currentAgentContactId || null);
   const [breed, setBreed] = useState(horse.breed ?? "");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>(horse.gender ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
   const [busy, setBusy] = useState(false);
+  const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
+  const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
+  const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
+  const selectedAgentId = agentContactId ?? defaultAgentId;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2170,6 +2343,7 @@ function HorseEditForm({
       await onUpdateHorse(horse.id, {
         name,
         primary_owner_contact_id: ownerContactId,
+        agent_contact_id: selectedAgentId && selectedAgentId !== ownerContactId ? selectedAgentId : null,
         breed: breed || null,
         gender: gender || null,
         registration_number: registrationNumber || null,
@@ -2203,6 +2377,18 @@ function HorseEditForm({
           onChange={setOwnerContactId}
           onCreateContact={onCreateContact}
         />
+        <ContactPicker
+          allowEmpty
+          contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          label="Agent"
+          organization={organization}
+          role="agent"
+          value={selectedAgentId}
+          onChange={setAgentContactId}
+          onCreateContact={onCreateContact}
+        />
         <div className="form-grid">
           <label>
             Breed
@@ -2228,21 +2414,363 @@ function HorseEditForm({
   );
 }
 
+function SanctioningFields({
+  backNumberPolicy,
+  disabled = false,
+  hideBackNumberPolicy = false,
+  sanctioningBodies,
+  sanctioningBodyCodes,
+  onBackNumberPolicyChange,
+  onSanctioningBodyCodesChange,
+}: {
+  backNumberPolicy: BackNumberPolicy;
+  disabled?: boolean;
+  hideBackNumberPolicy?: boolean;
+  sanctioningBodies: SanctioningBody[];
+  sanctioningBodyCodes: string[];
+  onBackNumberPolicyChange: (policy: BackNumberPolicy) => void;
+  onSanctioningBodyCodesChange: (codes: string[]) => void;
+}) {
+  return (
+    <div className="stack compact-stack">
+      <div className="field-group">
+        <span className="contact-picker-label">Sanctions</span>
+        <div className="checkbox-grid">
+          {sanctioningBodies.map((body) => (
+            <label className="check-row" key={body.code}>
+              <input
+                checked={sanctioningBodyCodes.includes(body.code)}
+                disabled={disabled}
+                type="checkbox"
+                onChange={() => onSanctioningBodyCodesChange(toggleSanctioningBodyCode(sanctioningBodyCodes, body.code))}
+              />
+              <span>{body.name}</span>
+            </label>
+          ))}
+          {!sanctioningBodies.length ? <span className="muted-line">No sanctioning bodies configured.</span> : null}
+        </div>
+      </div>
+      {hideBackNumberPolicy ? null : (
+        <label>
+          Politique de dossard
+          <select disabled={disabled} value={backNumberPolicy} onChange={(event) => onBackNumberPolicyChange(event.target.value as BackNumberPolicy)}>
+            <option value="horse">Par cheval</option>
+            <option value="horse_rider_team">Par équipe cheval / cavalier</option>
+            <option value="entry">Par inscription</option>
+            <option value="custom">Custom</option>
+          </select>
+        </label>
+      )}
+    </div>
+  );
+}
+
+function toggleSanctioningBodyCode(currentCodes: string[], code: string) {
+  return currentCodes.includes(code) ? currentCodes.filter((currentCode) => currentCode !== code) : [...currentCodes, code];
+}
+
+function defaultBackNumberPolicy(codes: string[], sanctioningBodies: SanctioningBody[]): BackNumberPolicy {
+  return codes.some((code) => sanctioningBodies.find((body) => body.code === code)?.back_number_policy === "horse_rider_team") ? "horse_rider_team" : "horse";
+}
+
+function isNrhaSanctioned(codes: string[] | null | undefined) {
+  return Boolean(codes?.includes("NRHA"));
+}
+
+function sanctionLabel(codes: string[] | null | undefined, sanctioningBodies: SanctioningBody[]) {
+  if (!codes?.length) {
+    return "No sanction";
+  }
+
+  return codes.map((code) => sanctioningBodies.find((body) => body.code === code)?.name ?? code).join(", ");
+}
+
+function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined) {
+  switch (policy) {
+    case "horse_rider_team":
+      return "Dossard équipe cheval / cavalier";
+    case "entry":
+      return "Dossard par inscription";
+    case "custom":
+      return "Dossard custom";
+    case "horse":
+    default:
+      return "Dossard par cheval";
+  }
+}
+
+function eligibilityRulesFromNotes(notes: string): EligibilityRules {
+  return notes.trim() ? { notes: notes.trim() } : {};
+}
+
+function eligibilityNotesFromRules(rules: EligibilityRules | null | undefined) {
+  return typeof rules?.notes === "string" ? rules.notes : "";
+}
+
+function ClassTemplateForm({
+  organization,
+  sanctioningBodies,
+  onCreateClassTemplate,
+}: {
+  organization: Organization | null;
+  sanctioningBodies: SanctioningBody[];
+  onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [blockLabel, setBlockLabel] = useState("");
+  const [category, setCategory] = useState("");
+  const [pattern, setPattern] = useState("");
+  const [entryFee, setEntryFee] = useState("");
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>("horse");
+  const [eligibilityNotes, setEligibilityNotes] = useState("");
+  const [notes, setNotes] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  function handleSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+    setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onCreateClassTemplate({
+        organization_id: organization.id,
+        name,
+        code,
+        block_label: blockLabel,
+        category,
+        default_pattern: pattern,
+        default_entry_fee: numericValue(entryFee),
+        sanctioning_body_codes: sanctioningBodyCodes,
+        back_number_policy: backNumberPolicy,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        notes,
+      });
+      setName("");
+      setCode("");
+      setBlockLabel("");
+      setCategory("");
+      setPattern("");
+      setEntryFee("");
+      setSanctioningBodyCodes([]);
+      setBackNumberPolicy("horse");
+      setEligibilityNotes("");
+      setNotes("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-header">
+        <div>
+          <h2>Nouveau preset</h2>
+          <p>Catalogue régulier de l'association.</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Nom du bloc
+          <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            Code
+            <input disabled={!organization} value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+          <label>
+            Catégorie
+            <input disabled={!organization} value={category} onChange={(event) => setCategory(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Bloc horaire
+            <input disabled={!organization} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
+          </label>
+          <label>
+            Patron
+            <input disabled={!organization} value={pattern} onChange={(event) => setPattern(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          Frais par défaut
+          <input disabled={!organization} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <SanctioningFields
+          backNumberPolicy={backNumberPolicy}
+          disabled={!organization}
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={setBackNumberPolicy}
+          onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea disabled={!organization} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
+        <label>
+          Notes
+          <textarea disabled={!organization} rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </label>
+        <button className="primary-button" disabled={busy || !organization} type="submit">
+          <Plus size={18} />
+          Create preset
+        </button>
+      </form>
+    </section>
+  );
+}
+
+function ClassTemplateDivisionForm({
+  classTemplates,
+  organization,
+  sanctioningBodies,
+  onCreateClassTemplateDivision,
+}: {
+  classTemplates: ClassTemplate[];
+  organization: Organization | null;
+  sanctioningBodies: SanctioningBody[];
+  onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
+}) {
+  const [templateId, setTemplateId] = useState("");
+  const [name, setName] = useState("");
+  const [code, setCode] = useState("");
+  const [entryFee, setEntryFee] = useState("");
+  const [eligibilityNotes, setEligibilityNotes] = useState("");
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[] | null>(null);
+  const [busy, setBusy] = useState(false);
+  const selectedTemplateId = templateId || classTemplates[0]?.id || "";
+  const selectedTemplate = findById(classTemplates, selectedTemplateId);
+  const selectedSanctioningBodyCodes = sanctioningBodyCodes ?? selectedTemplate?.sanctioning_body_codes ?? [];
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization || !selectedTemplate) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onCreateClassTemplateDivision({
+        organization_id: organization.id,
+        class_template_id: selectedTemplate.id,
+        name,
+        code,
+        default_entry_fee: numericValue(entryFee),
+        sanctioning_body_codes: selectedSanctioningBodyCodes,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+      });
+      setName("");
+      setCode("");
+      setEntryFee("");
+      setEligibilityNotes("");
+      setSanctioningBodyCodes(null);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel">
+      <div className="panel-header">
+        <div>
+          <h2>Division de preset</h2>
+          <p>{selectedTemplate ? selectedTemplate.name : "Crée un preset d'abord."}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Preset
+          <SearchSelect
+            disabled={!organization || !classTemplates.length}
+            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
+            placeholder="Search preset"
+            value={selectedTemplate?.id ?? ""}
+            onChange={setTemplateId}
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Division
+            <input disabled={!organization || !classTemplates.length} required value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            Code
+            <input disabled={!organization || !classTemplates.length} value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          Frais override
+          <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <SanctioningFields
+          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
+          disabled={!organization || !classTemplates.length}
+          hideBackNumberPolicy
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={selectedSanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea disabled={!organization || !classTemplates.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
+        <button className="primary-button" disabled={busy || !organization || !classTemplates.length} type="submit">
+          <Plus size={18} />
+          Create preset division
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function ClassForm({
   organization,
+  sanctioningBodies,
   shows,
   onCreateClass,
 }: {
   organization: Organization | null;
+  sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
+  const [blockLabel, setBlockLabel] = useState("");
+  const [pattern, setPattern] = useState("");
   const [entryFee, setEntryFee] = useState("");
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>("horse");
+  const [nrhaSlateNumber, setNrhaSlateNumber] = useState("");
+  const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
+  const classIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+    setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaSlateNumber("");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2259,11 +2787,23 @@ function ClassForm({
         show_id: selectedShowId,
         name,
         code,
+        block_label: blockLabel,
+        pattern,
+        sanctioning_body_codes: sanctioningBodyCodes,
+        back_number_policy: backNumberPolicy,
+        nrha_slate_number: classIsNrha ? nrhaSlateNumber.trim() || null : null,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
         entry_fee: numericValue(entryFee),
       });
       setName("");
       setCode("");
+      setBlockLabel("");
+      setPattern("");
       setEntryFee("");
+      setSanctioningBodyCodes([]);
+      setBackNumberPolicy("horse");
+      setNrhaSlateNumber("");
+      setEligibilityNotes("");
     } finally {
       setBusy(false);
     }
@@ -2302,6 +2842,34 @@ function ClassForm({
             <input disabled={!organization || !shows.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
+        <div className="form-grid">
+          <label>
+            Bloc horaire
+            <input disabled={!organization || !shows.length} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
+          </label>
+          <label>
+            Patron
+            <input disabled={!organization || !shows.length} value={pattern} onChange={(event) => setPattern(event.target.value)} />
+          </label>
+        </div>
+        <SanctioningFields
+          backNumberPolicy={backNumberPolicy}
+          disabled={!organization || !shows.length}
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={setBackNumberPolicy}
+          onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
+        />
+        {classIsNrha ? (
+          <label>
+            NRHA slate number
+            <input disabled={!organization || !shows.length} value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+          </label>
+        ) : null}
+        <label>
+          Critères d'éligibilité
+          <textarea disabled={!organization || !shows.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
         <button className="primary-button" disabled={busy || !organization || !shows.length} type="submit">
           <Plus size={18} />
           Create class
@@ -2314,17 +2882,22 @@ function ClassForm({
 function DivisionForm({
   classes,
   organization,
+  sanctioningBodies,
   shows,
   onCreateDivision,
 }: {
   classes: ClassRecord[];
   organization: Organization | null;
+  sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
 }) {
   const [classId, setClassId] = useState("");
   const [name, setName] = useState("");
+  const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
+  const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedClass = findById(classes, classId) ?? null;
   const selectedShow = selectedClass ? findById(shows, selectedClass.show_id) : null;
@@ -2344,10 +2917,16 @@ function DivisionForm({
         show_id: selectedClass.show_id,
         class_id: selectedClass.id,
         name,
+        code,
         entry_fee: numericValue(entryFee),
+        sanctioning_body_codes: sanctioningBodyCodes,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
       });
       setName("");
+      setCode("");
       setEntryFee("");
+      setSanctioningBodyCodes([]);
+      setEligibilityNotes("");
     } finally {
       setBusy(false);
     }
@@ -2372,13 +2951,32 @@ function DivisionForm({
             onChange={setClassId}
           />
         </label>
-        <label>
-          Division name
-          <input disabled={!organization || !classes.length} required value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Division name
+            <input disabled={!organization || !classes.length} required value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            Class #
+            <input disabled={!organization || !classes.length} value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+        </div>
         <label>
           Fee override
           <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <SanctioningFields
+          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
+          disabled={!organization || !classes.length}
+          hideBackNumberPolicy
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea disabled={!organization || !classes.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <button className="primary-button" disabled={busy || !organization || !classes.length} type="submit">
           <Plus size={18} />
@@ -2391,18 +2989,35 @@ function DivisionForm({
 
 function ClassEditForm({
   classRecord,
+  sanctioningBodies,
   onCancel,
   onUpdateClass,
 }: {
   classRecord: ClassRecord;
+  sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
 }) {
   const [name, setName] = useState(classRecord.name);
   const [code, setCode] = useState(classRecord.code ?? "");
+  const [blockLabel, setBlockLabel] = useState(classRecord.block_label ?? "");
+  const [pattern, setPattern] = useState(classRecord.pattern ?? "");
   const [entryFee, setEntryFee] = useState(classRecord.entry_fee == null ? "" : String(classRecord.entry_fee));
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classRecord.sanctioning_body_codes ?? []);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classRecord.back_number_policy ?? "horse");
+  const [nrhaSlateNumber, setNrhaSlateNumber] = useState(classRecord.nrha_slate_number ?? "");
+  const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classRecord.eligibility_rules));
   const [status, setStatus] = useState<ClassRecord["status"]>(classRecord.status);
   const [busy, setBusy] = useState(false);
+  const classIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+    setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaSlateNumber("");
+    }
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2412,6 +3027,12 @@ function ClassEditForm({
       await onUpdateClass(classRecord.id, {
         name,
         code: code || null,
+        block_label: blockLabel || null,
+        pattern: pattern || null,
+        sanctioning_body_codes: sanctioningBodyCodes,
+        back_number_policy: backNumberPolicy,
+        nrha_slate_number: classIsNrha ? nrhaSlateNumber.trim() || null : null,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
         entry_fee: numericValue(entryFee) ?? null,
         status,
       });
@@ -2443,6 +3064,33 @@ function ClassEditForm({
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
+        <div className="form-grid">
+          <label>
+            Bloc horaire
+            <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
+          </label>
+          <label>
+            Patron
+            <input value={pattern} onChange={(event) => setPattern(event.target.value)} />
+          </label>
+        </div>
+        <SanctioningFields
+          backNumberPolicy={backNumberPolicy}
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={setBackNumberPolicy}
+          onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
+        />
+        {classIsNrha ? (
+          <label>
+            NRHA slate number
+            <input value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+          </label>
+        ) : null}
+        <label>
+          Critères d'éligibilité
+          <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
         <label>
           Status
           <select value={status} onChange={(event) => setStatus(event.target.value as ClassRecord["status"])}>
@@ -2461,17 +3109,22 @@ function ClassEditForm({
 function DivisionEditForm({
   classes,
   division,
+  sanctioningBodies,
   onCancel,
   onUpdateDivision,
 }: {
   classes: ClassRecord[];
   division: Division;
+  sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
   const [classId, setClassId] = useState(division.class_id);
   const [name, setName] = useState(division.name);
+  const [code, setCode] = useState(division.code ?? "");
   const [entryFee, setEntryFee] = useState(division.entry_fee == null ? "" : String(division.entry_fee));
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(division.sanctioning_body_codes ?? []);
+  const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(division.eligibility_rules));
   const [busy, setBusy] = useState(false);
   const selectedClass = findById(classes, classId);
 
@@ -2489,7 +3142,10 @@ function DivisionEditForm({
         class_id: selectedClass.id,
         show_id: selectedClass.show_id,
         name,
+        code: code || null,
         entry_fee: numericValue(entryFee) ?? null,
+        sanctioning_body_codes: sanctioningBodyCodes,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
       });
     } finally {
       setBusy(false);
@@ -2514,13 +3170,31 @@ function DivisionEditForm({
             onChange={setClassId}
           />
         </label>
-        <label>
-          Division name
-          <input required value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Division name
+            <input required value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            Class #
+            <input value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+        </div>
         <label>
           Fee override
           <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <SanctioningFields
+          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
+          hideBackNumberPolicy
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <FormActions busy={busy || !selectedClass} onCancel={onCancel} />
       </form>

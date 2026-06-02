@@ -11,6 +11,8 @@ import type { Locale } from "./lib/i18n";
 import { supabase } from "./lib/supabase";
 import {
   createClass,
+  createClassTemplate,
+  createClassTemplateDivision,
   createContact,
   createDivision,
   createEntry,
@@ -22,6 +24,8 @@ import {
   loadAppContext,
   prepareShowScoreClassSetup,
   updateClass,
+  updateClassTemplate,
+  updateClassTemplateDivision,
   updateContact,
   updateDivision,
   updateEntry,
@@ -191,6 +195,26 @@ export default function App() {
       onCreateClass={async (input) => {
         await createClass(input);
         setNotice({ tone: "success", message: "Class created." });
+        await refreshContext();
+      }}
+      onCreateClassTemplate={async (input) => {
+        await createClassTemplate(input);
+        setNotice({ tone: "success", message: "Class preset created." });
+        await refreshContext();
+      }}
+      onUpdateClassTemplate={async (id, input) => {
+        await updateClassTemplate(id, input);
+        setNotice({ tone: "success", message: "Class preset updated." });
+        await refreshContext();
+      }}
+      onCreateClassTemplateDivision={async (input) => {
+        await createClassTemplateDivision(input);
+        setNotice({ tone: "success", message: "Preset division created." });
+        await refreshContext();
+      }}
+      onUpdateClassTemplateDivision={async (id, input) => {
+        await updateClassTemplateDivision(id, input);
+        setNotice({ tone: "success", message: "Preset division updated." });
         await refreshContext();
       }}
       onUpdateClass={async (id, input) => {

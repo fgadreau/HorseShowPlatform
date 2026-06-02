@@ -208,6 +208,7 @@ export function ContactPicker({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [barnName, setBarnName] = useState("");
+  const [errorMessage, setErrorMessage] = useState("");
   const visibleContacts = useMemo(() => {
     if (!createdContact || contacts.some((contact) => contact.id === createdContact.id)) {
       return contacts;
@@ -223,17 +224,18 @@ export function ContactPicker({
     }
 
     setBusy(true);
+    setErrorMessage("");
 
     try {
       const contact = await onCreateContact({
         organization_id: organization.id,
         type: contactTypeForRole(role),
         roles: [role],
-        first_name: firstName,
-        last_name: lastName,
-        email,
-        phone,
-        barn_name: barnName,
+        first_name: firstName.trim(),
+        last_name: lastName.trim(),
+        email: email.trim(),
+        phone: phone.trim(),
+        barn_name: barnName.trim(),
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
       });
@@ -245,6 +247,8 @@ export function ContactPicker({
       setPhone("");
       setBarnName("");
       setCreating(false);
+    } catch (error) {
+      setErrorMessage(contactCreateErrorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -252,8 +256,8 @@ export function ContactPicker({
 
   return (
     <div className="contact-picker">
-      <label>
-        {label}
+      <div className="contact-picker-field">
+        <span className="contact-picker-label">{label}</span>
         <div className="contact-picker-row">
           <SearchSelect
             allowEmpty={allowEmpty}
@@ -267,11 +271,19 @@ export function ContactPicker({
             value={value}
             onChange={onChange}
           />
-          <button className="ghost-button" disabled={disabled || !organization} type="button" onClick={() => setCreating((current) => !current)}>
+          <button
+            className="ghost-button"
+            disabled={disabled || !organization}
+            type="button"
+            onClick={() => {
+              setCreating((current) => !current);
+              setErrorMessage("");
+            }}
+          >
             {creating ? "Close" : "+ Contact"}
           </button>
         </div>
-      </label>
+      </div>
 
       {creating ? (
         <div className="contact-create-inline">
@@ -282,34 +294,79 @@ export function ContactPicker({
           <div className="form-grid">
             <label>
               First name
-              <input required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+              <input
+                required
+                value={firstName}
+                onChange={(event) => {
+                  setFirstName(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
             </label>
             <label>
               Last name
-              <input required value={lastName} onChange={(event) => setLastName(event.target.value)} />
+              <input
+                required
+                value={lastName}
+                onChange={(event) => {
+                  setLastName(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
             </label>
           </div>
           <div className="form-grid">
             <label>
               Email
-              <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
+              <input
+                type="email"
+                value={email}
+                onChange={(event) => {
+                  setEmail(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
             </label>
             <label>
               Phone
-              <input value={phone} onChange={(event) => setPhone(event.target.value)} />
+              <input
+                value={phone}
+                onChange={(event) => {
+                  setPhone(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
             </label>
           </div>
           <label>
             Barn
-            <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
+            <input
+              value={barnName}
+              onChange={(event) => {
+                setBarnName(event.target.value);
+                setErrorMessage("");
+              }}
+            />
           </label>
+          {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
           <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
-            Create and select
+            {busy ? "Creating..." : "Create and select"}
           </button>
         </div>
       ) : null}
     </div>
   );
+}
+
+function contactCreateErrorMessage(error: unknown) {
+  const maybeError = error as { code?: string; message?: string };
+  const message = maybeError.message ?? "";
+
+  if (maybeError.code === "23505" || message.toLowerCase().includes("duplicate key")) {
+    return "Un contact avec ces informations existe deja. Cherche-le dans la liste et selectionne-le.";
+  }
+
+  return message || "Impossible de creer le contact pour l'instant.";
 }
 
 function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {

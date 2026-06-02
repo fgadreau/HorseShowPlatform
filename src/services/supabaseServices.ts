@@ -3,6 +3,12 @@ import { requireSupabase } from "../lib/supabase";
 import type {
   ClassInput,
   ClassRecord,
+  ClassTemplate,
+  ClassTemplateDivision,
+  ClassTemplateDivisionInput,
+  ClassTemplateDivisionUpdateInput,
+  ClassTemplateInput,
+  ClassTemplateUpdateInput,
   ClassUpdateInput,
   Contact,
   ContactInput,
@@ -16,6 +22,7 @@ import type {
   EntryInput,
   EntryUpdateInput,
   Horse,
+  HorseContact,
   HorseInput,
   HorseUpdateInput,
   Invoice,
@@ -23,6 +30,7 @@ import type {
   Organization,
   OrganizationInput,
   OrganizationMember,
+  SanctioningBody,
   Show,
   ShowDay,
   ShowScoreClassSetup,
@@ -48,8 +56,12 @@ export type AppContext = {
   contacts: Contact[];
   contactRoles: ContactRole[];
   horses: Horse[];
+  horseContacts: HorseContact[];
   classes: ClassRecord[];
+  classTemplates: ClassTemplate[];
+  classTemplateDivisions: ClassTemplateDivision[];
   divisions: Division[];
+  sanctioningBodies: SanctioningBody[];
   entries: Entry[];
   stallOptions: StallOption[];
   stallBookings: StallBooking[];
@@ -114,8 +126,12 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contactsResult,
     contactRolesResult,
     horsesResult,
+    horseContactsResult,
     classesResult,
+    classTemplatesResult,
+    classTemplateDivisionsResult,
     divisionsResult,
+    sanctioningBodiesResult,
     entriesResult,
     stallOptionsResult,
     stallBookingsResult,
@@ -129,8 +145,12 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(),
     client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(),
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
+    client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
     client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
+    client.from("class_templates").select("*").order("sort_order", { ascending: true }).returns<ClassTemplate[]>(),
+    client.from("class_template_divisions").select("*").order("sort_order", { ascending: true }).returns<ClassTemplateDivision[]>(),
     client.from("divisions").select("*").order("created_at", { ascending: false }).returns<Division[]>(),
+    client.from("sanctioning_bodies").select("*").order("name", { ascending: true }).returns<SanctioningBody[]>(),
     client.from("entries").select("*").order("created_at", { ascending: false }).returns<Entry[]>(),
     client.from("stall_options").select("*").order("created_at", { ascending: false }).returns<StallOption[]>(),
     client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(),
@@ -173,12 +193,46 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw horsesResult.error;
   }
 
+  if (horseContactsResult.error) {
+    throw horseContactsResult.error;
+  }
+
   if (classesResult.error) {
     throw classesResult.error;
   }
 
+  const classTemplates = classTemplatesResult.error
+    ? isMissingSchemaError(classTemplatesResult.error, "class_templates")
+      ? []
+      : null
+    : classTemplatesResult.data ?? [];
+
+  if (!classTemplates) {
+    throw classTemplatesResult.error;
+  }
+
+  const classTemplateDivisions = classTemplateDivisionsResult.error
+    ? isMissingSchemaError(classTemplateDivisionsResult.error, "class_template_divisions")
+      ? []
+      : null
+    : classTemplateDivisionsResult.data ?? [];
+
+  if (!classTemplateDivisions) {
+    throw classTemplateDivisionsResult.error;
+  }
+
   if (divisionsResult.error) {
     throw divisionsResult.error;
+  }
+
+  const sanctioningBodies = sanctioningBodiesResult.error
+    ? isMissingSchemaError(sanctioningBodiesResult.error, "sanctioning_bodies")
+      ? []
+      : null
+    : sanctioningBodiesResult.data ?? [];
+
+  if (!sanctioningBodies) {
+    throw sanctioningBodiesResult.error;
   }
 
   if (entriesResult.error) {
@@ -211,8 +265,12 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contacts: contactsResult.data ?? [],
     contactRoles,
     horses: horsesResult.data ?? [],
+    horseContacts: horseContactsResult.data ?? [],
     classes: classesResult.data ?? [],
+    classTemplates,
+    classTemplateDivisions,
     divisions: divisionsResult.data ?? [],
+    sanctioningBodies,
     entries: entriesResult.data ?? [],
     stallOptions: stallOptionsResult.data ?? [],
     stallBookings: stallBookingsResult.data ?? [],
@@ -304,16 +362,43 @@ export async function updateShow(id: string, input: ShowUpdateInput) {
 
 export async function createContact(input: ContactInput) {
   const client = requireSupabase();
+  const normalizedEmail = input.email?.trim().toLowerCase() || null;
+  const roles = uniqueRoles([input.type, ...(input.roles ?? [])]);
+
+  if (normalizedEmail) {
+    const { data: existing, error: existingError } = await client
+      .from("contacts")
+      .select("*")
+      .eq("organization_id", input.organization_id)
+      .eq("email", normalizedEmail)
+      .maybeSingle<Contact>();
+
+    if (existingError) {
+      throw existingError;
+    }
+
+    if (existing) {
+      await ensureContactRoles({
+        organization_id: existing.organization_id,
+        contact_id: existing.id,
+        roles,
+        source: input.roles?.length ? "manual" : "contact_type",
+      });
+
+      return existing;
+    }
+  }
+
   const { data, error } = await client
     .from("contacts")
     .insert({
       organization_id: input.organization_id,
       type: input.type,
-      first_name: input.first_name,
-      last_name: input.last_name,
-      email: input.email || null,
-      phone: input.phone || null,
-      barn_name: input.barn_name || null,
+      first_name: input.first_name.trim(),
+      last_name: input.last_name.trim(),
+      email: normalizedEmail,
+      phone: input.phone?.trim() || null,
+      barn_name: input.barn_name?.trim() || null,
       linked_user_id: input.linked_user_id || null,
       created_by_user_id: input.created_by_user_id || null,
     })
@@ -321,13 +406,37 @@ export async function createContact(input: ContactInput) {
     .single<Contact>();
 
   if (error) {
+    if (error.code === "23505" && normalizedEmail) {
+      const { data: existing, error: retryError } = await client
+        .from("contacts")
+        .select("*")
+        .eq("organization_id", input.organization_id)
+        .eq("email", normalizedEmail)
+        .maybeSingle<Contact>();
+
+      if (retryError) {
+        throw retryError;
+      }
+
+      if (existing) {
+        await ensureContactRoles({
+          organization_id: existing.organization_id,
+          contact_id: existing.id,
+          roles,
+          source: input.roles?.length ? "manual" : "contact_type",
+        });
+
+        return existing;
+      }
+    }
+
     throw error;
   }
 
   await ensureContactRoles({
     organization_id: data.organization_id,
     contact_id: data.id,
-    roles: uniqueRoles([input.type, ...(input.roles ?? [])]),
+    roles,
     source: input.roles?.length ? "manual" : "contact_type",
   });
 
@@ -381,20 +490,12 @@ export async function createHorse(input: HorseInput) {
     throw horseError;
   }
 
-  const { error: relationError } = await client.from("horse_contacts").insert({
+  await upsertHorseContact({
     organization_id: input.organization_id,
     horse_id: horse.id,
     contact_id: input.primary_owner_contact_id,
     role: "owner",
-    can_create_entries: true,
-    can_modify_entries: true,
-    can_book_stalls: true,
-    can_pay_invoices: true,
   });
-
-  if (relationError) {
-    throw relationError;
-  }
 
   await ensureContactRole({
     organization_id: input.organization_id,
@@ -403,14 +504,30 @@ export async function createHorse(input: HorseInput) {
     source: "horse",
   });
 
+  if (input.agent_contact_id && input.agent_contact_id !== input.primary_owner_contact_id) {
+    await upsertHorseContact({
+      organization_id: input.organization_id,
+      horse_id: horse.id,
+      contact_id: input.agent_contact_id,
+      role: "agent",
+    });
+    await ensureContactRole({
+      organization_id: input.organization_id,
+      contact_id: input.agent_contact_id,
+      role: "agent",
+      source: "horse",
+    });
+  }
+
   return horse;
 }
 
 export async function updateHorse(id: string, input: HorseUpdateInput) {
   const client = requireSupabase();
+  const { agent_contact_id: agentContactId, ...horseInput } = input;
   const { data, error } = await client
     .from("horses")
-    .update(cleanPayload(input))
+    .update(cleanPayload(horseInput))
     .eq("id", id)
     .select("*")
     .single<Horse>();
@@ -420,12 +537,159 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
   }
 
   if (input.primary_owner_contact_id) {
+    const { error: deleteOwnerContactsError } = await client.from("horse_contacts").delete().eq("horse_id", id).eq("role", "owner").neq("contact_id", data.primary_owner_contact_id);
+    if (deleteOwnerContactsError) {
+      throw deleteOwnerContactsError;
+    }
+
+    await upsertHorseContact({
+      organization_id: data.organization_id,
+      horse_id: data.id,
+      contact_id: input.primary_owner_contact_id,
+      role: "owner",
+    });
     await ensureContactRole({
       organization_id: data.organization_id,
       contact_id: input.primary_owner_contact_id,
       role: "owner",
       source: "horse",
     });
+  }
+
+  if (agentContactId !== undefined) {
+    const { error: deleteAgentContactsError } = await client.from("horse_contacts").delete().eq("horse_id", id).eq("role", "agent");
+    if (deleteAgentContactsError) {
+      throw deleteAgentContactsError;
+    }
+
+    if (agentContactId && agentContactId !== data.primary_owner_contact_id) {
+      await upsertHorseContact({
+        organization_id: data.organization_id,
+        horse_id: data.id,
+        contact_id: agentContactId,
+        role: "agent",
+      });
+      await ensureContactRole({
+        organization_id: data.organization_id,
+        contact_id: agentContactId,
+        role: "agent",
+        source: "horse",
+      });
+    }
+  }
+
+  return data;
+}
+
+async function upsertHorseContact(input: {
+  organization_id: string;
+  horse_id: string;
+  contact_id: string;
+  role: HorseContact["role"];
+}) {
+  const client = requireSupabase();
+  const canPayInvoices = input.role === "owner" || input.role === "co-owner";
+  const { error } = await client.from("horse_contacts").upsert(
+    {
+      organization_id: input.organization_id,
+      horse_id: input.horse_id,
+      contact_id: input.contact_id,
+      role: input.role,
+      can_create_entries: true,
+      can_modify_entries: true,
+      can_book_stalls: true,
+      can_pay_invoices: canPayInvoices,
+    },
+    { onConflict: "horse_id,contact_id,role" },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function createClassTemplate(input: ClassTemplateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("class_templates")
+    .insert({
+      organization_id: input.organization_id,
+      name: input.name,
+      code: input.code || null,
+      block_label: input.block_label || null,
+      category: input.category || null,
+      default_pattern: input.default_pattern || null,
+      default_entry_fee: input.default_entry_fee ?? null,
+      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      back_number_policy: input.back_number_policy ?? "horse",
+      eligibility_rules: input.eligibility_rules ?? {},
+      sort_order: input.sort_order ?? 1,
+      is_active: input.is_active ?? true,
+      notes: input.notes || null,
+    })
+    .select("*")
+    .single<ClassTemplate>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateClassTemplate(id: string, input: ClassTemplateUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("class_templates")
+    .update(cleanPayload(input))
+    .eq("id", id)
+    .select("*")
+    .single<ClassTemplate>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function createClassTemplateDivision(input: ClassTemplateDivisionInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("class_template_divisions")
+    .insert({
+      organization_id: input.organization_id,
+      class_template_id: input.class_template_id,
+      name: input.name,
+      code: input.code || null,
+      level: input.level ?? null,
+      default_entry_fee: input.default_entry_fee ?? null,
+      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      eligibility_rules: input.eligibility_rules ?? {},
+      sort_order: input.sort_order ?? 1,
+      notes: input.notes || null,
+    })
+    .select("*")
+    .single<ClassTemplateDivision>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateClassTemplateDivision(id: string, input: ClassTemplateDivisionUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("class_template_divisions")
+    .update(cleanPayload(input))
+    .eq("id", id)
+    .select("*")
+    .single<ClassTemplateDivision>();
+
+  if (error) {
+    throw error;
   }
 
   return data;
@@ -439,11 +703,17 @@ export async function createClass(input: ClassInput) {
       organization_id: input.organization_id,
       show_id: input.show_id,
       show_day_id: input.show_day_id || null,
+      class_template_id: input.class_template_id || null,
       name: input.name,
       code: input.code || null,
+      block_label: input.block_label || null,
       arena: input.arena || null,
       pattern: input.pattern || null,
       custom_pattern: input.custom_pattern ?? null,
+      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      back_number_policy: input.back_number_policy ?? "horse",
+      nrha_slate_number: input.nrha_slate_number || null,
+      eligibility_rules: input.eligibility_rules ?? {},
       judge_name: input.judge_name || null,
       sort_order: input.sort_order ?? 1,
       entry_fee: input.entry_fee ?? null,
@@ -484,9 +754,13 @@ export async function createDivision(input: DivisionInput) {
       organization_id: input.organization_id,
       show_id: input.show_id,
       class_id: input.class_id,
+      class_template_division_id: input.class_template_division_id || null,
       name: input.name,
+      code: input.code || null,
       level: input.level ?? null,
       entry_fee: input.entry_fee ?? null,
+      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      eligibility_rules: input.eligibility_rules ?? {},
     })
     .select("*")
     .single<Division>();
@@ -649,7 +923,7 @@ export async function createStallBooking(input: StallBookingInput) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("stall_bookings")
-    .insert({
+    .insert(cleanPayload({
       organization_id: input.organization_id,
       show_id: input.show_id,
       stall_option_id: input.stall_option_id,
@@ -663,8 +937,10 @@ export async function createStallBooking(input: StallBookingInput) {
       quantity: input.quantity,
       unit_price: input.unit_price ?? null,
       total_price: input.total_price ?? null,
+      affects_inventory: input.affects_inventory,
+      billable: input.billable,
       notes: input.notes || null,
-    })
+    }))
     .select("*")
     .single<StallBooking>();
 
