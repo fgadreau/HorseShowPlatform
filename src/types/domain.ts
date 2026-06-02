@@ -39,6 +39,15 @@ export type Show = {
   default_currency: string | null;
   tax_rate: number | null;
   is_public: boolean;
+  reservation_payment_policy: "pay_at_booking" | "manual";
+  entry_payment_policy: "card_on_file_preauth" | "manual";
+  entry_preauth_timing: "show_start" | "manual";
+  entry_preauth_time: string;
+  entry_settlement_timing: "show_end" | "manual";
+  entry_settlement_due_time: string;
+  entry_auto_capture_enabled: boolean;
+  entry_preauth_amount_strategy: "entry_balance" | "entry_balance_with_margin";
+  entry_preauth_margin_percent: number;
   created_at: string;
 };
 
@@ -83,7 +92,7 @@ export type InvoiceLineItem = {
   id: string;
   organization_id: string;
   invoice_id: string;
-  item_type: "entry" | "stall" | "extra" | "membership" | "fee" | "discount" | "tax" | "manual";
+  item_type: "entry" | "judge_fee" | "stall" | "extra" | "membership" | "fee" | "discount" | "tax" | "manual";
   item_id: string | null;
   description: string;
   quantity: number;
@@ -188,6 +197,7 @@ export type ClassTemplateDivision = {
   code: string | null;
   level: number | null;
   default_entry_fee: number | null;
+  default_judge_fee: number | null;
   sanctioning_body_codes: string[];
   eligibility_rules: EligibilityRules;
   sort_order: number;
@@ -267,6 +277,7 @@ export type Division = {
   level: number | null;
   code: string | null;
   entry_fee: number | null;
+  judge_fee: number | null;
   sanctioning_body_codes: string[];
   eligibility_rules: EligibilityRules;
   created_at: string;
@@ -347,6 +358,15 @@ export type ShowInput = {
   venue?: string;
   location?: string;
   status?: Show["status"];
+  reservation_payment_policy?: Show["reservation_payment_policy"];
+  entry_payment_policy?: Show["entry_payment_policy"];
+  entry_preauth_timing?: Show["entry_preauth_timing"];
+  entry_preauth_time?: string;
+  entry_settlement_timing?: Show["entry_settlement_timing"];
+  entry_settlement_due_time?: string;
+  entry_auto_capture_enabled?: boolean;
+  entry_preauth_amount_strategy?: Show["entry_preauth_amount_strategy"];
+  entry_preauth_margin_percent?: number;
 };
 
 export type ShowUpdateInput = {
@@ -357,6 +377,15 @@ export type ShowUpdateInput = {
   venue?: string | null;
   location?: string | null;
   status?: Show["status"];
+  reservation_payment_policy?: Show["reservation_payment_policy"];
+  entry_payment_policy?: Show["entry_payment_policy"];
+  entry_preauth_timing?: Show["entry_preauth_timing"];
+  entry_preauth_time?: string;
+  entry_settlement_timing?: Show["entry_settlement_timing"];
+  entry_settlement_due_time?: string;
+  entry_auto_capture_enabled?: boolean;
+  entry_preauth_amount_strategy?: Show["entry_preauth_amount_strategy"];
+  entry_preauth_margin_percent?: number;
 };
 
 export type ContactInput = {
@@ -453,6 +482,7 @@ export type DivisionInput = {
   code?: string;
   level?: number;
   entry_fee?: number;
+  judge_fee?: number;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
 };
@@ -465,6 +495,7 @@ export type DivisionUpdateInput = {
   code?: string | null;
   level?: number | null;
   entry_fee?: number | null;
+  judge_fee?: number | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
 };
@@ -507,6 +538,7 @@ export type ClassTemplateDivisionInput = {
   code?: string;
   level?: number;
   default_entry_fee?: number;
+  default_judge_fee?: number;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
   sort_order?: number;
@@ -519,6 +551,7 @@ export type ClassTemplateDivisionUpdateInput = {
   code?: string | null;
   level?: number | null;
   default_entry_fee?: number | null;
+  default_judge_fee?: number | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
   sort_order?: number;

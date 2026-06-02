@@ -58,6 +58,7 @@ import type {
   Entry,
   Horse,
   HorseContact,
+  InvoiceLineItem,
   Organization,
   SanctioningBody,
   Show,
@@ -783,7 +784,10 @@ function ShowsView({
               <span>
                 {formatDate(show.start_date)} - {formatDate(show.end_date)}
               </span>
-              <span className={`badge ${show.status}`}>{show.status}</span>
+              <div>
+                <span className={`badge ${show.status}`}>{show.status}</span>
+                <span className="muted-line">{showPaymentSummary(show)}</span>
+              </div>
               <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
                 Edit
               </button>
@@ -1034,7 +1038,21 @@ function ClassesView({
                 </div>
                 <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies)}</span>
                 <span>{backNumberPolicyLabel(template.back_number_policy)}</span>
-                <span>{templateDivisions.length ? templateDivisions.map((division) => division.name).join(", ") : "Aucune division"}</span>
+                <span>
+                  {templateDivisions.length
+                    ? templateDivisions
+                        .map((division) =>
+                          [
+                            division.name,
+                            division.default_entry_fee == null ? null : `insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
+                            division.default_judge_fee == null ? null : `juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+                          ]
+                            .filter(Boolean)
+                            .join(" "),
+                        )
+                        .join(", ")
+                    : "Aucune division"}
+                </span>
               </div>
             );
           })}
@@ -1109,7 +1127,13 @@ function ClassesView({
               <div>
                 <strong>{division.name}</strong>
                 <span className="muted-line">
-                  {[division.code ? `#${division.code}` : null, division.entry_fee == null ? "Class fee" : formatCurrency(division.entry_fee, organization?.currency ?? "CAD")].filter(Boolean).join(" - ")}
+                  {[
+                    division.code ? `#${division.code}` : null,
+                    division.entry_fee == null ? "Frais classe" : `Inscription ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
+                    division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                  ]
+                    .filter(Boolean)
+                    .join(" - ")}
                 </span>
               </div>
               <span>{findById(classes, division.class_id)?.name ?? "Unknown class"}</span>
@@ -1693,7 +1717,7 @@ function BillingView({
                   <div className="table-row invoice-line-row" key={item.id}>
                     <div>
                       <strong>{item.description}</strong>
-                      <span className="muted-line">{item.item_type}</span>
+                      <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
                     </div>
                     <span>{Number(item.quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 })} x</span>
                     <span>{formatCurrency(item.unit_price, currency)}</span>
@@ -1833,6 +1857,15 @@ function ShowForm({
   const [startDate, setStartDate] = useState(today);
   const [endDate, setEndDate] = useState(today);
   const [location, setLocation] = useState("");
+  const [reservationPaymentPolicy, setReservationPaymentPolicy] = useState<Show["reservation_payment_policy"]>("pay_at_booking");
+  const [entryPaymentPolicy, setEntryPaymentPolicy] = useState<Show["entry_payment_policy"]>("card_on_file_preauth");
+  const [entryPreauthTiming, setEntryPreauthTiming] = useState<Show["entry_preauth_timing"]>("show_start");
+  const [entryPreauthTime, setEntryPreauthTime] = useState("08:00");
+  const [entrySettlementTiming, setEntrySettlementTiming] = useState<Show["entry_settlement_timing"]>("show_end");
+  const [entrySettlementDueTime, setEntrySettlementDueTime] = useState("14:00");
+  const [entryAutoCaptureEnabled, setEntryAutoCaptureEnabled] = useState(true);
+  const [entryPreauthAmountStrategy, setEntryPreauthAmountStrategy] = useState<Show["entry_preauth_amount_strategy"]>("entry_balance");
+  const [entryPreauthMarginPercent, setEntryPreauthMarginPercent] = useState("0");
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1853,10 +1886,28 @@ function ShowForm({
         end_date: endDate,
         location,
         status: "draft",
+        reservation_payment_policy: reservationPaymentPolicy,
+        entry_payment_policy: entryPaymentPolicy,
+        entry_preauth_timing: entryPreauthTiming,
+        entry_preauth_time: entryPreauthTime,
+        entry_settlement_timing: entrySettlementTiming,
+        entry_settlement_due_time: entrySettlementDueTime,
+        entry_auto_capture_enabled: entryAutoCaptureEnabled,
+        entry_preauth_amount_strategy: entryPreauthAmountStrategy,
+        entry_preauth_margin_percent: numericValue(entryPreauthMarginPercent) ?? 0,
       });
       setName("");
       setSlug("");
       setLocation("");
+      setReservationPaymentPolicy("pay_at_booking");
+      setEntryPaymentPolicy("card_on_file_preauth");
+      setEntryPreauthTiming("show_start");
+      setEntryPreauthTime("08:00");
+      setEntrySettlementTiming("show_end");
+      setEntrySettlementDueTime("14:00");
+      setEntryAutoCaptureEnabled(true);
+      setEntryPreauthAmountStrategy("entry_balance");
+      setEntryPreauthMarginPercent("0");
     } finally {
       setBusy(false);
     }
@@ -1893,6 +1944,68 @@ function ShowForm({
           Location
           <input disabled={!organization} value={location} onChange={(event) => setLocation(event.target.value)} />
         </label>
+        <div className="field-group">
+          <span className="contact-picker-label">Paiements du show</span>
+          <div className="form-grid">
+            <label>
+              Réservations
+              <select disabled={!organization} value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
+                <option value="pay_at_booking">Paiement à la réservation</option>
+                <option value="manual">Gestion manuelle</option>
+              </select>
+            </label>
+            <label>
+              Inscriptions
+              <select disabled={!organization} value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
+                <option value="card_on_file_preauth">Carte + préautorisation</option>
+                <option value="manual">Gestion manuelle</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Préautorisation
+              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
+                <option value="show_start">Première journée du show</option>
+                <option value="manual">Manuelle</option>
+              </select>
+            </label>
+            <label>
+              Heure
+              <input disabled={!organization || entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Échéance
+              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
+                <option value="show_end">Dernière journée du show</option>
+                <option value="manual">Manuelle</option>
+              </select>
+            </label>
+            <label>
+              Heure limite
+              <input disabled={!organization || entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Montant préautorisé
+              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
+                <option value="entry_balance">Solde des inscriptions</option>
+                <option value="entry_balance_with_margin">Solde + marge</option>
+              </select>
+            </label>
+            <label>
+              Marge %
+              <input disabled={!organization || entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
+            </label>
+          </div>
+          <label className="check-row">
+            <input checked={entryAutoCaptureEnabled} disabled={!organization || entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
+            <span>Capture automatique à l'échéance</span>
+          </label>
+        </div>
         <button className="primary-button" disabled={busy || !organization} type="submit">
           <Plus size={18} />
           Create show
@@ -1917,6 +2030,15 @@ function ShowEditForm({
   const [endDate, setEndDate] = useState(show.end_date);
   const [location, setLocation] = useState(show.location ?? "");
   const [status, setStatus] = useState<Show["status"]>(show.status);
+  const [reservationPaymentPolicy, setReservationPaymentPolicy] = useState<Show["reservation_payment_policy"]>(show.reservation_payment_policy ?? "pay_at_booking");
+  const [entryPaymentPolicy, setEntryPaymentPolicy] = useState<Show["entry_payment_policy"]>(show.entry_payment_policy ?? "card_on_file_preauth");
+  const [entryPreauthTiming, setEntryPreauthTiming] = useState<Show["entry_preauth_timing"]>(show.entry_preauth_timing ?? "show_start");
+  const [entryPreauthTime, setEntryPreauthTime] = useState(showTimeInputValue(show.entry_preauth_time, "08:00"));
+  const [entrySettlementTiming, setEntrySettlementTiming] = useState<Show["entry_settlement_timing"]>(show.entry_settlement_timing ?? "show_end");
+  const [entrySettlementDueTime, setEntrySettlementDueTime] = useState(showTimeInputValue(show.entry_settlement_due_time, "14:00"));
+  const [entryAutoCaptureEnabled, setEntryAutoCaptureEnabled] = useState(show.entry_auto_capture_enabled ?? true);
+  const [entryPreauthAmountStrategy, setEntryPreauthAmountStrategy] = useState<Show["entry_preauth_amount_strategy"]>(show.entry_preauth_amount_strategy ?? "entry_balance");
+  const [entryPreauthMarginPercent, setEntryPreauthMarginPercent] = useState(String(show.entry_preauth_margin_percent ?? 0));
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1931,6 +2053,15 @@ function ShowEditForm({
         end_date: endDate,
         location: location || null,
         status,
+        reservation_payment_policy: reservationPaymentPolicy,
+        entry_payment_policy: entryPaymentPolicy,
+        entry_preauth_timing: entryPreauthTiming,
+        entry_preauth_time: entryPreauthTime,
+        entry_settlement_timing: entrySettlementTiming,
+        entry_settlement_due_time: entrySettlementDueTime,
+        entry_auto_capture_enabled: entryAutoCaptureEnabled,
+        entry_preauth_amount_strategy: entryPreauthAmountStrategy,
+        entry_preauth_margin_percent: numericValue(entryPreauthMarginPercent) ?? 0,
       });
     } finally {
       setBusy(false);
@@ -1977,6 +2108,68 @@ function ShowEditForm({
           <label>
             Location
             <input value={location} onChange={(event) => setLocation(event.target.value)} />
+          </label>
+        </div>
+        <div className="field-group">
+          <span className="contact-picker-label">Paiements du show</span>
+          <div className="form-grid">
+            <label>
+              Réservations
+              <select value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
+                <option value="pay_at_booking">Paiement à la réservation</option>
+                <option value="manual">Gestion manuelle</option>
+              </select>
+            </label>
+            <label>
+              Inscriptions
+              <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
+                <option value="card_on_file_preauth">Carte + préautorisation</option>
+                <option value="manual">Gestion manuelle</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Préautorisation
+              <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
+                <option value="show_start">Première journée du show</option>
+                <option value="manual">Manuelle</option>
+              </select>
+            </label>
+            <label>
+              Heure
+              <input disabled={entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Échéance
+              <select disabled={entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
+                <option value="show_end">Dernière journée du show</option>
+                <option value="manual">Manuelle</option>
+              </select>
+            </label>
+            <label>
+              Heure limite
+              <input disabled={entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Montant préautorisé
+              <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
+                <option value="entry_balance">Solde des inscriptions</option>
+                <option value="entry_balance_with_margin">Solde + marge</option>
+              </select>
+            </label>
+            <label>
+              Marge %
+              <input disabled={entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
+            </label>
+          </div>
+          <label className="check-row">
+            <input checked={entryAutoCaptureEnabled} disabled={entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
+            <span>Capture automatique à l'échéance</span>
           </label>
         </div>
         <FormActions busy={busy} onCancel={onCancel} />
@@ -2499,6 +2692,44 @@ function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined) {
   }
 }
 
+function showTimeInputValue(value: string | null | undefined, fallback: string) {
+  return value ? value.slice(0, 5) : fallback;
+}
+
+function showPaymentSummary(show: Show) {
+  const reservationLabel = show.reservation_payment_policy === "pay_at_booking" ? "Réservations payées" : "Réservations manuelles";
+  const entryLabel =
+    show.entry_payment_policy === "card_on_file_preauth"
+      ? `Préautorisation ${showTimeInputValue(show.entry_preauth_time, "08:00")}, capture ${showTimeInputValue(show.entry_settlement_due_time, "14:00")}`
+      : "Inscriptions manuelles";
+
+  return `${reservationLabel} - ${entryLabel}`;
+}
+
+function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"]) {
+  switch (type) {
+    case "entry":
+      return "Inscription";
+    case "judge_fee":
+      return "Frais de juge";
+    case "stall":
+      return "Stall";
+    case "extra":
+      return "Extra";
+    case "membership":
+      return "Membership";
+    case "fee":
+      return "Frais";
+    case "discount":
+      return "Rabais";
+    case "tax":
+      return "Taxe";
+    case "manual":
+    default:
+      return "Manuel";
+  }
+}
+
 function eligibilityRulesFromNotes(notes: string): EligibilityRules {
   return notes.trim() ? { notes: notes.trim() } : {};
 }
@@ -2648,6 +2879,7 @@ function ClassTemplateDivisionForm({
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
+  const [judgeFee, setJudgeFee] = useState("");
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
@@ -2671,12 +2903,14 @@ function ClassTemplateDivisionForm({
         name,
         code,
         default_entry_fee: numericValue(entryFee),
+        default_judge_fee: numericValue(judgeFee),
         sanctioning_body_codes: selectedSanctioningBodyCodes,
         eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
       });
       setName("");
       setCode("");
       setEntryFee("");
+      setJudgeFee("");
       setEligibilityNotes("");
       setSanctioningBodyCodes(null);
     } finally {
@@ -2713,10 +2947,16 @@ function ClassTemplateDivisionForm({
             <input disabled={!organization || !classTemplates.length} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
         </div>
-        <label>
-          Frais override
-          <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Frais d'inscription
+            <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+          <label>
+            Frais de juge
+            <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
+          </label>
+        </div>
         <SanctioningFields
           backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
           disabled={!organization || !classTemplates.length}
@@ -2896,6 +3136,7 @@ function DivisionForm({
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
+  const [judgeFee, setJudgeFee] = useState("");
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
@@ -2919,12 +3160,14 @@ function DivisionForm({
         name,
         code,
         entry_fee: numericValue(entryFee),
+        judge_fee: numericValue(judgeFee),
         sanctioning_body_codes: sanctioningBodyCodes,
         eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
       });
       setName("");
       setCode("");
       setEntryFee("");
+      setJudgeFee("");
       setSanctioningBodyCodes([]);
       setEligibilityNotes("");
     } finally {
@@ -2961,10 +3204,16 @@ function DivisionForm({
             <input disabled={!organization || !classes.length} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
         </div>
-        <label>
-          Fee override
-          <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Frais d'inscription
+            <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+          <label>
+            Frais de juge
+            <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
+          </label>
+        </div>
         <SanctioningFields
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           disabled={!organization || !classes.length}
@@ -3123,6 +3372,7 @@ function DivisionEditForm({
   const [name, setName] = useState(division.name);
   const [code, setCode] = useState(division.code ?? "");
   const [entryFee, setEntryFee] = useState(division.entry_fee == null ? "" : String(division.entry_fee));
+  const [judgeFee, setJudgeFee] = useState(division.judge_fee == null ? "" : String(division.judge_fee));
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(division.sanctioning_body_codes ?? []);
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(division.eligibility_rules));
   const [busy, setBusy] = useState(false);
@@ -3144,6 +3394,7 @@ function DivisionEditForm({
         name,
         code: code || null,
         entry_fee: numericValue(entryFee) ?? null,
+        judge_fee: numericValue(judgeFee) ?? null,
         sanctioning_body_codes: sanctioningBodyCodes,
         eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
       });
@@ -3180,10 +3431,16 @@ function DivisionEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
         </div>
-        <label>
-          Fee override
-          <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Frais d'inscription
+            <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+          <label>
+            Frais de juge
+            <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
+          </label>
+        </div>
         <SanctioningFields
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           hideBackNumberPolicy
@@ -3301,7 +3558,21 @@ function EntryForm({
           Division
           <SearchSelect
             disabled={!availableDivisions.length}
-            items={availableDivisions.map((division) => ({ id: division.id, label: divisionLabel(division, classes), detail: "" }))}
+            items={availableDivisions.map((division) => {
+              const classRecord = findById(classes, division.class_id);
+              const effectiveEntryFee = division.entry_fee ?? classRecord?.entry_fee ?? null;
+
+              return {
+                id: division.id,
+                label: divisionLabel(division, classes),
+                detail: [
+                  effectiveEntryFee == null ? null : `Inscription ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
+                  division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                ]
+                  .filter(Boolean)
+                  .join(" - "),
+              };
+            })}
             placeholder="Search division"
             value={selectedDivision?.id ?? ""}
             onChange={setDivisionId}
@@ -3426,7 +3697,21 @@ function EntryEditForm({
         <label>
           Division
           <SearchSelect
-            items={divisions.map((division) => ({ id: division.id, label: divisionLabel(division, classes), detail: "" }))}
+            items={divisions.map((division) => {
+              const classRecord = findById(classes, division.class_id);
+              const effectiveEntryFee = division.entry_fee ?? classRecord?.entry_fee ?? null;
+
+              return {
+                id: division.id,
+                label: divisionLabel(division, classes),
+                detail: [
+                  effectiveEntryFee == null ? null : `Inscription ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
+                  division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                ]
+                  .filter(Boolean)
+                  .join(" - "),
+              };
+            })}
             placeholder="Search division"
             value={divisionId}
             onChange={setDivisionId}

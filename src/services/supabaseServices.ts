@@ -333,6 +333,15 @@ export async function createShow(input: ShowInput) {
       venue: input.venue || null,
       location: input.location || null,
       status: input.status ?? "draft",
+      reservation_payment_policy: input.reservation_payment_policy ?? "pay_at_booking",
+      entry_payment_policy: input.entry_payment_policy ?? "card_on_file_preauth",
+      entry_preauth_timing: input.entry_preauth_timing ?? "show_start",
+      entry_preauth_time: input.entry_preauth_time ?? "08:00",
+      entry_settlement_timing: input.entry_settlement_timing ?? "show_end",
+      entry_settlement_due_time: input.entry_settlement_due_time ?? "14:00",
+      entry_auto_capture_enabled: input.entry_auto_capture_enabled ?? true,
+      entry_preauth_amount_strategy: input.entry_preauth_amount_strategy ?? "entry_balance",
+      entry_preauth_margin_percent: input.entry_preauth_margin_percent ?? 0,
     })
     .select("*")
     .single<Show>();
@@ -664,6 +673,7 @@ export async function createClassTemplateDivision(input: ClassTemplateDivisionIn
       code: input.code || null,
       level: input.level ?? null,
       default_entry_fee: input.default_entry_fee ?? null,
+      default_judge_fee: input.default_judge_fee ?? null,
       sanctioning_body_codes: input.sanctioning_body_codes ?? [],
       eligibility_rules: input.eligibility_rules ?? {},
       sort_order: input.sort_order ?? 1,
@@ -759,6 +769,7 @@ export async function createDivision(input: DivisionInput) {
       code: input.code || null,
       level: input.level ?? null,
       entry_fee: input.entry_fee ?? null,
+      judge_fee: input.judge_fee ?? null,
       sanctioning_body_codes: input.sanctioning_body_codes ?? [],
       eligibility_rules: input.eligibility_rules ?? {},
     })
