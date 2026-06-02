@@ -590,6 +590,30 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
   return data;
 }
 
+export async function deleteHorse(id: string) {
+  const client = requireSupabase();
+
+  const { error: bookingsError } = await client.from("stall_bookings").delete().eq("horse_id", id);
+  if (bookingsError) {
+    throw bookingsError;
+  }
+
+  const { error: entriesError } = await client.from("entries").delete().eq("horse_id", id);
+  if (entriesError) {
+    throw entriesError;
+  }
+
+  const { error: horseContactsError } = await client.from("horse_contacts").delete().eq("horse_id", id);
+  if (horseContactsError) {
+    throw horseContactsError;
+  }
+
+  const { error } = await client.from("horses").delete().eq("id", id);
+  if (error) {
+    throw error;
+  }
+}
+
 async function upsertHorseContact(input: {
   organization_id: string;
   horse_id: string;
@@ -884,6 +908,15 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
   return data;
 }
 
+export async function deleteEntry(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("entries").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createStallOption(input: StallOptionInput) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -1002,6 +1035,15 @@ export async function updateStallBooking(id: string, input: StallBookingUpdateIn
   });
 
   return data;
+}
+
+export async function deleteStallBooking(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("stall_bookings").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }
 
 async function loadShowScoreClassSetups() {

@@ -1287,6 +1287,14 @@ button:focus-visible {
   text-decoration: underline;
 }
 
+.danger-text {
+  color: #b42318;
+}
+
+.danger-text:hover {
+  color: #8f1d14;
+}
+
 .text-button:disabled {
   color: #8a9994;
   cursor: not-allowed;
@@ -1333,11 +1341,51 @@ button:focus-visible {
   border-top: 1px solid #edf3f0;
 }
 
+.invoice-summary-row.selected {
+  background: #eef7f4;
+}
+
+.invoice-number-button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  color: #0f3f39;
+  display: inline-flex;
+  gap: 8px;
+  justify-content: flex-start;
+  min-height: 34px;
+  padding: 0;
+  text-align: left;
+}
+
+.invoice-number-button:hover strong {
+  text-decoration: underline;
+}
+
 .invoice-line-row {
   background: #fbfdfc;
   color: #4c5f58;
   grid-template-columns: 1.2fr 0.5fr 0.7fr 1fr;
   min-height: 48px;
+}
+
+.invoice-detail-panel {
+  border-color: #c9ddd6;
+}
+
+.invoice-detail-totals {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-bottom: 16px;
+}
+
+.invoice-detail-row {
+  grid-template-columns: 1.4fr 0.45fr 0.7fr 0.8fr;
+}
+
+.invoice-detail-table {
+  background: #ffffff;
 }
 
 .table-head {
@@ -1496,6 +1544,7 @@ button:focus-visible {
 
   .content-grid,
   .checkbox-grid,
+  .invoice-detail-totals,
   .metric-grid,
   .overview-command,
   .overview-layout,

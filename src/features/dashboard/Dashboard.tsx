@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
+  FileText,
   LogOut,
   MapPin,
   Plus,
@@ -14,6 +15,7 @@ import {
   Trophy,
   Users,
   Warehouse,
+  X,
 } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
@@ -33,6 +35,9 @@ import {
   createShow,
   createStallBooking,
   createStallOption,
+  deleteEntry,
+  deleteHorse,
+  deleteStallBooking,
   slugify,
   updateClass,
   updateClassTemplate,
@@ -87,6 +92,9 @@ export function Dashboard({
   onCreateShow,
   onCreateStallBooking,
   onCreateStallOption,
+  onDeleteEntry,
+  onDeleteHorse,
+  onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
   onRefresh,
@@ -122,6 +130,9 @@ export function Dashboard({
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
+  onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
+  onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
+  onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
   onRefresh: () => void;
@@ -323,6 +334,7 @@ export function Dashboard({
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onDeleteHorse={onDeleteHorse}
             onUpdateContact={onUpdateContact}
             onUpdateHorse={onUpdateHorse}
           />
@@ -362,6 +374,7 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
+            onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
           />
         ) : null}
@@ -381,6 +394,7 @@ export function Dashboard({
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onCreateStallOption={onCreateStallOption}
+            onDeleteStallBooking={onDeleteStallBooking}
             onUpdateStallBooking={onUpdateStallBooking}
             onUpdateStallOption={onUpdateStallOption}
           />
@@ -419,6 +433,7 @@ export function Dashboard({
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onDeleteHorse={onDeleteHorse}
             onUpdateHorse={onUpdateHorse}
           />
         ) : null}
@@ -447,6 +462,7 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
+            onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
           />
         ) : null}
@@ -465,6 +481,7 @@ export function Dashboard({
             stallOptions={selectedOrganizationStallOptions}
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
+            onDeleteStallBooking={onDeleteStallBooking}
             onUpdateStallBooking={onUpdateStallBooking}
           />
         ) : null}
@@ -810,6 +827,7 @@ function PeopleView({
   organization,
   onCreateContact,
   onCreateHorse,
+  onDeleteHorse,
   onUpdateContact,
   onUpdateHorse,
 }: {
@@ -821,11 +839,23 @@ function PeopleView({
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+
+  async function handleDeleteHorse(horse: Horse) {
+    if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/reservations liees?`)) {
+      return;
+    }
+
+    await onDeleteHorse(horse.id);
+    if (editingHorse?.id === horse.id) {
+      setEditingHorse(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -917,9 +947,14 @@ function PeopleView({
               <strong>{horse.name}</strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
-              <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!horses.length ? <EmptyState label="Create a horse after adding an owner contact." /> : null}
@@ -1245,6 +1280,7 @@ function EntriesView({
   shows,
   onCreateContact,
   onCreateEntry,
+  onDeleteEntry,
   onUpdateEntry,
 }: {
   classes: ClassRecord[];
@@ -1258,9 +1294,22 @@ function EntriesView({
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+
+  async function handleDeleteEntry(entry: Entry) {
+    const horseName = horseLabel(findById(horses, entry.horse_id));
+    if (!window.confirm(`Supprimer l'inscription de ${horseName}?`)) {
+      return;
+    }
+
+    await onDeleteEntry(entry.id);
+    if (editingEntry?.id === entry.id) {
+      setEditingEntry(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -1325,9 +1374,14 @@ function EntriesView({
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
-              <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!entries.length ? <EmptyState label="Create a draft entry after adding contacts, horses, classes and divisions." /> : null}
@@ -1475,6 +1529,7 @@ function MyHorsesView({
   profileId,
   onCreateContact,
   onCreateHorse,
+  onDeleteHorse,
   onUpdateHorse,
 }: {
   contacts: Contact[];
@@ -1485,9 +1540,21 @@ function MyHorsesView({
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
 }) {
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+
+  async function handleDeleteHorse(horse: Horse) {
+    if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/reservations liees?`)) {
+      return;
+    }
+
+    await onDeleteHorse(horse.id);
+    if (editingHorse?.id === horse.id) {
+      setEditingHorse(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -1546,9 +1613,14 @@ function MyHorsesView({
               <strong>{horse.name}</strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
-              <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!horses.length ? <EmptyState label="Aucun cheval lié à ton profil pour l'instant." /> : null}
@@ -1651,6 +1723,7 @@ function MyEntriesView({
   shows,
   onCreateContact,
   onCreateEntry,
+  onDeleteEntry,
   onUpdateEntry,
 }: {
   classes: ClassRecord[];
@@ -1664,9 +1737,22 @@ function MyEntriesView({
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
 }) {
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+
+  async function handleDeleteEntry(entry: Entry) {
+    const horseName = horseLabel(findById(horses, entry.horse_id));
+    if (!window.confirm(`Supprimer l'inscription de ${horseName}?`)) {
+      return;
+    }
+
+    await onDeleteEntry(entry.id);
+    if (editingEntry?.id === entry.id) {
+      setEditingEntry(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -1731,9 +1817,14 @@ function MyEntriesView({
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
               <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
-              <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!entries.length ? <EmptyState label="Aucune inscription liée à ton profil pour l'instant." /> : null}
@@ -1754,6 +1845,10 @@ function BillingView({
   lineItems: AppContext["invoiceLineItems"];
   unpaidBalance: number;
 }) {
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const selectedInvoice = findById(invoices, selectedInvoiceId) ?? null;
+  const selectedInvoiceLineItems = selectedInvoice ? lineItems.filter((item) => item.invoice_id === selectedInvoice.id) : [];
+
   return (
     <div className="content-grid">
       <ViewIntro
@@ -1771,6 +1866,15 @@ function BillingView({
         <Metric label="Solde ouvert" value={formatCurrency(unpaidBalance, currency)} />
         <Metric label="Payees" value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
       </section>
+
+      {selectedInvoice ? (
+        <InvoiceDetailPanel
+          currency={currency}
+          invoice={selectedInvoice}
+          lineItems={selectedInvoiceLineItems}
+          onClose={() => setSelectedInvoiceId("")}
+        />
+      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -1790,8 +1894,11 @@ function BillingView({
             const invoiceLineItems = lineItems.filter((item) => item.invoice_id === invoice.id);
             return (
               <div className="invoice-group" key={invoice.id}>
-                <div className="table-row">
-                  <strong>{invoice.invoice_number}</strong>
+                <div className={`table-row invoice-summary-row ${selectedInvoiceId === invoice.id ? "selected" : ""}`}>
+                  <button className="invoice-number-button" type="button" onClick={() => setSelectedInvoiceId(invoice.id)}>
+                    <FileText size={16} />
+                    <strong>{invoice.invoice_number}</strong>
+                  </button>
                   <span className={`badge ${invoice.status}`}>{invoice.status.replace("_", " ")}</span>
                   <span>{formatCurrency(invoice.total_amount, currency)}</span>
                   <span>{formatCurrency(invoice.balance_due, currency)}</span>
@@ -1802,7 +1909,7 @@ function BillingView({
                       <strong>{item.description}</strong>
                       <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
                     </div>
-                    <span>{Number(item.quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 })} x</span>
+                    <span>{invoiceQuantityLabel(item.quantity)} x</span>
                     <span>{formatCurrency(item.unit_price, currency)}</span>
                     <span>{formatCurrency(item.total_price + item.tax_amount, currency)}</span>
                   </div>
@@ -1814,6 +1921,61 @@ function BillingView({
         </div>
       </section>
     </div>
+  );
+}
+
+function InvoiceDetailPanel({
+  currency,
+  invoice,
+  lineItems,
+  onClose,
+}: {
+  currency: string;
+  invoice: AppContext["invoices"][number];
+  lineItems: AppContext["invoiceLineItems"];
+  onClose: () => void;
+}) {
+  return (
+    <section className="panel span-2 invoice-detail-panel">
+      <div className="panel-header">
+        <div>
+          <h2>{invoice.invoice_number}</h2>
+          <p>
+            {invoice.status.replace("_", " ")} · Émise le {formatDate(invoice.issue_date)}
+            {invoice.due_date ? ` · Due ${formatDate(invoice.due_date)}` : ""}
+          </p>
+        </div>
+        <button className="icon-button" type="button" aria-label="Fermer la facture" onClick={onClose}>
+          <X size={18} />
+        </button>
+      </div>
+      <div className="invoice-detail-totals">
+        <Metric label="Sous-total" value={formatCurrency(invoice.subtotal, currency)} />
+        <Metric label="Taxes" value={formatCurrency(invoice.tax_amount, currency)} />
+        <Metric label="Total" value={formatCurrency(invoice.total_amount, currency)} />
+        <Metric label="Balance" value={formatCurrency(invoice.balance_due, currency)} />
+      </div>
+      <div className="table invoice-detail-table">
+        <div className="table-row table-head invoice-detail-row">
+          <span>Description</span>
+          <span>Qté</span>
+          <span>Prix</span>
+          <span>Total</span>
+        </div>
+        {lineItems.map((item) => (
+          <div className="table-row invoice-detail-row" key={item.id}>
+            <div>
+              <strong>{item.description}</strong>
+              <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
+            </div>
+            <span>{invoiceQuantityLabel(item.quantity)} x</span>
+            <span>{formatCurrency(item.unit_price, currency)}</span>
+            <span>{formatCurrency(item.total_price + item.tax_amount, currency)}</span>
+          </div>
+        ))}
+        {!lineItems.length ? <EmptyState label="Aucune ligne sur cette facture." /> : null}
+      </div>
+    </section>
   );
 }
 
@@ -2815,6 +2977,10 @@ function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"]) {
     default:
       return "Manuel";
   }
+}
+
+function invoiceQuantityLabel(quantity: number) {
+  return Number(quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 });
 }
 
 function eligibilityRulesFromNotes(notes: string): EligibilityRules {

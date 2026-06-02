@@ -5,9 +5,10 @@ import { ClipboardList, Plus, Warehouse } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import {
-  createStallBooking,
   createContact,
+  createStallBooking,
   createStallOption,
+  deleteStallBooking,
   ensureContactRoles,
   updateStallBooking,
   updateStallOption,
@@ -50,6 +51,7 @@ export function StallsView({
   onCreateContact,
   onCreateStallBooking,
   onCreateStallOption,
+  onDeleteStallBooking,
   onUpdateStallBooking,
   onUpdateStallOption,
 }: {
@@ -66,6 +68,7 @@ export function StallsView({
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
+  onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
 }) {
@@ -98,6 +101,17 @@ export function StallsView({
       label: "Options reservables",
     },
   ];
+
+  async function handleDeleteBooking(booking: StallBooking) {
+    if (!window.confirm("Supprimer cette reservation et la ligne de facture liee?")) {
+      return;
+    }
+
+    await onDeleteStallBooking(booking.id);
+    if (editingBooking?.id === booking.id) {
+      setEditingBooking(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -149,7 +163,7 @@ export function StallsView({
             />
           ) : null}
 
-          <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} options={stallOptions} onEdit={setEditingBooking} />
+          <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
         </>
       ) : null}
 
@@ -210,6 +224,7 @@ export function MyStallsView({
   stallOptions,
   onCreateContact,
   onCreateStallBooking,
+  onDeleteStallBooking,
   onUpdateStallBooking,
 }: {
   bookings: StallBooking[];
@@ -224,6 +239,7 @@ export function MyStallsView({
   stallOptions: StallOption[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
+  onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
 }) {
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
@@ -252,6 +268,17 @@ export function MyStallsView({
       label: "Options disponibles",
     },
   ];
+
+  async function handleDeleteBooking(booking: StallBooking) {
+    if (!window.confirm("Supprimer cette reservation et la ligne de facture liee?")) {
+      return;
+    }
+
+    await onDeleteStallBooking(booking.id);
+    if (editingBooking?.id === booking.id) {
+      setEditingBooking(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -309,6 +336,7 @@ export function MyStallsView({
             horses={horses}
             options={stallOptions}
             title="Mes reservations"
+            onDelete={handleDeleteBooking}
             onEdit={setEditingBooking}
           />
         </>
@@ -437,6 +465,7 @@ function StallBookingsTable({
   horses,
   options,
   title = "Reservations",
+  onDelete,
   onEdit,
 }: {
   bookings: StallBooking[];
@@ -445,6 +474,7 @@ function StallBookingsTable({
   horses: Horse[];
   options: StallOption[];
   title?: string;
+  onDelete: (booking: StallBooking) => void;
   onEdit: (booking: StallBooking) => void;
 }) {
   return (
@@ -475,9 +505,14 @@ function StallBookingsTable({
               </div>
               <span>{contactLabel(findById(contacts, booking.booker_contact_id))}</span>
               <span className={`badge ${booking.status}`}>{booking.status}</span>
-              <button className="text-button" type="button" onClick={() => onEdit(booking)}>
-                Modifier
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => onEdit(booking)}>
+                  Modifier
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => onDelete(booking)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           );
         })}

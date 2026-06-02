@@ -21,6 +21,9 @@ import {
   createShow,
   createStallBooking,
   createStallOption,
+  deleteEntry,
+  deleteHorse,
+  deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
   updateClass,
@@ -192,6 +195,11 @@ export default function App() {
         setNotice({ tone: "success", message: "Horse updated." });
         await refreshContext();
       }}
+      onDeleteHorse={async (id) => {
+        await deleteHorse(id);
+        setNotice({ tone: "success", message: "Horse and related test data deleted." });
+        await refreshContext();
+      }}
       onCreateClass={async (input) => {
         const classRecord = await createClass(input);
         setNotice({ tone: "success", message: "Class created." });
@@ -243,6 +251,11 @@ export default function App() {
         setNotice({ tone: "success", message: "Entry and invoice draft updated." });
         await refreshContext();
       }}
+      onDeleteEntry={async (id) => {
+        await deleteEntry(id);
+        setNotice({ tone: "success", message: "Entry deleted and invoice draft updated." });
+        await refreshContext();
+      }}
       onCreateStallOption={async (input) => {
         await createStallOption(input);
         setNotice({ tone: "success", message: "Stall option created." });
@@ -261,6 +274,11 @@ export default function App() {
       onUpdateStallBooking={async (id, input) => {
         await updateStallBooking(id, input);
         setNotice({ tone: "success", message: "Reservation and invoice draft updated." });
+        await refreshContext();
+      }}
+      onDeleteStallBooking={async (id) => {
+        await deleteStallBooking(id);
+        setNotice({ tone: "success", message: "Reservation deleted and invoice draft updated." });
         await refreshContext();
       }}
       onPrepareShowScoreClass={async (classRecord) => {
