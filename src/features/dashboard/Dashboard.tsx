@@ -111,7 +111,7 @@ export function Dashboard({
   selectedOrganizationId: string;
   t: Translation;
   onChangeOrganization: (organizationId: string) => void;
-  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
+  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -336,6 +336,7 @@ export function Dashboard({
             divisions={selectedOrganizationDivisions}
             organization={selectedOrganization}
             sanctioningBodies={sanctioningBodies}
+            showDays={selectedOrganizationShowDays}
             shows={selectedOrganizationShows}
             onCreateClass={onCreateClass}
             onCreateClassTemplate={onCreateClassTemplate}
@@ -935,6 +936,7 @@ function ClassesView({
   divisions,
   organization,
   sanctioningBodies,
+  showDays,
   shows,
   onCreateClass,
   onCreateClassTemplate,
@@ -951,8 +953,9 @@ function ClassesView({
   divisions: Division[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
+  showDays: ShowDay[];
   shows: Show[];
-  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
+  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
@@ -961,10 +964,10 @@ function ClassesView({
   onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
+  const [editingClassTemplate, setEditingClassTemplate] = useState<ClassTemplate | null>(null);
+  const [editingClassTemplateDivision, setEditingClassTemplateDivision] = useState<ClassTemplateDivision | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingDivision, setEditingDivision] = useState<Division | null>(null);
-  void onUpdateClassTemplate;
-  void onUpdateClassTemplateDivision;
 
   return (
     <div className="content-grid">
@@ -986,8 +989,42 @@ function ClassesView({
         sanctioningBodies={sanctioningBodies}
         onCreateClassTemplateDivision={onCreateClassTemplateDivision}
       />
-      <ClassForm organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateClass={onCreateClass} />
+      <ClassForm
+        classTemplateDivisions={classTemplateDivisions}
+        classTemplates={classTemplates}
+        organization={organization}
+        sanctioningBodies={sanctioningBodies}
+        showDays={showDays}
+        shows={shows}
+        onCreateClass={onCreateClass}
+        onCreateDivision={onCreateDivision}
+      />
       <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} />
+
+      {editingClassTemplate ? (
+        <ClassTemplateEditForm
+          classTemplate={editingClassTemplate}
+          sanctioningBodies={sanctioningBodies}
+          onCancel={() => setEditingClassTemplate(null)}
+          onUpdateClassTemplate={async (id, input) => {
+            await onUpdateClassTemplate(id, input);
+            setEditingClassTemplate(null);
+          }}
+        />
+      ) : null}
+
+      {editingClassTemplateDivision ? (
+        <ClassTemplateDivisionEditForm
+          classTemplates={classTemplates}
+          classTemplateDivision={editingClassTemplateDivision}
+          sanctioningBodies={sanctioningBodies}
+          onCancel={() => setEditingClassTemplateDivision(null)}
+          onUpdateClassTemplateDivision={async (id, input) => {
+            await onUpdateClassTemplateDivision(id, input);
+            setEditingClassTemplateDivision(null);
+          }}
+        />
+      ) : null}
 
       {editingClass ? (
         <ClassEditForm
@@ -1035,6 +1072,9 @@ function ClassesView({
                 <div>
                   <strong>{template.name}</strong>
                   <span className="muted-line">{[template.block_label, template.default_pattern ? `Pattern ${template.default_pattern}` : null].filter(Boolean).join(" - ") || template.code || "Preset"}</span>
+                  <button className="text-button inline-action" type="button" onClick={() => setEditingClassTemplate(template)}>
+                    Edit
+                  </button>
                 </div>
                 <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies)}</span>
                 <span>{backNumberPolicyLabel(template.back_number_policy)}</span>
@@ -1063,6 +1103,44 @@ function ClassesView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
+            <h2>Divisions de presets</h2>
+            <p>{classTemplateDivisions.length ? `${classTemplateDivisions.length} division${classTemplateDivisions.length === 1 ? "" : "s"} de preset.` : "Ajoute les divisions régulières sous un preset."}</p>
+          </div>
+        </div>
+        <div className="table">
+          <div className="table-row table-head">
+            <span>Division</span>
+            <span>Preset</span>
+            <span>Frais</span>
+            <span>Action</span>
+          </div>
+          {classTemplateDivisions.map((division) => (
+            <div className="table-row" key={division.id}>
+              <div>
+                <strong>{division.name}</strong>
+                <span className="muted-line">{division.code ? `#${division.code}` : "Sans code"}</span>
+              </div>
+              <span>{findById(classTemplates, division.class_template_id)?.name ?? "Preset inconnu"}</span>
+              <span>
+                {[
+                  division.default_entry_fee == null ? null : `Insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
+                  division.default_judge_fee == null ? null : `Juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+                ]
+                  .filter(Boolean)
+                  .join(" - ") || "Aucun frais"}
+              </span>
+              <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
+                Edit
+              </button>
+            </div>
+          ))}
+          {!classTemplateDivisions.length ? <EmptyState label="Aucune division de preset pour l'instant." /> : null}
+        </div>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
             <h2>Class book</h2>
             <p>{classes.length ? `${classes.length} class${classes.length === 1 ? "" : "es"} configured.` : "Classes and divisions define what people can enter."}</p>
           </div>
@@ -1085,7 +1163,12 @@ function ClassesView({
                     {classRecord.entry_fee == null ? "" : ` - ${formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}`}
                   </span>
                 </div>
-                <span>{showLabel(findById(shows, classRecord.show_id))}</span>
+                <div>
+                  <span>{showLabel(findById(shows, classRecord.show_id))}</span>
+                  <span className="muted-line">
+                    {classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : "Aucune journée"}
+                  </span>
+                </div>
                 <div>
                   <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies)}</span>
                   <span className="muted-line">
@@ -2706,6 +2789,10 @@ function showPaymentSummary(show: Show) {
   return `${reservationLabel} - ${entryLabel}`;
 }
 
+function showDayLabel(day: ShowDay) {
+  return `${day.day_name || `Day ${day.day_number ?? ""}`.trim()} - ${formatDate(day.day_date)}`;
+}
+
 function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"]) {
   switch (type) {
     case "entry":
@@ -2979,18 +3066,245 @@ function ClassTemplateDivisionForm({
   );
 }
 
+function ClassTemplateEditForm({
+  classTemplate,
+  sanctioningBodies,
+  onCancel,
+  onUpdateClassTemplate,
+}: {
+  classTemplate: ClassTemplate;
+  sanctioningBodies: SanctioningBody[];
+  onCancel: () => void;
+  onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
+}) {
+  const [name, setName] = useState(classTemplate.name);
+  const [code, setCode] = useState(classTemplate.code ?? "");
+  const [blockLabel, setBlockLabel] = useState(classTemplate.block_label ?? "");
+  const [category, setCategory] = useState(classTemplate.category ?? "");
+  const [pattern, setPattern] = useState(classTemplate.default_pattern ?? "");
+  const [entryFee, setEntryFee] = useState(classTemplate.default_entry_fee == null ? "" : String(classTemplate.default_entry_fee));
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classTemplate.sanctioning_body_codes ?? []);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classTemplate.back_number_policy ?? "horse");
+  const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classTemplate.eligibility_rules));
+  const [notes, setNotes] = useState(classTemplate.notes ?? "");
+  const [isActive, setIsActive] = useState(classTemplate.is_active);
+  const [busy, setBusy] = useState(false);
+
+  function handleSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+    setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+
+    try {
+      await onUpdateClassTemplate(classTemplate.id, {
+        name,
+        code: code || null,
+        block_label: blockLabel || null,
+        category: category || null,
+        default_pattern: pattern || null,
+        default_entry_fee: numericValue(entryFee) ?? null,
+        sanctioning_body_codes: sanctioningBodyCodes,
+        back_number_policy: backNumberPolicy,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        notes: notes || null,
+        is_active: isActive,
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel span-2">
+      <div className="panel-header">
+        <div>
+          <h2>Edit preset</h2>
+          <p>{classTemplate.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Nom du bloc
+          <input required value={name} onChange={(event) => setName(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            Code
+            <input value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+          <label>
+            Catégorie
+            <input value={category} onChange={(event) => setCategory(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Bloc horaire
+            <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
+          </label>
+          <label>
+            Patron
+            <input value={pattern} onChange={(event) => setPattern(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          Frais par défaut
+          <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+        </label>
+        <SanctioningFields
+          backNumberPolicy={backNumberPolicy}
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={setBackNumberPolicy}
+          onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
+        <label>
+          Notes
+          <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} />
+        </label>
+        <label className="check-row">
+          <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
+          <span>Preset actif</span>
+        </label>
+        <FormActions busy={busy} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
+function ClassTemplateDivisionEditForm({
+  classTemplates,
+  classTemplateDivision,
+  sanctioningBodies,
+  onCancel,
+  onUpdateClassTemplateDivision,
+}: {
+  classTemplates: ClassTemplate[];
+  classTemplateDivision: ClassTemplateDivision;
+  sanctioningBodies: SanctioningBody[];
+  onCancel: () => void;
+  onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
+}) {
+  const [templateId, setTemplateId] = useState(classTemplateDivision.class_template_id);
+  const [name, setName] = useState(classTemplateDivision.name);
+  const [code, setCode] = useState(classTemplateDivision.code ?? "");
+  const [entryFee, setEntryFee] = useState(classTemplateDivision.default_entry_fee == null ? "" : String(classTemplateDivision.default_entry_fee));
+  const [judgeFee, setJudgeFee] = useState(classTemplateDivision.default_judge_fee == null ? "" : String(classTemplateDivision.default_judge_fee));
+  const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classTemplateDivision.eligibility_rules));
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classTemplateDivision.sanctioning_body_codes ?? []);
+  const [busy, setBusy] = useState(false);
+  const selectedTemplate = findById(classTemplates, templateId);
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedTemplate) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onUpdateClassTemplateDivision(classTemplateDivision.id, {
+        class_template_id: selectedTemplate.id,
+        name,
+        code: code || null,
+        default_entry_fee: numericValue(entryFee) ?? null,
+        default_judge_fee: numericValue(judgeFee) ?? null,
+        sanctioning_body_codes: sanctioningBodyCodes,
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+      });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <section className="panel edit-panel span-2">
+      <div className="panel-header">
+        <div>
+          <h2>Edit preset division</h2>
+          <p>{classTemplateDivision.name}</p>
+        </div>
+      </div>
+      <form className="stack" onSubmit={handleSubmit}>
+        <label>
+          Preset
+          <SearchSelect
+            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
+            placeholder="Search preset"
+            value={templateId}
+            onChange={setTemplateId}
+          />
+        </label>
+        <div className="form-grid">
+          <label>
+            Division
+            <input required value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            Code
+            <input value={code} onChange={(event) => setCode(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            Frais d'inscription
+            <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+          <label>
+            Frais de juge
+            <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
+          </label>
+        </div>
+        <SanctioningFields
+          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
+          hideBackNumberPolicy
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+        />
+        <label>
+          Critères d'éligibilité
+          <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+        </label>
+        <FormActions busy={busy || !selectedTemplate} onCancel={onCancel} />
+      </form>
+    </section>
+  );
+}
+
 function ClassForm({
+  classTemplateDivisions,
+  classTemplates,
   organization,
   sanctioningBodies,
+  showDays,
   shows,
   onCreateClass,
+  onCreateDivision,
 }: {
+  classTemplateDivisions: ClassTemplateDivision[];
+  classTemplates: ClassTemplate[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
+  showDays: ShowDay[];
   shows: Show[];
-  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
+  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
+  onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
+  const [showDayId, setShowDayId] = useState("");
+  const [templateId, setTemplateId] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [blockLabel, setBlockLabel] = useState("");
@@ -3002,7 +3316,38 @@ function ClassForm({
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
+  const selectedShowDays = showDays.filter((day) => day.show_id === selectedShowId);
+  const selectedShowDayId = showDayId && selectedShowDays.some((day) => day.id === showDayId) ? showDayId : selectedShowDays[0]?.id || "";
+  const activeClassTemplates = classTemplates.filter((template) => template.is_active);
+  const selectedTemplate = findById(classTemplates, templateId);
+  const selectedTemplateDivisions = selectedTemplate ? classTemplateDivisions.filter((division) => division.class_template_id === selectedTemplate.id) : [];
   const classIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleShowChange(nextShowId: string) {
+    setShowId(nextShowId);
+    setShowDayId("");
+  }
+
+  function handleTemplateChange(nextTemplateId: string) {
+    setTemplateId(nextTemplateId);
+
+    const template = findById(classTemplates, nextTemplateId);
+    if (!template) {
+      return;
+    }
+
+    setName(template.name);
+    setCode(template.code ?? "");
+    setBlockLabel(template.block_label ?? "");
+    setPattern(template.default_pattern ?? "");
+    setEntryFee(template.default_entry_fee == null ? "" : String(template.default_entry_fee));
+    setSanctioningBodyCodes(template.sanctioning_body_codes ?? []);
+    setBackNumberPolicy(template.back_number_policy ?? defaultBackNumberPolicy(template.sanctioning_body_codes ?? [], sanctioningBodies));
+    setEligibilityNotes(eligibilityNotesFromRules(template.eligibility_rules));
+    if (!isNrhaSanctioned(template.sanctioning_body_codes)) {
+      setNrhaSlateNumber("");
+    }
+  }
 
   function handleSanctioningBodyCodes(nextCodes: string[]) {
     setSanctioningBodyCodes(nextCodes);
@@ -3022,9 +3367,11 @@ function ClassForm({
     setBusy(true);
 
     try {
-      await onCreateClass({
+      const createdClass = await onCreateClass({
         organization_id: organization.id,
         show_id: selectedShowId,
+        show_day_id: selectedShowDayId || undefined,
+        class_template_id: selectedTemplate?.id ?? null,
         name,
         code,
         block_label: blockLabel,
@@ -3035,6 +3382,24 @@ function ClassForm({
         eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
         entry_fee: numericValue(entryFee),
       });
+
+      for (const templateDivision of selectedTemplateDivisions) {
+        await onCreateDivision({
+          organization_id: organization.id,
+          show_id: selectedShowId,
+          class_id: createdClass.id,
+          class_template_division_id: templateDivision.id,
+          name: templateDivision.name,
+          code: templateDivision.code ?? undefined,
+          level: templateDivision.level ?? undefined,
+          entry_fee: templateDivision.default_entry_fee ?? undefined,
+          judge_fee: templateDivision.default_judge_fee ?? undefined,
+          sanctioning_body_codes: templateDivision.sanctioning_body_codes.length ? templateDivision.sanctioning_body_codes : sanctioningBodyCodes,
+          eligibility_rules: templateDivision.eligibility_rules ?? {},
+        });
+      }
+
+      setTemplateId("");
       setName("");
       setCode("");
       setBlockLabel("");
@@ -3058,15 +3423,53 @@ function ClassForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
+        <div className="form-grid">
+          <label>
+            Show
+            <select disabled={!organization || !shows.length} value={selectedShowId} onChange={(event) => handleShowChange(event.target.value)}>
+              {shows.map((show) => (
+                <option key={show.id} value={show.id}>
+                  {show.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Journée
+            <select disabled={!organization || !selectedShowDays.length} value={selectedShowDayId} onChange={(event) => setShowDayId(event.target.value)}>
+              {!selectedShowDays.length ? <option value="">Aucune journée</option> : null}
+              {selectedShowDays.map((day) => (
+                <option key={day.id} value={day.id}>
+                  {showDayLabel(day)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
         <label>
-          Show
-          <select disabled={!organization || !shows.length} value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
-            {shows.map((show) => (
-              <option key={show.id} value={show.id}>
-                {show.name}
-              </option>
-            ))}
-          </select>
+          Preset
+          <SearchSelect
+            allowEmpty
+            disabled={!organization || !activeClassTemplates.length}
+            items={activeClassTemplates.map((template) => {
+              const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
+
+              return {
+                id: template.id,
+                label: template.name,
+                detail: [
+                  template.default_pattern ? `Pattern ${template.default_pattern}` : null,
+                  `${templateDivisions.length} division${templateDivisions.length === 1 ? "" : "s"}`,
+                  sanctionLabel(template.sanctioning_body_codes, sanctioningBodies),
+                ]
+                  .filter(Boolean)
+                  .join(" - "),
+              };
+            })}
+            placeholder="Search preset"
+            value={templateId}
+            onChange={handleTemplateChange}
+          />
         </label>
         <label>
           Class name
@@ -3112,7 +3515,7 @@ function ClassForm({
         </label>
         <button className="primary-button" disabled={busy || !organization || !shows.length} type="submit">
           <Plus size={18} />
-          Create class
+          {selectedTemplate ? `Create class + ${selectedTemplateDivisions.length} divisions` : "Create class"}
         </button>
       </form>
     </section>

@@ -193,9 +193,10 @@ export default function App() {
         await refreshContext();
       }}
       onCreateClass={async (input) => {
-        await createClass(input);
+        const classRecord = await createClass(input);
         setNotice({ tone: "success", message: "Class created." });
         await refreshContext();
+        return classRecord;
       }}
       onCreateClassTemplate={async (input) => {
         await createClassTemplate(input);

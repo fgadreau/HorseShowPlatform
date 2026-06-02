@@ -1293,6 +1293,11 @@ button:focus-visible {
   text-decoration: none;
 }
 
+.inline-action {
+  display: inline-flex;
+  min-height: 24px;
+}
+
 .table {
   border: 1px solid #dce5e1;
   border-radius: 8px;
