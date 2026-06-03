@@ -942,6 +942,7 @@ export async function verifyGvlCogginsDocument(input: {
   organization_id: string;
   horse_id: string;
   source_url: string;
+  document_file?: File | null;
   horse_name?: string;
   horse_date_of_birth?: string | null;
   horse_birth_year?: number | null;
@@ -964,14 +965,53 @@ export async function verifyGvlCogginsDocument(input: {
   });
 
   if (invokeError) {
+    if (input.document_file) {
+      return createPendingGvlCogginsDocument({
+        organization_id: input.organization_id,
+        horse_id: input.horse_id,
+        source_url: sourceUrl,
+        document_file: input.document_file,
+        horse_name: input.horse_name,
+        horse_date_of_birth: input.horse_date_of_birth,
+        created_by_user_id: input.created_by_user_id,
+        review_notes: `Validation GVL impossible: ${invokeError.message}`,
+      });
+    }
+
     throw new Error(`Validation GVL impossible: ${invokeError.message}`);
   }
 
   if (!verification) {
+    if (input.document_file) {
+      return createPendingGvlCogginsDocument({
+        organization_id: input.organization_id,
+        horse_id: input.horse_id,
+        source_url: sourceUrl,
+        document_file: input.document_file,
+        horse_name: input.horse_name,
+        horse_date_of_birth: input.horse_date_of_birth,
+        created_by_user_id: input.created_by_user_id,
+        review_notes: "Validation GVL impossible: aucune reponse recue.",
+      });
+    }
+
     throw new Error("Validation GVL impossible: aucune reponse recue.");
   }
 
   if (verification.error) {
+    if (input.document_file) {
+      return createPendingGvlCogginsDocument({
+        organization_id: input.organization_id,
+        horse_id: input.horse_id,
+        source_url: sourceUrl,
+        document_file: input.document_file,
+        horse_name: input.horse_name,
+        horse_date_of_birth: input.horse_date_of_birth,
+        created_by_user_id: input.created_by_user_id,
+        review_notes: verification.error,
+      });
+    }
+
     throw new Error(verification.error);
   }
 
@@ -1018,6 +1058,93 @@ export async function verifyGvlCogginsDocument(input: {
       throw error;
     }
 
+    if (data.status !== "verified" && input.document_file) {
+      return attachHorseHealthDocumentFile(data.id, {
+        organization_id: input.organization_id,
+        horse_id: input.horse_id,
+        file: input.document_file,
+      });
+    }
+
+    return data;
+  }
+
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .insert({
+      ...payload,
+      created_by_user_id: input.created_by_user_id ?? null,
+    })
+    .select("*")
+    .single<HorseHealthDocument>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_health_documents")) {
+      throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  if (data.status !== "verified" && input.document_file) {
+    return attachHorseHealthDocumentFile(data.id, {
+      organization_id: input.organization_id,
+      horse_id: input.horse_id,
+      file: input.document_file,
+    });
+  }
+
+  return data;
+}
+
+async function createPendingGvlCogginsDocument(input: {
+  organization_id: string;
+  horse_id: string;
+  source_url: string;
+  document_file: File;
+  horse_name?: string;
+  horse_date_of_birth?: string | null;
+  created_by_user_id?: string;
+  review_notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const documentUrl = await uploadHealthDocumentFile({
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    file: input.document_file,
+  });
+  const existing = await findExistingHorseHealthDocument({
+    horse_id: input.horse_id,
+    document_type: "coggins_eia",
+    certificate_number: null,
+    source_url: input.source_url,
+  });
+  const payload = {
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    document_type: "coggins_eia",
+    status: "pending_review",
+    verification_source: "upload",
+    source_url: input.source_url,
+    document_url: documentUrl,
+    horse_name: input.horse_name ?? null,
+    horse_date_of_birth: input.horse_date_of_birth ?? null,
+    warnings: ["GVL_MANUAL_REVIEW"],
+    review_notes: input.review_notes ?? "Coggins GVL depose pour revision manuelle.",
+  };
+
+  if (existing) {
+    const { data, error } = await client
+      .from("horse_health_documents")
+      .update(cleanPayload(payload))
+      .eq("id", existing.id)
+      .select("*")
+      .single<HorseHealthDocument>();
+
+    if (error) {
+      throw error;
+    }
+
     return data;
   }
 
@@ -1044,11 +1171,13 @@ export async function verifyGvlCogginsDocument(input: {
 export async function createUploadedHorseHealthDocument(input: {
   organization_id: string;
   horse_id: string;
-  document_type: Extract<HorseHealthDocument["document_type"], "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other">;
+  document_type: Extract<HorseHealthDocument["document_type"], "coggins_eia" | "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other">;
   file: File;
+  source_url?: string | null;
   test_or_administered_on?: string | null;
   issuer_name?: string | null;
   created_by_user_id?: string;
+  review_notes?: string | null;
 }) {
   const client = requireSupabase();
   const documentUrl = await uploadHealthDocumentFile({
@@ -1064,10 +1193,12 @@ export async function createUploadedHorseHealthDocument(input: {
       document_type: input.document_type,
       status: "pending_review",
       verification_source: "upload",
+      source_url: input.source_url || null,
       document_url: documentUrl,
       issuer_name: input.issuer_name || null,
       test_or_administered_on: input.test_or_administered_on || null,
       created_by_user_id: input.created_by_user_id ?? null,
+      review_notes: input.review_notes || null,
     })
     .select("*")
     .single<HorseHealthDocument>();
@@ -1077,6 +1208,30 @@ export async function createUploadedHorseHealthDocument(input: {
       throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
     }
 
+    throw error;
+  }
+
+  return data;
+}
+
+async function attachHorseHealthDocumentFile(
+  id: string,
+  input: {
+    organization_id: string;
+    horse_id: string;
+    file: File;
+  },
+) {
+  const client = requireSupabase();
+  const documentUrl = await uploadHealthDocumentFile(input);
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .update({ document_url: documentUrl })
+    .eq("id", id)
+    .select("*")
+    .single<HorseHealthDocument>();
+
+  if (error) {
     throw error;
   }
 

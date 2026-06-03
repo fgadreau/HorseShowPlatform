@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
-import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
+import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
 import type { Locale, Translation } from "../../lib/i18n";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
@@ -166,7 +166,7 @@ export function Dashboard({
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
-  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
@@ -723,6 +723,39 @@ function horseHealthStatusLabel(status: HorseHealthDocument["status"]) {
   return labels[status];
 }
 
+type InlineHealthMessage = {
+  tone: "success" | "info" | "error";
+  message: string;
+};
+
+function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMessage {
+  if (document.status === "verified") {
+    return {
+      tone: "success",
+      message: "Coggins GVL verifie. Le PDF n'a pas ete conserve parce que le lien GVL suffit.",
+    };
+  }
+
+  if (document.status === "approved") {
+    return {
+      tone: "success",
+      message: "Document sante approuve.",
+    };
+  }
+
+  if (document.document_url) {
+    return {
+      tone: "info",
+      message: "Coggins en revision manuelle. Le PDF a ete conserve dans les documents sante.",
+    };
+  }
+
+  return {
+    tone: "info",
+    message: "Coggins en revision manuelle.",
+  };
+}
+
 function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[]) {
   const coggins = latestHorseHealthDocument(horse.id, documents, "coggins_eia");
   const vaccine = latestHorseVaccineDocument(horse.id, documents);
@@ -765,6 +798,14 @@ async function resolveGvlCogginsUrl(pdfFile: File | null, fallbackUrl: string) {
 
   const cleanUrl = fallbackUrl.trim();
   return cleanUrl ? normalizeGvlUrl(cleanUrl) ?? cleanUrl : null;
+}
+
+function InlineHealthMessage({ value }: { value: InlineHealthMessage | null }) {
+  if (!value) {
+    return null;
+  }
+
+  return <p className={`inline-health-message ${value.tone}`}>{value.message}</p>;
 }
 
 function OverviewView({
@@ -1158,7 +1199,7 @@ function PeopleView({
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
-  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
@@ -1919,7 +1960,7 @@ function MyHorsesView({
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
-  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
@@ -3390,7 +3431,7 @@ function HorseForm({
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
-  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
@@ -3401,10 +3442,12 @@ function HorseForm({
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
   const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
+  const [preparedGvlUrl, setPreparedGvlUrl] = useState("");
   const [vaccineCertificateFile, setVaccineCertificateFile] = useState<File | null>(null);
   const [vaccineAdministeredOn, setVaccineAdministeredOn] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const selectedOwnerId = ownerContactId || currentUserContact?.id || "";
   const defaultAgentId = currentUserContact && selectedOwnerId !== currentUserContact.id ? currentUserContact.id : "";
@@ -3419,6 +3462,7 @@ function HorseForm({
     }
 
     setBusy(true);
+    setHealthMessage(null);
 
     try {
       const horse = await onCreateHorse({
@@ -3439,18 +3483,42 @@ function HorseForm({
         })),
       });
 
-      const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
+      if (preparedGvlUrl || cogginsPdfFile || gvlCogginsUrl.trim()) {
+        try {
+          const sourceUrl = preparedGvlUrl || (await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl));
 
-      if (sourceUrl) {
-        await onVerifyGvlCogginsDocument({
-          organization_id: organization.id,
-          horse_id: horse.id,
-          source_url: sourceUrl,
-          horse_name: name,
-          horse_date_of_birth: dateOfBirth || null,
-          horse_birth_year: birthYearFromDateValue(dateOfBirth),
-          created_by_user_id: createdByUserId,
-        });
+          if (sourceUrl) {
+            const document = await onVerifyGvlCogginsDocument({
+              organization_id: organization.id,
+              horse_id: horse.id,
+              source_url: sourceUrl,
+              document_file: cogginsPdfFile,
+              horse_name: name,
+              horse_date_of_birth: dateOfBirth || null,
+              horse_birth_year: birthYearFromDateValue(dateOfBirth),
+              created_by_user_id: createdByUserId,
+            });
+            setHealthMessage(horseHealthResultMessage(document));
+          }
+        } catch (error) {
+          if (cogginsPdfFile) {
+            const document = await onCreateHorseHealthDocument({
+              organization_id: organization.id,
+              horse_id: horse.id,
+              document_type: "coggins_eia",
+              file: cogginsPdfFile,
+              source_url: normalizeGvlUrl(gvlCogginsUrl) ?? (gvlCogginsUrl.trim() || null),
+              created_by_user_id: createdByUserId,
+              review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
+            });
+            setHealthMessage(horseHealthResultMessage(document));
+          } else {
+            setHealthMessage({
+              tone: "error",
+              message: `Cheval cree, mais Coggins GVL non valide: ${errorMessage(error)}`,
+            });
+          }
+        }
       }
 
       if (vaccineCertificateFile) {
@@ -3473,9 +3541,42 @@ function HorseForm({
       setRegistrationNumber("");
       setGvlCogginsUrl("");
       setCogginsPdfFile(null);
+      setPreparedGvlUrl("");
       setVaccineCertificateFile(null);
       setVaccineAdministeredOn("");
       setExternalReferenceNumbers({});
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePrepareCogginsUrl() {
+    setHealthMessage(null);
+    setBusy(true);
+
+    try {
+      const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
+
+      if (!sourceUrl) {
+        setHealthMessage({
+          tone: "error",
+          message: "Ajoute un PDF Coggins GVL ou colle un lien GVL avant de valider.",
+        });
+        return;
+      }
+
+      setPreparedGvlUrl(sourceUrl);
+      setGvlCogginsUrl(sourceUrl);
+      setHealthMessage({
+        tone: "success",
+        message: "Lien GVL pret. Il sera valide et enregistre quand tu creeras le cheval.",
+      });
+    } catch (error) {
+      setPreparedGvlUrl("");
+      setHealthMessage({
+        tone: "error",
+        message: errorMessage(error),
+      });
     } finally {
       setBusy(false);
     }
@@ -3556,6 +3657,14 @@ function HorseForm({
             Lien GVL en secours
             <input disabled={!organization} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
           </label>
+          <div className="row-actions">
+            <button className="primary-button" disabled={busy || !organization || (!cogginsPdfFile && !gvlCogginsUrl.trim())} type="button" onClick={handlePrepareCogginsUrl}>
+              <CheckCircle2 size={18} />
+              Valider le lien GVL
+            </button>
+            {preparedGvlUrl ? <span className="muted-line">Lien détecté: {preparedGvlUrl}</span> : null}
+          </div>
+          <InlineHealthMessage value={healthMessage} />
           <div className="health-document-actions">
             <label>
               Certificat vaccin influenza/rhino
@@ -3759,7 +3868,7 @@ function HorseEditForm({
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
-  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
   const currentAgentContactId = horseContacts.find((horseContact) => horseContact.horse_id === horse.id && horseContact.role === "agent")?.contact_id ?? "";
   const [name, setName] = useState(horse.name);
@@ -3778,6 +3887,7 @@ function HorseEditForm({
   );
   const [busy, setBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
+  const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
   const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
@@ -3820,6 +3930,7 @@ function HorseEditForm({
     }
 
     setHealthBusy(true);
+    setHealthMessage(null);
 
     try {
       const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
@@ -3828,17 +3939,39 @@ function HorseEditForm({
         return;
       }
 
-      await onVerifyGvlCogginsDocument({
+      const document = await onVerifyGvlCogginsDocument({
         organization_id: organization.id,
         horse_id: horse.id,
         source_url: sourceUrl,
+        document_file: cogginsPdfFile,
         horse_name: name.trim() || horse.name,
         horse_date_of_birth: dateOfBirth || horse.date_of_birth,
         horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
         created_by_user_id: createdByUserId,
       });
+      setHealthMessage(horseHealthResultMessage(document));
       setGvlCogginsUrl("");
       setCogginsPdfFile(null);
+    } catch (error) {
+      if (organization && cogginsPdfFile) {
+        const document = await onCreateHorseHealthDocument({
+          organization_id: organization.id,
+          horse_id: horse.id,
+          document_type: "coggins_eia",
+          file: cogginsPdfFile,
+          source_url: normalizeGvlUrl(gvlCogginsUrl) ?? (gvlCogginsUrl.trim() || null),
+          created_by_user_id: createdByUserId,
+          review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
+        });
+        setHealthMessage(horseHealthResultMessage(document));
+        setGvlCogginsUrl("");
+        setCogginsPdfFile(null);
+      } else {
+        setHealthMessage({
+          tone: "error",
+          message: errorMessage(error),
+        });
+      }
     } finally {
       setHealthBusy(false);
     }
@@ -3862,6 +3995,7 @@ function HorseEditForm({
 
   async function handleReviewHealthDocument(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">, label: string) {
     setHealthBusy(true);
+    setHealthMessage(null);
 
     try {
       await onReviewHorseHealthDocument(document.id, {
@@ -3871,6 +4005,10 @@ function HorseEditForm({
           status === "approved"
             ? `${label} approuve manuellement par un gestionnaire de l'association.`
             : `${label} refuse manuellement par un gestionnaire de l'association.`,
+      });
+      setHealthMessage({
+        tone: status === "approved" ? "success" : "info",
+        message: status === "approved" ? `${label} approuve.` : `${label} refuse.`,
       });
     } finally {
       setHealthBusy(false);
@@ -3883,9 +4021,10 @@ function HorseEditForm({
     }
 
     setHealthBusy(true);
+    setHealthMessage(null);
 
     try {
-      await onCreateHorseHealthDocument({
+      const document = await onCreateHorseHealthDocument({
         organization_id: organization.id,
         horse_id: horse.id,
         document_type: "combo_vaccine",
@@ -3893,6 +4032,7 @@ function HorseEditForm({
         test_or_administered_on: vaccineAdministeredOn || null,
         created_by_user_id: createdByUserId,
       });
+      setHealthMessage(horseHealthResultMessage(document));
       setVaccineCertificateFile(null);
       setVaccineAdministeredOn("");
     } finally {
@@ -3980,6 +4120,12 @@ function HorseEditForm({
                   {latestCoggins.horse_date_of_birth ? ` - ne(e) ${formatDate(latestCoggins.horse_date_of_birth)}` : ""}
                 </span>
               ) : null}
+              {latestCoggins.document_url ? <span className="muted-line">PDF Coggins conserve pour revision.</span> : null}
+              {latestCoggins.source_url ? (
+                <a className="text-button inline-action" href={latestCoggins.source_url} rel="noreferrer" target="_blank">
+                  Ouvrir le lien GVL
+                </a>
+              ) : null}
               {latestCoggins.warnings.length ? <span className="muted-line">Revision: {latestCoggins.warnings.join(", ")}</span> : null}
               {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
                 <div className="row-actions health-review-actions">
@@ -4010,6 +4156,7 @@ function HorseEditForm({
               {healthBusy ? "Validation..." : "Valider GVL"}
             </button>
           </div>
+          <InlineHealthMessage value={healthMessage} />
           <div className="inline-form-header">
             <strong>Vaccin influenza/rhino</strong>
             <span>Depot du certificat pour revision manuelle.</span>

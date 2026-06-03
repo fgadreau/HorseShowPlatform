@@ -244,6 +244,7 @@ export default function App() {
           message: document.status === "verified" ? "Coggins GVL verifie." : "Coggins GVL enregistre pour revision manuelle.",
         });
         await refreshContext();
+        return document;
       }}
       onDeleteHorse={async (id) => {
         await deleteHorse(id);

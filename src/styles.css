@@ -1400,6 +1400,33 @@ button:focus-visible {
   padding: 9px 10px;
 }
 
+.inline-health-message {
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.4;
+  margin: 0;
+  padding: 9px 10px;
+}
+
+.inline-health-message.success {
+  background: #e3f8ec;
+  border: 1px solid #b8e8c9;
+  color: #166534;
+}
+
+.inline-health-message.info {
+  background: #ecf5ff;
+  border: 1px solid #bfdbfe;
+  color: #1d4ed8;
+}
+
+.inline-health-message.error {
+  background: #fff0ef;
+  border: 1px solid #ffc9c4;
+  color: #b42318;
+}
+
 .inline-form-header {
   display: grid;
   gap: 3px;
