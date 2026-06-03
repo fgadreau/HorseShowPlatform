@@ -26,8 +26,14 @@ MVP starter for a multi-tenant horse show management platform.
 3. Fill the frontend-safe Supabase values:
 
    ```bash
-   VITE_SUPABASE_URL=https://your-project.supabase.co
-   VITE_SUPABASE_PUBLISHABLE_KEY=your-publishable-key
+   HOME=/tmp npx supabase status
+   ```
+
+   Then copy the local `Project URL` and `Publishable` key into `.env.local`:
+
+   ```bash
+   VITE_SUPABASE_URL=http://127.0.0.1:54321
+   VITE_SUPABASE_PUBLISHABLE_KEY=your-local-publishable-key
    ```
 
 4. Apply the Supabase migration:
@@ -41,6 +47,16 @@ MVP starter for a multi-tenant horse show management platform.
    ```bash
    npm run dev
    ```
+
+### Local login shortcuts
+
+When the app runs on `localhost` or `127.0.0.1`, the auth screen shows seed-account shortcuts:
+
+- Admin association: `phase1.org-a-admin@example.test`
+- Secretary: `phase1.org-a-secretary@example.test`
+- Exhibitor: `phase1.org-a-owner@example.test`
+
+All three use `phase1-password`. If login fails after resetting the database, rerun the Supabase seed.
 
 ## Current MVP Foundation
 

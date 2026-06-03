@@ -7,6 +7,28 @@ import { errorMessage } from "../../lib/display";
 import { LanguageToggle, NoticeBanner } from "../../components/ui";
 import type { Notice } from "../../types/ui";
 
+const localLoginAccounts = [
+  {
+    email: "phase1.org-a-admin@example.test",
+    label: "Admin association",
+    password: "phase1-password",
+  },
+  {
+    email: "phase1.org-a-secretary@example.test",
+    label: "Secrétaire",
+    password: "phase1-password",
+  },
+  {
+    email: "phase1.org-a-owner@example.test",
+    label: "Exposant",
+    password: "phase1-password",
+  },
+];
+
+function isLocalHostname() {
+  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+}
+
 export function AuthScreen({
   locale,
   notice,
@@ -24,6 +46,7 @@ export function AuthScreen({
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  const showLocalLogin = isLocalHostname();
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -50,6 +73,36 @@ export function AuthScreen({
       }
     } catch (error) {
       onNotice({ tone: "error", message: errorMessage(error) });
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleLocalSignIn(account: (typeof localLoginAccounts)[number]) {
+    if (!supabase) {
+      return;
+    }
+
+    setMode("signin");
+    setEmail(account.email);
+    setPassword(account.password);
+    setBusy(true);
+    onNotice(null);
+
+    try {
+      const result = await supabase.auth.signInWithPassword({
+        email: account.email,
+        password: account.password,
+      });
+
+      if (result.error) {
+        throw result.error;
+      }
+    } catch (error) {
+      onNotice({
+        tone: "error",
+        message: `${errorMessage(error)}. If this is a fresh local database, run the Supabase seed first.`,
+      });
     } finally {
       setBusy(false);
     }
@@ -102,6 +155,22 @@ export function AuthScreen({
             {busy ? t.auth.working : mode === "signin" ? t.auth.signIn : t.auth.createAccount}
           </button>
         </form>
+
+        {showLocalLogin ? (
+          <section className="local-login-panel">
+            <div>
+              <strong>Accès local</strong>
+              <span>Comptes de test créés par le seed Supabase.</span>
+            </div>
+            <div className="local-login-grid">
+              {localLoginAccounts.map((account) => (
+                <button className="ghost-button" disabled={busy || !supabase} key={account.email} type="button" onClick={() => handleLocalSignIn(account)}>
+                  {account.label}
+                </button>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </section>
     </main>
   );

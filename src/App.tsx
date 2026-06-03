@@ -165,9 +165,10 @@ export default function App() {
         await refreshContext();
       }}
       onCreateShow={async (input) => {
-        await createShow(input);
+        const show = await createShow(input);
         setNotice({ tone: "success", message: "Show created." });
         await refreshContext();
+        return show;
       }}
       onUpdateShow={async (id, input) => {
         await updateShow(id, input);

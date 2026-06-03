@@ -119,7 +119,7 @@ select phase1_test.assert_count(
 select phase1_test.assert_count(
   'org A admin sees org A contacts',
   'select count(*) from public.contacts',
-  2
+  3
 );
 select phase1_test.assert_count(
   'org A admin sees org A invoices',
@@ -174,9 +174,9 @@ select phase1_test.assert_count(
   0
 );
 select phase1_test.assert_count(
-  'owner sees own linked contact',
+  'owner sees own linked contacts',
   'select count(*) from public.contacts',
-  1
+  3
 );
 select phase1_test.assert_count(
   'owner sees own horse',

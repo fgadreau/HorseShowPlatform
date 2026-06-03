@@ -10,23 +10,39 @@ insert into auth.users (
   email,
   encrypted_password,
   email_confirmed_at,
+  confirmation_token,
+  recovery_token,
+  email_change_token_new,
+  email_change,
+  phone_change,
+  phone_change_token,
+  email_change_token_current,
+  reauthentication_token,
   raw_app_meta_data,
   raw_user_meta_data,
   created_at,
   updated_at
 )
 values
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'phase1.platform@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'phase1.org-a-admin@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'phase1.org-a-secretary@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'phase1.org-a-owner@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'phase1.org-a-judge@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
-  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'phase1.org-b-admin@example.test', crypt('phase1-password', gen_salt('bf')), now(), '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now())
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated', 'phase1.platform@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated', 'phase1.org-a-admin@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated', 'phase1.org-a-secretary@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated', 'phase1.org-a-owner@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000005', 'authenticated', 'authenticated', 'phase1.org-a-judge@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now()),
+  ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000006', 'authenticated', 'authenticated', 'phase1.org-b-admin@example.test', crypt('phase1-password', gen_salt('bf')), now(), '', '', '', '', '', '', '', '', '{"provider":"email","providers":["email"]}'::jsonb, '{}'::jsonb, now(), now())
 on conflict (id) do update
 set
   email = excluded.email,
   encrypted_password = excluded.encrypted_password,
   email_confirmed_at = excluded.email_confirmed_at,
+  confirmation_token = excluded.confirmation_token,
+  recovery_token = excluded.recovery_token,
+  email_change_token_new = excluded.email_change_token_new,
+  email_change = excluded.email_change,
+  phone_change = excluded.phone_change,
+  phone_change_token = excluded.phone_change_token,
+  email_change_token_current = excluded.email_change_token_current,
+  reauthentication_token = excluded.reauthentication_token,
   raw_app_meta_data = excluded.raw_app_meta_data,
   raw_user_meta_data = excluded.raw_user_meta_data,
   updated_at = now();
@@ -244,10 +260,12 @@ insert into public.contacts (
 )
 values
   ('70000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'owner', 'Phase1', 'Owner A', 'phase1.owner-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004'),
-  ('70000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', 'rider', 'Phase1', 'Rider A', 'phase1.rider-a@example.test', null, 'North Barn', '20000000-0000-0000-0000-000000000002'),
-  ('70000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', 'owner', 'Phase1', 'Owner B', 'phase1.owner-b@example.test', null, 'West Barn', '20000000-0000-0000-0000-000000000006')
+  ('70000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', 'rider', 'Phase1', 'Rider A', 'phase1.rider-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000002'),
+  ('70000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', 'owner', 'Phase1', 'Owner B', 'phase1.owner-b@example.test', null, 'West Barn', '20000000-0000-0000-0000-000000000006'),
+  ('70000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', 'rider', 'Phase1', 'Rider B', 'phase1.rider-b@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004')
 on conflict (id) do update
 set
+  type = excluded.type,
   first_name = excluded.first_name,
   last_name = excluded.last_name,
   email = excluded.email,

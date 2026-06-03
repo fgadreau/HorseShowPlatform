@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertCircle,
@@ -63,12 +63,14 @@ import type {
   Entry,
   Horse,
   HorseContact,
+  Invoice,
   InvoiceLineItem,
   Organization,
   SanctioningBody,
   Show,
   ShowDay,
   ShowScoreClassSetup,
+  StallOption,
 } from "../../types/domain";
 import type { NavItem, Notice, ViewKey } from "../../types/ui";
 
@@ -127,7 +129,7 @@ export function Dashboard({
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
-  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
+  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
   onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
@@ -321,7 +323,20 @@ export function Dashboard({
         ) : null}
 
         {effectiveView === "shows" ? (
-          <ShowsView organization={selectedOrganization} shows={selectedOrganizationShows} onCreateShow={onCreateShow} onUpdateShow={onUpdateShow} />
+          <ShowsView
+            classes={selectedOrganizationClasses}
+            divisions={selectedOrganizationDivisions}
+            entries={selectedOrganizationEntries}
+            invoices={selectedOrganizationInvoices}
+            organization={selectedOrganization}
+            showDays={selectedOrganizationShowDays}
+            showScoreClassSetups={selectedOrganizationShowScoreSetups}
+            shows={selectedOrganizationShows}
+            stallOptions={selectedOrganizationStallOptions}
+            onCreateShow={onCreateShow}
+            onUpdateShow={onUpdateShow}
+            onViewChange={onViewChange}
+          />
         ) : null}
 
         {effectiveView === "people" ? (
@@ -745,17 +760,40 @@ function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
 }
 
 function ShowsView({
+  classes,
+  divisions,
+  entries,
+  invoices,
   organization,
+  showDays,
+  showScoreClassSetups,
   shows,
+  stallOptions,
   onCreateShow,
   onUpdateShow,
+  onViewChange,
 }: {
+  classes: ClassRecord[];
+  divisions: Division[];
+  entries: Entry[];
+  invoices: Invoice[];
   organization: Organization | null;
+  showDays: ShowDay[];
+  showScoreClassSetups: ShowScoreClassSetup[];
   shows: Show[];
-  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
+  stallOptions: StallOption[];
+  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
+  onViewChange: (view: ViewKey) => void;
 }) {
   const [editingShow, setEditingShow] = useState<Show | null>(null);
+  const [assistantShow, setAssistantShow] = useState<Show | null>(null);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+
+  function openAssistant(show: Show | null = null) {
+    setAssistantShow(show);
+    setAssistantOpen(true);
+  }
 
   return (
     <div className="content-grid">
@@ -769,7 +807,18 @@ function ShowsView({
         ]}
       />
 
-      <ShowForm organization={organization} onCreateShow={onCreateShow} />
+      <section className="panel show-command-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Créer un show</h2>
+            <p>{organization ? "Démarre un brouillon, puis complète la préparation quand tu veux." : "Create an organization first."}</p>
+          </div>
+        </div>
+        <button className="primary-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
+          <Plus size={18} />
+          Créer un show
+        </button>
+      </section>
 
       {editingShow ? (
         <ShowEditForm
@@ -789,7 +838,7 @@ function ShowsView({
             <p>{shows.length ? `${shows.length} show${shows.length === 1 ? "" : "s"} in this organization.` : "No shows yet."}</p>
           </div>
         </div>
-        <div className="table">
+        <div className="table shows-table">
           <div className="table-row table-head">
             <span>Name</span>
             <span>Dates</span>
@@ -806,14 +855,40 @@ function ShowsView({
                 <span className={`badge ${show.status}`}>{show.status}</span>
                 <span className="muted-line">{showPaymentSummary(show)}</span>
               </div>
-              <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => openAssistant(show)}>
+                  {show.status === "draft" ? "Continuer" : "Checklist"}
+                </button>
+                <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
+                  Edit
+                </button>
+              </div>
             </div>
           ))}
           {!shows.length ? <EmptyState label="Create the first show for this organization." /> : null}
         </div>
       </section>
+
+      {assistantOpen ? (
+        <ShowAssistant
+          classes={classes}
+          divisions={divisions}
+          entries={entries}
+          initialShow={assistantShow}
+          invoices={invoices}
+          organization={organization}
+          showDays={showDays}
+          showScoreClassSetups={showScoreClassSetups}
+          stallOptions={stallOptions}
+          onClose={() => setAssistantOpen(false)}
+          onCreateShow={onCreateShow}
+          onUpdateShow={onUpdateShow}
+          onViewChange={(view) => {
+            setAssistantOpen(false);
+            onViewChange(view);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
@@ -1646,25 +1721,30 @@ function MyContactsView({
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const canCreateLinkedContact = Boolean(organization && profileId && contacts.length === 0);
+  const canCreateLinkedContact = Boolean(organization && profileId);
+  const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
 
   return (
     <div className="content-grid">
       <ViewIntro
         eyebrow="Mon espace"
         title="Mes cavaliers et contacts"
-        description="Gere le contact lie a ton compte pour les inscriptions, reservations et factures."
-        stats={[{ label: "Contacts", value: String(contacts.length) }]}
+        description="Gere les propriétaires, cavaliers et payeurs liés à ton compte."
+        stats={[
+          { label: "Contacts", value: String(contacts.length) },
+          { label: "Cavaliers", value: String(contacts.filter((contact) => contact.type === "rider").length) },
+        ]}
       />
 
       {canCreateLinkedContact ? (
         <ContactForm
+          key={defaultContactType}
           createdByUserId={profileId}
-          defaultType="owner"
+          defaultType={defaultContactType}
           linkedUserId={profileId}
           organization={organization}
-          title="Nouveau contact"
-          description="Crée ton contact personnel avant d'ajouter chevaux et inscriptions."
+          title={contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}
+          description={contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}
           onCreateContact={onCreateContact}
         />
       ) : null}
@@ -1684,7 +1764,7 @@ function MyContactsView({
         <div className="panel-header">
           <div>
             <h2>Mes cavaliers</h2>
-            <p>Contact lié à mon compte.</p>
+            <p>Contacts liés à mon compte.</p>
           </div>
         </div>
         <div className="table">
@@ -1704,7 +1784,7 @@ function MyContactsView({
               </button>
             </div>
           ))}
-          {!contacts.length ? <EmptyState label="Crée ton contact personnel pour commencer." /> : null}
+          {!contacts.length ? <EmptyState label="Crée ton premier contact pour commencer." /> : null}
         </div>
       </section>
     </div>
@@ -2089,31 +2169,100 @@ function OrganizationForm({ onCreateOrganization }: { onCreateOrganization: (inp
   );
 }
 
-function ShowForm({
+type ShowAssistantStep = "essentials" | "payments" | "readiness";
+
+type ShowReadinessItem = {
+  actionLabel?: string;
+  detail: string;
+  done: boolean;
+  key: string;
+  title: string;
+  view?: ViewKey;
+};
+
+function ShowAssistant({
+  classes,
+  divisions,
+  entries,
+  initialShow,
+  invoices,
   organization,
+  showDays,
+  showScoreClassSetups,
+  stallOptions,
+  onClose,
   onCreateShow,
+  onUpdateShow,
+  onViewChange,
 }: {
+  classes: ClassRecord[];
+  divisions: Division[];
+  entries: Entry[];
+  initialShow: Show | null;
+  invoices: Invoice[];
   organization: Organization | null;
-  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<void>;
+  showDays: ShowDay[];
+  showScoreClassSetups: ShowScoreClassSetup[];
+  stallOptions: StallOption[];
+  onClose: () => void;
+  onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
+  onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
+  onViewChange: (view: ViewKey) => void;
 }) {
   const today = new Date().toISOString().slice(0, 10);
-  const [name, setName] = useState("");
-  const [slug, setSlug] = useState("");
-  const [startDate, setStartDate] = useState(today);
-  const [endDate, setEndDate] = useState(today);
-  const [location, setLocation] = useState("");
-  const [reservationPaymentPolicy, setReservationPaymentPolicy] = useState<Show["reservation_payment_policy"]>("pay_at_booking");
-  const [entryPaymentPolicy, setEntryPaymentPolicy] = useState<Show["entry_payment_policy"]>("card_on_file_preauth");
-  const [entryPreauthTiming, setEntryPreauthTiming] = useState<Show["entry_preauth_timing"]>("show_start");
-  const [entryPreauthTime, setEntryPreauthTime] = useState("08:00");
-  const [entrySettlementTiming, setEntrySettlementTiming] = useState<Show["entry_settlement_timing"]>("show_end");
-  const [entrySettlementDueTime, setEntrySettlementDueTime] = useState("14:00");
-  const [entryAutoCaptureEnabled, setEntryAutoCaptureEnabled] = useState(true);
-  const [entryPreauthAmountStrategy, setEntryPreauthAmountStrategy] = useState<Show["entry_preauth_amount_strategy"]>("entry_balance");
-  const [entryPreauthMarginPercent, setEntryPreauthMarginPercent] = useState("0");
+  const [activeShow, setActiveShow] = useState<Show | null>(initialShow);
+  const [step, setStep] = useState<ShowAssistantStep>(initialShow ? "readiness" : "essentials");
+  const [name, setName] = useState(initialShow?.name ?? "");
+  const [slug, setSlug] = useState(initialShow?.slug ?? "");
+  const [startDate, setStartDate] = useState(initialShow?.start_date ?? today);
+  const [endDate, setEndDate] = useState(initialShow?.end_date ?? today);
+  const [location, setLocation] = useState(initialShow?.location ?? "");
+  const [reservationPaymentPolicy, setReservationPaymentPolicy] = useState<Show["reservation_payment_policy"]>(initialShow?.reservation_payment_policy ?? "pay_at_booking");
+  const [entryPaymentPolicy, setEntryPaymentPolicy] = useState<Show["entry_payment_policy"]>(initialShow?.entry_payment_policy ?? "card_on_file_preauth");
+  const [entryPreauthTiming, setEntryPreauthTiming] = useState<Show["entry_preauth_timing"]>(initialShow?.entry_preauth_timing ?? "show_start");
+  const [entryPreauthTime, setEntryPreauthTime] = useState(showTimeInputValue(initialShow?.entry_preauth_time, "08:00"));
+  const [entrySettlementTiming, setEntrySettlementTiming] = useState<Show["entry_settlement_timing"]>(initialShow?.entry_settlement_timing ?? "show_end");
+  const [entrySettlementDueTime, setEntrySettlementDueTime] = useState(showTimeInputValue(initialShow?.entry_settlement_due_time, "14:00"));
+  const [entryAutoCaptureEnabled, setEntryAutoCaptureEnabled] = useState(initialShow?.entry_auto_capture_enabled ?? true);
+  const [entryPreauthAmountStrategy, setEntryPreauthAmountStrategy] = useState<Show["entry_preauth_amount_strategy"]>(initialShow?.entry_preauth_amount_strategy ?? "entry_balance");
+  const [entryPreauthMarginPercent, setEntryPreauthMarginPercent] = useState(String(initialShow?.entry_preauth_margin_percent ?? 0));
   const [busy, setBusy] = useState(false);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  useEffect(() => {
+    setActiveShow(initialShow);
+    setStep(initialShow ? "readiness" : "essentials");
+    setName(initialShow?.name ?? "");
+    setSlug(initialShow?.slug ?? "");
+    setStartDate(initialShow?.start_date ?? today);
+    setEndDate(initialShow?.end_date ?? today);
+    setLocation(initialShow?.location ?? "");
+    setReservationPaymentPolicy(initialShow?.reservation_payment_policy ?? "pay_at_booking");
+    setEntryPaymentPolicy(initialShow?.entry_payment_policy ?? "card_on_file_preauth");
+    setEntryPreauthTiming(initialShow?.entry_preauth_timing ?? "show_start");
+    setEntryPreauthTime(showTimeInputValue(initialShow?.entry_preauth_time, "08:00"));
+    setEntrySettlementTiming(initialShow?.entry_settlement_timing ?? "show_end");
+    setEntrySettlementDueTime(showTimeInputValue(initialShow?.entry_settlement_due_time, "14:00"));
+    setEntryAutoCaptureEnabled(initialShow?.entry_auto_capture_enabled ?? true);
+    setEntryPreauthAmountStrategy(initialShow?.entry_preauth_amount_strategy ?? "entry_balance");
+    setEntryPreauthMarginPercent(String(initialShow?.entry_preauth_margin_percent ?? 0));
+  }, [initialShow, today]);
+
+  const readinessItems = activeShow
+    ? buildShowReadinessItems(activeShow, {
+        classes,
+        divisions,
+        entries,
+        invoices,
+        showDays,
+        showScoreClassSetups,
+        stallOptions,
+      })
+    : [];
+  const readinessTotal = readinessItems.length || 1;
+  const readinessDone = readinessItems.filter((item) => item.done).length;
+  const readinessPercent = Math.round((readinessDone / readinessTotal) * 100);
+
+  async function handleEssentialsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!organization) {
@@ -2123,13 +2272,28 @@ function ShowForm({
     setBusy(true);
 
     try {
-      await onCreateShow({
-        organization_id: organization.id,
+      const payload = {
         name,
         slug: slug || slugify(name),
         start_date: startDate,
         end_date: endDate,
-        location,
+        location: location || null,
+      };
+
+      if (activeShow) {
+        await onUpdateShow(activeShow.id, payload);
+        setActiveShow({ ...activeShow, ...payload });
+        setStep("payments");
+        return;
+      }
+
+      const createdShow = await onCreateShow({
+        organization_id: organization.id,
+        name: payload.name,
+        slug: payload.slug,
+        start_date: payload.start_date,
+        end_date: payload.end_date,
+        location: location || undefined,
         status: "draft",
         reservation_payment_policy: reservationPaymentPolicy,
         entry_payment_policy: entryPaymentPolicy,
@@ -2141,123 +2305,342 @@ function ShowForm({
         entry_preauth_amount_strategy: entryPreauthAmountStrategy,
         entry_preauth_margin_percent: numericValue(entryPreauthMarginPercent) ?? 0,
       });
-      setName("");
-      setSlug("");
-      setLocation("");
-      setReservationPaymentPolicy("pay_at_booking");
-      setEntryPaymentPolicy("card_on_file_preauth");
-      setEntryPreauthTiming("show_start");
-      setEntryPreauthTime("08:00");
-      setEntrySettlementTiming("show_end");
-      setEntrySettlementDueTime("14:00");
-      setEntryAutoCaptureEnabled(true);
-      setEntryPreauthAmountStrategy("entry_balance");
-      setEntryPreauthMarginPercent("0");
+      setActiveShow(createdShow);
+      setStep("payments");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handlePaymentsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!activeShow) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      const payload = {
+        reservation_payment_policy: reservationPaymentPolicy,
+        entry_payment_policy: entryPaymentPolicy,
+        entry_preauth_timing: entryPreauthTiming,
+        entry_preauth_time: entryPreauthTime,
+        entry_settlement_timing: entrySettlementTiming,
+        entry_settlement_due_time: entrySettlementDueTime,
+        entry_auto_capture_enabled: entryAutoCaptureEnabled,
+        entry_preauth_amount_strategy: entryPreauthAmountStrategy,
+        entry_preauth_margin_percent: numericValue(entryPreauthMarginPercent) ?? 0,
+      };
+
+      await onUpdateShow(activeShow.id, payload);
+      setActiveShow({ ...activeShow, ...payload });
+      setStep("readiness");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleOpenShow() {
+    if (!activeShow) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onUpdateShow(activeShow.id, { status: "open" });
+      setActiveShow({ ...activeShow, status: "open" });
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <h2>New show</h2>
-          <p>{organization ? organization.name : "Create an organization first."}</p>
+    <div className="modal-backdrop">
+      <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" role="dialog">
+        <div className="assistant-modal-header">
+          <div>
+            <p className="eyebrow">Assistant</p>
+            <h2 id="show-assistant-title">{activeShow ? activeShow.name : "Nouveau show"}</h2>
+            <p>{activeShow ? `${formatDate(activeShow.start_date)} - ${formatDate(activeShow.end_date)}` : organization?.name ?? "Create an organization first."}</p>
+          </div>
+          <button className="icon-button" title="Fermer" type="button" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
-      </div>
-      <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Name
-          <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
-        </label>
-        <label>
-          Slug
-          <input disabled={!organization} placeholder={slugify(name) || "spring-classic"} value={slug} onChange={(event) => setSlug(event.target.value)} />
-        </label>
-        <div className="form-grid">
-          <label>
-            Start
-            <input disabled={!organization} required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
-          </label>
-          <label>
-            End
-            <input disabled={!organization} required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
-          </label>
+
+        <div className="assistant-stepper">
+          <button className={step === "essentials" ? "active" : ""} type="button" onClick={() => setStep("essentials")}>
+            <CalendarDays size={16} />
+            Essentiel
+          </button>
+          <button className={step === "payments" ? "active" : ""} disabled={!activeShow} type="button" onClick={() => setStep("payments")}>
+            <CircleDollarSign size={16} />
+            Paiements
+          </button>
+          <button className={step === "readiness" ? "active" : ""} disabled={!activeShow} type="button" onClick={() => setStep("readiness")}>
+            <ClipboardList size={16} />
+            Checklist
+          </button>
         </div>
-        <label>
-          Location
-          <input disabled={!organization} value={location} onChange={(event) => setLocation(event.target.value)} />
-        </label>
-        <div className="field-group">
-          <span className="contact-picker-label">Paiements du show</span>
-          <div className="form-grid">
-            <label>
-              Réservations
-              <select disabled={!organization} value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
-                <option value="pay_at_booking">Paiement à la réservation</option>
-                <option value="manual">Gestion manuelle</option>
-              </select>
-            </label>
-            <label>
-              Inscriptions
-              <select disabled={!organization} value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
-                <option value="card_on_file_preauth">Carte + préautorisation</option>
-                <option value="manual">Gestion manuelle</option>
-              </select>
-            </label>
+
+        {activeShow ? (
+          <div className="assistant-save-state">
+            <CheckCircle2 size={16} />
+            <span>Brouillon sauvegardé</span>
           </div>
-          <div className="form-grid">
+        ) : null}
+
+        {step === "essentials" ? (
+          <form className="stack assistant-form" onSubmit={handleEssentialsSubmit}>
+            <div className="form-grid">
+              <label>
+                Name
+                <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
+              </label>
+              <label>
+                Slug
+                <input disabled={!organization} placeholder={slugify(name) || "spring-classic"} value={slug} onChange={(event) => setSlug(event.target.value)} />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                Start
+                <input disabled={!organization} required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
+              </label>
+              <label>
+                End
+                <input disabled={!organization} min={startDate} required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
+              </label>
+            </div>
             <label>
-              Préautorisation
-              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
-                <option value="show_start">Première journée du show</option>
-                <option value="manual">Manuelle</option>
-              </select>
+              Location
+              <input disabled={!organization} value={location} onChange={(event) => setLocation(event.target.value)} />
             </label>
-            <label>
-              Heure
-              <input disabled={!organization || entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
-            </label>
+            <div className="form-actions">
+              <button className="primary-button" disabled={busy || !organization} type="submit">
+                <CheckCircle2 size={18} />
+                {activeShow ? "Sauvegarder" : "Créer le brouillon"}
+              </button>
+              <button className="ghost-button" type="button" onClick={onClose}>
+                Fermer
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {step === "payments" ? (
+          <form className="stack assistant-form" onSubmit={handlePaymentsSubmit}>
+            <div className="field-group">
+              <span className="contact-picker-label">Paiements du show</span>
+              <div className="form-grid">
+                <label>
+                  Réservations
+                  <select value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
+                    <option value="pay_at_booking">Paiement à la réservation</option>
+                    <option value="manual">Gestion manuelle</option>
+                  </select>
+                </label>
+                <label>
+                  Inscriptions
+                  <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
+                    <option value="card_on_file_preauth">Carte + préautorisation</option>
+                    <option value="manual">Gestion manuelle</option>
+                  </select>
+                </label>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Préautorisation
+                  <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
+                    <option value="show_start">Première journée du show</option>
+                    <option value="manual">Manuelle</option>
+                  </select>
+                </label>
+                <label>
+                  Heure
+                  <input disabled={entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
+                </label>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Échéance
+                  <select disabled={entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
+                    <option value="show_end">Dernière journée du show</option>
+                    <option value="manual">Manuelle</option>
+                  </select>
+                </label>
+                <label>
+                  Heure limite
+                  <input disabled={entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
+                </label>
+              </div>
+              <div className="form-grid">
+                <label>
+                  Montant préautorisé
+                  <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
+                    <option value="entry_balance">Solde des inscriptions</option>
+                    <option value="entry_balance_with_margin">Solde + marge</option>
+                  </select>
+                </label>
+                <label>
+                  Marge %
+                  <input disabled={entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
+                </label>
+              </div>
+              <label className="check-row">
+                <input checked={entryAutoCaptureEnabled} disabled={entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
+                <span>Capture automatique à l'échéance</span>
+              </label>
+            </div>
+            <div className="form-actions">
+              <button className="primary-button" disabled={busy || !activeShow} type="submit">
+                <CheckCircle2 size={18} />
+                Sauvegarder
+              </button>
+              <button className="ghost-button" type="button" onClick={() => setStep("essentials")}>
+                Retour
+              </button>
+              <button className="ghost-button" type="button" onClick={onClose}>
+                Fermer
+              </button>
+            </div>
+          </form>
+        ) : null}
+
+        {step === "readiness" && activeShow ? (
+          <div className="assistant-readiness">
+            <div className="readiness-summary">
+              <div>
+                <strong>{readinessDone}/{readinessItems.length} prêts</strong>
+                <span>Préparation du show</span>
+              </div>
+              <div className="progress-track">
+                <span style={{ width: `${readinessPercent}%` }} />
+              </div>
+            </div>
+            <div className="readiness-list">
+              {readinessItems.map((item) => (
+                <div className={item.done ? "readiness-item done" : "readiness-item"} key={item.key}>
+                  <span className="readiness-icon">{item.done ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}</span>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.detail}</span>
+                  </div>
+                  {item.view ? (
+                    <button className="text-button" type="button" onClick={() => onViewChange(item.view as ViewKey)}>
+                      {item.actionLabel ?? "Ouvrir"}
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+            <div className="form-actions">
+              <button className="primary-button" disabled={busy || activeShow.status === "open"} type="button" onClick={handleOpenShow}>
+                <CheckCircle2 size={18} />
+                {activeShow.status === "open" ? "Show ouvert" : "Ouvrir les inscriptions"}
+              </button>
+              <button className="ghost-button" type="button" onClick={() => setStep("payments")}>
+                Paiements
+              </button>
+              <button className="ghost-button" type="button" onClick={onClose}>
+                Fermer
+              </button>
+            </div>
           </div>
-          <div className="form-grid">
-            <label>
-              Échéance
-              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
-                <option value="show_end">Dernière journée du show</option>
-                <option value="manual">Manuelle</option>
-              </select>
-            </label>
-            <label>
-              Heure limite
-              <input disabled={!organization || entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
-            </label>
-          </div>
-          <div className="form-grid">
-            <label>
-              Montant préautorisé
-              <select disabled={!organization || entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
-                <option value="entry_balance">Solde des inscriptions</option>
-                <option value="entry_balance_with_margin">Solde + marge</option>
-              </select>
-            </label>
-            <label>
-              Marge %
-              <input disabled={!organization || entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
-            </label>
-          </div>
-          <label className="check-row">
-            <input checked={entryAutoCaptureEnabled} disabled={!organization || entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
-            <span>Capture automatique à l'échéance</span>
-          </label>
-        </div>
-        <button className="primary-button" disabled={busy || !organization} type="submit">
-          <Plus size={18} />
-          Create show
-        </button>
-      </form>
-    </section>
+        ) : null}
+      </section>
+    </div>
   );
+}
+
+function buildShowReadinessItems(
+  show: Show,
+  context: {
+    classes: ClassRecord[];
+    divisions: Division[];
+    entries: Entry[];
+    invoices: Invoice[];
+    showDays: ShowDay[];
+    showScoreClassSetups: ShowScoreClassSetup[];
+    stallOptions: StallOption[];
+  },
+): ShowReadinessItem[] {
+  const showDays = context.showDays.filter((day) => day.show_id === show.id);
+  const showClasses = context.classes.filter((classRecord) => classRecord.show_id === show.id);
+  const showDivisions = context.divisions.filter((division) => division.show_id === show.id);
+  const showEntries = context.entries.filter((entry) => entry.show_id === show.id);
+  const showStallOptions = context.stallOptions.filter((option) => option.show_id === show.id);
+  const showInvoices = context.invoices.filter((invoice) => invoice.show_id === show.id);
+  const preparedClassIds = new Set(context.showScoreClassSetups.filter((setup) => setup.show_id === show.id).map((setup) => setup.class_id));
+  const preparedClasses = showClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length;
+
+  return [
+    {
+      key: "days",
+      title: "Journées",
+      detail: showDays.length ? `${showDays.length} journée${showDays.length === 1 ? "" : "s"} générée${showDays.length === 1 ? "" : "s"}.` : "Les journées apparaîtront depuis les dates du show.",
+      done: showDays.length > 0,
+      view: "shows",
+      actionLabel: "Vérifier",
+    },
+    {
+      key: "classes",
+      title: "Classes",
+      detail: showClasses.length ? `${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} au programme.` : "Aucune classe créée.",
+      done: showClasses.length > 0,
+      view: "classes",
+      actionLabel: showClasses.length ? "Ajuster" : "Ajouter",
+    },
+    {
+      key: "divisions",
+      title: "Divisions",
+      detail: showDivisions.length ? `${showDivisions.length} division${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.` : "Aucune division disponible.",
+      done: showDivisions.length > 0,
+      view: "classes",
+      actionLabel: showDivisions.length ? "Ajuster" : "Ajouter",
+    },
+    {
+      key: "stalls",
+      title: "Stalls et extras",
+      detail: showStallOptions.length ? `${showStallOptions.length} produit${showStallOptions.length === 1 ? "" : "s"} réservable${showStallOptions.length === 1 ? "" : "s"}.` : "Aucun produit de réservation.",
+      done: showStallOptions.length > 0,
+      view: "stalls",
+      actionLabel: showStallOptions.length ? "Ajuster" : "Configurer",
+    },
+    {
+      key: "entries",
+      title: "Inscriptions",
+      detail: showEntries.length ? `${showEntries.length} inscription${showEntries.length === 1 ? "" : "s"} créée${showEntries.length === 1 ? "" : "s"}.` : "Les inscriptions arriveront ici.",
+      done: showEntries.length > 0,
+      view: "entries",
+      actionLabel: "Ouvrir",
+    },
+    {
+      key: "scoring",
+      title: "Scoring",
+      detail: showClasses.length ? `${preparedClasses}/${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} préparée${showClasses.length === 1 ? "" : "s"}.` : "Crée des classes avant le scoring.",
+      done: showClasses.length > 0 && preparedClasses === showClasses.length,
+      view: "scoring",
+      actionLabel: "Préparer",
+    },
+    {
+      key: "billing",
+      title: "Facturation",
+      detail: showInvoices.length ? `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} liée${showInvoices.length === 1 ? "" : "s"} au show.` : "Aucune facture liée au show.",
+      done: showInvoices.length > 0,
+      view: "billing",
+      actionLabel: "Voir",
+    },
+    {
+      key: "publication",
+      title: "Publication",
+      detail: show.status === "open" ? "Les inscriptions sont ouvertes." : "Le show est encore en brouillon.",
+      done: show.status === "open",
+    },
+  ];
 }
 
 function ShowEditForm({
@@ -2469,6 +2852,7 @@ function ContactForm({
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
       });
+      setType(defaultType);
       setFirstName("");
       setLastName("");
       setEmail("");
