@@ -17,9 +17,20 @@ export function saveLocale(locale: Locale) {
 export const translations = {
   fr: {
     auth: {
+      accountType: "Type de compte",
+      accountTypes: {
+        admin: "Administrateur",
+        agent: "Agent",
+        owner: "Propriétaire",
+        secretary: "Secrétaire",
+      },
+      checkEmail: "Compte créé. Vérifie ton courriel si la confirmation est activée.",
       createAccount: "Créer un compte",
       email: "Courriel",
+      firstName: "Prénom",
+      lastName: "Nom",
       password: "Mot de passe",
+      phone: "Téléphone",
       signIn: "Connexion",
       working: "En cours",
     },
@@ -54,9 +65,20 @@ export const translations = {
   },
   en: {
     auth: {
+      accountType: "Account type",
+      accountTypes: {
+        admin: "Administrator",
+        agent: "Agent",
+        owner: "Owner",
+        secretary: "Secretary",
+      },
+      checkEmail: "Account created. Check your email if confirmation is enabled.",
       createAccount: "Create account",
       email: "Email",
+      firstName: "First name",
+      lastName: "Last name",
       password: "Password",
+      phone: "Phone",
       signIn: "Sign in",
       working: "Working",
     },

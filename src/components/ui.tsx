@@ -265,7 +265,7 @@ export function ContactPicker({
             items={visibleContacts.map((contact) => ({
               id: contact.id,
               label: contactLabel(contact),
-              detail: contactRoleSummary(contact, contactRoles),
+              detail: contactPickerDetail(contact, contactRoles, organization),
             }))}
             placeholder={placeholder ?? `Search ${roleLabel.toLowerCase()}`}
             value={value}
@@ -375,6 +375,11 @@ function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
   return roles.length ? Array.from(new Set(roles)).join(" / ") : contactRoleLabel(contact.type);
 }
 
+function contactPickerDetail(contact: Contact, contactRoles: ContactRole[], organization: Organization | null) {
+  const scope = organization && contact.organization_id !== organization.id ? "Ailleurs dans l'app" : "Association active";
+  return `${contactRoleSummary(contact, contactRoles)} - ${scope}`;
+}
+
 function contactRoleLabel(role: ContactRoleName) {
   switch (role) {
     case "owner":
@@ -398,10 +403,10 @@ function contactTypeForRole(role: ContactRoleName): Contact["type"] {
   return role === "booker" ? "payer" : role;
 }
 
-export function FormActions({ busy, onCancel }: { busy: boolean; onCancel: () => void }) {
+export function FormActions({ busy, disabled = false, onCancel }: { busy: boolean; disabled?: boolean; onCancel: () => void }) {
   return (
     <div className="form-actions">
-      <button className="primary-button" disabled={busy} type="submit">
+      <button className="primary-button" disabled={busy || disabled} type="submit">
         Save changes
       </button>
       <button className="ghost-button" disabled={busy} type="button" onClick={onCancel}>

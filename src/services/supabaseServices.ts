@@ -11,7 +11,9 @@ import type {
   ClassTemplateUpdateInput,
   ClassUpdateInput,
   Contact,
+  ContactExternalMembership,
   ContactInput,
+  ContactOrganizationLink,
   ContactRole,
   ContactRoleName,
   ContactUpdateInput,
@@ -22,12 +24,16 @@ import type {
   EntryInput,
   EntryUpdateInput,
   Horse,
+  HorseOrganizationLink,
   HorseContact,
   HorseInput,
   HorseUpdateInput,
+  ExternalMembershipInput,
+  ExternalOrganization,
   Invoice,
   InvoiceLineItem,
   Organization,
+  OrganizationExternalMembershipRequirement,
   OrganizationInput,
   OrganizationMember,
   SanctioningBody,
@@ -54,8 +60,13 @@ export type AppContext = {
   showDays: ShowDay[];
   showScoreClassSetups: ShowScoreClassSetup[];
   contacts: Contact[];
+  contactOrganizationLinks: ContactOrganizationLink[];
   contactRoles: ContactRole[];
+  externalOrganizations: ExternalOrganization[];
+  organizationExternalMembershipRequirements: OrganizationExternalMembershipRequirement[];
+  contactExternalMemberships: ContactExternalMembership[];
   horses: Horse[];
+  horseOrganizationLinks: HorseOrganizationLink[];
   horseContacts: HorseContact[];
   classes: ClassRecord[];
   classTemplates: ClassTemplate[];
@@ -80,6 +91,7 @@ export function slugify(value: string) {
 
 export async function ensureUserProfile(user: User) {
   const client = requireSupabase();
+  const profileDefaults = profileDefaultsFromUser(user);
   const { data: existing, error: selectError } = await client
     .from("user_profiles")
     .select("*")
@@ -91,18 +103,36 @@ export async function ensureUserProfile(user: User) {
   }
 
   if (existing) {
+    const patch = missingUserProfileFields(existing, profileDefaults);
+
+    if (Object.keys(patch).length) {
+      const { data: updated, error: updateError } = await client
+        .from("user_profiles")
+        .update(patch)
+        .eq("id", existing.id)
+        .select("*")
+        .single<UserProfile>();
+
+      if (updateError) {
+        throw updateError;
+      }
+
+      await claimContactsForCurrentUser();
+      return updated;
+    }
+
+    await claimContactsForCurrentUser();
     return existing;
   }
 
-  const emailName = user.email?.split("@")[0] ?? "user";
-  const [firstName, ...rest] = emailName.split(/[._-]/).filter(Boolean);
   const { data: created, error: insertError } = await client
     .from("user_profiles")
     .insert({
       user_id: user.id,
-      first_name: titleCase(firstName),
-      last_name: titleCase(rest.join(" ")),
-      type_user: "admin",
+      first_name: profileDefaults.first_name,
+      last_name: profileDefaults.last_name,
+      phone: profileDefaults.phone,
+      type_user: profileDefaults.type_user,
     })
     .select("*")
     .single<UserProfile>();
@@ -111,6 +141,7 @@ export async function ensureUserProfile(user: User) {
     throw insertError;
   }
 
+  await claimContactsForCurrentUser();
   return created;
 }
 
@@ -124,8 +155,13 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showsResult,
     showDaysResult,
     contactsResult,
+    contactOrganizationLinksResult,
     contactRolesResult,
+    externalOrganizationsResult,
+    organizationExternalMembershipRequirementsResult,
+    contactExternalMembershipsResult,
     horsesResult,
+    horseOrganizationLinksResult,
     horseContactsResult,
     classesResult,
     classTemplatesResult,
@@ -143,8 +179,13 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(),
     client.from("show_days").select("*").order("day_date", { ascending: true }).returns<ShowDay[]>(),
     client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(),
+    client.from("contact_organization_links").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationLink[]>(),
     client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(),
+    client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
+    client.from("organization_external_membership_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalMembershipRequirement[]>(),
+    client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
+    client.from("horse_organization_links").select("*").order("created_at", { ascending: false }).returns<HorseOrganizationLink[]>(),
     client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
     client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
     client.from("class_templates").select("*").order("sort_order", { ascending: true }).returns<ClassTemplate[]>(),
@@ -179,6 +220,16 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw contactsResult.error;
   }
 
+  const contactOrganizationLinks = contactOrganizationLinksResult.error
+    ? isMissingSchemaError(contactOrganizationLinksResult.error, "contact_organization_links")
+      ? deriveContactOrganizationLinksFromContacts(contactsResult.data ?? [])
+      : null
+    : contactOrganizationLinksResult.data ?? [];
+
+  if (!contactOrganizationLinks) {
+    throw contactOrganizationLinksResult.error;
+  }
+
   const contactRoles = contactRolesResult.error
     ? isMissingSchemaError(contactRolesResult.error, "contact_roles")
       ? deriveContactRolesFromContacts(contactsResult.data ?? [])
@@ -189,8 +240,48 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw contactRolesResult.error;
   }
 
+  const externalOrganizations = externalOrganizationsResult.error
+    ? isMissingSchemaError(externalOrganizationsResult.error, "external_organizations")
+      ? []
+      : null
+    : externalOrganizationsResult.data ?? [];
+
+  if (!externalOrganizations) {
+    throw externalOrganizationsResult.error;
+  }
+
+  const organizationExternalMembershipRequirements = organizationExternalMembershipRequirementsResult.error
+    ? isMissingSchemaError(organizationExternalMembershipRequirementsResult.error, "organization_external_membership_requirements")
+      ? []
+      : null
+    : organizationExternalMembershipRequirementsResult.data ?? [];
+
+  if (!organizationExternalMembershipRequirements) {
+    throw organizationExternalMembershipRequirementsResult.error;
+  }
+
+  const contactExternalMemberships = contactExternalMembershipsResult.error
+    ? isMissingSchemaError(contactExternalMembershipsResult.error, "contact_external_memberships")
+      ? []
+      : null
+    : contactExternalMembershipsResult.data ?? [];
+
+  if (!contactExternalMemberships) {
+    throw contactExternalMembershipsResult.error;
+  }
+
   if (horsesResult.error) {
     throw horsesResult.error;
+  }
+
+  const horseOrganizationLinks = horseOrganizationLinksResult.error
+    ? isMissingSchemaError(horseOrganizationLinksResult.error, "horse_organization_links")
+      ? deriveHorseOrganizationLinksFromHorses(horsesResult.data ?? [])
+      : null
+    : horseOrganizationLinksResult.data ?? [];
+
+  if (!horseOrganizationLinks) {
+    throw horseOrganizationLinksResult.error;
   }
 
   if (horseContactsResult.error) {
@@ -263,8 +354,13 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showDays: showDaysResult.data ?? [],
     showScoreClassSetups,
     contacts: contactsResult.data ?? [],
+    contactOrganizationLinks,
     contactRoles,
+    externalOrganizations,
+    organizationExternalMembershipRequirements,
+    contactExternalMemberships,
     horses: horsesResult.data ?? [],
+    horseOrganizationLinks,
     horseContacts: horseContactsResult.data ?? [],
     classes: classesResult.data ?? [],
     classTemplates,
@@ -371,30 +467,29 @@ export async function updateShow(id: string, input: ShowUpdateInput) {
 
 export async function createContact(input: ContactInput) {
   const client = requireSupabase();
-  const normalizedEmail = input.email?.trim().toLowerCase() || null;
+  const normalizedEmail = normalizeEmail(input.email);
   const roles = uniqueRoles([input.type, ...(input.roles ?? [])]);
 
   if (normalizedEmail) {
-    const { data: existing, error: existingError } = await client
-      .from("contacts")
-      .select("*")
-      .eq("organization_id", input.organization_id)
-      .eq("email", normalizedEmail)
-      .maybeSingle<Contact>();
-
-    if (existingError) {
-      throw existingError;
-    }
+    const existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
 
     if (existing) {
+      const contact = await enrichExistingContact(existing, input);
+      await ensureContactOrganizationLink({
+        organization_id: input.organization_id,
+        contact_id: contact.id,
+        source: "manual",
+        created_by_user_id: input.created_by_user_id,
+      });
       await ensureContactRoles({
-        organization_id: existing.organization_id,
-        contact_id: existing.id,
+        organization_id: input.organization_id,
+        contact_id: contact.id,
         roles,
         source: input.roles?.length ? "manual" : "contact_type",
       });
+      await syncContactExternalMemberships(contact.id, input.external_memberships);
 
-      return existing;
+      return contact;
     }
   }
 
@@ -416,26 +511,30 @@ export async function createContact(input: ContactInput) {
 
   if (error) {
     if (error.code === "23505" && normalizedEmail) {
-      const { data: existing, error: retryError } = await client
-        .from("contacts")
-        .select("*")
-        .eq("organization_id", input.organization_id)
-        .eq("email", normalizedEmail)
-        .maybeSingle<Contact>();
+      let existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
 
-      if (retryError) {
-        throw retryError;
+      if (!existing) {
+        await claimContactsForCurrentUser();
+        existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
       }
 
       if (existing) {
+        const contact = await enrichExistingContact(existing, input);
+        await ensureContactOrganizationLink({
+          organization_id: input.organization_id,
+          contact_id: contact.id,
+          source: "manual",
+          created_by_user_id: input.created_by_user_id,
+        });
         await ensureContactRoles({
-          organization_id: existing.organization_id,
-          contact_id: existing.id,
+          organization_id: input.organization_id,
+          contact_id: contact.id,
           roles,
           source: input.roles?.length ? "manual" : "contact_type",
         });
+        await syncContactExternalMemberships(contact.id, input.external_memberships);
 
-        return existing;
+        return contact;
       }
     }
 
@@ -448,15 +547,31 @@ export async function createContact(input: ContactInput) {
     roles,
     source: input.roles?.length ? "manual" : "contact_type",
   });
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: data.id,
+    source: "created_here",
+    created_by_user_id: input.created_by_user_id,
+  });
+  await syncContactExternalMemberships(data.id, input.external_memberships);
 
   return data;
 }
 
 export async function updateContact(id: string, input: ContactUpdateInput) {
   const client = requireSupabase();
+  const { external_memberships: externalMemberships, ...contactInput } = input;
+  const payload = {
+    ...contactInput,
+    first_name: contactInput.first_name?.trim(),
+    last_name: contactInput.last_name?.trim(),
+    email: contactInput.email === undefined ? undefined : normalizeEmail(contactInput.email),
+    phone: contactInput.phone === undefined ? undefined : contactInput.phone?.trim() || null,
+    barn_name: contactInput.barn_name === undefined ? undefined : contactInput.barn_name?.trim() || null,
+  };
   const { data, error } = await client
     .from("contacts")
-    .update(cleanPayload(input))
+    .update(cleanPayload(payload))
     .eq("id", id)
     .select("*")
     .single<Contact>();
@@ -474,11 +589,67 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
     });
   }
 
+  await syncContactExternalMemberships(data.id, externalMemberships);
+
   return data;
+}
+
+export async function setOrganizationExternalMembershipRequirement(input: {
+  organization_id: string;
+  external_organization_id: string;
+  contact_type: Contact["type"];
+  is_required: boolean;
+}) {
+  const client = requireSupabase();
+
+  if (!input.is_required) {
+    const { error } = await client
+      .from("organization_external_membership_requirements")
+      .delete()
+      .eq("organization_id", input.organization_id)
+      .eq("external_organization_id", input.external_organization_id)
+      .eq("contact_type", input.contact_type);
+
+    if (error) {
+      throw error;
+    }
+
+    return;
+  }
+
+  const { error } = await client.from("organization_external_membership_requirements").upsert(
+    {
+      organization_id: input.organization_id,
+      external_organization_id: input.external_organization_id,
+      contact_type: input.contact_type,
+      is_required: true,
+    },
+    { onConflict: "organization_id,external_organization_id,contact_type" },
+  );
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function createHorse(input: HorseInput) {
   const client = requireSupabase();
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: input.primary_owner_contact_id,
+    source: "horse",
+    created_by_user_id: input.created_by_user_id,
+  });
+
+  if (input.agent_contact_id && input.agent_contact_id !== input.primary_owner_contact_id) {
+    await ensureContactOrganizationLink({
+      organization_id: input.organization_id,
+      contact_id: input.agent_contact_id,
+      source: "horse",
+      created_by_user_id: input.created_by_user_id,
+    });
+  }
+
   const { data: horse, error: horseError } = await client
     .from("horses")
     .insert({
@@ -498,6 +669,13 @@ export async function createHorse(input: HorseInput) {
   if (horseError) {
     throw horseError;
   }
+
+  await ensureHorseOrganizationLink({
+    organization_id: input.organization_id,
+    horse_id: horse.id,
+    source: "created_here",
+    created_by_user_id: input.created_by_user_id,
+  });
 
   await upsertHorseContact({
     organization_id: input.organization_id,
@@ -534,6 +712,24 @@ export async function createHorse(input: HorseInput) {
 export async function updateHorse(id: string, input: HorseUpdateInput) {
   const client = requireSupabase();
   const { agent_contact_id: agentContactId, ...horseInput } = input;
+  const existingHorse = await getHorseById(id);
+
+  if (input.primary_owner_contact_id) {
+    await ensureContactOrganizationLink({
+      organization_id: existingHorse.organization_id,
+      contact_id: input.primary_owner_contact_id,
+      source: "horse",
+    });
+  }
+
+  if (agentContactId && agentContactId !== input.primary_owner_contact_id) {
+    await ensureContactOrganizationLink({
+      organization_id: existingHorse.organization_id,
+      contact_id: agentContactId,
+      source: "horse",
+    });
+  }
+
   const { data, error } = await client
     .from("horses")
     .update(cleanPayload(horseInput))
@@ -825,6 +1021,15 @@ export async function updateDivision(id: string, input: DivisionUpdateInput) {
 
 export async function createEntry(input: EntryInput) {
   const client = requireSupabase();
+  await ensureEntryOrganizationLinks({
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    owner_contact_id: input.owner_contact_id,
+    rider_contact_id: input.rider_contact_id ?? null,
+    payer_contact_id: input.payer_contact_id,
+    created_by_user_id: input.created_by_user_id,
+  });
+
   const { data, error } = await client
     .from("entries")
     .insert({
@@ -873,6 +1078,16 @@ export async function createEntry(input: EntryInput) {
 
 export async function updateEntry(id: string, input: EntryUpdateInput) {
   const client = requireSupabase();
+  const existing = await getEntryById(id);
+  await ensureEntryOrganizationLinks({
+    organization_id: existing.organization_id,
+    horse_id: input.horse_id ?? existing.horse_id,
+    owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
+    rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
+    payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
+    created_by_user_id: existing.created_by_user_id,
+  });
+
   const { data, error } = await client
     .from("entries")
     .update(cleanPayload(input))
@@ -965,6 +1180,14 @@ export async function updateStallOption(id: string, input: StallOptionUpdateInpu
 
 export async function createStallBooking(input: StallBookingInput) {
   const client = requireSupabase();
+  await ensureStallBookingOrganizationLinks({
+    organization_id: input.organization_id,
+    horse_id: input.horse_id ?? null,
+    booker_contact_id: input.booker_contact_id,
+    payer_contact_id: input.payer_contact_id,
+    created_by_user_id: input.created_by_user_id,
+  });
+
   const { data, error } = await client
     .from("stall_bookings")
     .insert(cleanPayload({
@@ -1010,6 +1233,15 @@ export async function createStallBooking(input: StallBookingInput) {
 
 export async function updateStallBooking(id: string, input: StallBookingUpdateInput) {
   const client = requireSupabase();
+  const existing = await getStallBookingById(id);
+  await ensureStallBookingOrganizationLinks({
+    organization_id: existing.organization_id,
+    horse_id: input.horse_id === undefined ? existing.horse_id : input.horse_id,
+    booker_contact_id: input.booker_contact_id ?? existing.booker_contact_id,
+    payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
+    created_by_user_id: existing.created_by_user_id,
+  });
+
   const { data, error } = await client
     .from("stall_bookings")
     .update(cleanPayload(input))
@@ -1163,6 +1395,348 @@ export async function ensureContactRoles(input: {
   return ensured;
 }
 
+async function ensureContactOrganizationLink(input: {
+  organization_id: string;
+  contact_id: string;
+  source: ContactOrganizationLink["source"];
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("contact_organization_links").upsert(
+    {
+      organization_id: input.organization_id,
+      contact_id: input.contact_id,
+      source: input.source,
+      created_by_user_id: input.created_by_user_id ?? null,
+    },
+    { onConflict: "organization_id,contact_id" },
+  );
+
+  if (error) {
+    if (isMissingSchemaError(error, "contact_organization_links")) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function ensureHorseOrganizationLink(input: {
+  organization_id: string;
+  horse_id: string;
+  source: HorseOrganizationLink["source"];
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("horse_organization_links").upsert(
+    {
+      organization_id: input.organization_id,
+      horse_id: input.horse_id,
+      source: input.source,
+      created_by_user_id: input.created_by_user_id ?? null,
+    },
+    { onConflict: "organization_id,horse_id" },
+  );
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_organization_links")) {
+      return;
+    }
+
+    throw error;
+  }
+}
+
+async function syncContactExternalMemberships(contactId: string, memberships?: ExternalMembershipInput[]) {
+  if (!memberships) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const cleanMemberships = memberships
+    .map((membership) => ({
+      contact_id: contactId,
+      external_organization_id: membership.external_organization_id,
+      membership_number: membership.membership_number.trim(),
+      status: membership.status ?? "unknown",
+      expires_on: membership.expires_on ?? null,
+    }))
+    .filter((membership) => membership.external_organization_id && membership.membership_number);
+
+  if (cleanMemberships.length) {
+    const { error } = await client.from("contact_external_memberships").upsert(cleanMemberships, {
+      onConflict: "contact_id,external_organization_id",
+    });
+
+    if (error) {
+      if (isMissingSchemaError(error, "contact_external_memberships")) {
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  const emptyMemberships = memberships.filter((membership) => membership.external_organization_id && !membership.membership_number.trim());
+
+  if (emptyMemberships.length) {
+    const { error } = await client
+      .from("contact_external_memberships")
+      .delete()
+      .eq("contact_id", contactId)
+      .in(
+        "external_organization_id",
+        emptyMemberships.map((membership) => membership.external_organization_id),
+      );
+
+    if (error && !isMissingSchemaError(error, "contact_external_memberships")) {
+      throw error;
+    }
+  }
+}
+
+async function getHorseById(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("horses").select("*").eq("id", id).single<Horse>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function getEntryById(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("entries").select("*").eq("id", id).single<Entry>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function getStallBookingById(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("stall_bookings").select("*").eq("id", id).single<StallBooking>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+async function ensureEntryOrganizationLinks(input: {
+  organization_id: string;
+  horse_id: string;
+  owner_contact_id: string;
+  rider_contact_id?: string | null;
+  payer_contact_id: string;
+  created_by_user_id?: string | null;
+}) {
+  await ensureHorseOrganizationLink({
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    source: "entry",
+    created_by_user_id: input.created_by_user_id,
+  });
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: input.owner_contact_id,
+    source: "entry",
+    created_by_user_id: input.created_by_user_id,
+  });
+  if (input.rider_contact_id) {
+    await ensureContactOrganizationLink({
+      organization_id: input.organization_id,
+      contact_id: input.rider_contact_id,
+      source: "entry",
+      created_by_user_id: input.created_by_user_id,
+    });
+  }
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: input.payer_contact_id,
+    source: "entry",
+    created_by_user_id: input.created_by_user_id,
+  });
+}
+
+async function ensureStallBookingOrganizationLinks(input: {
+  organization_id: string;
+  horse_id?: string | null;
+  booker_contact_id: string;
+  payer_contact_id: string;
+  created_by_user_id?: string | null;
+}) {
+  if (input.horse_id) {
+    await ensureHorseOrganizationLink({
+      organization_id: input.organization_id,
+      horse_id: input.horse_id,
+      source: "reservation",
+      created_by_user_id: input.created_by_user_id,
+    });
+  }
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: input.booker_contact_id,
+    source: "reservation",
+    created_by_user_id: input.created_by_user_id,
+  });
+  await ensureContactOrganizationLink({
+    organization_id: input.organization_id,
+    contact_id: input.payer_contact_id,
+    source: "reservation",
+    created_by_user_id: input.created_by_user_id,
+  });
+}
+
+const userProfileTypes = ["owner", "agent", "secretary", "admin"] as const;
+
+function profileDefaultsFromUser(user: User): Pick<UserProfile, "first_name" | "last_name" | "phone" | "type_user"> {
+  const metadata = user.user_metadata ?? {};
+  const emailName = user.email?.split("@")[0] ?? "user";
+  const [firstName, ...rest] = emailName.split(/[._-]/).filter(Boolean);
+
+  return {
+    first_name: metadataText(metadata, "first_name") ?? titleCase(firstName),
+    last_name: metadataText(metadata, "last_name") ?? titleCase(rest.join(" ")),
+    phone: metadataText(metadata, "phone"),
+    type_user: profileTypeFromMetadata(metadata) ?? "owner",
+  };
+}
+
+function missingUserProfileFields(
+  profile: UserProfile,
+  defaults: Pick<UserProfile, "first_name" | "last_name" | "phone" | "type_user">,
+) {
+  const patch: Partial<Pick<UserProfile, "first_name" | "last_name" | "phone" | "type_user">> = {};
+
+  if (!profile.first_name && defaults.first_name) {
+    patch.first_name = defaults.first_name;
+  }
+
+  if (!profile.last_name && defaults.last_name) {
+    patch.last_name = defaults.last_name;
+  }
+
+  if (!profile.phone && defaults.phone) {
+    patch.phone = defaults.phone;
+  }
+
+  if (!profile.type_user && defaults.type_user) {
+    patch.type_user = defaults.type_user;
+  }
+
+  return patch;
+}
+
+function metadataText(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  return value.trim() || null;
+}
+
+function profileTypeFromMetadata(metadata: Record<string, unknown>): UserProfile["type_user"] {
+  const value = metadataText(metadata, "type_user") ?? metadataText(metadata, "account_type");
+
+  if (value && userProfileTypes.includes(value as NonNullable<UserProfile["type_user"]>)) {
+    return value as NonNullable<UserProfile["type_user"]>;
+  }
+
+  return null;
+}
+
+async function claimContactsForCurrentUser() {
+  const client = requireSupabase();
+  const { error } = await client.rpc("claim_contacts_for_current_user");
+
+  if (error && !isMissingRpcError(error, "claim_contacts_for_current_user")) {
+    throw error;
+  }
+}
+
+function normalizeEmail(value?: string | null) {
+  return value?.trim().toLowerCase() || null;
+}
+
+async function findExistingContactByEmail(normalizedEmail: string, preferredOrganizationId?: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("contacts")
+    .select("*")
+    .ilike("email", normalizedEmail)
+    .order("created_at", { ascending: true })
+    .returns<Contact[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  const visibleContacts = data ?? [];
+
+  if (preferredOrganizationId) {
+    const localContact = visibleContacts.find((contact) => contact.organization_id === preferredOrganizationId);
+
+    if (localContact) {
+      return localContact;
+    }
+  }
+
+  return visibleContacts[0] ?? null;
+}
+
+async function enrichExistingContact(existing: Contact, input: ContactInput) {
+  const client = requireSupabase();
+  const patch: Record<string, unknown> = {};
+  const phone = input.phone?.trim();
+  const barnName = input.barn_name?.trim();
+  const normalizedEmail = normalizeEmail(input.email);
+
+  if (!existing.email && normalizedEmail) {
+    patch.email = normalizedEmail;
+  }
+
+  if (!existing.phone && phone) {
+    patch.phone = phone;
+  }
+
+  if (!existing.barn_name && barnName) {
+    patch.barn_name = barnName;
+  }
+
+  if (!existing.linked_user_id && input.linked_user_id) {
+    patch.linked_user_id = input.linked_user_id;
+  }
+
+  if (existing.type === "other" && input.type !== "other") {
+    patch.type = input.type;
+  }
+
+  if (!Object.keys(patch).length) {
+    return existing;
+  }
+
+  const { data, error } = await client
+    .from("contacts")
+    .update(patch)
+    .eq("id", existing.id)
+    .select("*")
+    .single<Contact>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 function uniqueRoles(roles: ContactRoleName[]) {
   return Array.from(new Set(roles.filter(Boolean)));
 }
@@ -1175,6 +1749,28 @@ function deriveContactRolesFromContacts(contacts: Contact[]): ContactRole[] {
     role: contact.type,
     source: "contact_type",
     created_at: contact.created_at,
+  }));
+}
+
+function deriveContactOrganizationLinksFromContacts(contacts: Contact[]): ContactOrganizationLink[] {
+  return contacts.map((contact) => ({
+    id: `${contact.organization_id}-${contact.id}`,
+    organization_id: contact.organization_id,
+    contact_id: contact.id,
+    source: "created_here",
+    created_by_user_id: null,
+    created_at: contact.created_at,
+  }));
+}
+
+function deriveHorseOrganizationLinksFromHorses(horses: Horse[]): HorseOrganizationLink[] {
+  return horses.map((horse) => ({
+    id: `${horse.organization_id}-${horse.id}`,
+    organization_id: horse.organization_id,
+    horse_id: horse.id,
+    source: "created_here",
+    created_by_user_id: null,
+    created_at: horse.created_at,
   }));
 }
 
@@ -1201,4 +1797,16 @@ function isMissingShowScoreSchemaError(error: { code?: string; message?: string 
 function isMissingSchemaError(error: { code?: string; message?: string }, relationName: string) {
   const message = String(error.message || "").toLowerCase();
   return error.code === "42P01" || (message.includes("schema cache") && message.includes(relationName));
+}
+
+function isMissingRpcError(error: { code?: string; message?: string }, functionName: string) {
+  const message = String(error.message || "").toLowerCase();
+  const normalizedFunctionName = functionName.toLowerCase();
+
+  return (
+    error.code === "PGRST202" ||
+    error.code === "42883" ||
+    (message.includes("schema cache") && message.includes(normalizedFunctionName)) ||
+    message.includes(`function public.${normalizedFunctionName}`)
+  );
 }

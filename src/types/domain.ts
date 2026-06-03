@@ -127,6 +127,56 @@ export type ContactRole = {
   created_at: string;
 };
 
+export type ContactOrganizationLink = {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  source: "manual" | "created_here" | "claimed_account" | "entry" | "reservation" | "horse";
+  created_by_user_id: string | null;
+  created_at: string;
+};
+
+export type HorseOrganizationLink = {
+  id: string;
+  organization_id: string;
+  horse_id: string;
+  source: "manual" | "created_here" | "entry" | "reservation";
+  created_by_user_id: string | null;
+  created_at: string;
+};
+
+export type ExternalOrganization = {
+  id: string;
+  code: string;
+  name: string;
+  verification_provider: string | null;
+  verification_url: string | null;
+  verification_enabled: boolean;
+  created_at: string;
+};
+
+export type OrganizationExternalMembershipRequirement = {
+  id: string;
+  organization_id: string;
+  external_organization_id: string;
+  contact_type: Contact["type"];
+  is_required: boolean;
+  created_at: string;
+};
+
+export type ContactExternalMembership = {
+  id: string;
+  contact_id: string;
+  external_organization_id: string;
+  membership_number: string;
+  status: "active" | "pending" | "expired" | "unknown";
+  expires_on: string | null;
+  verified_at: string | null;
+  verification_source: string | null;
+  verification_payload: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Horse = {
   id: string;
   organization_id: string;
@@ -399,6 +449,7 @@ export type ContactInput = {
   barn_name?: string;
   linked_user_id?: string;
   created_by_user_id?: string;
+  external_memberships?: ExternalMembershipInput[];
 };
 
 export type ContactUpdateInput = {
@@ -408,6 +459,14 @@ export type ContactUpdateInput = {
   email?: string | null;
   phone?: string | null;
   barn_name?: string | null;
+  external_memberships?: ExternalMembershipInput[];
+};
+
+export type ExternalMembershipInput = {
+  external_organization_id: string;
+  membership_number: string;
+  status?: ContactExternalMembership["status"];
+  expires_on?: string | null;
 };
 
 export type HorseInput = {

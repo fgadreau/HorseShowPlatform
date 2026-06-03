@@ -5,6 +5,7 @@ import type { Locale, Translation } from "../../lib/i18n";
 import { supabase } from "../../lib/supabase";
 import { errorMessage } from "../../lib/display";
 import { LanguageToggle, NoticeBanner } from "../../components/ui";
+import type { UserProfile } from "../../types/domain";
 import type { Notice } from "../../types/ui";
 
 const localLoginAccounts = [
@@ -45,8 +46,13 @@ export function AuthScreen({
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [phone, setPhone] = useState("");
+  const [accountType, setAccountType] = useState<NonNullable<UserProfile["type_user"]>>("owner");
   const [busy, setBusy] = useState(false);
   const showLocalLogin = isLocalHostname();
+  const signUpMissingDetails = mode === "signup" && (!firstName.trim() || !lastName.trim());
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -55,21 +61,37 @@ export function AuthScreen({
       return;
     }
 
+    if (signUpMissingDetails) {
+      return;
+    }
+
     setBusy(true);
     onNotice(null);
 
     try {
+      const normalizedEmail = email.trim().toLowerCase();
       const result =
         mode === "signin"
-          ? await supabase.auth.signInWithPassword({ email, password })
-          : await supabase.auth.signUp({ email, password });
+          ? await supabase.auth.signInWithPassword({ email: normalizedEmail, password })
+          : await supabase.auth.signUp({
+              email: normalizedEmail,
+              password,
+              options: {
+                data: {
+                  first_name: firstName.trim(),
+                  last_name: lastName.trim(),
+                  phone: phone.trim() || null,
+                  type_user: accountType,
+                },
+              },
+            });
 
       if (result.error) {
         throw result.error;
       }
 
       if (mode === "signup" && !result.data.session) {
-        onNotice({ tone: "info", message: "Account created. Check your email if confirmation is enabled." });
+        onNotice({ tone: "info", message: t.auth.checkEmail });
       }
     } catch (error) {
       onNotice({ tone: "error", message: errorMessage(error) });
@@ -135,6 +157,35 @@ export function AuthScreen({
         {notice ? <NoticeBanner notice={notice} /> : null}
 
         <form className="stack" onSubmit={handleSubmit}>
+          {mode === "signup" ? (
+            <>
+              <div className="form-grid">
+                <label>
+                  {t.auth.firstName}
+                  <input autoComplete="given-name" required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
+                </label>
+                <label>
+                  {t.auth.lastName}
+                  <input autoComplete="family-name" required value={lastName} onChange={(event) => setLastName(event.target.value)} />
+                </label>
+              </div>
+              <div className="form-grid">
+                <label>
+                  {t.auth.phone}
+                  <input autoComplete="tel" type="tel" value={phone} onChange={(event) => setPhone(event.target.value)} />
+                </label>
+                <label>
+                  {t.auth.accountType}
+                  <select value={accountType} onChange={(event) => setAccountType(event.target.value as NonNullable<UserProfile["type_user"]>)}>
+                    <option value="owner">{t.auth.accountTypes.owner}</option>
+                    <option value="agent">{t.auth.accountTypes.agent}</option>
+                    <option value="secretary">{t.auth.accountTypes.secretary}</option>
+                    <option value="admin">{t.auth.accountTypes.admin}</option>
+                  </select>
+                </label>
+              </div>
+            </>
+          ) : null}
           <label>
             {t.auth.email}
             <input autoComplete="email" required type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
@@ -150,7 +201,7 @@ export function AuthScreen({
               onChange={(event) => setPassword(event.target.value)}
             />
           </label>
-          <button className="primary-button" disabled={busy} type="submit">
+          <button className="primary-button" disabled={busy || signUpMissingDetails} type="submit">
             <UserRound size={18} />
             {busy ? t.auth.working : mode === "signin" ? t.auth.signIn : t.auth.createAccount}
           </button>

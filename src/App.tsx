@@ -26,6 +26,7 @@ import {
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
+  setOrganizationExternalMembershipRequirement,
   updateClass,
   updateClassTemplate,
   updateClassTemplateDivision,
@@ -303,6 +304,11 @@ export default function App() {
       }}
       onRefresh={() => refreshContext()}
       onSignOut={handleSignOut}
+      onSetExternalMembershipRequirement={async (input) => {
+        await setOrganizationExternalMembershipRequirement(input);
+        setNotice({ tone: "success", message: "Membership requirement updated." });
+        await refreshContext();
+      }}
       onViewChange={setActiveView}
     />
   );

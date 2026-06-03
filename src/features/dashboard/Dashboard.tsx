@@ -38,6 +38,7 @@ import {
   deleteEntry,
   deleteHorse,
   deleteStallBooking,
+  setOrganizationExternalMembershipRequirement,
   slugify,
   updateClass,
   updateClassTemplate,
@@ -57,15 +58,18 @@ import type {
   ClassTemplate,
   ClassTemplateDivision,
   Contact,
+  ContactExternalMembership,
   ContactRole,
   Division,
   EligibilityRules,
   Entry,
+  ExternalOrganization,
   Horse,
   HorseContact,
   Invoice,
   InvoiceLineItem,
   Organization,
+  OrganizationExternalMembershipRequirement,
   SanctioningBody,
   Show,
   ShowDay,
@@ -101,6 +105,7 @@ export function Dashboard({
   onPrepareShowScoreClass,
   onRefresh,
   onSignOut,
+  onSetExternalMembershipRequirement,
   onUpdateClass,
   onUpdateClassTemplate,
   onUpdateClassTemplateDivision,
@@ -139,6 +144,7 @@ export function Dashboard({
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
   onRefresh: () => void;
   onSignOut: () => void;
+  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
   onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
@@ -157,8 +163,13 @@ export function Dashboard({
   const showDays = context?.showDays ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const contacts = context?.contacts ?? [];
+  const contactOrganizationLinks = context?.contactOrganizationLinks ?? [];
   const contactRoles = context?.contactRoles ?? [];
+  const externalOrganizations = context?.externalOrganizations ?? [];
+  const organizationExternalMembershipRequirements = context?.organizationExternalMembershipRequirements ?? [];
+  const contactExternalMemberships = context?.contactExternalMemberships ?? [];
   const horses = context?.horses ?? [];
+  const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
   const classes = context?.classes ?? [];
   const classTemplates = context?.classTemplates ?? [];
   const classTemplateDivisions = context?.classTemplateDivisions ?? [];
@@ -187,17 +198,36 @@ export function Dashboard({
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
     : [];
+  const selectedOrganizationContactIds = selectedOrganization
+    ? new Set(
+        contactOrganizationLinks
+          .filter((link) => link.organization_id === selectedOrganization.id)
+          .map((link) => link.contact_id)
+          .concat(contacts.filter((contact) => contact.organization_id === selectedOrganization.id).map((contact) => contact.id)),
+      )
+    : new Set<string>();
+  const selectedOrganizationHorseIds = selectedOrganization
+    ? new Set(
+        horseOrganizationLinks
+          .filter((link) => link.organization_id === selectedOrganization.id)
+          .map((link) => link.horse_id)
+          .concat(horses.filter((horse) => horse.organization_id === selectedOrganization.id).map((horse) => horse.id)),
+      )
+    : new Set<string>();
   const selectedOrganizationContacts = selectedOrganization
-    ? contacts.filter((contact) => contact.organization_id === selectedOrganization.id)
+    ? sortRecordsForOrganization(contacts, selectedOrganizationContactIds)
     : [];
   const selectedOrganizationContactRoles = selectedOrganization
-    ? contactRoles.filter((role) => role.organization_id === selectedOrganization.id)
+    ? contactRoles.filter((role) => role.organization_id === selectedOrganization.id || selectedOrganizationContactIds.has(role.contact_id))
+    : [];
+  const selectedOrganizationMembershipRequirements = selectedOrganization
+    ? organizationExternalMembershipRequirements.filter((requirement) => requirement.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationHorses = selectedOrganization
-    ? horses.filter((horse) => horse.organization_id === selectedOrganization.id)
+    ? sortRecordsForOrganization(horses, selectedOrganizationHorseIds)
     : [];
   const selectedOrganizationHorseContacts = selectedOrganization
-    ? context?.horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id) ?? []
+    ? context?.horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(horseContact.horse_id)) ?? []
     : [];
   const selectedOrganizationClasses = selectedOrganization
     ? classes.filter((classRecord) => classRecord.organization_id === selectedOrganization.id)
@@ -342,10 +372,13 @@ export function Dashboard({
         {effectiveView === "people" ? (
           <PeopleView
             contacts={selectedOrganizationContacts}
+            contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
+            externalOrganizations={externalOrganizations}
             horses={selectedOrganizationHorses}
             horseContacts={selectedOrganizationHorseContacts}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
@@ -456,7 +489,10 @@ export function Dashboard({
         {effectiveView === "my-riders" ? (
           <MyContactsView
             contacts={personalContacts}
+            contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
@@ -510,7 +546,15 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "settings" ? <SettingsView context={context} organization={selectedOrganization} /> : null}
+        {effectiveView === "settings" ? (
+          <SettingsView
+            context={context}
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
+            organization={selectedOrganization}
+            onSetExternalMembershipRequirement={onSetExternalMembershipRequirement}
+          />
+        ) : null}
       </section>
     </main>
   );
@@ -543,6 +587,42 @@ function NavigationSection({
       })}
     </div>
   );
+}
+
+function sortRecordsForOrganization<T extends { id: string }>(records: T[], organizationRecordIds: Set<string>) {
+  return [...records].sort((a, b) => {
+    const aLocal = organizationRecordIds.has(a.id);
+    const bLocal = organizationRecordIds.has(b.id);
+
+    if (aLocal === bLocal) {
+      return 0;
+    }
+
+    return aLocal ? -1 : 1;
+  });
+}
+
+function buildExternalMembershipFields(
+  contactType: Contact["type"],
+  externalOrganizations: ExternalOrganization[],
+  requirements: OrganizationExternalMembershipRequirement[],
+  existingMemberships: ContactExternalMembership[] = [],
+) {
+  const requiredOrganizationIds = new Set(
+    requirements
+      .filter((requirement) => requirement.is_required && requirement.contact_type === contactType)
+      .map((requirement) => requirement.external_organization_id),
+  );
+  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_organization_id));
+  const requiredOrExistingOrganizations = externalOrganizations.filter(
+    (organization) => requiredOrganizationIds.has(organization.id) || existingOrganizationIds.has(organization.id),
+  );
+  const visibleOrganizations = requiredOrExistingOrganizations.length ? requiredOrExistingOrganizations : externalOrganizations.slice(0, 3);
+
+  return visibleOrganizations.map((organization) => ({
+    organization,
+    required: requiredOrganizationIds.has(organization.id),
+  }));
 }
 
 function OverviewView({
@@ -895,10 +975,13 @@ function ShowsView({
 
 function PeopleView({
   contacts,
+  contactExternalMemberships,
   contactRoles,
   createdByUserId,
+  externalOrganizations,
   horses,
   horseContacts,
+  membershipRequirements,
   organization,
   onCreateContact,
   onCreateHorse,
@@ -907,10 +990,13 @@ function PeopleView({
   onUpdateHorse,
 }: {
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   createdByUserId: string;
+  externalOrganizations: ExternalOrganization[];
   horses: Horse[];
   horseContacts: HorseContact[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
@@ -944,12 +1030,20 @@ function PeopleView({
         ]}
       />
 
-      <ContactForm organization={organization} onCreateContact={onCreateContact} />
+      <ContactForm
+        externalOrganizations={externalOrganizations}
+        membershipRequirements={membershipRequirements}
+        organization={organization}
+        onCreateContact={onCreateContact}
+      />
       <HorseForm contacts={contacts} contactRoles={contactRoles} createdByUserId={createdByUserId} organization={organization} onCreateContact={onCreateContact} onCreateHorse={onCreateHorse} />
 
       {editingContact ? (
         <ContactEditForm
           contact={editingContact}
+          contactExternalMemberships={contactExternalMemberships}
+          externalOrganizations={externalOrganizations}
+          membershipRequirements={membershipRequirements}
           onCancel={() => setEditingContact(null)}
           onUpdateContact={async (id, input) => {
             await onUpdateContact(id, input);
@@ -1707,14 +1801,20 @@ function MyHorsesView({
 
 function MyContactsView({
   contacts,
+  contactExternalMemberships,
   contactRoles,
+  externalOrganizations,
+  membershipRequirements,
   organization,
   profileId,
   onCreateContact,
   onUpdateContact,
 }: {
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
+  externalOrganizations: ExternalOrganization[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -1742,6 +1842,8 @@ function MyContactsView({
           createdByUserId={profileId}
           defaultType={defaultContactType}
           linkedUserId={profileId}
+          externalOrganizations={externalOrganizations}
+          membershipRequirements={membershipRequirements}
           organization={organization}
           title={contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}
           description={contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}
@@ -1752,6 +1854,9 @@ function MyContactsView({
       {editingContact ? (
         <ContactEditForm
           contact={editingContact}
+          contactExternalMemberships={contactExternalMemberships}
+          externalOrganizations={externalOrganizations}
+          membershipRequirements={membershipRequirements}
           onCancel={() => setEditingContact(null)}
           onUpdateContact={async (id, input) => {
             await onUpdateContact(id, input);
@@ -2059,7 +2164,45 @@ function InvoiceDetailPanel({
   );
 }
 
-function SettingsView({ context, organization }: { context: AppContext | null; organization: Organization | null }) {
+function SettingsView({
+  context,
+  externalOrganizations,
+  membershipRequirements,
+  organization,
+  onSetExternalMembershipRequirement,
+}: {
+  context: AppContext | null;
+  externalOrganizations: ExternalOrganization[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  organization: Organization | null;
+  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
+}) {
+  const [busyRequirementId, setBusyRequirementId] = useState("");
+  const riderRequirementIds = new Set(
+    membershipRequirements
+      .filter((requirement) => requirement.contact_type === "rider" && requirement.is_required)
+      .map((requirement) => requirement.external_organization_id),
+  );
+
+  async function handleRequirementToggle(externalOrganizationId: string, isRequired: boolean) {
+    if (!organization) {
+      return;
+    }
+
+    setBusyRequirementId(externalOrganizationId);
+
+    try {
+      await onSetExternalMembershipRequirement({
+        organization_id: organization.id,
+        external_organization_id: externalOrganizationId,
+        contact_type: "rider",
+        is_required: isRequired,
+      });
+    } finally {
+      setBusyRequirementId("");
+    }
+  }
+
   return (
     <div className="content-grid">
       <ViewIntro
@@ -2108,6 +2251,36 @@ function SettingsView({ context, organization }: { context: AppContext | null; o
             <dd>{organization?.subscription_plan ?? "free"}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Numéros externes obligatoires</h2>
+            <p>Exigences appliquées aux fiches cavalier de cette association.</p>
+          </div>
+        </div>
+        <div className="requirement-list">
+          {externalOrganizations.map((externalOrganization) => {
+            const checked = riderRequirementIds.has(externalOrganization.id);
+            return (
+              <label className="requirement-row" key={externalOrganization.id}>
+                <input
+                  checked={checked}
+                  disabled={!organization || busyRequirementId === externalOrganization.id}
+                  type="checkbox"
+                  onChange={(event) => void handleRequirementToggle(externalOrganization.id, event.target.checked)}
+                />
+                <span>
+                  <strong>{externalOrganization.code}</strong>
+                  {externalOrganization.name}
+                </span>
+                <small>{externalOrganization.verification_enabled ? "Validation externe prête" : "Validation manuelle"}</small>
+              </label>
+            );
+          })}
+          {!externalOrganizations.length ? <EmptyState label="Aucune organisation externe configuree." /> : null}
+        </div>
       </section>
     </div>
   );
@@ -2810,7 +2983,9 @@ function ContactForm({
   createdByUserId,
   defaultType = "owner",
   description,
+  externalOrganizations = [],
   linkedUserId,
+  membershipRequirements = [],
   organization,
   title = "New contact",
   onCreateContact,
@@ -2818,7 +2993,9 @@ function ContactForm({
   createdByUserId?: string;
   defaultType?: Contact["type"];
   description?: string;
+  externalOrganizations?: ExternalOrganization[];
   linkedUserId?: string;
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   title?: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -2829,7 +3006,13 @@ function ContactForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [barnName, setBarnName] = useState("");
+  const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const externalMembershipFields = useMemo(
+    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements),
+    [externalOrganizations, membershipRequirements, type],
+  );
+  const missingRequiredMembership = externalMembershipFields.some((field) => field.required && !membershipNumbers[field.organization.id]?.trim());
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2851,6 +3034,11 @@ function ContactForm({
         barn_name: barnName,
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
+        external_memberships: externalMembershipFields.map((field) => ({
+          external_organization_id: field.organization.id,
+          membership_number: membershipNumbers[field.organization.id] ?? "",
+          status: "unknown",
+        })),
       });
       setType(defaultType);
       setFirstName("");
@@ -2858,6 +3046,7 @@ function ContactForm({
       setEmail("");
       setPhone("");
       setBarnName("");
+      setMembershipNumbers({});
     } finally {
       setBusy(false);
     }
@@ -2906,7 +3095,31 @@ function ContactForm({
             <input disabled={!organization} value={barnName} onChange={(event) => setBarnName(event.target.value)} />
           </label>
         </div>
-        <button className="primary-button" disabled={busy || !organization} type="submit">
+        {externalMembershipFields.length ? (
+          <div className="external-membership-fields">
+            <div className="inline-form-header">
+              <strong>Numéros de membre externes</strong>
+              <span>Les champs obligatoires dépendent de l'association active.</span>
+            </div>
+            {externalMembershipFields.map((field) => (
+              <label key={field.organization.id}>
+                {field.organization.code} #
+                <input
+                  disabled={!organization}
+                  required={field.required}
+                  value={membershipNumbers[field.organization.id] ?? ""}
+                  onChange={(event) =>
+                    setMembershipNumbers((current) => ({
+                      ...current,
+                      [field.organization.id]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+        <button className="primary-button" disabled={busy || !organization || missingRequiredMembership} type="submit">
           <Plus size={18} />
           Create contact
         </button>
@@ -3041,10 +3254,16 @@ function HorseForm({
 
 function ContactEditForm({
   contact,
+  contactExternalMemberships,
+  externalOrganizations = [],
+  membershipRequirements = [],
   onCancel,
   onUpdateContact,
 }: {
   contact: Contact;
+  contactExternalMemberships?: ContactExternalMembership[];
+  externalOrganizations?: ExternalOrganization[];
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   onCancel: () => void;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
@@ -3054,7 +3273,15 @@ function ContactEditForm({
   const [email, setEmail] = useState(contact.email ?? "");
   const [phone, setPhone] = useState(contact.phone ?? "");
   const [barnName, setBarnName] = useState(contact.barn_name ?? "");
+  const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>(() =>
+    Object.fromEntries((contactExternalMemberships ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_organization_id, membership.membership_number])),
+  );
   const [busy, setBusy] = useState(false);
+  const externalMembershipFields = useMemo(
+    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements, contactExternalMemberships?.filter((membership) => membership.contact_id === contact.id) ?? []),
+    [contact.id, contactExternalMemberships, externalOrganizations, membershipRequirements, type],
+  );
+  const missingRequiredMembership = externalMembershipFields.some((field) => field.required && !membershipNumbers[field.organization.id]?.trim());
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3068,6 +3295,11 @@ function ContactEditForm({
         email: email || null,
         phone: phone || null,
         barn_name: barnName || null,
+        external_memberships: externalMembershipFields.map((field) => ({
+          external_organization_id: field.organization.id,
+          membership_number: membershipNumbers[field.organization.id] ?? "",
+          status: "unknown",
+        })),
       });
     } finally {
       setBusy(false);
@@ -3117,7 +3349,30 @@ function ContactEditForm({
           Barn
           <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
         </label>
-        <FormActions busy={busy} onCancel={onCancel} />
+        {externalMembershipFields.length ? (
+          <div className="external-membership-fields">
+            <div className="inline-form-header">
+              <strong>Numéros de membre externes</strong>
+              <span>Ces informations pourront être vérifiées par intégration externe plus tard.</span>
+            </div>
+            {externalMembershipFields.map((field) => (
+              <label key={field.organization.id}>
+                {field.organization.code} #
+                <input
+                  required={field.required}
+                  value={membershipNumbers[field.organization.id] ?? ""}
+                  onChange={(event) =>
+                    setMembershipNumbers((current) => ({
+                      ...current,
+                      [field.organization.id]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
+        <FormActions busy={busy} disabled={missingRequiredMembership} onCancel={onCancel} />
       </form>
     </section>
   );
