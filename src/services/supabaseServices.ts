@@ -1041,6 +1041,48 @@ export async function verifyGvlCogginsDocument(input: {
   return data;
 }
 
+export async function createUploadedHorseHealthDocument(input: {
+  organization_id: string;
+  horse_id: string;
+  document_type: Extract<HorseHealthDocument["document_type"], "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other">;
+  file: File;
+  test_or_administered_on?: string | null;
+  issuer_name?: string | null;
+  created_by_user_id?: string;
+}) {
+  const client = requireSupabase();
+  const documentUrl = await uploadHealthDocumentFile({
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    file: input.file,
+  });
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .insert({
+      organization_id: input.organization_id,
+      horse_id: input.horse_id,
+      document_type: input.document_type,
+      status: "pending_review",
+      verification_source: "upload",
+      document_url: documentUrl,
+      issuer_name: input.issuer_name || null,
+      test_or_administered_on: input.test_or_administered_on || null,
+      created_by_user_id: input.created_by_user_id ?? null,
+    })
+    .select("*")
+    .single<HorseHealthDocument>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_health_documents")) {
+      throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
 export async function reviewHorseHealthDocument(
   id: string,
   input: {
@@ -1074,6 +1116,30 @@ export async function reviewHorseHealthDocument(
   }
 
   return data;
+}
+
+async function uploadHealthDocumentFile(input: { organization_id: string; horse_id: string; file: File }) {
+  const client = requireSupabase();
+  const objectPath = `${input.organization_id}/${input.horse_id}/${crypto.randomUUID()}-${safeStorageFileName(input.file.name)}`;
+  const { error } = await client.storage.from("health-documents").upload(objectPath, input.file, {
+    contentType: input.file.type || undefined,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  return objectPath;
+}
+
+function safeStorageFileName(value: string) {
+  const clean = value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return clean || "document";
 }
 
 async function findExistingHorseHealthDocument(input: {

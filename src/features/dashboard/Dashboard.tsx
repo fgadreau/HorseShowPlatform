@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
+import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
 import type { Locale, Translation } from "../../lib/i18n";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
 import { MyStallsView, StallsView } from "./StallsViews";
@@ -31,6 +32,7 @@ import {
   createDivision,
   createEntry,
   createHorse,
+  createUploadedHorseHealthDocument,
   createOrganization,
   createShow,
   createStallBooking,
@@ -99,6 +101,7 @@ export function Dashboard({
   onCreateDivision,
   onCreateEntry,
   onCreateHorse,
+  onCreateHorseHealthDocument,
   onCreateOrganization,
   onCreateShow,
   onCreateStallBooking,
@@ -140,7 +143,8 @@ export function Dashboard({
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
-  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
@@ -402,6 +406,7 @@ export function Dashboard({
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteContact={onDeleteContact}
             onDeleteHorse={onDeleteHorse}
             onReviewHorseHealthDocument={onReviewHorseHealthDocument}
@@ -508,6 +513,7 @@ export function Dashboard({
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteHorse={onDeleteHorse}
             onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={onUpdateHorse}
@@ -719,13 +725,28 @@ function horseHealthStatusLabel(status: HorseHealthDocument["status"]) {
 
 function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[]) {
   const coggins = latestHorseHealthDocument(horse.id, documents, "coggins_eia");
+  const vaccine = latestHorseVaccineDocument(horse.id, documents);
 
-  if (!coggins) {
-    return "Coggins: manquant";
-  }
+  const cogginsSummary = coggins
+    ? `Coggins: ${horseHealthStatusLabel(coggins.status)}${coggins.test_or_administered_on ? ` - ${formatDate(coggins.test_or_administered_on)}` : ""}`
+    : "Coggins: manquant";
+  const vaccineSummary = vaccine
+    ? `Vaccin: ${horseHealthStatusLabel(vaccine.status)}${vaccine.test_or_administered_on ? ` - ${formatDate(vaccine.test_or_administered_on)}` : ""}`
+    : "Vaccin: manquant";
 
-  const testDate = coggins.test_or_administered_on ? ` - ${formatDate(coggins.test_or_administered_on)}` : "";
-  return `Coggins: ${horseHealthStatusLabel(coggins.status)}${testDate}`;
+  return `${cogginsSummary} · ${vaccineSummary}`;
+}
+
+function latestHorseVaccineDocument(horseId: string, documents: HorseHealthDocument[]) {
+  const vaccineTypes: HorseHealthDocument["document_type"][] = ["combo_vaccine", "influenza_vaccine", "rhino_vaccine"];
+
+  return [...documents]
+    .filter((document) => document.horse_id === horseId && vaccineTypes.includes(document.document_type))
+    .sort((a, b) => {
+      const aDate = a.test_or_administered_on ?? a.created_at;
+      const bDate = b.test_or_administered_on ?? b.created_at;
+      return bDate.localeCompare(aDate);
+    })[0];
 }
 
 function birthYearFromDateValue(value: string | null | undefined) {
@@ -735,6 +756,15 @@ function birthYearFromDateValue(value: string | null | undefined) {
 
   const year = Number(value.slice(0, 4));
   return Number.isFinite(year) ? year : null;
+}
+
+async function resolveGvlCogginsUrl(pdfFile: File | null, fallbackUrl: string) {
+  if (pdfFile) {
+    return extractGvlUrlFromPdf(pdfFile);
+  }
+
+  const cleanUrl = fallbackUrl.trim();
+  return cleanUrl ? normalizeGvlUrl(cleanUrl) ?? cleanUrl : null;
 }
 
 function OverviewView({
@@ -1100,6 +1130,7 @@ function PeopleView({
   organization,
   onCreateContact,
   onCreateHorse,
+  onCreateHorseHealthDocument,
   onDeleteContact,
   onDeleteHorse,
   onReviewHorseHealthDocument,
@@ -1120,7 +1151,8 @@ function PeopleView({
   membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
-  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
@@ -1181,6 +1213,8 @@ function PeopleView({
         organization={organization}
         onCreateContact={onCreateContact}
         onCreateHorse={onCreateHorse}
+        onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+        onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
       />
 
       {editingContact ? (
@@ -1211,6 +1245,7 @@ function PeopleView({
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
           onCreateContact={onCreateContact}
+          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
           onReviewHorseHealthDocument={onReviewHorseHealthDocument}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
@@ -1862,6 +1897,7 @@ function MyHorsesView({
   profileId,
   onCreateContact,
   onCreateHorse,
+  onCreateHorseHealthDocument,
   onDeleteHorse,
   onReviewHorseHealthDocument,
   onUpdateHorse,
@@ -1878,7 +1914,8 @@ function MyHorsesView({
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
-  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
@@ -1917,6 +1954,8 @@ function MyHorsesView({
         organization={organization}
         onCreateContact={onCreateContact}
         onCreateHorse={onCreateHorse}
+        onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+        onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
       />
 
       {editingHorse ? (
@@ -1933,6 +1972,7 @@ function MyHorsesView({
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
           onCreateContact={onCreateContact}
+          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
           onReviewHorseHealthDocument={onReviewHorseHealthDocument}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
@@ -3339,6 +3379,8 @@ function HorseForm({
   organization,
   onCreateContact,
   onCreateHorse,
+  onCreateHorseHealthDocument,
+  onVerifyGvlCogginsDocument,
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -3346,7 +3388,9 @@ function HorseForm({
   externalOrganizations?: ExternalOrganization[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
-  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
 }) {
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
@@ -3355,6 +3399,10 @@ function HorseForm({
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
+  const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
+  const [vaccineCertificateFile, setVaccineCertificateFile] = useState<File | null>(null);
+  const [vaccineAdministeredOn, setVaccineAdministeredOn] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
@@ -3373,7 +3421,7 @@ function HorseForm({
     setBusy(true);
 
     try {
-      await onCreateHorse({
+      const horse = await onCreateHorse({
         organization_id: organization.id,
         name,
         primary_owner_contact_id: selectedOwnerId,
@@ -3390,6 +3438,32 @@ function HorseForm({
           status: "unknown",
         })),
       });
+
+      const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
+
+      if (sourceUrl) {
+        await onVerifyGvlCogginsDocument({
+          organization_id: organization.id,
+          horse_id: horse.id,
+          source_url: sourceUrl,
+          horse_name: name,
+          horse_date_of_birth: dateOfBirth || null,
+          horse_birth_year: birthYearFromDateValue(dateOfBirth),
+          created_by_user_id: createdByUserId,
+        });
+      }
+
+      if (vaccineCertificateFile) {
+        await onCreateHorseHealthDocument({
+          organization_id: organization.id,
+          horse_id: horse.id,
+          document_type: "combo_vaccine",
+          file: vaccineCertificateFile,
+          test_or_administered_on: vaccineAdministeredOn || null,
+          created_by_user_id: createdByUserId,
+        });
+      }
+
       setName("");
       setOwnerContactId("");
       setAgentContactId(null);
@@ -3397,6 +3471,10 @@ function HorseForm({
       setGender("");
       setDateOfBirth("");
       setRegistrationNumber("");
+      setGvlCogginsUrl("");
+      setCogginsPdfFile(null);
+      setVaccineCertificateFile(null);
+      setVaccineAdministeredOn("");
       setExternalReferenceNumbers({});
     } finally {
       setBusy(false);
@@ -3464,6 +3542,32 @@ function HorseForm({
           Registration
           <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
+        <div className="external-membership-fields health-document-fields">
+          <div className="inline-form-header">
+            <strong>Documents santé initiaux</strong>
+            <span>Ajoute le Coggins GVL et le certificat vaccin pendant la création du cheval.</span>
+          </div>
+          <label>
+            PDF Coggins GVL
+            <input accept="application/pdf" disabled={!organization} type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
+            {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
+          </label>
+          <label>
+            Lien GVL en secours
+            <input disabled={!organization} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
+          </label>
+          <div className="health-document-actions">
+            <label>
+              Certificat vaccin influenza/rhino
+              <input accept="application/pdf,image/*" disabled={!organization} type="file" onChange={(event) => setVaccineCertificateFile(event.target.files?.[0] ?? null)} />
+              {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
+            </label>
+            <label>
+              Date du vaccin
+              <input disabled={!organization} type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
+            </label>
+          </div>
+        </div>
         {externalReferenceFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
@@ -3635,6 +3739,7 @@ function HorseEditForm({
   organization,
   onCancel,
   onCreateContact,
+  onCreateHorseHealthDocument,
   onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
@@ -3651,6 +3756,7 @@ function HorseEditForm({
   organization: Organization | null;
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
@@ -3664,6 +3770,9 @@ function HorseEditForm({
   const [dateOfBirth, setDateOfBirth] = useState(horse.date_of_birth ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
   const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
+  const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
+  const [vaccineCertificateFile, setVaccineCertificateFile] = useState<File | null>(null);
+  const [vaccineAdministeredOn, setVaccineAdministeredOn] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>(() =>
     Object.fromEntries(horseExternalMemberships.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_organization_id, membership.reference_number])),
   );
@@ -3678,6 +3787,7 @@ function HorseEditForm({
     [externalOrganizations, horse.id, horseExternalMemberships],
   );
   const latestCoggins = useMemo(() => latestHorseHealthDocument(horse.id, horseHealthDocuments, "coggins_eia"), [horse.id, horseHealthDocuments]);
+  const latestVaccine = useMemo(() => latestHorseVaccineDocument(horse.id, horseHealthDocuments), [horse.id, horseHealthDocuments]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3705,23 +3815,30 @@ function HorseEditForm({
   }
 
   async function handleVerifyGvlCoggins() {
-    if (!organization || !gvlCogginsUrl.trim()) {
+    if (!organization || (!gvlCogginsUrl.trim() && !cogginsPdfFile)) {
       return;
     }
 
     setHealthBusy(true);
 
     try {
+      const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
+
+      if (!sourceUrl) {
+        return;
+      }
+
       await onVerifyGvlCogginsDocument({
         organization_id: organization.id,
         horse_id: horse.id,
-        source_url: gvlCogginsUrl,
+        source_url: sourceUrl,
         horse_name: name.trim() || horse.name,
         horse_date_of_birth: dateOfBirth || horse.date_of_birth,
         horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
         created_by_user_id: createdByUserId,
       });
       setGvlCogginsUrl("");
+      setCogginsPdfFile(null);
     } finally {
       setHealthBusy(false);
     }
@@ -3732,14 +3849,52 @@ function HorseEditForm({
       return;
     }
 
+    await handleReviewHealthDocument(latestCoggins, status, "Coggins");
+  }
+
+  async function handleReviewVaccine(status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
+    if (!latestVaccine) {
+      return;
+    }
+
+    await handleReviewHealthDocument(latestVaccine, status, "certificat vaccin");
+  }
+
+  async function handleReviewHealthDocument(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">, label: string) {
     setHealthBusy(true);
 
     try {
-      await onReviewHorseHealthDocument(latestCoggins.id, {
+      await onReviewHorseHealthDocument(document.id, {
         status,
         reviewed_by_user_id: createdByUserId,
-        review_notes: status === "approved" ? "Approuve manuellement par un gestionnaire de l'association." : "Refuse manuellement par un gestionnaire de l'association.",
+        review_notes:
+          status === "approved"
+            ? `${label} approuve manuellement par un gestionnaire de l'association.`
+            : `${label} refuse manuellement par un gestionnaire de l'association.`,
       });
+    } finally {
+      setHealthBusy(false);
+    }
+  }
+
+  async function handleUploadVaccineCertificate() {
+    if (!organization || !vaccineCertificateFile) {
+      return;
+    }
+
+    setHealthBusy(true);
+
+    try {
+      await onCreateHorseHealthDocument({
+        organization_id: organization.id,
+        horse_id: horse.id,
+        document_type: "combo_vaccine",
+        file: vaccineCertificateFile,
+        test_or_administered_on: vaccineAdministeredOn || null,
+        created_by_user_id: createdByUserId,
+      });
+      setVaccineCertificateFile(null);
+      setVaccineAdministeredOn("");
     } finally {
       setHealthBusy(false);
     }
@@ -3842,12 +3997,60 @@ function HorseEditForm({
           )}
           <div className="health-document-actions">
             <label>
-              Lien GVL Coggins
+              PDF Coggins GVL
+              <input accept="application/pdf" type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
+              {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
+            </label>
+            <label>
+              Lien GVL en secours
               <input placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
             </label>
-            <button className="primary-button" disabled={healthBusy || !organization || !gvlCogginsUrl.trim()} type="button" onClick={handleVerifyGvlCoggins}>
+            <button className="primary-button" disabled={healthBusy || !organization || (!gvlCogginsUrl.trim() && !cogginsPdfFile)} type="button" onClick={handleVerifyGvlCoggins}>
               <CheckCircle2 size={18} />
               {healthBusy ? "Validation..." : "Valider GVL"}
+            </button>
+          </div>
+          <div className="inline-form-header">
+            <strong>Vaccin influenza/rhino</strong>
+            <span>Depot du certificat pour revision manuelle.</span>
+          </div>
+          {latestVaccine ? (
+            <div className="health-document-summary">
+              <div className="health-document-title">
+                <span className={`badge ${latestVaccine.status}`}>{horseHealthStatusLabel(latestVaccine.status)}</span>
+                <strong>Certificat vaccin</strong>
+              </div>
+              <span className="muted-line">
+                {latestVaccine.test_or_administered_on ? `Vaccin: ${formatDate(latestVaccine.test_or_administered_on)}` : "Date du vaccin inconnue"}
+                {latestVaccine.document_url ? " - fichier depose" : ""}
+              </span>
+              {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
+                <div className="row-actions health-review-actions">
+                  <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("approved")}>
+                    Approuver
+                  </button>
+                  <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("rejected")}>
+                    Refuser
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className="muted-line">Aucun certificat vaccin depose.</span>
+          )}
+          <div className="health-document-actions">
+            <label>
+              Certificat vaccin
+              <input accept="application/pdf,image/*" type="file" onChange={(event) => setVaccineCertificateFile(event.target.files?.[0] ?? null)} />
+              {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
+            </label>
+            <label>
+              Date du vaccin
+              <input type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
+            </label>
+            <button className="primary-button" disabled={healthBusy || !organization || !vaccineCertificateFile} type="button" onClick={handleUploadVaccineCertificate}>
+              <FileText size={18} />
+              Ajouter vaccin
             </button>
           </div>
         </div>

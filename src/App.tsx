@@ -17,6 +17,7 @@ import {
   createDivision,
   createEntry,
   createHorse,
+  createUploadedHorseHealthDocument,
   createOrganization,
   createShow,
   createStallBooking,
@@ -209,9 +210,19 @@ export default function App() {
         await refreshContext();
       }}
       onCreateHorse={async (input) => {
-        await createHorse(input);
+        const horse = await createHorse(input);
         setNotice({ tone: "success", message: "Horse created." });
         await refreshContext();
+        return horse;
+      }}
+      onCreateHorseHealthDocument={async (input) => {
+        const document = await createUploadedHorseHealthDocument(input);
+        setNotice({
+          tone: "info",
+          message: document.document_type === "combo_vaccine" ? "Certificat de vaccin ajoute pour revision." : "Document sante ajoute pour revision.",
+        });
+        await refreshContext();
+        return document;
       }}
       onUpdateHorse={async (id, input) => {
         await updateHorse(id, input);
