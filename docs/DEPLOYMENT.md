@@ -44,6 +44,13 @@ https://horseshowplatform.com/**
 https://www.horseshowplatform.com/**
 ```
 
+Keep the Site URL to the app origin only, without an `/auth/...` path. The app
+sets `emailRedirectTo` from the current browser origin during signup, so the
+confirmation email should land back on the app root after Supabase verifies the
+token. If email templates are customized, keep the confirmation link based on
+Supabase's `{{ .ConfirmationURL }}` value so the token verification still goes
+through Supabase before redirecting to the app.
+
 If the canonical production domain is `horseshowplatform.app`, use the `.app` URLs instead or add both domains while testing.
 
 ## Vercel

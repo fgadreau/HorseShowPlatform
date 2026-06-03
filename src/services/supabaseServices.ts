@@ -23,7 +23,9 @@ import type {
   Entry,
   EntryInput,
   EntryUpdateInput,
+  ExternalHorseMembershipInput,
   Horse,
+  HorseExternalMembership,
   HorseOrganizationLink,
   HorseContact,
   HorseInput,
@@ -65,6 +67,7 @@ export type AppContext = {
   externalOrganizations: ExternalOrganization[];
   organizationExternalMembershipRequirements: OrganizationExternalMembershipRequirement[];
   contactExternalMemberships: ContactExternalMembership[];
+  horseExternalMemberships: HorseExternalMembership[];
   horses: Horse[];
   horseOrganizationLinks: HorseOrganizationLink[];
   horseContacts: HorseContact[];
@@ -160,6 +163,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     externalOrganizationsResult,
     organizationExternalMembershipRequirementsResult,
     contactExternalMembershipsResult,
+    horseExternalMembershipsResult,
     horsesResult,
     horseOrganizationLinksResult,
     horseContactsResult,
@@ -184,6 +188,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
     client.from("organization_external_membership_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalMembershipRequirement[]>(),
     client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
+    client.from("horse_external_memberships").select("*").order("created_at", { ascending: false }).returns<HorseExternalMembership[]>(),
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
     client.from("horse_organization_links").select("*").order("created_at", { ascending: false }).returns<HorseOrganizationLink[]>(),
     client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
@@ -268,6 +273,16 @@ export async function loadAppContext(user: User): Promise<AppContext> {
 
   if (!contactExternalMemberships) {
     throw contactExternalMembershipsResult.error;
+  }
+
+  const horseExternalMemberships = horseExternalMembershipsResult.error
+    ? isMissingSchemaError(horseExternalMembershipsResult.error, "horse_external_memberships")
+      ? []
+      : null
+    : horseExternalMembershipsResult.data ?? [];
+
+  if (!horseExternalMemberships) {
+    throw horseExternalMembershipsResult.error;
   }
 
   if (horsesResult.error) {
@@ -359,6 +374,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     externalOrganizations,
     organizationExternalMembershipRequirements,
     contactExternalMemberships,
+    horseExternalMemberships,
     horses: horsesResult.data ?? [],
     horseOrganizationLinks,
     horseContacts: horseContactsResult.data ?? [],
@@ -594,6 +610,76 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
   return data;
 }
 
+type CountResult = {
+  count: number | null;
+  error: unknown;
+};
+
+function exactCount(result: CountResult) {
+  if (result.error) {
+    throw result.error;
+  }
+
+  return result.count ?? 0;
+}
+
+function pluralizedReference(count: number, singular: string, plural: string) {
+  return count === 1 ? `1 ${singular}` : `${count} ${plural}`;
+}
+
+export async function deleteContact(id: string) {
+  const client = requireSupabase();
+  const [ownedHorsesResult, entriesOwnerOrPayerResult, entriesRiderResult, stallBookingsResult, invoicesResult] = await Promise.all([
+    client.from("horses").select("id", { count: "exact", head: true }).eq("primary_owner_contact_id", id),
+    client.from("entries").select("id", { count: "exact", head: true }).or(`owner_contact_id.eq.${id},payer_contact_id.eq.${id}`),
+    client.from("entries").select("id", { count: "exact", head: true }).eq("rider_contact_id", id),
+    client.from("stall_bookings").select("id", { count: "exact", head: true }).or(`booker_contact_id.eq.${id},payer_contact_id.eq.${id}`),
+    client.from("invoices").select("id", { count: "exact", head: true }).eq("payer_contact_id", id),
+  ]);
+  const blockers = [
+    {
+      count: exactCount(ownedHorsesResult),
+      singular: "cheval comme proprietaire principal",
+      plural: "chevaux comme proprietaire principal",
+    },
+    {
+      count: exactCount(entriesOwnerOrPayerResult),
+      singular: "inscription comme proprietaire/payeur",
+      plural: "inscriptions comme proprietaire/payeur",
+    },
+    {
+      count: exactCount(stallBookingsResult),
+      singular: "reservation comme reservataire/payeur",
+      plural: "reservations comme reservataire/payeur",
+    },
+    {
+      count: exactCount(invoicesResult),
+      singular: "facture comme payeur",
+      plural: "factures comme payeur",
+    },
+  ]
+    .filter((reference) => reference.count > 0)
+    .map((reference) => pluralizedReference(reference.count, reference.singular, reference.plural));
+
+  if (blockers.length) {
+    throw new Error(`Impossible de supprimer ce contact pour l'instant: il est encore utilise par ${blockers.join(", ")}.`);
+  }
+
+  if (exactCount(entriesRiderResult)) {
+    const { error: detachRiderError } = await client.from("entries").update({ rider_contact_id: null }).eq("rider_contact_id", id);
+
+    if (detachRiderError) {
+      throw detachRiderError;
+    }
+  }
+
+  const { error } = await client.from("contacts").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function setOrganizationExternalMembershipRequirement(input: {
   organization_id: string;
   external_organization_id: string;
@@ -706,12 +792,14 @@ export async function createHorse(input: HorseInput) {
     });
   }
 
+  await syncHorseExternalMemberships(horse.id, input.external_memberships);
+
   return horse;
 }
 
 export async function updateHorse(id: string, input: HorseUpdateInput) {
   const client = requireSupabase();
-  const { agent_contact_id: agentContactId, ...horseInput } = input;
+  const { agent_contact_id: agentContactId, external_memberships: externalMemberships, ...horseInput } = input;
   const existingHorse = await getHorseById(id);
 
   if (input.primary_owner_contact_id) {
@@ -782,6 +870,8 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
       });
     }
   }
+
+  await syncHorseExternalMemberships(data.id, externalMemberships);
 
   return data;
 }
@@ -1491,6 +1581,62 @@ async function syncContactExternalMemberships(contactId: string, memberships?: E
 
     if (error && !isMissingSchemaError(error, "contact_external_memberships")) {
       throw error;
+    }
+  }
+}
+
+async function syncHorseExternalMemberships(horseId: string, memberships?: ExternalHorseMembershipInput[]) {
+  if (!memberships) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const cleanMemberships = memberships
+    .map((membership) => ({
+      horse_id: horseId,
+      external_organization_id: membership.external_organization_id,
+      reference_type: membership.reference_type ?? "competition_license",
+      reference_number: membership.reference_number.trim(),
+      status: membership.status ?? "unknown",
+      expires_on: membership.expires_on ?? null,
+    }))
+    .filter((membership) => membership.external_organization_id && membership.reference_number);
+
+  if (cleanMemberships.length) {
+    const { error } = await client.from("horse_external_memberships").upsert(cleanMemberships, {
+      onConflict: "horse_id,external_organization_id,reference_type",
+    });
+
+    if (error) {
+      if (isMissingSchemaError(error, "horse_external_memberships")) {
+        return;
+      }
+
+      throw error;
+    }
+  }
+
+  const emptyMemberships = memberships.filter((membership) => membership.external_organization_id && !membership.reference_number.trim());
+
+  if (emptyMemberships.length) {
+    const membershipsByType = new Map<HorseExternalMembership["reference_type"], string[]>();
+
+    for (const membership of emptyMemberships) {
+      const referenceType = membership.reference_type ?? "competition_license";
+      membershipsByType.set(referenceType, [...(membershipsByType.get(referenceType) ?? []), membership.external_organization_id]);
+    }
+
+    for (const [referenceType, externalOrganizationIds] of membershipsByType.entries()) {
+      const { error } = await client
+        .from("horse_external_memberships")
+        .delete()
+        .eq("horse_id", horseId)
+        .eq("reference_type", referenceType)
+        .in("external_organization_id", externalOrganizationIds);
+
+      if (error && !isMissingSchemaError(error, "horse_external_memberships")) {
+        throw error;
+      }
     }
   }
 }

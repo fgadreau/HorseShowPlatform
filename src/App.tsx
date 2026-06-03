@@ -22,6 +22,7 @@ import {
   createStallBooking,
   createStallOption,
   deleteEntry,
+  deleteContact,
   deleteHorse,
   deleteStallBooking,
   loadAppContext,
@@ -55,6 +56,19 @@ export default function App() {
     setLocale(nextLocale);
     saveLocale(nextLocale);
   }
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    const hashParams = new URLSearchParams(url.hash.startsWith("#") ? url.hash.slice(1) : "");
+    const authError = url.searchParams.get("error_description") || hashParams.get("error_description") || url.searchParams.get("error") || hashParams.get("error");
+
+    if (!authError) {
+      return;
+    }
+
+    setNotice({ tone: "error", message: authError.replace(/\+/g, " ") });
+    window.history.replaceState({}, document.title, `${url.origin}${url.pathname}`);
+  }, []);
 
   useEffect(() => {
     if (!supabase) {
@@ -181,6 +195,11 @@ export default function App() {
         setNotice({ tone: "success", message: "Contact created." });
         await refreshContext();
         return contact;
+      }}
+      onDeleteContact={async (id) => {
+        await deleteContact(id);
+        setNotice({ tone: "success", message: "Contact deleted." });
+        await refreshContext();
       }}
       onUpdateContact={async (id, input) => {
         await updateContact(id, input);

@@ -36,6 +36,7 @@ import {
   createStallBooking,
   createStallOption,
   deleteEntry,
+  deleteContact,
   deleteHorse,
   deleteStallBooking,
   setOrganizationExternalMembershipRequirement,
@@ -66,6 +67,7 @@ import type {
   ExternalOrganization,
   Horse,
   HorseContact,
+  HorseExternalMembership,
   Invoice,
   InvoiceLineItem,
   Organization,
@@ -99,6 +101,7 @@ export function Dashboard({
   onCreateStallBooking,
   onCreateStallOption,
   onDeleteEntry,
+  onDeleteContact,
   onDeleteHorse,
   onDeleteStallBooking,
   onLocaleChange,
@@ -138,6 +141,7 @@ export function Dashboard({
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
   onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
+  onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
@@ -168,6 +172,7 @@ export function Dashboard({
   const externalOrganizations = context?.externalOrganizations ?? [];
   const organizationExternalMembershipRequirements = context?.organizationExternalMembershipRequirements ?? [];
   const contactExternalMemberships = context?.contactExternalMemberships ?? [];
+  const horseExternalMemberships = context?.horseExternalMemberships ?? [];
   const horses = context?.horses ?? [];
   const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
   const classes = context?.classes ?? [];
@@ -376,12 +381,14 @@ export function Dashboard({
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
             externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
             horses={selectedOrganizationHorses}
             horseContacts={selectedOrganizationHorseContacts}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
+            onDeleteContact={onDeleteContact}
             onDeleteHorse={onDeleteHorse}
             onUpdateContact={onUpdateContact}
             onUpdateHorse={onUpdateHorse}
@@ -475,7 +482,9 @@ export function Dashboard({
           <MyHorsesView
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
+            externalOrganizations={externalOrganizations}
             horses={personalHorses}
+            horseExternalMemberships={horseExternalMemberships}
             horseContacts={selectedOrganizationHorseContacts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -496,6 +505,7 @@ export function Dashboard({
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
+            onDeleteContact={onDeleteContact}
             onUpdateContact={onUpdateContact}
           />
         ) : null}
@@ -614,15 +624,55 @@ function buildExternalMembershipFields(
       .map((requirement) => requirement.external_organization_id),
   );
   const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_organization_id));
-  const requiredOrExistingOrganizations = externalOrganizations.filter(
-    (organization) => requiredOrganizationIds.has(organization.id) || existingOrganizationIds.has(organization.id),
-  );
-  const visibleOrganizations = requiredOrExistingOrganizations.length ? requiredOrExistingOrganizations : externalOrganizations.slice(0, 3);
+  const visibleOrganizations = [...externalOrganizations].sort((a, b) => {
+    const aPinned = requiredOrganizationIds.has(a.id) || existingOrganizationIds.has(a.id);
+    const bPinned = requiredOrganizationIds.has(b.id) || existingOrganizationIds.has(b.id);
+
+    if (aPinned === bPinned) {
+      return a.name.localeCompare(b.name);
+    }
+
+    return aPinned ? -1 : 1;
+  });
 
   return visibleOrganizations.map((organization) => ({
     organization,
     required: requiredOrganizationIds.has(organization.id),
   }));
+}
+
+function horseReferenceTypeForOrganization(organization: ExternalOrganization): HorseExternalMembership["reference_type"] {
+  return organization.code.toUpperCase() === "NRHA" ? "competition_license" : "registration";
+}
+
+function horseExternalReferenceLabel(organization: ExternalOrganization) {
+  return organization.code.toUpperCase() === "NRHA" ? "NRHA Competition licence #" : `${organization.code} #`;
+}
+
+function buildHorseExternalMembershipFields(externalOrganizations: ExternalOrganization[], existingMemberships: HorseExternalMembership[] = []) {
+  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_organization_id));
+
+  return [...externalOrganizations].sort((a, b) => {
+    const aPinned = existingOrganizationIds.has(a.id);
+    const bPinned = existingOrganizationIds.has(b.id);
+
+    if (aPinned === bPinned) {
+      return a.name.localeCompare(b.name);
+    }
+
+    return aPinned ? -1 : 1;
+  });
+}
+
+function horseExternalReferenceSummary(horse: Horse, memberships: HorseExternalMembership[], externalOrganizations: ExternalOrganization[]) {
+  const references = memberships
+    .filter((membership) => membership.horse_id === horse.id)
+    .map((membership) => {
+      const organization = externalOrganizations.find((externalOrganization) => externalOrganization.id === membership.external_organization_id);
+      return `${organization?.code ?? "Ext."} ${membership.reference_number}`;
+    });
+
+  return references.length ? references.join(" · ") : "Aucune référence externe";
 }
 
 function OverviewView({
@@ -979,12 +1029,14 @@ function PeopleView({
   contactRoles,
   createdByUserId,
   externalOrganizations,
+  horseExternalMemberships,
   horses,
   horseContacts,
   membershipRequirements,
   organization,
   onCreateContact,
   onCreateHorse,
+  onDeleteContact,
   onDeleteHorse,
   onUpdateContact,
   onUpdateHorse,
@@ -994,12 +1046,14 @@ function PeopleView({
   contactRoles: ContactRole[];
   createdByUserId: string;
   externalOrganizations: ExternalOrganization[];
+  horseExternalMemberships: HorseExternalMembership[];
   horses: Horse[];
   horseContacts: HorseContact[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
+  onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
@@ -1015,6 +1069,19 @@ function PeopleView({
     await onDeleteHorse(horse.id);
     if (editingHorse?.id === horse.id) {
       setEditingHorse(null);
+    }
+  }
+
+  async function handleDeleteContact(contact: Contact) {
+    const label = contactLabel(contact);
+
+    if (!window.confirm(`Supprimer ${label}? Si ce contact est utilise comme cavalier dans une inscription de test, il sera detache de l'inscription.`)) {
+      return;
+    }
+
+    await onDeleteContact(contact.id);
+    if (editingContact?.id === contact.id) {
+      setEditingContact(null);
     }
   }
 
@@ -1036,7 +1103,15 @@ function PeopleView({
         organization={organization}
         onCreateContact={onCreateContact}
       />
-      <HorseForm contacts={contacts} contactRoles={contactRoles} createdByUserId={createdByUserId} organization={organization} onCreateContact={onCreateContact} onCreateHorse={onCreateHorse} />
+      <HorseForm
+        contacts={contacts}
+        contactRoles={contactRoles}
+        createdByUserId={createdByUserId}
+        externalOrganizations={externalOrganizations}
+        organization={organization}
+        onCreateContact={onCreateContact}
+        onCreateHorse={onCreateHorse}
+      />
 
       {editingContact ? (
         <ContactEditForm
@@ -1057,6 +1132,8 @@ function PeopleView({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
+          externalOrganizations={externalOrganizations}
+          horseExternalMemberships={horseExternalMemberships}
           horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
@@ -1088,9 +1165,14 @@ function PeopleView({
               <strong>{contactLabel(contact)}</strong>
               <span>{contactRoleSummary(contact, contactRoles)}</span>
               <span>{contact.email || "No email"}</span>
-              <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!contacts.length ? <EmptyState label="Create an owner or rider contact first." /> : null}
@@ -1113,7 +1195,10 @@ function PeopleView({
           </div>
           {horses.map((horse) => (
             <div className="table-row" key={horse.id}>
-              <strong>{horse.name}</strong>
+              <strong>
+                {horse.name}
+                <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
+              </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
               <div className="row-actions">
@@ -1692,7 +1777,9 @@ function ScoringView({
 function MyHorsesView({
   contacts,
   contactRoles,
+  externalOrganizations,
   horses,
+  horseExternalMemberships,
   horseContacts,
   organization,
   profileId,
@@ -1703,7 +1790,9 @@ function MyHorsesView({
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
+  externalOrganizations: ExternalOrganization[];
   horses: Horse[];
+  horseExternalMemberships: HorseExternalMembership[];
   horseContacts: HorseContact[];
   organization: Organization | null;
   profileId: string;
@@ -1741,6 +1830,7 @@ function MyHorsesView({
         contacts={contacts}
         contactRoles={contactRoles}
         createdByUserId={profileId}
+        externalOrganizations={externalOrganizations}
         organization={organization}
         onCreateContact={onCreateContact}
         onCreateHorse={onCreateHorse}
@@ -1751,6 +1841,8 @@ function MyHorsesView({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={profileId}
+          externalOrganizations={externalOrganizations}
+          horseExternalMemberships={horseExternalMemberships}
           horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
@@ -1779,7 +1871,10 @@ function MyHorsesView({
           </div>
           {horses.map((horse) => (
             <div className="table-row" key={horse.id}>
-              <strong>{horse.name}</strong>
+              <strong>
+                {horse.name}
+                <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
+              </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
               <div className="row-actions">
@@ -1808,6 +1903,7 @@ function MyContactsView({
   organization,
   profileId,
   onCreateContact,
+  onDeleteContact,
   onUpdateContact,
 }: {
   contacts: Contact[];
@@ -1818,11 +1914,25 @@ function MyContactsView({
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const canCreateLinkedContact = Boolean(organization && profileId);
   const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
+
+  async function handleDeleteContact(contact: Contact) {
+    const label = contactLabel(contact);
+
+    if (!window.confirm(`Supprimer ${label}? Si ce contact est utilise comme cavalier dans une inscription de test, il sera detache de l'inscription.`)) {
+      return;
+    }
+
+    await onDeleteContact(contact.id);
+    if (editingContact?.id === contact.id) {
+      setEditingContact(null);
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -1884,9 +1994,14 @@ function MyContactsView({
               <strong>{contactLabel(contact)}</strong>
               <span>{contactRoleSummary(contact, contactRoles)}</span>
               <span>{contact.email || "No email"}</span>
-              <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
           {!contacts.length ? <EmptyState label="Crée ton premier contact pour commencer." /> : null}
@@ -3132,6 +3247,7 @@ function HorseForm({
   contacts,
   contactRoles,
   createdByUserId,
+  externalOrganizations = [],
   organization,
   onCreateContact,
   onCreateHorse,
@@ -3139,6 +3255,7 @@ function HorseForm({
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId?: string;
+  externalOrganizations?: ExternalOrganization[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
@@ -3149,11 +3266,13 @@ function HorseForm({
   const [breed, setBreed] = useState("");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const selectedOwnerId = ownerContactId || currentUserContact?.id || "";
   const defaultAgentId = currentUserContact && selectedOwnerId !== currentUserContact.id ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
+  const externalReferenceFields = useMemo(() => buildHorseExternalMembershipFields(externalOrganizations), [externalOrganizations]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3174,6 +3293,12 @@ function HorseForm({
         gender: gender || null,
         registration_number: registrationNumber,
         created_by_user_id: createdByUserId,
+        external_memberships: externalReferenceFields.map((organization) => ({
+          external_organization_id: organization.id,
+          reference_type: horseReferenceTypeForOrganization(organization),
+          reference_number: externalReferenceNumbers[organization.id] ?? "",
+          status: "unknown",
+        })),
       });
       setName("");
       setOwnerContactId("");
@@ -3181,6 +3306,7 @@ function HorseForm({
       setBreed("");
       setGender("");
       setRegistrationNumber("");
+      setExternalReferenceNumbers({});
     } finally {
       setBusy(false);
     }
@@ -3243,6 +3369,29 @@ function HorseForm({
           Registration
           <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
+        {externalReferenceFields.length ? (
+          <div className="external-membership-fields">
+            <div className="inline-form-header">
+              <strong>Références externes du cheval</strong>
+              <span>Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.</span>
+            </div>
+            {externalReferenceFields.map((externalOrganization) => (
+              <label key={externalOrganization.id}>
+                {horseExternalReferenceLabel(externalOrganization)}
+                <input
+                  disabled={!organization}
+                  value={externalReferenceNumbers[externalOrganization.id] ?? ""}
+                  onChange={(event) =>
+                    setExternalReferenceNumbers((current) => ({
+                      ...current,
+                      [externalOrganization.id]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
         <button className="primary-button" disabled={busy || !organization || !selectedOwnerId} type="submit">
           <Plus size={18} />
           Create horse
@@ -3382,7 +3531,9 @@ function HorseEditForm({
   contacts,
   contactRoles,
   createdByUserId,
+  externalOrganizations = [],
   horse,
+  horseExternalMemberships = [],
   horseContacts,
   organization,
   onCancel,
@@ -3392,7 +3543,9 @@ function HorseEditForm({
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId?: string;
+  externalOrganizations?: ExternalOrganization[];
   horse: Horse;
+  horseExternalMemberships?: HorseExternalMembership[];
   horseContacts: HorseContact[];
   organization: Organization | null;
   onCancel: () => void;
@@ -3406,11 +3559,18 @@ function HorseEditForm({
   const [breed, setBreed] = useState(horse.breed ?? "");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>(horse.gender ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
+  const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>(() =>
+    Object.fromEntries(horseExternalMemberships.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_organization_id, membership.reference_number])),
+  );
   const [busy, setBusy] = useState(false);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
   const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
+  const externalReferenceFields = useMemo(
+    () => buildHorseExternalMembershipFields(externalOrganizations, horseExternalMemberships.filter((membership) => membership.horse_id === horse.id)),
+    [externalOrganizations, horse.id, horseExternalMemberships],
+  );
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3424,6 +3584,12 @@ function HorseEditForm({
         breed: breed || null,
         gender: gender || null,
         registration_number: registrationNumber || null,
+        external_memberships: externalReferenceFields.map((organization) => ({
+          external_organization_id: organization.id,
+          reference_type: horseReferenceTypeForOrganization(organization),
+          reference_number: externalReferenceNumbers[organization.id] ?? "",
+          status: "unknown",
+        })),
       });
     } finally {
       setBusy(false);
@@ -3485,6 +3651,28 @@ function HorseEditForm({
           Registration
           <input value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
+        {externalReferenceFields.length ? (
+          <div className="external-membership-fields">
+            <div className="inline-form-header">
+              <strong>Références externes du cheval</strong>
+              <span>Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.</span>
+            </div>
+            {externalReferenceFields.map((externalOrganization) => (
+              <label key={externalOrganization.id}>
+                {horseExternalReferenceLabel(externalOrganization)}
+                <input
+                  value={externalReferenceNumbers[externalOrganization.id] ?? ""}
+                  onChange={(event) =>
+                    setExternalReferenceNumbers((current) => ({
+                      ...current,
+                      [externalOrganization.id]: event.target.value,
+                    }))
+                  }
+                />
+              </label>
+            ))}
+          </div>
+        ) : null}
         <FormActions busy={busy || !ownerContactId} onCancel={onCancel} />
       </form>
     </section>

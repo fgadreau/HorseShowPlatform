@@ -177,6 +177,20 @@ export type ContactExternalMembership = {
   created_at: string;
 };
 
+export type HorseExternalMembership = {
+  id: string;
+  horse_id: string;
+  external_organization_id: string;
+  reference_type: "competition_license" | "registration" | "membership" | "other";
+  reference_number: string;
+  status: "active" | "pending" | "expired" | "unknown";
+  expires_on: string | null;
+  verified_at: string | null;
+  verification_source: string | null;
+  verification_payload: Record<string, unknown>;
+  created_at: string;
+};
+
 export type Horse = {
   id: string;
   organization_id: string;
@@ -469,6 +483,14 @@ export type ExternalMembershipInput = {
   expires_on?: string | null;
 };
 
+export type ExternalHorseMembershipInput = {
+  external_organization_id: string;
+  reference_type?: HorseExternalMembership["reference_type"];
+  reference_number: string;
+  status?: HorseExternalMembership["status"];
+  expires_on?: string | null;
+};
+
 export type HorseInput = {
   organization_id: string;
   name: string;
@@ -480,6 +502,7 @@ export type HorseInput = {
   birth_year?: number;
   registration_number?: string;
   created_by_user_id?: string;
+  external_memberships?: ExternalHorseMembershipInput[];
 };
 
 export type HorseUpdateInput = {
@@ -491,6 +514,7 @@ export type HorseUpdateInput = {
   gender?: Horse["gender"];
   birth_year?: number | null;
   registration_number?: string | null;
+  external_memberships?: ExternalHorseMembershipInput[];
 };
 
 export type ClassInput = {

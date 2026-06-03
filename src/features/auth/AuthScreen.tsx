@@ -30,6 +30,10 @@ function isLocalHostname() {
   return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
 }
 
+function authEmailRedirectUrl() {
+  return window.location.origin;
+}
+
 export function AuthScreen({
   locale,
   notice,
@@ -77,6 +81,7 @@ export function AuthScreen({
               email: normalizedEmail,
               password,
               options: {
+                emailRedirectTo: authEmailRedirectUrl(),
                 data: {
                   first_name: firstName.trim(),
                   last_name: lastName.trim(),
