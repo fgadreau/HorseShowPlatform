@@ -1424,6 +1424,30 @@ button:focus-visible {
   border-color: #e4ebe8;
 }
 
+.health-document-summary {
+  background: #ffffff;
+  border: 1px solid #e4ebe8;
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.health-document-title,
+.health-document-actions {
+  align-items: center;
+  display: grid;
+  gap: 10px;
+  grid-template-columns: auto 1fr;
+}
+
+.health-document-actions {
+  align-items: end;
+  grid-template-columns: 1fr auto;
+}
+
+.health-review-actions {
+  margin-top: 8px;
+}
+
 .requirement-list {
   display: grid;
   gap: 10px;
@@ -1699,7 +1723,9 @@ button:focus-visible {
 }
 
 .badge.open,
-.badge.paid {
+.badge.paid,
+.badge.approved,
+.badge.verified {
   background: #dff7e8;
   color: #166534;
 }
@@ -1712,13 +1738,16 @@ button:focus-visible {
 
 .badge.closed,
 .badge.partially_paid,
-.badge.overdue {
+.badge.overdue,
+.badge.pending_review,
+.badge.expired {
   background: #fff1dc;
   color: #9a5b13;
 }
 
 .badge.archived,
-.badge.void {
+.badge.void,
+.badge.rejected {
   background: #f1f5f9;
   color: #475569;
 }
@@ -1811,6 +1840,7 @@ button:focus-visible {
   .content-grid,
   .assistant-stepper,
   .checkbox-grid,
+  .health-document-actions,
   .invoice-detail-totals,
   .metric-grid,
   .overview-command,

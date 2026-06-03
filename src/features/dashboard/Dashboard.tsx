@@ -39,6 +39,7 @@ import {
   deleteContact,
   deleteHorse,
   deleteStallBooking,
+  reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   slugify,
   updateClass,
@@ -51,6 +52,7 @@ import {
   updateShow,
   updateStallBooking,
   updateStallOption,
+  verifyGvlCogginsDocument,
   type AppContext,
 } from "../../services/supabaseServices";
 import type {
@@ -68,6 +70,7 @@ import type {
   Horse,
   HorseContact,
   HorseExternalMembership,
+  HorseHealthDocument,
   Invoice,
   InvoiceLineItem,
   Organization,
@@ -107,6 +110,7 @@ export function Dashboard({
   onLocaleChange,
   onPrepareShowScoreClass,
   onRefresh,
+  onReviewHorseHealthDocument,
   onSignOut,
   onSetExternalMembershipRequirement,
   onUpdateClass,
@@ -116,6 +120,7 @@ export function Dashboard({
   onUpdateDivision,
   onUpdateEntry,
   onUpdateHorse,
+  onVerifyGvlCogginsDocument,
   onUpdateShow,
   onUpdateStallBooking,
   onUpdateStallOption,
@@ -147,6 +152,7 @@ export function Dashboard({
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
   onRefresh: () => void;
+  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onSignOut: () => void;
   onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
@@ -156,6 +162,7 @@ export function Dashboard({
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
@@ -173,6 +180,7 @@ export function Dashboard({
   const organizationExternalMembershipRequirements = context?.organizationExternalMembershipRequirements ?? [];
   const contactExternalMemberships = context?.contactExternalMemberships ?? [];
   const horseExternalMemberships = context?.horseExternalMemberships ?? [];
+  const horseHealthDocuments = context?.horseHealthDocuments ?? [];
   const horses = context?.horses ?? [];
   const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
   const classes = context?.classes ?? [];
@@ -219,6 +227,9 @@ export function Dashboard({
           .concat(horses.filter((horse) => horse.organization_id === selectedOrganization.id).map((horse) => horse.id)),
       )
     : new Set<string>();
+  const selectedOrganizationHorseHealthDocuments = selectedOrganization
+    ? horseHealthDocuments.filter((document) => document.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(document.horse_id))
+    : [];
   const selectedOrganizationContacts = selectedOrganization
     ? sortRecordsForOrganization(contacts, selectedOrganizationContactIds)
     : [];
@@ -267,6 +278,7 @@ export function Dashboard({
   );
   const personalHorses = selectedOrganizationHorses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
+  const personalHorseHealthDocuments = selectedOrganizationHorseHealthDocuments.filter((document) => personalHorseIds.has(document.horse_id));
   const personalEntries = selectedOrganizationEntries.filter(
     (entry) =>
       personalHorseIds.has(entry.horse_id) ||
@@ -381,7 +393,9 @@ export function Dashboard({
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
             externalOrganizations={externalOrganizations}
+            canManageHealthDocuments={canManageAssociation}
             horseExternalMemberships={horseExternalMemberships}
+            horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             horseContacts={selectedOrganizationHorseContacts}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -390,8 +404,10 @@ export function Dashboard({
             onCreateHorse={onCreateHorse}
             onDeleteContact={onDeleteContact}
             onDeleteHorse={onDeleteHorse}
+            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateContact={onUpdateContact}
             onUpdateHorse={onUpdateHorse}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
           />
         ) : null}
 
@@ -483,15 +499,19 @@ export function Dashboard({
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
             externalOrganizations={externalOrganizations}
+            canManageHealthDocuments={canManageAssociation}
             horses={personalHorses}
             horseExternalMemberships={horseExternalMemberships}
+            horseHealthDocuments={personalHorseHealthDocuments}
             horseContacts={selectedOrganizationHorseContacts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
             onDeleteHorse={onDeleteHorse}
+            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={onUpdateHorse}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
           />
         ) : null}
 
@@ -673,6 +693,48 @@ function horseExternalReferenceSummary(horse: Horse, memberships: HorseExternalM
     });
 
   return references.length ? references.join(" · ") : "Aucune référence externe";
+}
+
+function latestHorseHealthDocument(horseId: string, documents: HorseHealthDocument[], documentType: HorseHealthDocument["document_type"]) {
+  return [...documents]
+    .filter((document) => document.horse_id === horseId && document.document_type === documentType)
+    .sort((a, b) => {
+      const aDate = a.test_or_administered_on ?? a.created_at;
+      const bDate = b.test_or_administered_on ?? b.created_at;
+      return bDate.localeCompare(aDate);
+    })[0];
+}
+
+function horseHealthStatusLabel(status: HorseHealthDocument["status"]) {
+  const labels: Record<HorseHealthDocument["status"], string> = {
+    pending_review: "Revision",
+    verified: "Verifie",
+    approved: "Approuve",
+    rejected: "Refuse",
+    expired: "Expire",
+  };
+
+  return labels[status];
+}
+
+function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[]) {
+  const coggins = latestHorseHealthDocument(horse.id, documents, "coggins_eia");
+
+  if (!coggins) {
+    return "Coggins: manquant";
+  }
+
+  const testDate = coggins.test_or_administered_on ? ` - ${formatDate(coggins.test_or_administered_on)}` : "";
+  return `Coggins: ${horseHealthStatusLabel(coggins.status)}${testDate}`;
+}
+
+function birthYearFromDateValue(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const year = Number(value.slice(0, 4));
+  return Number.isFinite(year) ? year : null;
 }
 
 function OverviewView({
@@ -1027,9 +1089,11 @@ function PeopleView({
   contacts,
   contactExternalMemberships,
   contactRoles,
+  canManageHealthDocuments,
   createdByUserId,
   externalOrganizations,
   horseExternalMemberships,
+  horseHealthDocuments,
   horses,
   horseContacts,
   membershipRequirements,
@@ -1038,15 +1102,19 @@ function PeopleView({
   onCreateHorse,
   onDeleteContact,
   onDeleteHorse,
+  onReviewHorseHealthDocument,
   onUpdateContact,
   onUpdateHorse,
+  onVerifyGvlCogginsDocument,
 }: {
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
+  canManageHealthDocuments: boolean;
   createdByUserId: string;
   externalOrganizations: ExternalOrganization[];
   horseExternalMemberships: HorseExternalMembership[];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   horseContacts: HorseContact[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
@@ -1055,8 +1123,10 @@ function PeopleView({
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
+  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
 }) {
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
@@ -1131,18 +1201,22 @@ function PeopleView({
         <HorseEditForm
           contacts={contacts}
           contactRoles={contactRoles}
+          canManageHealthDocuments={canManageHealthDocuments}
           createdByUserId={createdByUserId}
           externalOrganizations={externalOrganizations}
           horseExternalMemberships={horseExternalMemberships}
+          horseHealthDocuments={horseHealthDocuments}
           horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
           onCreateContact={onCreateContact}
+          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
             setEditingHorse(null);
           }}
+          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
         />
       ) : null}
 
@@ -1198,6 +1272,7 @@ function PeopleView({
               <strong>
                 {horse.name}
                 <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
+                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments)}</span>
               </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
@@ -1777,29 +1852,37 @@ function ScoringView({
 function MyHorsesView({
   contacts,
   contactRoles,
+  canManageHealthDocuments,
   externalOrganizations,
   horses,
   horseExternalMemberships,
+  horseHealthDocuments,
   horseContacts,
   organization,
   profileId,
   onCreateContact,
   onCreateHorse,
   onDeleteHorse,
+  onReviewHorseHealthDocument,
   onUpdateHorse,
+  onVerifyGvlCogginsDocument,
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
+  canManageHealthDocuments: boolean;
   externalOrganizations: ExternalOrganization[];
   horses: Horse[];
   horseExternalMemberships: HorseExternalMembership[];
+  horseHealthDocuments: HorseHealthDocument[];
   horseContacts: HorseContact[];
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
+  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
 }) {
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
@@ -1840,18 +1923,22 @@ function MyHorsesView({
         <HorseEditForm
           contacts={contacts}
           contactRoles={contactRoles}
+          canManageHealthDocuments={canManageHealthDocuments}
           createdByUserId={profileId}
           externalOrganizations={externalOrganizations}
           horseExternalMemberships={horseExternalMemberships}
+          horseHealthDocuments={horseHealthDocuments}
           horseContacts={horseContacts}
           organization={organization}
           horse={editingHorse}
           onCancel={() => setEditingHorse(null)}
           onCreateContact={onCreateContact}
+          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
           onUpdateHorse={async (id, input) => {
             await onUpdateHorse(id, input);
             setEditingHorse(null);
           }}
+          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
         />
       ) : null}
 
@@ -1874,6 +1961,7 @@ function MyHorsesView({
               <strong>
                 {horse.name}
                 <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
+                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments)}</span>
               </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
@@ -3265,6 +3353,7 @@ function HorseForm({
   const [agentContactId, setAgentContactId] = useState<string | null>(null);
   const [breed, setBreed] = useState("");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
@@ -3291,6 +3380,7 @@ function HorseForm({
         agent_contact_id: selectedAgentId && selectedAgentId !== selectedOwnerId ? selectedAgentId : null,
         breed,
         gender: gender || null,
+        date_of_birth: dateOfBirth || null,
         registration_number: registrationNumber,
         created_by_user_id: createdByUserId,
         external_memberships: externalReferenceFields.map((organization) => ({
@@ -3305,6 +3395,7 @@ function HorseForm({
       setAgentContactId(null);
       setBreed("");
       setGender("");
+      setDateOfBirth("");
       setRegistrationNumber("");
       setExternalReferenceNumbers({});
     } finally {
@@ -3365,6 +3456,10 @@ function HorseForm({
             </select>
           </label>
         </div>
+        <label>
+          Date de naissance
+          <input disabled={!organization} type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+        </label>
         <label>
           Registration
           <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
@@ -3530,27 +3625,35 @@ function ContactEditForm({
 function HorseEditForm({
   contacts,
   contactRoles,
+  canManageHealthDocuments,
   createdByUserId,
   externalOrganizations = [],
   horse,
   horseExternalMemberships = [],
+  horseHealthDocuments = [],
   horseContacts,
   organization,
   onCancel,
   onCreateContact,
+  onReviewHorseHealthDocument,
   onUpdateHorse,
+  onVerifyGvlCogginsDocument,
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
+  canManageHealthDocuments: boolean;
   createdByUserId?: string;
   externalOrganizations?: ExternalOrganization[];
   horse: Horse;
   horseExternalMemberships?: HorseExternalMembership[];
+  horseHealthDocuments?: HorseHealthDocument[];
   horseContacts: HorseContact[];
   organization: Organization | null;
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<void>;
 }) {
   const currentAgentContactId = horseContacts.find((horseContact) => horseContact.horse_id === horse.id && horseContact.role === "agent")?.contact_id ?? "";
   const [name, setName] = useState(horse.name);
@@ -3558,11 +3661,14 @@ function HorseEditForm({
   const [agentContactId, setAgentContactId] = useState<string | null>(currentAgentContactId || null);
   const [breed, setBreed] = useState(horse.breed ?? "");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>(horse.gender ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(horse.date_of_birth ?? "");
   const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
+  const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>(() =>
     Object.fromEntries(horseExternalMemberships.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_organization_id, membership.reference_number])),
   );
   const [busy, setBusy] = useState(false);
+  const [healthBusy, setHealthBusy] = useState(false);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
   const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
@@ -3571,6 +3677,7 @@ function HorseEditForm({
     () => buildHorseExternalMembershipFields(externalOrganizations, horseExternalMemberships.filter((membership) => membership.horse_id === horse.id)),
     [externalOrganizations, horse.id, horseExternalMemberships],
   );
+  const latestCoggins = useMemo(() => latestHorseHealthDocument(horse.id, horseHealthDocuments, "coggins_eia"), [horse.id, horseHealthDocuments]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -3583,6 +3690,7 @@ function HorseEditForm({
         agent_contact_id: selectedAgentId && selectedAgentId !== ownerContactId ? selectedAgentId : null,
         breed: breed || null,
         gender: gender || null,
+        date_of_birth: dateOfBirth || null,
         registration_number: registrationNumber || null,
         external_memberships: externalReferenceFields.map((organization) => ({
           external_organization_id: organization.id,
@@ -3593,6 +3701,47 @@ function HorseEditForm({
       });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleVerifyGvlCoggins() {
+    if (!organization || !gvlCogginsUrl.trim()) {
+      return;
+    }
+
+    setHealthBusy(true);
+
+    try {
+      await onVerifyGvlCogginsDocument({
+        organization_id: organization.id,
+        horse_id: horse.id,
+        source_url: gvlCogginsUrl,
+        horse_name: name.trim() || horse.name,
+        horse_date_of_birth: dateOfBirth || horse.date_of_birth,
+        horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
+        created_by_user_id: createdByUserId,
+      });
+      setGvlCogginsUrl("");
+    } finally {
+      setHealthBusy(false);
+    }
+  }
+
+  async function handleReviewCoggins(status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
+    if (!latestCoggins) {
+      return;
+    }
+
+    setHealthBusy(true);
+
+    try {
+      await onReviewHorseHealthDocument(latestCoggins.id, {
+        status,
+        reviewed_by_user_id: createdByUserId,
+        review_notes: status === "approved" ? "Approuve manuellement par un gestionnaire de l'association." : "Refuse manuellement par un gestionnaire de l'association.",
+      });
+    } finally {
+      setHealthBusy(false);
     }
   }
 
@@ -3648,9 +3797,60 @@ function HorseEditForm({
           </label>
         </div>
         <label>
+          Date de naissance
+          <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+        </label>
+        <label>
           Registration
           <input value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
+        <div className="external-membership-fields health-document-fields">
+          <div className="inline-form-header">
+            <strong>Coggins / EIA GVL</strong>
+            <span>Validation automatique du resultat GVL.</span>
+          </div>
+          {latestCoggins ? (
+            <div className="health-document-summary">
+              <div className="health-document-title">
+                <span className={`badge ${latestCoggins.status}`}>{horseHealthStatusLabel(latestCoggins.status)}</span>
+                <strong>{latestCoggins.certificate_number ?? "Certificat GVL"}</strong>
+              </div>
+              <span className="muted-line">
+                {latestCoggins.test_or_administered_on ? `Test: ${formatDate(latestCoggins.test_or_administered_on)}` : "Date de test inconnue"}
+                {latestCoggins.result ? ` - ${latestCoggins.result}` : ""}
+              </span>
+              {latestCoggins.horse_name ? (
+                <span className="muted-line">
+                  GVL: {latestCoggins.horse_name}
+                  {latestCoggins.horse_date_of_birth ? ` - ne(e) ${formatDate(latestCoggins.horse_date_of_birth)}` : ""}
+                </span>
+              ) : null}
+              {latestCoggins.warnings.length ? <span className="muted-line">Revision: {latestCoggins.warnings.join(", ")}</span> : null}
+              {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
+                <div className="row-actions health-review-actions">
+                  <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("approved")}>
+                    Approuver
+                  </button>
+                  <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("rejected")}>
+                    Refuser
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : (
+            <span className="muted-line">Aucun Coggins GVL valide.</span>
+          )}
+          <div className="health-document-actions">
+            <label>
+              Lien GVL Coggins
+              <input placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
+            </label>
+            <button className="primary-button" disabled={healthBusy || !organization || !gvlCogginsUrl.trim()} type="button" onClick={handleVerifyGvlCoggins}>
+              <CheckCircle2 size={18} />
+              {healthBusy ? "Validation..." : "Valider GVL"}
+            </button>
+          </div>
+        </div>
         {externalReferenceFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">

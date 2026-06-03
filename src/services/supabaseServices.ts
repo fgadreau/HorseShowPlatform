@@ -26,6 +26,7 @@ import type {
   ExternalHorseMembershipInput,
   Horse,
   HorseExternalMembership,
+  HorseHealthDocument,
   HorseOrganizationLink,
   HorseContact,
   HorseInput,
@@ -68,6 +69,7 @@ export type AppContext = {
   organizationExternalMembershipRequirements: OrganizationExternalMembershipRequirement[];
   contactExternalMemberships: ContactExternalMembership[];
   horseExternalMemberships: HorseExternalMembership[];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   horseOrganizationLinks: HorseOrganizationLink[];
   horseContacts: HorseContact[];
@@ -164,6 +166,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     organizationExternalMembershipRequirementsResult,
     contactExternalMembershipsResult,
     horseExternalMembershipsResult,
+    horseHealthDocumentsResult,
     horsesResult,
     horseOrganizationLinksResult,
     horseContactsResult,
@@ -189,6 +192,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("organization_external_membership_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalMembershipRequirement[]>(),
     client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
     client.from("horse_external_memberships").select("*").order("created_at", { ascending: false }).returns<HorseExternalMembership[]>(),
+    client.from("horse_health_documents").select("*").order("created_at", { ascending: false }).returns<HorseHealthDocument[]>(),
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
     client.from("horse_organization_links").select("*").order("created_at", { ascending: false }).returns<HorseOrganizationLink[]>(),
     client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
@@ -285,6 +289,16 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw horseExternalMembershipsResult.error;
   }
 
+  const horseHealthDocuments = horseHealthDocumentsResult.error
+    ? isMissingSchemaError(horseHealthDocumentsResult.error, "horse_health_documents")
+      ? []
+      : null
+    : horseHealthDocumentsResult.data ?? [];
+
+  if (!horseHealthDocuments) {
+    throw horseHealthDocumentsResult.error;
+  }
+
   if (horsesResult.error) {
     throw horsesResult.error;
   }
@@ -375,6 +389,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     organizationExternalMembershipRequirements,
     contactExternalMemberships,
     horseExternalMemberships,
+    horseHealthDocuments,
     horses: horsesResult.data ?? [],
     horseOrganizationLinks,
     horseContacts: horseContactsResult.data ?? [],
@@ -720,6 +735,7 @@ export async function setOrganizationExternalMembershipRequirement(input: {
 
 export async function createHorse(input: HorseInput) {
   const client = requireSupabase();
+  const birthYear = input.birth_year ?? birthYearFromDate(input.date_of_birth ?? null);
   await ensureContactOrganizationLink({
     organization_id: input.organization_id,
     contact_id: input.primary_owner_contact_id,
@@ -745,7 +761,8 @@ export async function createHorse(input: HorseInput) {
       breed: input.breed || null,
       color: input.color || null,
       gender: input.gender || null,
-      birth_year: input.birth_year || null,
+      date_of_birth: input.date_of_birth || null,
+      birth_year: birthYear || null,
       registration_number: input.registration_number || null,
       created_by_user_id: input.created_by_user_id || null,
     })
@@ -801,6 +818,10 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
   const client = requireSupabase();
   const { agent_contact_id: agentContactId, external_memberships: externalMemberships, ...horseInput } = input;
   const existingHorse = await getHorseById(id);
+  const normalizedHorseInput = {
+    ...horseInput,
+    birth_year: horseInput.birth_year ?? (horseInput.date_of_birth !== undefined ? birthYearFromDate(horseInput.date_of_birth) : undefined),
+  };
 
   if (input.primary_owner_contact_id) {
     await ensureContactOrganizationLink({
@@ -820,7 +841,7 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
 
   const { data, error } = await client
     .from("horses")
-    .update(cleanPayload(horseInput))
+    .update(cleanPayload(normalizedHorseInput))
     .eq("id", id)
     .select("*")
     .single<Horse>();
@@ -898,6 +919,202 @@ export async function deleteHorse(id: string) {
   if (error) {
     throw error;
   }
+}
+
+type GvlCogginsVerification = {
+  error?: string;
+  status?: "verified" | "pending_review" | "rejected";
+  source_url?: string | null;
+  certificate_number?: string | null;
+  issuer_name?: string | null;
+  test_or_administered_on?: string | null;
+  result?: string | null;
+  horse_name?: string | null;
+  horse_date_of_birth?: string | null;
+  horse_external_id?: string | null;
+  verification_source?: HorseHealthDocument["verification_source"];
+  verified_at?: string | null;
+  warnings?: string[];
+  payload?: Record<string, unknown>;
+};
+
+export async function verifyGvlCogginsDocument(input: {
+  organization_id: string;
+  horse_id: string;
+  source_url: string;
+  horse_name?: string;
+  horse_date_of_birth?: string | null;
+  horse_birth_year?: number | null;
+  created_by_user_id?: string;
+}) {
+  const client = requireSupabase();
+  const sourceUrl = input.source_url.trim();
+
+  if (!sourceUrl) {
+    throw new Error("Ajoute un lien GVL avant de lancer la validation.");
+  }
+
+  const { data: verification, error: invokeError } = await client.functions.invoke<GvlCogginsVerification>("verify-gvl-coggins", {
+    body: {
+      url: sourceUrl,
+      horseName: input.horse_name,
+      horseDateOfBirth: input.horse_date_of_birth ?? null,
+      horseBirthYear: input.horse_birth_year ?? null,
+    },
+  });
+
+  if (invokeError) {
+    throw new Error(`Validation GVL impossible: ${invokeError.message}`);
+  }
+
+  if (!verification) {
+    throw new Error("Validation GVL impossible: aucune reponse recue.");
+  }
+
+  if (verification.error) {
+    throw new Error(verification.error);
+  }
+
+  const documentType: HorseHealthDocument["document_type"] = "coggins_eia";
+  const status: HorseHealthDocument["status"] = verification.status === "verified" ? "verified" : verification.status === "rejected" ? "rejected" : "pending_review";
+  const sourceUrlFromGvl = verification.source_url ?? sourceUrl;
+  const payload = {
+    organization_id: input.organization_id,
+    horse_id: input.horse_id,
+    document_type: documentType,
+    status,
+    verification_source: verification.verification_source ?? "gvl_url",
+    source_url: sourceUrlFromGvl,
+    certificate_number: verification.certificate_number ?? null,
+    issuer_name: verification.issuer_name ?? null,
+    test_or_administered_on: verification.test_or_administered_on ?? null,
+    result: verification.result ?? null,
+    horse_name: verification.horse_name ?? null,
+    horse_date_of_birth: verification.horse_date_of_birth ?? null,
+    horse_external_id: verification.horse_external_id ?? null,
+    warnings: verification.warnings ?? [],
+    payload: verification.payload ?? {},
+    reviewed_by_user_id: null,
+    reviewed_at: null,
+    review_notes: verification.warnings?.length ? verification.warnings.join(", ") : null,
+  };
+
+  const existing = await findExistingHorseHealthDocument({
+    horse_id: input.horse_id,
+    document_type: documentType,
+    certificate_number: payload.certificate_number,
+    source_url: sourceUrlFromGvl,
+  });
+
+  if (existing) {
+    const { data, error } = await client
+      .from("horse_health_documents")
+      .update(cleanPayload(payload))
+      .eq("id", existing.id)
+      .select("*")
+      .single<HorseHealthDocument>();
+
+    if (error) {
+      throw error;
+    }
+
+    return data;
+  }
+
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .insert({
+      ...payload,
+      created_by_user_id: input.created_by_user_id ?? null,
+    })
+    .select("*")
+    .single<HorseHealthDocument>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_health_documents")) {
+      throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+export async function reviewHorseHealthDocument(
+  id: string,
+  input: {
+    status: Extract<HorseHealthDocument["status"], "approved" | "rejected" | "pending_review">;
+    reviewed_by_user_id?: string;
+    review_notes?: string | null;
+  },
+) {
+  const client = requireSupabase();
+  const reviewed = input.status === "approved" || input.status === "rejected";
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .update(
+      cleanPayload({
+        status: input.status,
+        reviewed_by_user_id: reviewed ? input.reviewed_by_user_id ?? null : null,
+        reviewed_at: reviewed ? new Date().toISOString() : null,
+        review_notes: input.review_notes ?? null,
+      }),
+    )
+    .eq("id", id)
+    .select("*")
+    .single<HorseHealthDocument>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_health_documents")) {
+      throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return data;
+}
+
+async function findExistingHorseHealthDocument(input: {
+  horse_id: string;
+  document_type: HorseHealthDocument["document_type"];
+  certificate_number: string | null;
+  source_url: string;
+}) {
+  const client = requireSupabase();
+
+  if (input.certificate_number) {
+    const { data, error } = await client
+      .from("horse_health_documents")
+      .select("*")
+      .eq("horse_id", input.horse_id)
+      .eq("document_type", input.document_type)
+      .eq("certificate_number", input.certificate_number)
+      .maybeSingle<HorseHealthDocument>();
+
+    if (error && !isMissingSchemaError(error, "horse_health_documents")) {
+      throw error;
+    }
+
+    if (data) {
+      return data;
+    }
+  }
+
+  const { data, error } = await client
+    .from("horse_health_documents")
+    .select("*")
+    .eq("horse_id", input.horse_id)
+    .eq("document_type", input.document_type)
+    .eq("source_url", input.source_url)
+    .maybeSingle<HorseHealthDocument>();
+
+  if (error && !isMissingSchemaError(error, "horse_health_documents")) {
+    throw error;
+  }
+
+  return data ?? null;
 }
 
 async function upsertHorseContact(input: {
@@ -1930,6 +2147,15 @@ function titleCase(value: string) {
     .filter(Boolean)
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
     .join(" ");
+}
+
+function birthYearFromDate(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const year = Number(value.slice(0, 4));
+  return Number.isFinite(year) ? year : null;
 }
 
 function cleanPayload<T extends Record<string, unknown>>(input: T) {

@@ -191,6 +191,32 @@ export type HorseExternalMembership = {
   created_at: string;
 };
 
+export type HorseHealthDocument = {
+  id: string;
+  organization_id: string;
+  horse_id: string;
+  document_type: "coggins_eia" | "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other";
+  status: "pending_review" | "verified" | "approved" | "rejected" | "expired";
+  verification_source: "manual" | "gvl_qr" | "gvl_url" | "gvl_api" | "upload";
+  source_url: string | null;
+  document_url: string | null;
+  certificate_number: string | null;
+  issuer_name: string | null;
+  test_or_administered_on: string | null;
+  expires_on: string | null;
+  result: string | null;
+  horse_name: string | null;
+  horse_date_of_birth: string | null;
+  horse_external_id: string | null;
+  warnings: string[];
+  payload: Record<string, unknown>;
+  reviewed_by_user_id: string | null;
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+};
+
 export type Horse = {
   id: string;
   organization_id: string;
@@ -198,6 +224,7 @@ export type Horse = {
   breed: string | null;
   color: string | null;
   gender: "M" | "F" | "G" | null;
+  date_of_birth: string | null;
   birth_year: number | null;
   registration_number: string | null;
   primary_owner_contact_id: string;
@@ -499,6 +526,7 @@ export type HorseInput = {
   breed?: string;
   color?: string;
   gender?: Horse["gender"];
+  date_of_birth?: string | null;
   birth_year?: number;
   registration_number?: string;
   created_by_user_id?: string;
@@ -512,6 +540,7 @@ export type HorseUpdateInput = {
   breed?: string | null;
   color?: string | null;
   gender?: Horse["gender"];
+  date_of_birth?: string | null;
   birth_year?: number | null;
   registration_number?: string | null;
   external_memberships?: ExternalHorseMembershipInput[];

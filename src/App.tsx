@@ -27,6 +27,7 @@ import {
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
+  reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   updateClass,
   updateClassTemplate,
@@ -38,6 +39,7 @@ import {
   updateShow,
   updateStallBooking,
   updateStallOption,
+  verifyGvlCogginsDocument,
   type AppContext,
 } from "./services/supabaseServices";
 import type { Notice, ViewKey } from "./types/ui";
@@ -214,6 +216,22 @@ export default function App() {
       onUpdateHorse={async (id, input) => {
         await updateHorse(id, input);
         setNotice({ tone: "success", message: "Horse updated." });
+        await refreshContext();
+      }}
+      onReviewHorseHealthDocument={async (id, input) => {
+        const document = await reviewHorseHealthDocument(id, input);
+        setNotice({
+          tone: document.status === "rejected" ? "info" : "success",
+          message: document.status === "rejected" ? "Document sante refuse." : "Document sante approuve.",
+        });
+        await refreshContext();
+      }}
+      onVerifyGvlCogginsDocument={async (input) => {
+        const document = await verifyGvlCogginsDocument(input);
+        setNotice({
+          tone: document.status === "verified" ? "success" : "info",
+          message: document.status === "verified" ? "Coggins GVL verifie." : "Coggins GVL enregistre pour revision manuelle.",
+        });
         await refreshContext();
       }}
       onDeleteHorse={async (id) => {
