@@ -25,7 +25,7 @@ import type { Locale, Translation } from "../../lib/i18n";
 import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
 import { MyStallsView, StallsView } from "./StallsViews";
-import { buildShowScoreRunsForClass } from "../../services/showScoreAdapters";
+import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
 import {
   createClass,
   createClassTemplate,
@@ -2817,6 +2817,7 @@ function ScoringView({
 }) {
   const [showId, setShowId] = useState("");
   const [busyClassId, setBusyClassId] = useState("");
+  const [expandedDrawClassIds, setExpandedDrawClassIds] = useState<string[]>([]);
   const selectedShowId = showId || shows[0]?.id || "";
   const visibleClasses = selectedShowId ? classes.filter((classRecord) => classRecord.show_id === selectedShowId) : classes;
   const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.class_id));
@@ -2839,6 +2840,10 @@ function ScoringView({
     } finally {
       setBusyClassId("");
     }
+  }
+
+  function toggleDraw(classId: string) {
+    setExpandedDrawClassIds((current) => (current.includes(classId) ? current.filter((candidate) => candidate !== classId) : [...current, classId]));
   }
 
   return (
@@ -2896,27 +2901,71 @@ function ScoringView({
             const canPrepare = entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
             const prepareLabel = !entriesClosed ? "Sortie apres cutoff" : busyClassId === classRecord.id ? "Preparation" : setup ? "Rafraichir ordre" : "Sortir ordre";
 
+            const drawRuns = setup?.runs.length ? normalizeShowScoreRuns(setup.runs) : runs;
+            const drawIsExpanded = expandedDrawClassIds.includes(classRecord.id);
+            const lateRunCount = drawRuns.filter((run) => run.isLate || run.drawGroup === "late").length;
+            const regularRunCount = Math.max(0, drawRuns.length - lateRunCount);
+            const lastRegularDraw = drawRuns.reduce((highest, run) => (run.draw > 0 ? Math.max(highest, run.draw) : highest), 0);
+
             return (
-              <div className="table-row" key={classRecord.id}>
-                <div>
-                  <strong>{classRecord.name}</strong>
-                  <span className="muted-line">{classRecord.code || "No code"}</span>
+              <div className="scoring-class-group" key={classRecord.id}>
+                <div className="table-row">
+                  <div>
+                    <strong>{classRecord.name}</strong>
+                    <span className="muted-line">{classRecord.code || "No code"}</span>
+                  </div>
+                  <div>
+                    <span>{showLabel(show)}</span>
+                    <span className="muted-line">{day ? `${day.day_name || "Day"} - ${formatDate(day.day_date)}` : "No day assigned"}</span>
+                    <span className="muted-line">{classEntriesCloseLabel(classRecord)}</span>
+                  </div>
+                  <div>
+                    <strong>{runs.length}</strong>
+                    <span className="muted-line">{preparedRunCount ? `${preparedRunCount} saved` : "Not saved yet"}</span>
+                  </div>
+                  <div className="row-actions">
+                    <span className={`badge ${statusClass}`}>{status}</span>
+                    <button className="text-button" disabled={!canPrepare || busyClassId === classRecord.id} type="button" onClick={() => handlePrepare(classRecord)}>
+                      {prepareLabel}
+                    </button>
+                    <button className="text-button" disabled={!drawRuns.length} type="button" onClick={() => toggleDraw(classRecord.id)}>
+                      {drawIsExpanded ? "Masquer ordre" : "Voir ordre"}
+                    </button>
+                  </div>
                 </div>
-                <div>
-                  <span>{showLabel(show)}</span>
-                  <span className="muted-line">{day ? `${day.day_name || "Day"} - ${formatDate(day.day_date)}` : "No day assigned"}</span>
-                  <span className="muted-line">{classEntriesCloseLabel(classRecord)}</span>
-                </div>
-                <div>
-                  <strong>{runs.length}</strong>
-                  <span className="muted-line">{preparedRunCount ? `${preparedRunCount} saved` : "Not saved yet"}</span>
-                </div>
-                <div className="row-actions">
-                  <span className={`badge ${statusClass}`}>{status}</span>
-                  <button className="text-button" disabled={!canPrepare || busyClassId === classRecord.id} type="button" onClick={() => handlePrepare(classRecord)}>
-                    {prepareLabel}
-                  </button>
-                </div>
+                {drawIsExpanded ? (
+                  <div className="draw-detail-panel">
+                    <div className="draw-detail-summary">
+                      <span>{drawRuns.length} passages</span>
+                      <span>{lateRunCount} late</span>
+                      <span>{regularRunCount} reguliers</span>
+                      <span>Dernier draw {lastRegularDraw || "-"}</span>
+                    </div>
+                    <div className="draw-list">
+                      <div className="draw-list-row draw-list-head">
+                        <span>Draw</span>
+                        <span>Cheval</span>
+                        <span>Cavalier</span>
+                        <span>Division</span>
+                        <span>Statut</span>
+                      </div>
+                      {drawRuns.map((run) => {
+                        const division = findById(divisions, run.divisionId);
+                        return (
+                          <div className="draw-list-row" key={`${run.entryId}-${run.draw}`}>
+                            <strong>{formatDrawNumber(run.draw)}</strong>
+                            <span>{run.horse || "-"}</span>
+                            <span>{run.rider || "-"}</span>
+                            <span>{division ? divisionLabel(division, classes) : run.divisionId || "-"}</span>
+                            <span className={`badge ${run.isLate || run.drawGroup === "late" ? "warning" : "info"}`}>
+                              {run.isLate || run.drawGroup === "late" ? "Late" : "Regular"}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             );
           })}
@@ -2925,6 +2974,70 @@ function ScoringView({
       </section>
     </div>
   );
+}
+
+function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScoreRun[] {
+  return runs
+    .map((run, index) => {
+      const entryId = stringFromRecord(run, "entryId") || stringFromRecord(run, "entry_id") || stringFromRecord(run, "id");
+      const draw = numberFromRecord(run, "draw") ?? numberFromRecord(run, "order") ?? index + 1;
+
+      if (!entryId) {
+        return null;
+      }
+
+      const drawGroup = stringFromRecord(run, "drawGroup") === "late" || booleanFromRecord(run, "isLate") ? "late" : "regular";
+
+      return {
+        id: stringFromRecord(run, "id") || entryId,
+        entryId,
+        classId: stringFromRecord(run, "classId") || stringFromRecord(run, "class_id"),
+        divisionId: stringFromRecord(run, "divisionId") || stringFromRecord(run, "division_id"),
+        horseId: stringFromRecord(run, "horseId") || stringFromRecord(run, "horse_id"),
+        riderContactId: stringFromRecord(run, "riderContactId") || stringFromRecord(run, "rider_contact_id") || null,
+        ownerContactId: stringFromRecord(run, "ownerContactId") || stringFromRecord(run, "owner_contact_id"),
+        payerContactId: stringFromRecord(run, "payerContactId") || stringFromRecord(run, "payer_contact_id"),
+        order: numberFromRecord(run, "order") ?? draw,
+        draw,
+        backNumber: stringFromRecord(run, "backNumber") || stringFromRecord(run, "back_number"),
+        rider: stringFromRecord(run, "rider"),
+        horse: stringFromRecord(run, "horse"),
+        owner: stringFromRecord(run, "owner"),
+        isLate: drawGroup === "late",
+        drawGroup,
+      };
+    })
+    .filter((run): run is ShowScoreRun => Boolean(run))
+    .sort((first, second) => first.draw - second.draw);
+}
+
+function stringFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" ? value : "";
+}
+
+function numberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function booleanFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "boolean" ? value : false;
+}
+
+function formatDrawNumber(draw: number) {
+  return draw < 0 ? String(draw) : `#${draw}`;
 }
 
 function MyHorsesView({

@@ -1,4 +1,3 @@
-import type { AppContext } from "./supabaseServices";
 import type {
   ClassRecord,
   Contact,
@@ -87,6 +86,13 @@ type RunRelations = {
   contacts: Contact[];
 };
 
+type ShowScoreAdapterContext = {
+  organizations: Organization[];
+  shows: Show[];
+  showDays: ShowDay[];
+  classes: ClassRecord[];
+};
+
 const inactiveEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
 const minimumRiderDrawSpacing = 9;
 
@@ -141,7 +147,7 @@ export function toShowScoreClass(classRecord: ClassRecord): ShowScoreClass {
   };
 }
 
-export function buildShowScoreContext(context: AppContext, organizationId?: string): ShowScoreContext {
+export function buildShowScoreContext(context: ShowScoreAdapterContext, organizationId?: string): ShowScoreContext {
   const organizationIds = new Set(
     organizationId ? [organizationId] : context.organizations.map((organization) => organization.id),
   );

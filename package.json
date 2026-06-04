@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
-    "preview": "vite preview --host 0.0.0.0"
+    "preview": "vite preview --host 0.0.0.0",
+    "test:draw": "tsc -p tsconfig.draw-test.json && cp scripts/draw-test-package.json .tmp/draw-tests/package.json && node .tmp/draw-tests/scripts/draw-test-program.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
