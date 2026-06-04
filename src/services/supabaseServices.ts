@@ -1295,6 +1295,17 @@ export async function reviewHorseHealthDocument(
   return data;
 }
 
+export async function getHorseHealthDocumentFileUrl(documentUrl: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.storage.from("health-documents").createSignedUrl(documentUrl, 10 * 60);
+
+  if (error) {
+    throw error;
+  }
+
+  return data.signedUrl;
+}
+
 async function uploadHealthDocumentFile(input: { organization_id: string; horse_id: string; file: File }) {
   const client = requireSupabase();
   const objectPath = `${input.organization_id}/${input.horse_id}/${crypto.randomUUID()}-${safeStorageFileName(input.file.name)}`;
@@ -1579,7 +1590,7 @@ export async function createEntry(input: EntryInput) {
     payer_contact_id: input.payer_contact_id,
     created_by_user_id: input.created_by_user_id,
   });
-  await assertHorseCogginsValidForShow(input.horse_id, input.show_id);
+  await assertHorseHealthValidForShow(input.horse_id, input.show_id);
   await assertEntryShowLevelMembershipRequirements({
     organization_id: input.organization_id,
     owner_contact_id: input.owner_contact_id,
@@ -1647,7 +1658,7 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
   const nextEntryStatus = input.status ?? existing.status;
 
   if (!["cancelled", "scratched", "scratched_pending_refund"].includes(nextEntryStatus)) {
-    await assertHorseCogginsValidForShow(input.horse_id ?? existing.horse_id, existing.show_id);
+    await assertHorseHealthValidForShow(input.horse_id ?? existing.horse_id, existing.show_id);
     await assertEntryShowLevelMembershipRequirements({
       organization_id: existing.organization_id,
       owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
@@ -1758,7 +1769,7 @@ export async function createStallBooking(input: StallBookingInput) {
   const bookingStatus = input.status ?? "requested";
 
   if (input.horse_id && !["cancelled", "completed"].includes(bookingStatus)) {
-    await assertHorseCogginsValidForShow(input.horse_id, input.show_id);
+    await assertHorseHealthValidForShow(input.horse_id, input.show_id);
   }
 
   const { data, error } = await client
@@ -1818,7 +1829,7 @@ export async function updateStallBooking(id: string, input: StallBookingUpdateIn
   const nextBookingStatus = input.status ?? existing.status;
 
   if (nextBookingHorseId && !["cancelled", "completed"].includes(nextBookingStatus)) {
-    await assertHorseCogginsValidForShow(nextBookingHorseId, existing.show_id);
+    await assertHorseHealthValidForShow(nextBookingHorseId, existing.show_id);
   }
 
   const { data, error } = await client
@@ -2163,23 +2174,32 @@ async function getStallBookingById(id: string) {
   return data;
 }
 
-async function assertHorseCogginsValidForShow(horseId: string | null | undefined, showId: string | null | undefined) {
+async function assertHorseHealthValidForShow(horseId: string | null | undefined, showId: string | null | undefined) {
   if (!horseId || !showId) {
     return;
   }
 
   const client = requireSupabase();
-  const { error } = await client.rpc("assert_horse_coggins_valid_for_show", {
+  const { error } = await client.rpc("assert_horse_health_valid_for_show", {
     target_horse_id: horseId,
     target_show_id: showId,
   });
 
   if (error) {
-    if (isMissingRpcError(error, "assert_horse_coggins_valid_for_show")) {
-      return;
+    if (isMissingRpcError(error, "assert_horse_health_valid_for_show")) {
+      const { error: cogginsError } = await client.rpc("assert_horse_coggins_valid_for_show", {
+        target_horse_id: horseId,
+        target_show_id: showId,
+      });
+
+      if (!cogginsError || isMissingRpcError(cogginsError, "assert_horse_coggins_valid_for_show")) {
+        return;
+      }
+
+      throw new Error(cogginsError.message || "Le statut sante du cheval n'est pas valide pour ce show.");
     }
 
-    throw new Error(error.message || "Le Coggins du cheval n'est pas valide pour ce show.");
+    throw new Error(error.message || "Le statut sante du cheval n'est pas valide pour ce show.");
   }
 }
 

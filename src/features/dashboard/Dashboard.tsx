@@ -20,7 +20,7 @@ import {
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
-import { getHorseCogginsValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HorseCogginsValidity } from "../../lib/health";
+import { getHorseCogginsValidity, getHorseVaccineValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import type { Locale, Translation } from "../../lib/i18n";
 import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
@@ -43,6 +43,7 @@ import {
   deleteContact,
   deleteHorse,
   deleteStallBooking,
+  getHorseHealthDocumentFileUrl,
   reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   slugify,
@@ -421,6 +422,18 @@ export function Dashboard({
           />
         ) : null}
 
+        {effectiveView === "health" ? (
+          <HealthCenterView
+            contacts={selectedOrganizationContacts}
+            horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
+            horses={selectedOrganizationHorses}
+            organization={selectedOrganization}
+            profileId={context?.profile.id ?? ""}
+            shows={selectedOrganizationShows}
+            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+          />
+        ) : null}
+
         {effectiveView === "classes" ? (
           <ClassesView
             classes={selectedOrganizationClasses}
@@ -744,6 +757,12 @@ type InlineHealthMessage = {
   message: string;
 };
 
+type HorseHealthValidity = {
+  coggins: HorseCogginsValidity;
+  vaccine: HorseVaccineValidity;
+  valid: boolean;
+};
+
 function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMessage {
   if (document.status === "verified") {
     return {
@@ -836,20 +855,234 @@ function cogginsValidityTone(validity: HorseCogginsValidity): InlineHealthMessag
   return validity.valid ? "success" : validity.status === "pending_review" || validity.status === "not_required" ? "info" : "error";
 }
 
+function vaccineValidityMessage(validity: HorseVaccineValidity) {
+  if (validity.status === "not_required") {
+    return "Vaccin non exige par cette association.";
+  }
+
+  if (validity.status === "valid" && validity.expiresOn) {
+    return `Vaccin valide jusqu'au ${formatDate(validity.expiresOn)} (${validity.months} mois).`;
+  }
+
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Vaccin expire depuis le ${formatDate(validity.expiresOn)}.`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "Vaccin en revision manuelle.";
+  }
+
+  if (validity.status === "rejected") {
+    return "Vaccin refuse.";
+  }
+
+  return "Vaccin manquant.";
+}
+
+function getHorseHealthValidity(input: {
+  documents: HorseHealthDocument[];
+  horseId: string;
+  organization: Organization | null | undefined;
+  referenceDate?: string | null;
+}): HorseHealthValidity {
+  const coggins = getHorseCogginsValidity(input);
+  const vaccine = getHorseVaccineValidity(input);
+
+  return {
+    coggins,
+    vaccine,
+    valid: coggins.valid && vaccine.valid,
+  };
+}
+
+function horseHealthValidityMessage(validity: HorseHealthValidity) {
+  if (!validity.coggins.valid) {
+    return cogginsValidityMessage(validity.coggins);
+  }
+
+  if (!validity.vaccine.valid) {
+    return vaccineValidityMessage(validity.vaccine);
+  }
+
+  if (validity.coggins.status === "not_required" && validity.vaccine.status === "not_required") {
+    return "Documents sante non exiges par cette association.";
+  }
+
+  return [cogginsValidityMessage(validity.coggins), vaccineValidityMessage(validity.vaccine)].join(" · ");
+}
+
+function horseHealthValidityTone(validity: HorseHealthValidity): InlineHealthMessage["tone"] {
+  if (validity.valid) {
+    return "success";
+  }
+
+  return validity.coggins.status === "pending_review" || validity.vaccine.status === "pending_review" ? "info" : "error";
+}
+
 function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[], organization: Organization | null | undefined) {
-  const vaccine = latestHorseVaccineDocument(horse.id, documents);
-  const cogginsValidity = getHorseCogginsValidity({
+  const validity = getHorseHealthValidity({
     documents,
     horseId: horse.id,
     organization,
   });
 
-  const cogginsSummary = `Coggins: ${cogginsValidityMessage(cogginsValidity)}`;
-  const vaccineSummary = vaccine
-    ? `Vaccin: ${horseHealthStatusLabel(vaccine.status)}${vaccine.test_or_administered_on ? ` - ${formatDate(vaccine.test_or_administered_on)}` : ""}`
-    : "Vaccin: manquant";
+  return horseHealthValidityMessage(validity);
+}
 
-  return `${cogginsSummary} · ${vaccineSummary}`;
+type HealthAlert = {
+  detail: string;
+  horse: Horse;
+  key: string;
+  label: string;
+  referenceLabel: string;
+  tone: "error" | "warning" | "info";
+};
+
+function buildHealthAlerts(input: {
+  documents: HorseHealthDocument[];
+  horses: Horse[];
+  organization: Organization | null | undefined;
+  referenceShow: Show | null;
+  today: string;
+}) {
+  if (!organizationRequiresHealthVerification(input.organization)) {
+    return [];
+  }
+
+  const referenceDate = input.referenceShow?.start_date ?? input.today;
+  const referenceLabel = input.referenceShow ? `${input.referenceShow.name} - ${formatDate(input.referenceShow.start_date)}` : formatDate(input.today);
+  const alerts: HealthAlert[] = [];
+
+  for (const horse of input.horses) {
+    const validity = getHorseCogginsValidity({
+      documents: input.documents,
+      horseId: horse.id,
+      organization: input.organization,
+      referenceDate,
+    });
+
+    if (validity.status === "not_required") {
+      continue;
+    }
+
+    if (!validity.valid) {
+      alerts.push({
+        detail: cogginsValidityMessage(validity),
+        horse,
+        key: `${horse.id}-${validity.status}`,
+        label: healthAlertLabel(validity.status),
+        referenceLabel,
+        tone: validity.status === "pending_review" ? "warning" : "error",
+      });
+    } else if (validity.expiresOn) {
+      const daysUntilExpiry = daysBetween(input.today, validity.expiresOn);
+
+      if (daysUntilExpiry <= 30) {
+        alerts.push({
+          detail: `Coggins expire dans ${Math.max(daysUntilExpiry, 0)} jour${daysUntilExpiry === 1 ? "" : "s"} (${formatDate(validity.expiresOn)}).`,
+          horse,
+          key: `${horse.id}-coggins-expires-${validity.expiresOn}`,
+          label: "Bientôt expiré",
+          referenceLabel,
+          tone: "warning",
+        });
+      }
+    }
+
+    const vaccineValidity = getHorseVaccineValidity({
+      documents: input.documents,
+      horseId: horse.id,
+      organization: input.organization,
+      referenceDate,
+    });
+
+    if (vaccineValidity.status === "not_required") {
+      continue;
+    }
+
+    if (!vaccineValidity.valid) {
+      alerts.push({
+        detail: vaccineValidityMessage(vaccineValidity),
+        horse,
+        key: `${horse.id}-vaccine-${vaccineValidity.status}`,
+        label: healthAlertLabel(vaccineValidity.status),
+        referenceLabel,
+        tone: vaccineValidity.status === "pending_review" ? "warning" : "error",
+      });
+    } else if (vaccineValidity.expiresOn) {
+      const daysUntilExpiry = daysBetween(input.today, vaccineValidity.expiresOn);
+
+      if (daysUntilExpiry <= 30) {
+        alerts.push({
+          detail: `Vaccin expire dans ${Math.max(daysUntilExpiry, 0)} jour${daysUntilExpiry === 1 ? "" : "s"} (${formatDate(vaccineValidity.expiresOn)}).`,
+          horse,
+          key: `${horse.id}-vaccine-expires-${vaccineValidity.expiresOn}`,
+          label: "Bientôt expiré",
+          referenceLabel,
+          tone: "warning",
+        });
+      }
+    }
+  }
+
+  return alerts.sort((a, b) => {
+    const toneRank = { error: 0, warning: 1, info: 2 };
+    return toneRank[a.tone] - toneRank[b.tone] || a.horse.name.localeCompare(b.horse.name);
+  });
+}
+
+function healthAlertLabel(status: HealthGateStatus) {
+  if (status === "pending_review") {
+    return "En revision";
+  }
+
+  if (status === "expired") {
+    return "Expiré";
+  }
+
+  if (status === "rejected") {
+    return "Refusé";
+  }
+
+  return "Bloquant";
+}
+
+function healthDocumentTypeLabel(type: HorseHealthDocument["document_type"]) {
+  const labels: Record<HorseHealthDocument["document_type"], string> = {
+    coggins_eia: "Coggins / EIA",
+    combo_vaccine: "Vaccin influenza/rhino",
+    influenza_vaccine: "Vaccin influenza",
+    other: "Autre document",
+    rhino_vaccine: "Vaccin rhino",
+  };
+
+  return labels[type];
+}
+
+function healthVerificationSourceLabel(source: HorseHealthDocument["verification_source"]) {
+  const labels: Record<HorseHealthDocument["verification_source"], string> = {
+    gvl_api: "GVL API",
+    gvl_qr: "QR GVL",
+    gvl_url: "Lien GVL",
+    manual: "Manuel",
+    upload: "Fichier déposé",
+  };
+
+  return labels[source];
+}
+
+function healthDocumentDateValue(document: HorseHealthDocument) {
+  return document.test_or_administered_on ?? document.created_at.slice(0, 10);
+}
+
+function healthDocumentDateLabel(document: HorseHealthDocument) {
+  const label = document.document_type === "coggins_eia" ? "Test" : "Date";
+  return `${label}: ${formatDate(healthDocumentDateValue(document))}`;
+}
+
+function healthReviewNote(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
+  const action = status === "approved" ? "approuve" : "refuse";
+  return `${healthDocumentTypeLabel(document.document_type)} ${action} depuis le centre de validation sante.`;
 }
 
 function latestHorseVaccineDocument(horseId: string, documents: HorseHealthDocument[]) {
@@ -862,6 +1095,21 @@ function latestHorseVaccineDocument(horseId: string, documents: HorseHealthDocum
       const bDate = b.test_or_administered_on ?? b.created_at;
       return bDate.localeCompare(aDate);
     })[0];
+}
+
+function todayDateValue() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function daysBetween(from: string, to: string) {
+  const start = Date.parse(`${from}T00:00:00Z`);
+  const end = Date.parse(`${to}T00:00:00Z`);
+
+  if (!Number.isFinite(start) || !Number.isFinite(end)) {
+    return Number.POSITIVE_INFINITY;
+  }
+
+  return Math.ceil((end - start) / 86_400_000);
 }
 
 function birthYearFromDateValue(value: string | null | undefined) {
@@ -1470,6 +1718,196 @@ function PeopleView({
             </div>
           ))}
           {!horses.length ? <EmptyState label="Create a horse after adding an owner contact." /> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function HealthCenterView({
+  contacts,
+  horseHealthDocuments,
+  horses,
+  organization,
+  profileId,
+  shows,
+  onReviewHorseHealthDocument,
+}: {
+  contacts: Contact[];
+  horseHealthDocuments: HorseHealthDocument[];
+  horses: Horse[];
+  organization: Organization | null;
+  profileId: string;
+  shows: Show[];
+  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+}) {
+  const [busyDocumentId, setBusyDocumentId] = useState("");
+  const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
+  const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
+  const today = todayDateValue();
+  const pendingDocuments = [...horseHealthDocuments]
+    .filter((document) => document.status === "pending_review")
+    .sort((a, b) => healthDocumentDateValue(b).localeCompare(healthDocumentDateValue(a)));
+  const upcomingShows = [...shows]
+    .filter((show) => show.status !== "archived" && show.end_date >= today)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+  const referenceShow = upcomingShows[0] ?? [...shows].filter((show) => show.status !== "archived").sort((a, b) => a.start_date.localeCompare(b.start_date))[0] ?? null;
+  const healthAlerts = buildHealthAlerts({
+    documents: horseHealthDocuments,
+    horses,
+    organization,
+    referenceShow,
+    today,
+  });
+
+  async function handleReview(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
+    setBusyDocumentId(document.id);
+
+    try {
+      await onReviewHorseHealthDocument(document.id, {
+        status,
+        reviewed_by_user_id: profileId,
+        review_notes: healthReviewNote(document, status),
+      });
+    } finally {
+      setBusyDocumentId("");
+    }
+  }
+
+  async function handleOpenStoredDocument(document: HorseHealthDocument) {
+    if (!document.document_url) {
+      return;
+    }
+
+    setFileBusyDocumentId(document.id);
+    setFileErrorDocumentId("");
+
+    try {
+      const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
+      window.open(signedUrl, "_blank", "noopener,noreferrer");
+    } catch {
+      setFileErrorDocumentId(document.id);
+    } finally {
+      setFileBusyDocumentId("");
+    }
+  }
+
+  return (
+    <div className="content-grid">
+      <ViewIntro
+        eyebrow="Santé"
+        title="Centre de validation"
+        description="Traite les documents en revision et surveille les echeances avant les reservations et inscriptions."
+        stats={[
+          { label: "À valider", value: String(pendingDocuments.length) },
+          { label: "Alertes", value: String(healthAlerts.length) },
+          { label: "Chevaux", value: String(horses.length) },
+        ]}
+      />
+
+      <section className="metric-grid span-2">
+        <Metric detail="Documents en attente d'un gestionnaire." label="À valider" value={String(pendingDocuments.length)} />
+        <Metric detail={referenceShow ? `Reference: ${referenceShow.name}` : "Aucun show actif."} label="Échéances" value={String(healthAlerts.length)} />
+        <Metric detail={organizationRequiresHealthVerification(organization) ? "Coggins et vaccin obligatoires." : "Verification désactivée."} label="Règle santé" value={organizationCogginsValidityMonths(organization) + " mois"} />
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Documents à valider</h2>
+            <p>{pendingDocuments.length ? `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} en attente.` : "Aucun document en revision manuelle."}</p>
+          </div>
+        </div>
+        <div className="table health-review-table">
+          <div className="table-row table-head">
+            <span>Document</span>
+            <span>Cheval</span>
+            <span>Source</span>
+            <span>Action</span>
+          </div>
+          {pendingDocuments.map((document) => {
+            const horse = findById(horses, document.horse_id);
+            const owner = findById(contacts, horse?.primary_owner_contact_id);
+            const busy = busyDocumentId === document.id;
+
+            return (
+              <div className="table-row" key={document.id}>
+                <div>
+                  <strong>{healthDocumentTypeLabel(document.document_type)}</strong>
+                  <span className="muted-line">
+                    {healthDocumentDateLabel(document)}
+                    {document.result ? ` - ${document.result}` : ""}
+                  </span>
+                  {document.review_notes ? <span className="muted-line">{document.review_notes}</span> : null}
+                </div>
+                <div>
+                  <strong>{horseLabel(horse)}</strong>
+                  <span className="muted-line">{contactLabel(owner)}</span>
+                  {document.horse_name ? (
+                    <span className="muted-line">
+                      Doc: {document.horse_name}
+                      {document.horse_date_of_birth ? ` - ${formatDate(document.horse_date_of_birth)}` : ""}
+                    </span>
+                  ) : null}
+                </div>
+                <div>
+                  <span className={`badge ${document.status}`}>{horseHealthStatusLabel(document.status)}</span>
+                  <span className="muted-line">{healthVerificationSourceLabel(document.verification_source)}</span>
+                  {document.warnings.length ? <span className="muted-line">{document.warnings.join(", ")}</span> : null}
+                </div>
+                <div className="row-actions">
+                  {document.source_url ? (
+                    <a className="text-button" href={document.source_url} rel="noreferrer" target="_blank">
+                      Lien GVL
+                    </a>
+                  ) : null}
+                  {document.document_url ? (
+                    <button className="text-button" disabled={fileBusyDocumentId === document.id} type="button" onClick={() => void handleOpenStoredDocument(document)}>
+                      {fileBusyDocumentId === document.id ? "Ouverture..." : "PDF"}
+                    </button>
+                  ) : null}
+                  <button className="text-button" disabled={busy} type="button" onClick={() => void handleReview(document, "approved")}>
+                    Approuver
+                  </button>
+                  <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void handleReview(document, "rejected")}>
+                    Refuser
+                  </button>
+                  {fileErrorDocumentId === document.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
+                </div>
+              </div>
+            );
+          })}
+          {!pendingDocuments.length ? <EmptyState label="Aucun document santé en attente de validation." /> : null}
+        </div>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Échéances santé</h2>
+            <p>{referenceShow ? `Calculées avec la date d'arrivée du show ${referenceShow.name}.` : "Crée un show pour calculer les échéances par date d'arrivée."}</p>
+          </div>
+        </div>
+        <div className="table health-alert-table">
+          <div className="table-row table-head">
+            <span>Cheval</span>
+            <span>Statut</span>
+            <span>Référence</span>
+          </div>
+          {healthAlerts.map((alert) => (
+            <div className="table-row" key={alert.key}>
+              <div>
+                <strong>{alert.horse.name}</strong>
+                <span className="muted-line">{contactLabel(findById(contacts, alert.horse.primary_owner_contact_id))}</span>
+              </div>
+              <div>
+                <span className={`badge ${alert.tone}`}>{alert.label}</span>
+                <span className="muted-line">{alert.detail}</span>
+              </div>
+              <span>{alert.referenceLabel}</span>
+            </div>
+          ))}
+          {!healthAlerts.length ? <EmptyState label="Aucune échéance santé à surveiller pour l'instant." /> : null}
         </div>
       </section>
     </div>
@@ -2748,13 +3186,13 @@ function SettingsView({
           <label className="requirement-row">
             <input checked={healthRequired} disabled={!organization || healthBusy} type="checkbox" onChange={(event) => setHealthRequired(event.target.checked)} />
             <span>
-              <strong>Exiger un Coggins valide</strong>
-              Bloque les entries et stalls rattaches a un cheval si le Coggins ne couvre pas la date du show.
+              <strong>Exiger les documents sante valides</strong>
+              Bloque les entries et stalls rattaches a un cheval si le Coggins ou le vaccin influenza/rhino ne couvre pas la date du show.
             </span>
             <small>{healthRequired ? "Validation obligatoire" : "Validation non exigee"}</small>
           </label>
           <label>
-            Duree de validite Coggins
+            Duree de validite des documents sante
             <select disabled={!organization || healthBusy || !healthRequired} value={cogginsValidityMonths} onChange={(event) => setCogginsValidityMonths(Number(event.target.value) === 6 ? 6 : 12)}>
               <option value={6}>6 mois</option>
               <option value={12}>12 mois</option>
@@ -5661,8 +6099,8 @@ function EntryForm({
   const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
   const selectedRiderContact = findById(contacts, riderContactId) ?? null;
   const selectedPayerContact = findById(contacts, selectedPayerId) ?? null;
-  const selectedCogginsValidity = selectedHorse
-    ? getHorseCogginsValidity({
+  const selectedHealthValidity = selectedHorse
+    ? getHorseHealthValidity({
         documents: horseHealthDocuments,
         horseId: selectedHorse.id,
         organization,
@@ -5736,7 +6174,7 @@ function EntryForm({
           <SearchSelect
             disabled={!horses.length}
             items={horses.map((horse) => {
-              const validity = getHorseCogginsValidity({
+              const validity = getHorseHealthValidity({
                 documents: horseHealthDocuments,
                 horseId: horse.id,
                 organization,
@@ -5746,7 +6184,7 @@ function EntryForm({
               return {
                 id: horse.id,
                 label: horse.name,
-                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${cogginsValidityMessage(validity)}`,
+                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
               };
             })}
             placeholder="Search horse"
@@ -5756,10 +6194,10 @@ function EntryForm({
         </label>
         <InlineHealthMessage
           value={
-            selectedCogginsValidity
+            selectedHealthValidity
               ? {
-                  tone: cogginsValidityTone(selectedCogginsValidity),
-                  message: `${cogginsValidityMessage(selectedCogginsValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                  tone: horseHealthValidityTone(selectedHealthValidity),
+                  message: `${horseHealthValidityMessage(selectedHealthValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
                 }
               : null
           }
@@ -5875,8 +6313,8 @@ function EntryEditForm({
   const selectedRiderContact = findById(contacts, riderContactId) ?? null;
   const selectedPayerContact = findById(contacts, payerContactId) ?? null;
   const skipsEntryReadiness = ["cancelled", "scratched", "scratched_pending_refund"].includes(status);
-  const selectedCogginsValidity = selectedHorse
-    ? getHorseCogginsValidity({
+  const selectedHealthValidity = selectedHorse
+    ? getHorseHealthValidity({
         documents: horseHealthDocuments,
         horseId: selectedHorse.id,
         organization,
@@ -5938,7 +6376,7 @@ function EntryEditForm({
           Horse
           <SearchSelect
             items={horses.map((horse) => {
-              const validity = getHorseCogginsValidity({
+              const validity = getHorseHealthValidity({
                 documents: horseHealthDocuments,
                 horseId: horse.id,
                 organization,
@@ -5948,7 +6386,7 @@ function EntryEditForm({
               return {
                 id: horse.id,
                 label: horse.name,
-                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${cogginsValidityMessage(validity)}`,
+                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
               };
             })}
             placeholder="Search horse"
@@ -5958,10 +6396,10 @@ function EntryEditForm({
         </label>
         <InlineHealthMessage
           value={
-            selectedCogginsValidity
+            selectedHealthValidity
               ? {
-                  tone: cogginsValidityTone(selectedCogginsValidity),
-                  message: `${cogginsValidityMessage(selectedCogginsValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                  tone: horseHealthValidityTone(selectedHealthValidity),
+                  message: `${horseHealthValidityMessage(selectedHealthValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
                 }
               : null
           }

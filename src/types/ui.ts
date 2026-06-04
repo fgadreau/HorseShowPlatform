@@ -5,6 +5,7 @@ export type ViewKey =
   | "overview"
   | "shows"
   | "people"
+  | "health"
   | "classes"
   | "entries"
   | "stalls"

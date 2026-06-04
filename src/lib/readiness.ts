@@ -1,5 +1,5 @@
 import { contactLabel, formatDate, horseLabel } from "./display";
-import { getHorseCogginsValidity, type HorseCogginsValidity } from "./health";
+import { getHorseCogginsValidity, getHorseVaccineValidity, type HorseCogginsValidity, type HorseVaccineValidity } from "./health";
 import type {
   Contact,
   ContactExternalMembership,
@@ -62,6 +62,12 @@ export function buildHorseShowReadiness(input: {
     organization: input.organization,
     referenceDate: input.show?.start_date ?? null,
   });
+  const vaccineValidity = getHorseVaccineValidity({
+    documents: input.documents,
+    horseId: input.horse.id,
+    organization: input.organization,
+    referenceDate: input.show?.start_date ?? null,
+  });
 
   items.push({
     blocking: !cogginsValidity.valid,
@@ -69,6 +75,13 @@ export function buildHorseShowReadiness(input: {
     key: "horse.coggins",
     status: horseCogginsReadinessStatus(cogginsValidity),
     title: `Coggins - ${horseLabel(input.horse)}`,
+  });
+  items.push({
+    blocking: !vaccineValidity.valid,
+    detail: horseVaccineReadinessMessage(vaccineValidity, input.show),
+    key: "horse.vaccine",
+    status: horseVaccineReadinessStatus(vaccineValidity),
+    title: `Vaccin influenza/rhino - ${horseLabel(input.horse)}`,
   });
 
   return summarizeReadiness(items, "Cheval pret pour le show.");
@@ -253,6 +266,18 @@ function horseCogginsReadinessStatus(validity: HorseCogginsValidity): ReadinessI
   return validity.status === "pending_review" ? "pending" : "blocked";
 }
 
+function horseVaccineReadinessStatus(validity: HorseVaccineValidity): ReadinessItemStatus {
+  if (validity.status === "not_required") {
+    return "not_required";
+  }
+
+  if (validity.valid) {
+    return "ready";
+  }
+
+  return validity.status === "pending_review" ? "pending" : "blocked";
+}
+
 function horseCogginsReadinessMessage(validity: HorseCogginsValidity, show: Show | null | undefined) {
   const reference = show ? ` pour l'arrivee du show (${formatDate(show.start_date)})` : "";
 
@@ -277,6 +302,32 @@ function horseCogginsReadinessMessage(validity: HorseCogginsValidity, show: Show
   }
 
   return "Coggins manquant; ajouter un GVL valide ou deposer le PDF pour revision.";
+}
+
+function horseVaccineReadinessMessage(validity: HorseVaccineValidity, show: Show | null | undefined) {
+  const reference = show ? ` pour l'arrivee du show (${formatDate(show.start_date)})` : "";
+
+  if (!validity.required) {
+    return "Certificat vaccin non exige par cette association.";
+  }
+
+  if (validity.status === "valid" && validity.expiresOn) {
+    return `Certificat vaccin valide jusqu'au ${formatDate(validity.expiresOn)}${reference}.`;
+  }
+
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Certificat vaccin expire le ${formatDate(validity.expiresOn)} et ne couvre pas${reference || " la date de reference"}.`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "Certificat vaccin en revision manuelle; il doit etre approuve avant de reserver ou inscrire.";
+  }
+
+  if (validity.status === "rejected") {
+    return "Certificat vaccin refuse; deposer un nouveau document ou corriger la fiche.";
+  }
+
+  return "Certificat vaccin influenza/rhino manquant.";
 }
 
 export function readinessItemClassName(item: ReadinessItem) {
