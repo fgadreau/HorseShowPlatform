@@ -1266,6 +1266,7 @@ export async function reviewHorseHealthDocument(
     status: Extract<HorseHealthDocument["status"], "approved" | "rejected" | "pending_review">;
     reviewed_by_user_id?: string;
     review_notes?: string | null;
+    test_or_administered_on?: string | null;
   },
 ) {
   const client = requireSupabase();
@@ -1278,6 +1279,7 @@ export async function reviewHorseHealthDocument(
         reviewed_by_user_id: reviewed ? input.reviewed_by_user_id ?? null : null,
         reviewed_at: reviewed ? new Date().toISOString() : null,
         review_notes: input.review_notes ?? null,
+        test_or_administered_on: input.test_or_administered_on === undefined ? undefined : input.test_or_administered_on || null,
       }),
     )
     .eq("id", id)
@@ -1297,13 +1299,46 @@ export async function reviewHorseHealthDocument(
 
 export async function getHorseHealthDocumentFileUrl(documentUrl: string) {
   const client = requireSupabase();
-  const { data, error } = await client.storage.from("health-documents").createSignedUrl(documentUrl, 10 * 60);
+  const objectPath = horseHealthDocumentObjectPath(documentUrl);
+
+  if (/^https?:\/\//i.test(objectPath)) {
+    return objectPath;
+  }
+
+  const { data, error } = await client.storage.from("health-documents").createSignedUrl(objectPath, 10 * 60);
 
   if (error) {
     throw error;
   }
 
   return data.signedUrl;
+}
+
+function horseHealthDocumentObjectPath(documentUrl: string) {
+  const cleanUrl = documentUrl.trim();
+
+  if (!cleanUrl) {
+    return cleanUrl;
+  }
+
+  if (!/^https?:\/\//i.test(cleanUrl)) {
+    return cleanUrl.replace(/^\/+/, "").replace(/^health-documents\//, "");
+  }
+
+  try {
+    const url = new URL(cleanUrl);
+    const decodedPath = decodeURIComponent(url.pathname);
+    const marker = "/health-documents/";
+    const markerIndex = decodedPath.indexOf(marker);
+
+    if (markerIndex >= 0) {
+      return decodedPath.slice(markerIndex + marker.length);
+    }
+  } catch {
+    return cleanUrl;
+  }
+
+  return cleanUrl;
 }
 
 async function uploadHealthDocumentFile(input: { organization_id: string; horse_id: string; file: File }) {

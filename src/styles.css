@@ -1520,6 +1520,17 @@ button:focus-visible {
   margin-top: 8px;
 }
 
+.compact-label {
+  display: grid;
+  font-size: 12px;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.compact-label input {
+  min-height: 36px;
+}
+
 .requirement-list {
   display: grid;
   gap: 10px;
@@ -1772,7 +1783,7 @@ button:focus-visible {
 }
 
 .health-alert-table .table-row {
-  grid-template-columns: 1.2fr 1fr 1fr;
+  grid-template-columns: 1.2fr 1fr 1fr 0.7fr;
 }
 
 .muted-line {

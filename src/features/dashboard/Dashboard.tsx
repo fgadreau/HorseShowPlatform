@@ -424,13 +424,23 @@ export function Dashboard({
 
         {effectiveView === "health" ? (
           <HealthCenterView
+            canManageHealthDocuments={canManageAssociation}
             contacts={selectedOrganizationContacts}
+            contactRoles={selectedOrganizationContactRoles}
+            createdByUserId={context?.profile.id ?? ""}
+            externalOrganizations={externalOrganizations}
+            horseContacts={selectedOrganizationHorseContacts}
+            horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
+            onCreateContact={onCreateContact}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+            onUpdateHorse={onUpdateHorse}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
           />
         ) : null}
 
@@ -1057,6 +1067,10 @@ function healthDocumentTypeLabel(type: HorseHealthDocument["document_type"]) {
   };
 
   return labels[type];
+}
+
+function isVaccineHealthDocument(document: Pick<HorseHealthDocument, "document_type">) {
+  return document.document_type === "combo_vaccine" || document.document_type === "influenza_vaccine" || document.document_type === "rhino_vaccine";
 }
 
 function healthVerificationSourceLabel(source: HorseHealthDocument["verification_source"]) {
@@ -1725,25 +1739,47 @@ function PeopleView({
 }
 
 function HealthCenterView({
+  canManageHealthDocuments,
   contacts,
+  contactRoles,
+  createdByUserId,
+  externalOrganizations,
+  horseContacts,
+  horseExternalMemberships,
   horseHealthDocuments,
   horses,
   organization,
   profileId,
   shows,
+  onCreateContact,
+  onCreateHorseHealthDocument,
   onReviewHorseHealthDocument,
+  onUpdateHorse,
+  onVerifyGvlCogginsDocument,
 }: {
+  canManageHealthDocuments: boolean;
   contacts: Contact[];
+  contactRoles: ContactRole[];
+  createdByUserId: string;
+  externalOrganizations: ExternalOrganization[];
+  horseContacts: HorseContact[];
+  horseExternalMemberships: HorseExternalMembership[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
+  onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+  onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
   const [busyDocumentId, setBusyDocumentId] = useState("");
+  const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
   const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
+  const [reviewDateByDocumentId, setReviewDateByDocumentId] = useState<Record<string, string>>({});
   const today = todayDateValue();
   const pendingDocuments = [...horseHealthDocuments]
     .filter((document) => document.status === "pending_review")
@@ -1759,8 +1795,15 @@ function HealthCenterView({
     referenceShow,
     today,
   });
+  const currentEditingHorse = editingHorse ? findById(horses, editingHorse.id) ?? editingHorse : null;
 
   async function handleReview(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
+    const reviewDate = reviewDateByDocumentId[document.id] ?? document.test_or_administered_on ?? "";
+
+    if (status === "approved" && isVaccineHealthDocument(document) && !reviewDate) {
+      return;
+    }
+
     setBusyDocumentId(document.id);
 
     try {
@@ -1768,6 +1811,7 @@ function HealthCenterView({
         status,
         reviewed_by_user_id: profileId,
         review_notes: healthReviewNote(document, status),
+        test_or_administered_on: status === "approved" && isVaccineHealthDocument(document) ? reviewDate || null : undefined,
       });
     } finally {
       setBusyDocumentId("");
@@ -1779,13 +1823,19 @@ function HealthCenterView({
       return;
     }
 
+    const documentWindow = window.open("about:blank", "_blank");
     setFileBusyDocumentId(document.id);
     setFileErrorDocumentId("");
 
     try {
       const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
-      window.open(signedUrl, "_blank", "noopener,noreferrer");
+      if (documentWindow) {
+        documentWindow.location.href = signedUrl;
+      } else {
+        window.open(signedUrl, "_blank", "noopener,noreferrer");
+      }
     } catch {
+      documentWindow?.close();
       setFileErrorDocumentId(document.id);
     } finally {
       setFileBusyDocumentId("");
@@ -1811,6 +1861,39 @@ function HealthCenterView({
         <Metric detail={organizationRequiresHealthVerification(organization) ? "Coggins et vaccin obligatoires." : "Verification désactivée."} label="Règle santé" value={organizationCogginsValidityMonths(organization) + " mois"} />
       </section>
 
+      {currentEditingHorse ? (
+        <HorseEditForm
+          canManageHealthDocuments={canManageHealthDocuments}
+          contacts={contacts}
+          contactRoles={contactRoles}
+          createdByUserId={createdByUserId}
+          externalOrganizations={externalOrganizations}
+          horse={currentEditingHorse}
+          horseContacts={horseContacts}
+          horseExternalMemberships={horseExternalMemberships}
+          horseHealthDocuments={horseHealthDocuments}
+          organization={organization}
+          onCancel={() => setEditingHorse(null)}
+          onCreateContact={onCreateContact}
+          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+          onUpdateHorse={async (id, input) => {
+            await onUpdateHorse(id, input);
+            setEditingHorse((current) =>
+              current?.id === id
+                ? {
+                    ...current,
+                    ...input,
+                    birth_year: input.birth_year ?? current.birth_year,
+                    primary_owner_contact_id: input.primary_owner_contact_id ?? current.primary_owner_contact_id,
+                  }
+                : current,
+            );
+          }}
+          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+        />
+      ) : null}
+
       <section className="panel span-2">
         <div className="panel-header">
           <div>
@@ -1829,6 +1912,8 @@ function HealthCenterView({
             const horse = findById(horses, document.horse_id);
             const owner = findById(contacts, horse?.primary_owner_contact_id);
             const busy = busyDocumentId === document.id;
+            const reviewDate = reviewDateByDocumentId[document.id] ?? document.test_or_administered_on ?? "";
+            const needsReviewDate = isVaccineHealthDocument(document);
 
             return (
               <div className="table-row" key={document.id}>
@@ -1839,6 +1924,21 @@ function HealthCenterView({
                     {document.result ? ` - ${document.result}` : ""}
                   </span>
                   {document.review_notes ? <span className="muted-line">{document.review_notes}</span> : null}
+                  {needsReviewDate ? (
+                    <label className="compact-label">
+                      Date vaccin validée
+                      <input
+                        type="date"
+                        value={reviewDate}
+                        onChange={(event) =>
+                          setReviewDateByDocumentId((current) => ({
+                            ...current,
+                            [document.id]: event.target.value,
+                          }))
+                        }
+                      />
+                    </label>
+                  ) : null}
                 </div>
                 <div>
                   <strong>{horseLabel(horse)}</strong>
@@ -1856,6 +1956,11 @@ function HealthCenterView({
                   {document.warnings.length ? <span className="muted-line">{document.warnings.join(", ")}</span> : null}
                 </div>
                 <div className="row-actions">
+                  {horse ? (
+                    <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                      Edit horse
+                    </button>
+                  ) : null}
                   {document.source_url ? (
                     <a className="text-button" href={document.source_url} rel="noreferrer" target="_blank">
                       Lien GVL
@@ -1866,7 +1971,7 @@ function HealthCenterView({
                       {fileBusyDocumentId === document.id ? "Ouverture..." : "PDF"}
                     </button>
                   ) : null}
-                  <button className="text-button" disabled={busy} type="button" onClick={() => void handleReview(document, "approved")}>
+                  <button className="text-button" disabled={busy || (needsReviewDate && !reviewDate)} type="button" onClick={() => void handleReview(document, "approved")}>
                     Approuver
                   </button>
                   <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void handleReview(document, "rejected")}>
@@ -1893,6 +1998,7 @@ function HealthCenterView({
             <span>Cheval</span>
             <span>Statut</span>
             <span>Référence</span>
+            <span>Action</span>
           </div>
           {healthAlerts.map((alert) => (
             <div className="table-row" key={alert.key}>
@@ -1905,6 +2011,11 @@ function HealthCenterView({
                 <span className="muted-line">{alert.detail}</span>
               </div>
               <span>{alert.referenceLabel}</span>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingHorse(alert.horse)}>
+                  Edit horse
+                </button>
+              </div>
             </div>
           ))}
           {!healthAlerts.length ? <EmptyState label="Aucune échéance santé à surveiller pour l'instant." /> : null}
@@ -4524,6 +4635,8 @@ function HorseEditForm({
   );
   const [busy, setBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
+  const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
+  const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
@@ -4544,6 +4657,11 @@ function HorseEditForm({
     [horse.id, horseHealthDocuments, organization],
   );
   const latestVaccine = useMemo(() => latestHorseVaccineDocument(horse.id, horseHealthDocuments), [horse.id, horseHealthDocuments]);
+  const [vaccineReviewDate, setVaccineReviewDate] = useState(latestVaccine?.test_or_administered_on ?? "");
+
+  useEffect(() => {
+    setVaccineReviewDate(latestVaccine?.test_or_administered_on ?? "");
+  }, [latestVaccine?.id, latestVaccine?.test_or_administered_on]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -4623,6 +4741,35 @@ function HorseEditForm({
     }
   }
 
+  async function handleReverifyLatestGvlCoggins() {
+    if (!organization || !latestCoggins?.source_url) {
+      return;
+    }
+
+    setHealthBusy(true);
+    setHealthMessage(null);
+
+    try {
+      const document = await onVerifyGvlCogginsDocument({
+        organization_id: organization.id,
+        horse_id: horse.id,
+        source_url: latestCoggins.source_url,
+        horse_name: name.trim() || horse.name,
+        horse_date_of_birth: dateOfBirth || horse.date_of_birth,
+        horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
+        created_by_user_id: createdByUserId,
+      });
+      setHealthMessage(horseHealthResultMessage(document));
+    } catch (error) {
+      setHealthMessage({
+        tone: "error",
+        message: errorMessage(error),
+      });
+    } finally {
+      setHealthBusy(false);
+    }
+  }
+
   async function handleReviewCoggins(status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
     if (!latestCoggins) {
       return;
@@ -4636,10 +4783,23 @@ function HorseEditForm({
       return;
     }
 
-    await handleReviewHealthDocument(latestVaccine, status, "certificat vaccin");
+    if (status === "approved" && !vaccineReviewDate) {
+      setHealthMessage({
+        tone: "error",
+        message: "Entre la date du vaccin vue sur le certificat avant d'approuver.",
+      });
+      return;
+    }
+
+    await handleReviewHealthDocument(latestVaccine, status, "certificat vaccin", status === "approved" ? vaccineReviewDate || null : undefined);
   }
 
-  async function handleReviewHealthDocument(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">, label: string) {
+  async function handleReviewHealthDocument(
+    document: HorseHealthDocument,
+    status: Extract<HorseHealthDocument["status"], "approved" | "rejected">,
+    label: string,
+    testOrAdministeredOn?: string | null,
+  ) {
     setHealthBusy(true);
     setHealthMessage(null);
 
@@ -4651,6 +4811,7 @@ function HorseEditForm({
           status === "approved"
             ? `${label} approuve manuellement par un gestionnaire de l'association.`
             : `${label} refuse manuellement par un gestionnaire de l'association.`,
+        test_or_administered_on: testOrAdministeredOn,
       });
       setHealthMessage({
         tone: status === "approved" ? "success" : "info",
@@ -4683,6 +4844,30 @@ function HorseEditForm({
       setVaccineAdministeredOn("");
     } finally {
       setHealthBusy(false);
+    }
+  }
+
+  async function handleOpenStoredDocument(document: HorseHealthDocument) {
+    if (!document.document_url) {
+      return;
+    }
+
+    const documentWindow = window.open("about:blank", "_blank");
+    setFileBusyDocumentId(document.id);
+    setFileErrorDocumentId("");
+
+    try {
+      const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
+      if (documentWindow) {
+        documentWindow.location.href = signedUrl;
+      } else {
+        window.open(signedUrl, "_blank", "noopener,noreferrer");
+      }
+    } catch {
+      documentWindow?.close();
+      setFileErrorDocumentId(document.id);
+    } finally {
+      setFileBusyDocumentId("");
     }
   }
 
@@ -4774,16 +4959,29 @@ function HorseEditForm({
                 </a>
               ) : null}
               {latestCoggins.warnings.length ? <span className="muted-line">Revision: {latestCoggins.warnings.join(", ")}</span> : null}
-              {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
-                <div className="row-actions health-review-actions">
+              <div className="row-actions health-review-actions">
+                {latestCoggins.document_url ? (
+                  <button className="text-button" disabled={fileBusyDocumentId === latestCoggins.id} type="button" onClick={() => void handleOpenStoredDocument(latestCoggins)}>
+                    {fileBusyDocumentId === latestCoggins.id ? "Ouverture..." : "PDF"}
+                  </button>
+                ) : null}
+                {latestCoggins.source_url ? (
+                  <button className="text-button" disabled={healthBusy} type="button" onClick={() => void handleReverifyLatestGvlCoggins()}>
+                    Revérifier GVL
+                  </button>
+                ) : null}
+                {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
+                  <>
                   <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("approved")}>
                     Approuver
                   </button>
                   <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("rejected")}>
                     Refuser
                   </button>
-                </div>
-              ) : null}
+                  </>
+                ) : null}
+              </div>
+              {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
             </div>
           ) : (
             <span className="muted-line">Aucun Coggins GVL valide.</span>
@@ -4819,15 +5017,29 @@ function HorseEditForm({
                 {latestVaccine.document_url ? " - fichier depose" : ""}
               </span>
               {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
-                <div className="row-actions health-review-actions">
-                  <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("approved")}>
+                <label className="compact-label">
+                  Date vaccin validée
+                  <input type="date" value={vaccineReviewDate} onChange={(event) => setVaccineReviewDate(event.target.value)} />
+                </label>
+              ) : null}
+              <div className="row-actions health-review-actions">
+                {latestVaccine.document_url ? (
+                  <button className="text-button" disabled={fileBusyDocumentId === latestVaccine.id} type="button" onClick={() => void handleOpenStoredDocument(latestVaccine)}>
+                    {fileBusyDocumentId === latestVaccine.id ? "Ouverture..." : "PDF"}
+                  </button>
+                ) : null}
+              {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
+                  <>
+                  <button className="text-button" disabled={healthBusy || !vaccineReviewDate} type="button" onClick={() => handleReviewVaccine("approved")}>
                     Approuver
                   </button>
                   <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("rejected")}>
                     Refuser
                   </button>
-                </div>
+                  </>
               ) : null}
+              </div>
+              {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
             </div>
           ) : (
             <span className="muted-line">Aucun certificat vaccin depose.</span>
