@@ -1070,6 +1070,21 @@ button:focus-visible {
   margin: 5px 0 0;
 }
 
+.health-horse-modal {
+  max-width: 940px;
+  width: min(100%, 940px);
+}
+
+.health-horse-modal .edit-panel {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.health-horse-modal .edit-panel > .panel-header {
+  display: none;
+}
+
 .assistant-stepper {
   display: grid;
   gap: 8px;

@@ -1779,6 +1779,7 @@ function HealthCenterView({
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
   const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
+  const [fileErrorMessageByDocumentId, setFileErrorMessageByDocumentId] = useState<Record<string, string>>({});
   const [reviewDateByDocumentId, setReviewDateByDocumentId] = useState<Record<string, string>>({});
   const today = todayDateValue();
   const pendingDocuments = [...horseHealthDocuments]
@@ -1826,6 +1827,7 @@ function HealthCenterView({
     const documentWindow = window.open("about:blank", "_blank");
     setFileBusyDocumentId(document.id);
     setFileErrorDocumentId("");
+    setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: "" }));
 
     try {
       const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
@@ -1834,9 +1836,10 @@ function HealthCenterView({
       } else {
         window.open(signedUrl, "_blank", "noopener,noreferrer");
       }
-    } catch {
+    } catch (error) {
       documentWindow?.close();
       setFileErrorDocumentId(document.id);
+      setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: errorMessage(error) }));
     } finally {
       setFileBusyDocumentId("");
     }
@@ -1862,36 +1865,41 @@ function HealthCenterView({
       </section>
 
       {currentEditingHorse ? (
-        <HorseEditForm
-          canManageHealthDocuments={canManageHealthDocuments}
-          contacts={contacts}
-          contactRoles={contactRoles}
-          createdByUserId={createdByUserId}
-          externalOrganizations={externalOrganizations}
-          horse={currentEditingHorse}
-          horseContacts={horseContacts}
-          horseExternalMemberships={horseExternalMemberships}
-          horseHealthDocuments={horseHealthDocuments}
-          organization={organization}
-          onCancel={() => setEditingHorse(null)}
-          onCreateContact={onCreateContact}
-          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
-          onUpdateHorse={async (id, input) => {
-            await onUpdateHorse(id, input);
-            setEditingHorse((current) =>
-              current?.id === id
-                ? {
-                    ...current,
-                    ...input,
-                    birth_year: input.birth_year ?? current.birth_year,
-                    primary_owner_contact_id: input.primary_owner_contact_id ?? current.primary_owner_contact_id,
-                  }
-                : current,
-            );
-          }}
-          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
-        />
+        <div className="modal-backdrop">
+          <section aria-labelledby="health-horse-edit-title" aria-modal="true" className="assistant-modal health-horse-modal" role="dialog">
+            <div className="assistant-modal-header">
+              <div>
+                <p className="eyebrow">Santé</p>
+                <h2 id="health-horse-edit-title">Modifier le cheval</h2>
+                <p>Corrige la fiche, puis relance la validation GVL au besoin.</p>
+              </div>
+              <button className="icon-button" type="button" aria-label="Fermer l'edition du cheval" onClick={() => setEditingHorse(null)}>
+                <X size={18} />
+              </button>
+            </div>
+            <HorseEditForm
+              canManageHealthDocuments={canManageHealthDocuments}
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={createdByUserId}
+              externalOrganizations={externalOrganizations}
+              horse={currentEditingHorse}
+              horseContacts={horseContacts}
+              horseExternalMemberships={horseExternalMemberships}
+              horseHealthDocuments={horseHealthDocuments}
+              organization={organization}
+              onCancel={() => setEditingHorse(null)}
+              onCreateContact={onCreateContact}
+              onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+              onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+              onUpdateHorse={async (id, input) => {
+                await onUpdateHorse(id, input);
+                setEditingHorse(null);
+              }}
+              onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            />
+          </section>
+        </div>
       ) : null}
 
       <section className="panel span-2">
@@ -1977,7 +1985,7 @@ function HealthCenterView({
                   <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void handleReview(document, "rejected")}>
                     Refuser
                   </button>
-                  {fileErrorDocumentId === document.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
+                  {fileErrorDocumentId === document.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[document.id] || "acces refuse."}</span> : null}
                 </div>
               </div>
             );
@@ -4637,6 +4645,7 @@ function HorseEditForm({
   const [healthBusy, setHealthBusy] = useState(false);
   const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
   const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
+  const [fileErrorMessageByDocumentId, setFileErrorMessageByDocumentId] = useState<Record<string, string>>({});
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
@@ -4855,6 +4864,7 @@ function HorseEditForm({
     const documentWindow = window.open("about:blank", "_blank");
     setFileBusyDocumentId(document.id);
     setFileErrorDocumentId("");
+    setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: "" }));
 
     try {
       const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
@@ -4863,9 +4873,10 @@ function HorseEditForm({
       } else {
         window.open(signedUrl, "_blank", "noopener,noreferrer");
       }
-    } catch {
+    } catch (error) {
       documentWindow?.close();
       setFileErrorDocumentId(document.id);
+      setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: errorMessage(error) }));
     } finally {
       setFileBusyDocumentId("");
     }
@@ -4981,7 +4992,7 @@ function HorseEditForm({
                   </>
                 ) : null}
               </div>
-              {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
+              {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[latestCoggins.id] || "acces refuse."}</span> : null}
             </div>
           ) : (
             <span className="muted-line">Aucun Coggins GVL valide.</span>
@@ -5039,7 +5050,7 @@ function HorseEditForm({
                   </>
               ) : null}
               </div>
-              {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">Impossible d'ouvrir le fichier.</span> : null}
+              {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[latestVaccine.id] || "acces refuse."}</span> : null}
             </div>
           ) : (
             <span className="muted-line">Aucun certificat vaccin depose.</span>
