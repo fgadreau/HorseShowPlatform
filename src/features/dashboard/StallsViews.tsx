@@ -4,6 +4,7 @@ import type { ComponentType } from "react";
 import { ClipboardList, Plus, Warehouse } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
+import { getHorseCogginsValidity, organizationRequiresHealthVerification, type HorseCogginsValidity } from "../../lib/health";
 import {
   createContact,
   createStallBooking,
@@ -13,7 +14,7 @@ import {
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ContactRoleName, Horse, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
 
 const stallPresets = [
   { key: "stall", label: "Stall", name: "Stall", category: "stall" },
@@ -42,6 +43,7 @@ export function StallsView({
   contacts,
   contactRoles,
   currency,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -59,6 +61,7 @@ export function StallsView({
   contacts: Contact[];
   contactRoles: ContactRole[];
   currency: string;
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -149,10 +152,12 @@ export function StallsView({
               contacts={contacts}
               contactRoles={contactRoles}
               currency={currency}
+              horseHealthDocuments={horseHealthDocuments}
               horses={horses}
               organization={organization}
               profileId={profileId}
               showDays={showDays}
+              shows={shows}
               stallOptions={stallOptions}
               onCancel={() => setEditingBooking(null)}
               onCreateContact={onCreateContact}
@@ -174,6 +179,7 @@ export function StallsView({
           contactRoles={contactRoles}
           currency={currency}
           defaultStatus="reserved"
+          horseHealthDocuments={horseHealthDocuments}
           horses={horses}
           organization={organization}
           profileId={profileId}
@@ -216,6 +222,7 @@ export function MyStallsView({
   contacts,
   contactRoles,
   currency,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -231,6 +238,7 @@ export function MyStallsView({
   contacts: Contact[];
   contactRoles: ContactRole[];
   currency: string;
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -315,10 +323,12 @@ export function MyStallsView({
               contacts={contacts}
               contactRoles={contactRoles}
               currency={currency}
+              horseHealthDocuments={horseHealthDocuments}
               horses={horses}
               organization={organization}
               profileId={profileId}
               showDays={showDays}
+              shows={shows}
               stallOptions={stallOptions}
               onCancel={() => setEditingBooking(null)}
               onCreateContact={onCreateContact}
@@ -350,6 +360,7 @@ export function MyStallsView({
           contactRoles={contactRoles}
           currency={currency}
           defaultStatus="requested"
+          horseHealthDocuments={horseHealthDocuments}
           horses={horses}
           organization={organization}
           profileId={profileId}
@@ -970,6 +981,7 @@ function StallBookingForm({
   contactRoles,
   currency,
   defaultStatus,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -986,6 +998,7 @@ function StallBookingForm({
   contactRoles: ContactRole[];
   currency: string;
   defaultStatus: StallBooking["status"];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -1021,6 +1034,18 @@ function StallBookingForm({
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || firstStallOption?.show_id || shows[0]?.id || "";
+  const selectedShow = findById(shows, selectedShowId) ?? null;
+  const healthRequired = organizationRequiresHealthVerification(organization);
+
+  function horseCogginsValidity(horseId: string) {
+    return getHorseCogginsValidity({
+      documents: horseHealthDocuments,
+      horseId,
+      organization,
+      referenceDate: selectedShow?.start_date ?? null,
+    });
+  }
+
   const stallChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isStallReservationOption(option));
   const tackChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isTackStallOption(option));
   const beddingChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isBeddingOption(option));
@@ -1044,11 +1069,14 @@ function StallBookingForm({
   });
   const reservedHorseIdsKey = Array.from(reservedHorseBookingById.keys()).sort().join("|");
   const selectedReservedHorseCount = selectedHorseIds.filter((horseId) => reservedHorseBookingById.has(horseId)).length;
-  const availableHorseCount = horses.filter((horse) => !reservedHorseBookingById.has(horse.id)).length;
+  const availableHorseCount = horses.filter((horse) => !reservedHorseBookingById.has(horse.id) && (!healthRequired || horseCogginsValidity(horse.id).valid)).length;
   const selectedHorses = selectedHorseIds
     .filter((horseId) => !reservedHorseBookingById.has(horseId))
     .map((horseId) => findById(horses, horseId))
     .filter((horse): horse is Horse => Boolean(horse));
+  const selectedInvalidCoggins = selectedHorses
+    .map((horse) => ({ horse, validity: horseCogginsValidity(horse.id) }))
+    .filter((item) => healthRequired && !item.validity.valid);
   const selectedHorseBillingTargets = selectedHorses.map((horse) => ({
     horse,
     payerContactId: horsePayerContactIds[horse.id] || horse.primary_owner_contact_id,
@@ -1094,6 +1122,7 @@ function StallBookingForm({
   const beddingAvailabilityTooLow = Boolean(selectedBeddingOption && beddingTotalQuantity > selectedBeddingOption.available_quantity);
   const hayAvailabilityTooLow = Boolean(selectedHayOption && hayTotalQuantity > selectedHayOption.available_quantity);
   const campingAvailabilityTooLow = Boolean(selectedCampingOption && campingQuantityNumber > selectedCampingOption.available_quantity);
+  const hasInvalidCoggins = selectedInvalidCoggins.length > 0;
   const needsBeddingOption = beddingTotalQuantity > 0 && !selectedBeddingOption;
   const needsHayOption = hayTotalQuantity > 0 && !selectedHayOption;
   const needsStallOption = selectedHorseIds.length > 0 && !selectedStallOption;
@@ -1110,6 +1139,7 @@ function StallBookingForm({
       !selectedReservedHorseCount &&
       (!reservationUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) &&
       !stallAvailabilityTooLow &&
+      !hasInvalidCoggins &&
       !tackAvailabilityTooLow &&
       !tackLimitTooHigh &&
       !beddingAvailabilityTooLow &&
@@ -1135,6 +1165,7 @@ function StallBookingForm({
     dayOptions,
     hasRequiredContactRoles,
     hasReservationItems,
+    invalidCogginsHorseNames: selectedInvalidCoggins.map((item) => item.horse.name),
     missingCampingPayerCount,
     needsBeddingOption,
     needsHayOption,
@@ -1415,7 +1446,7 @@ function StallBookingForm({
   }
 
   function toggleHorse(horseId: string) {
-    if (reservedHorseBookingById.has(horseId)) {
+    if (reservedHorseBookingById.has(horseId) || (healthRequired && !horseCogginsValidity(horseId).valid)) {
       return;
     }
 
@@ -1548,19 +1579,26 @@ function StallBookingForm({
               const reservedBooking = reservedHorseBookingById.get(horse.id);
               const reservedOption = reservedBooking ? findById(stallOptions, reservedBooking.stall_option_id) : null;
               const alreadyReserved = Boolean(reservedBooking);
+              const cogginsValidity = horseCogginsValidity(horse.id);
+              const healthUnavailable = healthRequired && !cogginsValidity.valid;
               const selected = selectedHorseIds.includes(horse.id);
               const beddingSelected = beddingHorseIds.includes(horse.id);
 
               return (
-                <div className={`horse-reservation-row ${selected ? "selected" : ""} ${alreadyReserved ? "unavailable" : ""}`} key={horse.id}>
+                <div className={`horse-reservation-row ${selected ? "selected" : ""} ${alreadyReserved || healthUnavailable ? "unavailable" : ""}`} key={horse.id}>
                   <label className="horse-reservation-main">
-                    <input checked={selected && !alreadyReserved} disabled={alreadyReserved} type="checkbox" onChange={() => toggleHorse(horse.id)} />
+                    <input checked={selected && !alreadyReserved && !healthUnavailable} disabled={alreadyReserved || healthUnavailable} type="checkbox" onChange={() => toggleHorse(horse.id)} />
                     <span>
                       <strong>
                         {horse.name}
                         {alreadyReserved ? <em className="horse-reservation-status">Deja reserve</em> : null}
+                        {healthUnavailable ? <em className="horse-reservation-status">{stallCogginsValidityTagLabel(cogginsValidity)}</em> : null}
                       </strong>
-                      <small>{alreadyReserved ? `Stall deja reserve: ${reservedOption?.name ?? "Stall"}` : contactLabel(findById(contacts, horse.primary_owner_contact_id))}</small>
+                      <small>
+                        {alreadyReserved
+                          ? `Stall deja reserve: ${reservedOption?.name ?? "Stall"}`
+                          : `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallCogginsValidityMessage(cogginsValidity)}`}
+                      </small>
                     </span>
                   </label>
                   {selected && !alreadyReserved ? (
@@ -1873,10 +1911,12 @@ function StallBookingEditForm({
   contacts,
   contactRoles,
   currency,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
   showDays,
+  shows,
   stallOptions,
   onCancel,
   onCreateContact,
@@ -1886,10 +1926,12 @@ function StallBookingEditForm({
   contacts: Contact[];
   contactRoles: ContactRole[];
   currency: string;
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
   showDays: ShowDay[];
+  shows: Show[];
   stallOptions: StallOption[];
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -1908,6 +1950,15 @@ function StallBookingEditForm({
   const optionChoices = stallOptions.filter((option) => option.show_id === booking.show_id);
   const selectedOption = findById(optionChoices, optionId) ?? findById(stallOptions, booking.stall_option_id);
   const selectedHorse = findById(horses, horseId) ?? null;
+  const selectedShow = findById(shows, booking.show_id) ?? null;
+  const selectedCogginsValidity = selectedHorse
+    ? getHorseCogginsValidity({
+        documents: horseHealthDocuments,
+        horseId: selectedHorse.id,
+        organization,
+        referenceDate: selectedShow?.start_date ?? null,
+      })
+    : null;
   const dayOptions = showDays.filter((day) => day.show_id === booking.show_id);
   const selectedOptionUsesDailyReservations = optionUsesDailyReservations(selectedOption ?? null);
   const selectedStartDayId = selectedOptionUsesDailyReservations ? validDayId(startDayId, dayOptions) || selectedOption?.show_day_start_id || dayOptions[0]?.id || "" : "";
@@ -1918,7 +1969,14 @@ function StallBookingEditForm({
   const currentReservedQuantity = booking.status === "cancelled" ? 0 : Number(booking.quantity ?? 1);
   const editableAvailability = selectedOption ? selectedOption.available_quantity + (selectedOption.id === booking.stall_option_id ? currentReservedQuantity : 0) : 0;
   const quantityTooHigh = Boolean(selectedOption && status !== "cancelled" && quantityNumber > editableAvailability);
-  const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && (!selectedOptionUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) && !quantityTooHigh);
+  const healthBlocksBooking = Boolean(
+    selectedHorse &&
+      organizationRequiresHealthVerification(organization) &&
+      selectedCogginsValidity &&
+      !selectedCogginsValidity.valid &&
+      !["cancelled", "completed"].includes(status),
+  );
+  const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && (!selectedOptionUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) && !quantityTooHigh && !healthBlocksBooking);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1953,7 +2011,13 @@ function StallBookingEditForm({
       <div className="panel-header">
         <div>
           <h2>Modifier reservation</h2>
-          <p>{quantityTooHigh ? `Seulement ${editableAvailability} disponible pour ce produit.` : `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`}</p>
+          <p>
+            {healthBlocksBooking && selectedCogginsValidity
+              ? stallCogginsValidityMessage(selectedCogginsValidity)
+              : quantityTooHigh
+                ? `Seulement ${editableAvailability} disponible pour ce produit.`
+                : `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`}
+          </p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -2001,12 +2065,26 @@ function StallBookingEditForm({
             Cheval
             <SearchSelect
               allowEmpty
-              items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+              items={horses.map((horse) => {
+                const validity = getHorseCogginsValidity({
+                  documents: horseHealthDocuments,
+                  horseId: horse.id,
+                  organization,
+                  referenceDate: selectedShow?.start_date ?? null,
+                });
+
+                return {
+                  id: horse.id,
+                  label: horse.name,
+                  detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallCogginsValidityMessage(validity)}`,
+                };
+              })}
               placeholder="Search horse"
               value={selectedHorse?.id ?? ""}
               onChange={setHorseId}
             />
           </label>
+          {selectedCogginsValidity ? <p className={`inline-health-message ${stallCogginsValidityTone(selectedCogginsValidity)}`}>{stallCogginsValidityMessage(selectedCogginsValidity)}</p> : null}
           <div className="form-grid">
             <ContactPicker
               contacts={contacts}
@@ -2092,6 +2170,7 @@ function reservationCreateMessage({
   hayTotalQuantity,
   hasRequiredContactRoles,
   hasReservationItems,
+  invalidCogginsHorseNames,
   missingCampingPayerCount,
   needsBeddingOption,
   needsHayOption,
@@ -2125,6 +2204,7 @@ function reservationCreateMessage({
   hayTotalQuantity: number;
   hasRequiredContactRoles: boolean;
   hasReservationItems: boolean;
+  invalidCogginsHorseNames: string[];
   missingCampingPayerCount: number;
   needsBeddingOption: boolean;
   needsHayOption: boolean;
@@ -2194,6 +2274,10 @@ function reservationCreateMessage({
     return `${selectedReservedHorseCount} cheval${selectedReservedHorseCount === 1 ? "" : "x"} a deja un stall pour ce show.`;
   }
 
+  if (invalidCogginsHorseNames.length) {
+    return `Coggins invalide pour ${invalidCogginsHorseNames.join(", ")}.`;
+  }
+
   if (stallAvailabilityTooLow && selectedStallOption) {
     return `Seulement ${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"} pour ce produit.`;
   }
@@ -2231,6 +2315,50 @@ function reservationCreateMessage({
   }
 
   return "Completer les informations de reservation.";
+}
+
+function stallCogginsValidityMessage(validity: HorseCogginsValidity) {
+  if (validity.status === "not_required") {
+    return "Coggins non exige";
+  }
+
+  if (validity.status === "valid" && validity.expiresOn) {
+    return `Coggins valide jusqu'au ${formatDate(validity.expiresOn)}`;
+  }
+
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Coggins expire le ${formatDate(validity.expiresOn)}`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "Coggins en revision";
+  }
+
+  if (validity.status === "rejected") {
+    return "Coggins refuse";
+  }
+
+  return "Coggins manquant";
+}
+
+function stallCogginsValidityTagLabel(validity: HorseCogginsValidity) {
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Expire ${formatDate(validity.expiresOn)}`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "Coggins en revision";
+  }
+
+  if (validity.status === "rejected") {
+    return "Coggins refuse";
+  }
+
+  return "Coggins manquant";
+}
+
+function stallCogginsValidityTone(validity: HorseCogginsValidity) {
+  return validity.valid ? "success" : validity.status === "pending_review" || validity.status === "not_required" ? "info" : "error";
 }
 
 function isStallReservationOption(option: StallOption) {

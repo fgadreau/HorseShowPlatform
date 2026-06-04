@@ -20,6 +20,7 @@ import {
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
+import { getHorseCogginsValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HorseCogginsValidity } from "../../lib/health";
 import type { Locale, Translation } from "../../lib/i18n";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
 import { MyStallsView, StallsView } from "./StallsViews";
@@ -51,6 +52,7 @@ import {
   updateDivision,
   updateEntry,
   updateHorse,
+  updateOrganizationHealthSettings,
   updateShow,
   updateStallBooking,
   updateStallOption,
@@ -123,6 +125,7 @@ export function Dashboard({
   onUpdateDivision,
   onUpdateEntry,
   onUpdateHorse,
+  onUpdateOrganizationHealthSettings,
   onVerifyGvlCogginsDocument,
   onUpdateShow,
   onUpdateStallBooking,
@@ -166,6 +169,7 @@ export function Dashboard({
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
+  onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
@@ -444,6 +448,7 @@ export function Dashboard({
             contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
+            horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -461,6 +466,7 @@ export function Dashboard({
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
+            horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -543,6 +549,7 @@ export function Dashboard({
             contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={personalEntries}
+            horseHealthDocuments={personalHorseHealthDocuments}
             horses={personalHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -560,6 +567,7 @@ export function Dashboard({
             contacts={personalContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
+            horseHealthDocuments={personalHorseHealthDocuments}
             horses={personalHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -589,6 +597,7 @@ export function Dashboard({
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             onSetExternalMembershipRequirement={onSetExternalMembershipRequirement}
+            onUpdateOrganizationHealthSettings={onUpdateOrganizationHealthSettings}
           />
         ) : null}
       </section>
@@ -756,13 +765,79 @@ function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMe
   };
 }
 
-function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[]) {
-  const coggins = latestHorseHealthDocument(horse.id, documents, "coggins_eia");
-  const vaccine = latestHorseVaccineDocument(horse.id, documents);
+function cogginsValidityMessage(validity: HorseCogginsValidity) {
+  if (validity.status === "not_required") {
+    return "Coggins non exige par cette association.";
+  }
 
-  const cogginsSummary = coggins
-    ? `Coggins: ${horseHealthStatusLabel(coggins.status)}${coggins.test_or_administered_on ? ` - ${formatDate(coggins.test_or_administered_on)}` : ""}`
-    : "Coggins: manquant";
+  if (validity.status === "valid" && validity.expiresOn) {
+    return `Coggins valide jusqu'au ${formatDate(validity.expiresOn)} (${validity.months} mois).`;
+  }
+
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Coggins expire depuis le ${formatDate(validity.expiresOn)}.`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "Coggins en revision manuelle.";
+  }
+
+  if (validity.status === "rejected") {
+    return "Coggins refuse.";
+  }
+
+  return "Coggins manquant.";
+}
+
+function cogginsValidityTagLabel(validity: HorseCogginsValidity) {
+  if (validity.status === "not_required") {
+    return "Non exige";
+  }
+
+  if (validity.status === "valid" && validity.expiresOn) {
+    return `Valide jusqu'au ${formatDate(validity.expiresOn)}`;
+  }
+
+  if (validity.status === "expired" && validity.expiresOn) {
+    return `Expire le ${formatDate(validity.expiresOn)}`;
+  }
+
+  if (validity.status === "pending_review") {
+    return "En revision";
+  }
+
+  if (validity.status === "rejected") {
+    return "Refuse";
+  }
+
+  return "Manquant";
+}
+
+function cogginsValidityBadgeClass(validity: HorseCogginsValidity) {
+  if (validity.valid) {
+    return "verified";
+  }
+
+  if (validity.status === "pending_review" || validity.status === "expired") {
+    return validity.status;
+  }
+
+  return "rejected";
+}
+
+function cogginsValidityTone(validity: HorseCogginsValidity): InlineHealthMessage["tone"] {
+  return validity.valid ? "success" : validity.status === "pending_review" || validity.status === "not_required" ? "info" : "error";
+}
+
+function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[], organization: Organization | null | undefined) {
+  const vaccine = latestHorseVaccineDocument(horse.id, documents);
+  const cogginsValidity = getHorseCogginsValidity({
+    documents,
+    horseId: horse.id,
+    organization,
+  });
+
+  const cogginsSummary = `Coggins: ${cogginsValidityMessage(cogginsValidity)}`;
   const vaccineSummary = vaccine
     ? `Vaccin: ${horseHealthStatusLabel(vaccine.status)}${vaccine.test_or_administered_on ? ` - ${formatDate(vaccine.test_or_administered_on)}` : ""}`
     : "Vaccin: manquant";
@@ -1348,7 +1423,7 @@ function PeopleView({
               <strong>
                 {horse.name}
                 <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
-                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments)}</span>
+                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments, organization)}</span>
               </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
@@ -1679,6 +1754,7 @@ function EntriesView({
   contactRoles,
   divisions,
   entries,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -1693,6 +1769,7 @@ function EntriesView({
   contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -1733,6 +1810,7 @@ function EntriesView({
         contacts={contacts}
         contactRoles={contactRoles}
         divisions={divisions}
+        horseHealthDocuments={horseHealthDocuments}
         horses={horses}
         organization={organization}
         profileId={profileId}
@@ -1748,9 +1826,11 @@ function EntriesView({
           contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
+          horseHealthDocuments={horseHealthDocuments}
           horses={horses}
           organization={organization}
           profileId={profileId}
+          shows={shows}
           onCancel={() => setEditingEntry(null)}
           onCreateContact={onCreateContact}
           onUpdateEntry={async (id, input) => {
@@ -2042,7 +2122,7 @@ function MyHorsesView({
               <strong>
                 {horse.name}
                 <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
-                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments)}</span>
+                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments, organization)}</span>
               </strong>
               <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
               <span>{horse.gender || "Unset"}</span>
@@ -2186,6 +2266,7 @@ function MyEntriesView({
   contactRoles,
   divisions,
   entries,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -2200,6 +2281,7 @@ function MyEntriesView({
   contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -2240,6 +2322,7 @@ function MyEntriesView({
         contacts={contacts}
         contactRoles={contactRoles}
         divisions={divisions}
+        horseHealthDocuments={horseHealthDocuments}
         horses={horses}
         organization={organization}
         profileId={profileId}
@@ -2255,9 +2338,11 @@ function MyEntriesView({
           contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
+          horseHealthDocuments={horseHealthDocuments}
           horses={horses}
           organization={organization}
           profileId={profileId}
+          shows={shows}
           onCancel={() => setEditingEntry(null)}
           onCreateContact={onCreateContact}
           onUpdateEntry={async (id, input) => {
@@ -2454,19 +2539,29 @@ function SettingsView({
   membershipRequirements,
   organization,
   onSetExternalMembershipRequirement,
+  onUpdateOrganizationHealthSettings,
 }: {
   context: AppContext | null;
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
+  onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
 }) {
   const [busyRequirementId, setBusyRequirementId] = useState("");
+  const [healthBusy, setHealthBusy] = useState(false);
+  const [healthRequired, setHealthRequired] = useState(organizationRequiresHealthVerification(organization));
+  const [cogginsValidityMonths, setCogginsValidityMonths] = useState<6 | 12>(organizationCogginsValidityMonths(organization));
   const riderRequirementIds = new Set(
     membershipRequirements
       .filter((requirement) => requirement.contact_type === "rider" && requirement.is_required)
       .map((requirement) => requirement.external_organization_id),
   );
+
+  useEffect(() => {
+    setHealthRequired(organizationRequiresHealthVerification(organization));
+    setCogginsValidityMonths(organizationCogginsValidityMonths(organization));
+  }, [organization]);
 
   async function handleRequirementToggle(externalOrganizationId: string, isRequired: boolean) {
     if (!organization) {
@@ -2484,6 +2579,25 @@ function SettingsView({
       });
     } finally {
       setBusyRequirementId("");
+    }
+  }
+
+  async function handleHealthSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization) {
+      return;
+    }
+
+    setHealthBusy(true);
+
+    try {
+      await onUpdateOrganizationHealthSettings(organization.id, {
+        health_verification_required: healthRequired,
+        coggins_validity_months: cogginsValidityMonths,
+      });
+    } finally {
+      setHealthBusy(false);
     }
   }
 
@@ -2565,6 +2679,35 @@ function SettingsView({
           })}
           {!externalOrganizations.length ? <EmptyState label="Aucune organisation externe configuree." /> : null}
         </div>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Statut sante des chevaux</h2>
+            <p>Regles utilisees pour bloquer les inscriptions et les reservations de stalls.</p>
+          </div>
+        </div>
+        <form className="stack" onSubmit={handleHealthSettingsSubmit}>
+          <label className="requirement-row">
+            <input checked={healthRequired} disabled={!organization || healthBusy} type="checkbox" onChange={(event) => setHealthRequired(event.target.checked)} />
+            <span>
+              <strong>Exiger un Coggins valide</strong>
+              Bloque les entries et stalls rattaches a un cheval si le Coggins ne couvre pas la date du show.
+            </span>
+            <small>{healthRequired ? "Validation obligatoire" : "Validation non exigee"}</small>
+          </label>
+          <label>
+            Duree de validite Coggins
+            <select disabled={!organization || healthBusy || !healthRequired} value={cogginsValidityMonths} onChange={(event) => setCogginsValidityMonths(Number(event.target.value) === 6 ? 6 : 12)}>
+              <option value={6}>6 mois</option>
+              <option value={12}>12 mois</option>
+            </select>
+          </label>
+          <button className="primary-button" disabled={!organization || healthBusy} type="submit">
+            {healthBusy ? "Enregistrement..." : "Enregistrer les regles sante"}
+          </button>
+        </form>
       </section>
     </div>
   );
@@ -3897,6 +4040,15 @@ function HorseEditForm({
     [externalOrganizations, horse.id, horseExternalMemberships],
   );
   const latestCoggins = useMemo(() => latestHorseHealthDocument(horse.id, horseHealthDocuments, "coggins_eia"), [horse.id, horseHealthDocuments]);
+  const cogginsValidity = useMemo(
+    () =>
+      getHorseCogginsValidity({
+        documents: horseHealthDocuments,
+        horseId: horse.id,
+        organization,
+      }),
+    [horse.id, horseHealthDocuments, organization],
+  );
   const latestVaccine = useMemo(() => latestHorseVaccineDocument(horse.id, horseHealthDocuments), [horse.id, horseHealthDocuments]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -4108,6 +4260,7 @@ function HorseEditForm({
             <div className="health-document-summary">
               <div className="health-document-title">
                 <span className={`badge ${latestCoggins.status}`}>{horseHealthStatusLabel(latestCoggins.status)}</span>
+                <span className={`badge ${cogginsValidityBadgeClass(cogginsValidity)}`}>{cogginsValidityTagLabel(cogginsValidity)}</span>
                 <strong>{latestCoggins.certificate_number ?? "Certificat GVL"}</strong>
               </div>
               <span className="muted-line">
@@ -5410,6 +5563,7 @@ function EntryForm({
   contacts,
   contactRoles,
   divisions,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
@@ -5421,6 +5575,7 @@ function EntryForm({
   contacts: Contact[];
   contactRoles: ContactRole[];
   divisions: Division[];
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
@@ -5436,17 +5591,27 @@ function EntryForm({
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const availableDivisions = selectedShowId ? divisions.filter((division) => division.show_id === selectedShowId) : divisions;
+  const selectedShow = findById(shows, selectedShowId) ?? null;
   const selectedHorse = findById(horses, horseId) ?? null;
   const selectedDivision = findById(availableDivisions, divisionId) ?? null;
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
-  const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId);
+  const selectedCogginsValidity = selectedHorse
+    ? getHorseCogginsValidity({
+        documents: horseHealthDocuments,
+        horseId: selectedHorse.id,
+        organization,
+        referenceDate: selectedShow?.start_date ?? null,
+      })
+    : null;
+  const healthBlocksEntry = Boolean(selectedHorse && organizationRequiresHealthVerification(organization) && selectedCogginsValidity && !selectedCogginsValidity.valid);
+  const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId && !healthBlocksEntry);
   const baseFee = selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? undefined;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!organization || !profileId || !selectedHorse || !selectedDivision || !selectedShowId || !selectedPayerId) {
+    if (!canCreate || !organization || !profileId || !selectedHorse || !selectedDivision || !selectedShowId || !selectedPayerId) {
       return;
     }
 
@@ -5476,7 +5641,7 @@ function EntryForm({
       <div className="panel-header">
         <div>
           <h2>New draft entry</h2>
-          <p>{canCreate ? "Draft now, checkout later." : "Add a show, horse and division first."}</p>
+          <p>{canCreate ? "Draft now, checkout later." : healthBlocksEntry ? cogginsValidityMessage(selectedCogginsValidity!) : "Add a show, horse and division first."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -5494,12 +5659,35 @@ function EntryForm({
           Horse
           <SearchSelect
             disabled={!horses.length}
-            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+            items={horses.map((horse) => {
+              const validity = getHorseCogginsValidity({
+                documents: horseHealthDocuments,
+                horseId: horse.id,
+                organization,
+                referenceDate: selectedShow?.start_date ?? null,
+              });
+
+              return {
+                id: horse.id,
+                label: horse.name,
+                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${cogginsValidityMessage(validity)}`,
+              };
+            })}
             placeholder="Search horse"
             value={selectedHorse?.id ?? ""}
             onChange={setHorseId}
           />
         </label>
+        <InlineHealthMessage
+          value={
+            selectedCogginsValidity
+              ? {
+                  tone: cogginsValidityTone(selectedCogginsValidity),
+                  message: `${cogginsValidityMessage(selectedCogginsValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                }
+              : null
+          }
+        />
         <label>
           Division
           <SearchSelect
@@ -5566,9 +5754,11 @@ function EntryEditForm({
   contactRoles,
   divisions,
   entry,
+  horseHealthDocuments,
   horses,
   organization,
   profileId,
+  shows,
   onCancel,
   onCreateContact,
   onUpdateEntry,
@@ -5578,9 +5768,11 @@ function EntryEditForm({
   contactRoles: ContactRole[];
   divisions: Division[];
   entry: Entry;
+  horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
   profileId: string;
+  shows: Show[];
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
@@ -5595,12 +5787,29 @@ function EntryEditForm({
   const selectedHorse = findById(horses, horseId);
   const selectedDivision = findById(divisions, divisionId);
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
+  const selectedShow = findById(shows, entry.show_id) ?? null;
+  const selectedCogginsValidity = selectedHorse
+    ? getHorseCogginsValidity({
+        documents: horseHealthDocuments,
+        horseId: selectedHorse.id,
+        organization,
+        referenceDate: selectedShow?.start_date ?? null,
+      })
+    : null;
+  const healthBlocksEntry = Boolean(
+    selectedHorse &&
+      organizationRequiresHealthVerification(organization) &&
+      selectedCogginsValidity &&
+      !selectedCogginsValidity.valid &&
+      !["cancelled", "scratched", "scratched_pending_refund"].includes(status),
+  );
   const effectiveFee = numericValue(baseFee) ?? selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? null;
+  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && !healthBlocksEntry);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!selectedHorse || !selectedDivision || !payerContactId) {
+    if (!canUpdate || !selectedHorse || !selectedDivision || !payerContactId) {
       return;
     }
 
@@ -5627,19 +5836,42 @@ function EntryEditForm({
       <div className="panel-header">
         <div>
           <h2>Edit entry</h2>
-          <p>{horseLabel(selectedHorse)}</p>
+          <p>{healthBlocksEntry && selectedCogginsValidity ? cogginsValidityMessage(selectedCogginsValidity) : horseLabel(selectedHorse)}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           Horse
           <SearchSelect
-            items={horses.map((horse) => ({ id: horse.id, label: horse.name, detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)) }))}
+            items={horses.map((horse) => {
+              const validity = getHorseCogginsValidity({
+                documents: horseHealthDocuments,
+                horseId: horse.id,
+                organization,
+                referenceDate: selectedShow?.start_date ?? null,
+              });
+
+              return {
+                id: horse.id,
+                label: horse.name,
+                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${cogginsValidityMessage(validity)}`,
+              };
+            })}
             placeholder="Search horse"
             value={horseId}
             onChange={setHorseId}
           />
         </label>
+        <InlineHealthMessage
+          value={
+            selectedCogginsValidity
+              ? {
+                  tone: cogginsValidityTone(selectedCogginsValidity),
+                  message: `${cogginsValidityMessage(selectedCogginsValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                }
+              : null
+          }
+        />
         <label>
           Division
           <SearchSelect
@@ -5706,7 +5938,7 @@ function EntryEditForm({
             <input min="0" step="0.01" type="number" value={baseFee} onChange={(event) => setBaseFee(event.target.value)} />
           </label>
         </div>
-        <FormActions busy={busy || !selectedHorse || !selectedDivision || !payerContactId} onCancel={onCancel} />
+        <FormActions busy={busy || !canUpdate} onCancel={onCancel} />
       </form>
     </section>
   );

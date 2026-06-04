@@ -447,6 +447,28 @@ export async function createOrganization(profileId: string, input: OrganizationI
   return organization;
 }
 
+export async function updateOrganizationHealthSettings(
+  id: string,
+  input: {
+    health_verification_required: boolean;
+    coggins_validity_months: 6 | 12;
+  },
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organizations")
+    .update(input)
+    .eq("id", id)
+    .select("*")
+    .single<Organization>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
 export async function createShow(input: ShowInput) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -1557,6 +1579,7 @@ export async function createEntry(input: EntryInput) {
     payer_contact_id: input.payer_contact_id,
     created_by_user_id: input.created_by_user_id,
   });
+  await assertHorseCogginsValidForShow(input.horse_id, input.show_id);
 
   const { data, error } = await client
     .from("entries")
@@ -1615,6 +1638,11 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
     payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
     created_by_user_id: existing.created_by_user_id,
   });
+  const nextEntryStatus = input.status ?? existing.status;
+
+  if (!["cancelled", "scratched", "scratched_pending_refund"].includes(nextEntryStatus)) {
+    await assertHorseCogginsValidForShow(input.horse_id ?? existing.horse_id, existing.show_id);
+  }
 
   const { data, error } = await client
     .from("entries")
@@ -1715,6 +1743,11 @@ export async function createStallBooking(input: StallBookingInput) {
     payer_contact_id: input.payer_contact_id,
     created_by_user_id: input.created_by_user_id,
   });
+  const bookingStatus = input.status ?? "requested";
+
+  if (input.horse_id && !["cancelled", "completed"].includes(bookingStatus)) {
+    await assertHorseCogginsValidForShow(input.horse_id, input.show_id);
+  }
 
   const { data, error } = await client
     .from("stall_bookings")
@@ -1769,6 +1802,12 @@ export async function updateStallBooking(id: string, input: StallBookingUpdateIn
     payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
     created_by_user_id: existing.created_by_user_id,
   });
+  const nextBookingHorseId = input.horse_id === undefined ? existing.horse_id : input.horse_id;
+  const nextBookingStatus = input.status ?? existing.status;
+
+  if (nextBookingHorseId && !["cancelled", "completed"].includes(nextBookingStatus)) {
+    await assertHorseCogginsValidForShow(nextBookingHorseId, existing.show_id);
+  }
 
   const { data, error } = await client
     .from("stall_bookings")
@@ -2110,6 +2149,26 @@ async function getStallBookingById(id: string) {
   }
 
   return data;
+}
+
+async function assertHorseCogginsValidForShow(horseId: string | null | undefined, showId: string | null | undefined) {
+  if (!horseId || !showId) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const { error } = await client.rpc("assert_horse_coggins_valid_for_show", {
+    target_horse_id: horseId,
+    target_show_id: showId,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "assert_horse_coggins_valid_for_show")) {
+      return;
+    }
+
+    throw new Error(error.message || "Le Coggins du cheval n'est pas valide pour ce show.");
+  }
 }
 
 async function ensureEntryOrganizationLinks(input: {

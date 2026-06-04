@@ -37,6 +37,7 @@ import {
   updateDivision,
   updateEntry,
   updateHorse,
+  updateOrganizationHealthSettings,
   updateShow,
   updateStallBooking,
   updateStallOption,
@@ -356,6 +357,11 @@ export default function App() {
       onSetExternalMembershipRequirement={async (input) => {
         await setOrganizationExternalMembershipRequirement(input);
         setNotice({ tone: "success", message: "Membership requirement updated." });
+        await refreshContext();
+      }}
+      onUpdateOrganizationHealthSettings={async (id, input) => {
+        await updateOrganizationHealthSettings(id, input);
+        setNotice({ tone: "success", message: "Regles de sante mises a jour." });
         await refreshContext();
       }}
       onViewChange={setActiveView}

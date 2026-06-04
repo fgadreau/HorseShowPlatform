@@ -15,6 +15,8 @@ export type Organization = {
   timezone: string;
   currency: string;
   tax_rate: number;
+  health_verification_required: boolean;
+  coggins_validity_months: 6 | 12;
   subscription_plan: string;
   subscription_status: string;
   created_by_user_id: string | null;
