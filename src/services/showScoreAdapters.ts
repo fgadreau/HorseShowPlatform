@@ -70,6 +70,8 @@ export type ShowScoreRun = {
   rider: string;
   horse: string;
   owner: string;
+  isLate: boolean;
+  drawGroup: "late" | "regular";
 };
 
 export type ShowScoreContext = {
@@ -84,6 +86,9 @@ type RunRelations = {
   horses: Horse[];
   contacts: Contact[];
 };
+
+const inactiveEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
+const minimumRiderDrawSpacing = 9;
 
 export function toShowScoreAssociation(organization: Organization): ShowScoreAssociation {
   return {
@@ -167,11 +172,24 @@ export function buildShowScoreRunsForClass(
       .filter((division) => division.class_id === classId)
       .map((division) => division.id),
   );
+  const eligibleEntries = entries.filter((entry) => classDivisionIds.has(entry.division_id) && !inactiveEntryStatuses.has(entry.status));
+  const lateEntries = stableShuffle(
+    eligibleEntries.filter((entry) => entry.is_late),
+    `${classId}:late`,
+  );
+  const regularEntries = buildSpacedDrawOrder(
+    eligibleEntries.filter((entry) => !entry.is_late),
+    classId,
+    lateEntries,
+  );
+  const orderedEntries = [...lateEntries, ...regularEntries];
+  const lateEntryCount = lateEntries.length;
 
-  return entries
-    .filter((entry) => classDivisionIds.has(entry.division_id))
-    .sort(compareEntriesForDraw)
-    .map((entry, index) => toShowScoreRun(entry, index + 1, divisionsById, relations))
+  return orderedEntries
+    .map((entry, index) => {
+      const draw = index < lateEntryCount ? index - lateEntryCount : index - lateEntryCount + 1;
+      return toShowScoreRun(entry, draw, divisionsById, relations);
+    })
     .filter((run): run is ShowScoreRun => Boolean(run));
 }
 
@@ -192,7 +210,7 @@ function toShowScoreRun(
     return null;
   }
 
-  const draw = entry.entry_number || fallbackDraw;
+  const draw = fallbackDraw;
 
   return {
     id: entry.id,
@@ -209,6 +227,8 @@ function toShowScoreRun(
     rider: formatContactName(rider),
     horse: horse.name,
     owner: formatContactName(owner),
+    isLate: entry.is_late,
+    drawGroup: entry.is_late ? "late" : "regular",
   };
 }
 
@@ -222,17 +242,6 @@ function toShowScoreStatus(status: Show["status"]): ShowScoreShowStatus {
   }
 
   return status;
-}
-
-function compareEntriesForDraw(left: Entry, right: Entry) {
-  const leftNumber = left.entry_number ?? Number.MAX_SAFE_INTEGER;
-  const rightNumber = right.entry_number ?? Number.MAX_SAFE_INTEGER;
-
-  if (leftNumber !== rightNumber) {
-    return leftNumber - rightNumber;
-  }
-
-  return left.created_at.localeCompare(right.created_at);
 }
 
 function formatContactName(contact: Contact | undefined) {
@@ -249,4 +258,81 @@ function formatLocation(show: Show) {
 
 function formatDateLabel(date: string) {
   return date;
+}
+
+function buildSpacedDrawOrder(entries: Entry[], classId: string, precedingEntries: Entry[] = []) {
+  const remaining = stableShuffle(entries, `${classId}:regular`);
+  const ordered: Entry[] = [];
+  const lastPositionByRider = new Map<string, number>();
+
+  precedingEntries.forEach((entry, index) => {
+    lastPositionByRider.set(drawRiderKey(entry), index);
+  });
+
+  while (remaining.length) {
+    const position = precedingEntries.length + ordered.length;
+    const candidates = remaining.map((entry, index) => {
+      const riderKey = drawRiderKey(entry);
+      const lastPosition = lastPositionByRider.get(riderKey);
+      const gap = lastPosition == null ? Number.POSITIVE_INFINITY : position - lastPosition;
+      const sameRiderRemaining = remaining.filter((candidate) => drawRiderKey(candidate) === riderKey).length;
+
+      return {
+        entry,
+        gap,
+        index,
+        randomWeight: stableNumber(`${classId}:${entry.id}:${position}`),
+        sameRiderRemaining,
+      };
+    });
+    const eligibleCandidates = candidates.filter((candidate) => candidate.gap >= minimumRiderDrawSpacing);
+    const pool = eligibleCandidates.length ? eligibleCandidates : candidates;
+
+    pool.sort((left, right) => {
+      if (left.sameRiderRemaining !== right.sameRiderRemaining) {
+        return right.sameRiderRemaining - left.sameRiderRemaining;
+      }
+
+      if (left.gap !== right.gap) {
+        return right.gap - left.gap;
+      }
+
+      return left.randomWeight - right.randomWeight;
+    });
+
+    const selected = pool[0];
+    remaining.splice(selected.index, 1);
+    ordered.push(selected.entry);
+    lastPositionByRider.set(drawRiderKey(selected.entry), position);
+  }
+
+  return ordered;
+}
+
+function stableShuffle(entries: Entry[], salt: string) {
+  return [...entries].sort((left, right) => {
+    const leftWeight = stableNumber(`${salt}:${left.id}`);
+    const rightWeight = stableNumber(`${salt}:${right.id}`);
+
+    if (leftWeight !== rightWeight) {
+      return leftWeight - rightWeight;
+    }
+
+    return left.created_at.localeCompare(right.created_at);
+  });
+}
+
+function stableNumber(value: string) {
+  let hash = 2_166_136_261;
+
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16_777_619);
+  }
+
+  return hash >>> 0;
+}
+
+function drawRiderKey(entry: Entry) {
+  return entry.rider_contact_id ?? entry.owner_contact_id;
 }

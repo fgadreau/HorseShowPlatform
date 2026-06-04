@@ -81,6 +81,7 @@ import type {
   InvoiceLineItem,
   Organization,
   OrganizationExternalMembershipRequirement,
+  PayoutScheduleType,
   SanctioningBody,
   Show,
   ShowDay,
@@ -945,6 +946,153 @@ function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[], orga
   return horseHealthValidityMessage(validity);
 }
 
+type HorseStatusTone = "success" | "warning" | "error" | "neutral";
+
+type HorseStatusChip = {
+  label: string;
+  tone: HorseStatusTone;
+  value: string;
+};
+
+function horseHealthDisplay(horse: Horse, documents: HorseHealthDocument[], organization: Organization | null | undefined) {
+  const validity = getHorseHealthValidity({
+    documents,
+    horseId: horse.id,
+    organization,
+  });
+  const chips = [healthGateChip("Coggins", validity.coggins), healthGateChip("Vaccin", validity.vaccine)];
+  const hasPendingReview = validity.coggins.status === "pending_review" || validity.vaccine.status === "pending_review";
+  const hasMissingInfo = validity.coggins.status === "missing" || validity.vaccine.status === "missing";
+  const hasRejected = validity.coggins.status === "rejected" || validity.vaccine.status === "rejected";
+  const hasExpired = validity.coggins.status === "expired" || validity.vaccine.status === "expired";
+  const healthRequired = organizationRequiresHealthVerification(organization);
+
+  if (!healthRequired) {
+    return {
+      chips,
+      summary: {
+        label: "Prêt",
+        tone: "success" as const,
+      },
+    };
+  }
+
+  if (validity.valid) {
+    return {
+      chips,
+      summary: {
+        label: "Santé vérifiée",
+        tone: "success" as const,
+      },
+    };
+  }
+
+  if (hasPendingReview) {
+    return {
+      chips,
+      summary: {
+        label: "En révision",
+        tone: "warning" as const,
+      },
+    };
+  }
+
+  return {
+    chips,
+    summary: {
+      label: hasMissingInfo ? "Info manquante" : hasRejected ? "À corriger" : hasExpired ? "Expiré" : "À vérifier",
+      tone: "error" as const,
+    },
+  };
+}
+
+function healthGateChip(label: string, validity: HorseCogginsValidity | HorseVaccineValidity): HorseStatusChip {
+  if (validity.status === "not_required") {
+    return { label, tone: "neutral", value: "Non requis" };
+  }
+
+  if (validity.status === "valid") {
+    return { label, tone: "success", value: validity.expiresOn ? `Jusqu'au ${formatDate(validity.expiresOn)}` : "Vérifié" };
+  }
+
+  if (validity.status === "pending_review") {
+    return { label, tone: "warning", value: "En révision" };
+  }
+
+  if (validity.status === "expired") {
+    return { label, tone: "error", value: validity.expiresOn ? `Expiré ${formatDate(validity.expiresOn)}` : "Expiré" };
+  }
+
+  if (validity.status === "rejected") {
+    return { label, tone: "error", value: "Refusé" };
+  }
+
+  return { label, tone: "error", value: "Manquant" };
+}
+
+function horseExternalReferenceChips(horse: Horse, memberships: HorseExternalMembership[], externalOrganizations: ExternalOrganization[]): HorseStatusChip[] {
+  const references = memberships
+    .filter((membership) => membership.horse_id === horse.id)
+    .sort((a, b) => {
+      const aOrganization = externalOrganizations.find((organization) => organization.id === a.external_organization_id);
+      const bOrganization = externalOrganizations.find((organization) => organization.id === b.external_organization_id);
+      return (aOrganization?.code ?? "").localeCompare(bOrganization?.code ?? "");
+    })
+    .map((membership) => {
+      const organization = externalOrganizations.find((externalOrganization) => externalOrganization.id === membership.external_organization_id);
+      return {
+        label: organization?.code ?? "Ext.",
+        tone: horseExternalReferenceTone(membership.status),
+        value: membership.reference_number || horseExternalReferenceStatusLabel(membership.status),
+      };
+    });
+
+  return references.length ? references : [{ label: "Références", tone: "neutral", value: "Aucune" }];
+}
+
+function horseExternalReferenceTone(status: HorseExternalMembership["status"]): HorseStatusTone {
+  if (status === "active") {
+    return "success";
+  }
+
+  if (status === "pending") {
+    return "warning";
+  }
+
+  if (status === "expired") {
+    return "error";
+  }
+
+  return "neutral";
+}
+
+function horseExternalReferenceStatusLabel(status: HorseExternalMembership["status"]) {
+  const labels: Record<HorseExternalMembership["status"], string> = {
+    active: "Active",
+    pending: "En révision",
+    expired: "Expirée",
+    unknown: "À valider",
+  };
+
+  return labels[status];
+}
+
+function horseGenderLabel(gender: Horse["gender"]) {
+  if (gender === "M") {
+    return "Mâle";
+  }
+
+  if (gender === "F") {
+    return "Femelle";
+  }
+
+  if (gender === "G") {
+    return "Hongre";
+  }
+
+  return "Genre non indiqué";
+}
+
 type HealthAlert = {
   detail: string;
   horse: Horse;
@@ -1241,7 +1389,7 @@ function OverviewView({
     {
       detail: upcomingShow
         ? `${upcomingShows.length} upcoming show${upcomingShows.length === 1 ? "" : "s"} on the calendar.`
-        : "Create dates, venue and open status before inviting exhibitors.",
+        : "Create dates, venue and open status before inviting competitors.",
       icon: upcomingShow ? CheckCircle2 : AlertCircle,
       state: upcomingShow ? "Ready" : "Next",
       title: upcomingShow ? "Calendar is started" : "Create the first show",
@@ -1337,7 +1485,7 @@ function OverviewView({
         <div className="panel-header">
           <div>
             <h2>Upcoming shows</h2>
-            <p>{upcomingShows.length ? "The visible runway for secretaries and exhibitors." : "No upcoming shows yet."}</p>
+            <p>{upcomingShows.length ? "The visible runway for secretaries and competitors." : "No upcoming shows yet."}</p>
           </div>
         </div>
         <div className="timeline-list">
@@ -2110,6 +2258,10 @@ function ClassesView({
   onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
+  const [creatingClassTemplate, setCreatingClassTemplate] = useState(false);
+  const [creatingClassTemplateDivision, setCreatingClassTemplateDivision] = useState(false);
+  const [creatingClass, setCreatingClass] = useState<"preset" | "custom" | null>(null);
+  const [creatingDivision, setCreatingDivision] = useState(false);
   const [editingClassTemplate, setEditingClassTemplate] = useState<ClassTemplate | null>(null);
   const [editingClassTemplateDivision, setEditingClassTemplateDivision] = useState<ClassTemplateDivision | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
@@ -2128,73 +2280,141 @@ function ClassesView({
         ]}
       />
 
-      <ClassTemplateForm organization={organization} sanctioningBodies={sanctioningBodies} onCreateClassTemplate={onCreateClassTemplate} />
-      <ClassTemplateDivisionForm
-        classTemplates={classTemplates}
-        organization={organization}
-        sanctioningBodies={sanctioningBodies}
-        onCreateClassTemplateDivision={onCreateClassTemplateDivision}
-      />
-      <ClassForm
-        classTemplateDivisions={classTemplateDivisions}
-        classTemplates={classTemplates}
-        organization={organization}
-        sanctioningBodies={sanctioningBodies}
-        showDays={showDays}
-        shows={shows}
-        onCreateClass={onCreateClass}
-        onCreateDivision={onCreateDivision}
-      />
-      <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Ajouter au programme</h2>
+            <p>Crée une classe depuis un preset, une classe custom ou une division sans quitter le programme.</p>
+          </div>
+          <div className="row-actions">
+            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingClassTemplate(true)}>
+              <Plus size={18} />
+              Preset
+            </button>
+            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
+              <Plus size={18} />
+              Division preset
+            </button>
+            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
+              <Plus size={18} />
+              Classe preset
+            </button>
+            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
+              <Plus size={18} />
+              Classe libre
+            </button>
+            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
+              <Plus size={18} />
+              Division
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {creatingClassTemplate ? (
+        <ModalDialog className="class-program-modal" description="Catalogue réutilisable de l'association." eyebrow="Programme" title="Nouveau preset" onClose={() => setCreatingClassTemplate(false)}>
+          <ClassTemplateForm
+            organization={organization}
+            sanctioningBodies={sanctioningBodies}
+            onCreateClassTemplate={onCreateClassTemplate}
+            onCreated={() => setCreatingClassTemplate(false)}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {creatingClassTemplateDivision ? (
+        <ModalDialog className="class-program-modal" description="Division régulière rattachée à un preset." eyebrow="Programme" title="Division de preset" onClose={() => setCreatingClassTemplateDivision(false)}>
+          <ClassTemplateDivisionForm
+            classTemplates={classTemplates}
+            organization={organization}
+            sanctioningBodies={sanctioningBodies}
+            onCreateClassTemplateDivision={onCreateClassTemplateDivision}
+            onCreated={() => setCreatingClassTemplateDivision(false)}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {creatingClass ? (
+        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? "Choisis un preset ou passe en classe libre au besoin." : "Crée une classe hors catalogue."} eyebrow="Programme" title={creatingClass === "preset" ? "Nouvelle classe depuis preset" : "Nouvelle classe libre"} onClose={() => setCreatingClass(null)}>
+          <ClassForm
+            classes={classes}
+            classTemplateDivisions={classTemplateDivisions}
+            classTemplates={classTemplates}
+            defaultMode={creatingClass}
+            organization={organization}
+            sanctioningBodies={sanctioningBodies}
+            showDays={showDays}
+            shows={shows}
+            onCreateClass={onCreateClass}
+            onCreateDivision={onCreateDivision}
+            onCreated={() => setCreatingClass(null)}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {creatingDivision ? (
+        <ModalDialog className="class-program-modal" description="Ajoute une option d'inscription sous une classe existante." eyebrow="Programme" title="Nouvelle division" onClose={() => setCreatingDivision(false)}>
+          <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(false)} />
+        </ModalDialog>
+      ) : null}
 
       {editingClassTemplate ? (
-        <ClassTemplateEditForm
-          classTemplate={editingClassTemplate}
-          sanctioningBodies={sanctioningBodies}
-          onCancel={() => setEditingClassTemplate(null)}
-          onUpdateClassTemplate={async (id, input) => {
-            await onUpdateClassTemplate(id, input);
-            setEditingClassTemplate(null);
-          }}
-        />
+        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow="Programme" title="Modifier le preset" onClose={() => setEditingClassTemplate(null)}>
+          <ClassTemplateEditForm
+            classTemplate={editingClassTemplate}
+            sanctioningBodies={sanctioningBodies}
+            onCancel={() => setEditingClassTemplate(null)}
+            onUpdateClassTemplate={async (id, input) => {
+              await onUpdateClassTemplate(id, input);
+              setEditingClassTemplate(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       {editingClassTemplateDivision ? (
-        <ClassTemplateDivisionEditForm
-          classTemplates={classTemplates}
-          classTemplateDivision={editingClassTemplateDivision}
-          sanctioningBodies={sanctioningBodies}
-          onCancel={() => setEditingClassTemplateDivision(null)}
-          onUpdateClassTemplateDivision={async (id, input) => {
-            await onUpdateClassTemplateDivision(id, input);
-            setEditingClassTemplateDivision(null);
-          }}
-        />
+        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow="Programme" title="Modifier la division de preset" onClose={() => setEditingClassTemplateDivision(null)}>
+          <ClassTemplateDivisionEditForm
+            classTemplates={classTemplates}
+            classTemplateDivision={editingClassTemplateDivision}
+            sanctioningBodies={sanctioningBodies}
+            onCancel={() => setEditingClassTemplateDivision(null)}
+            onUpdateClassTemplateDivision={async (id, input) => {
+              await onUpdateClassTemplateDivision(id, input);
+              setEditingClassTemplateDivision(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       {editingClass ? (
-        <ClassEditForm
-          classRecord={editingClass}
-          sanctioningBodies={sanctioningBodies}
-          onCancel={() => setEditingClass(null)}
-          onUpdateClass={async (id, input) => {
-            await onUpdateClass(id, input);
-            setEditingClass(null);
-          }}
-        />
+        <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow="Programme" title="Modifier la classe" onClose={() => setEditingClass(null)}>
+          <ClassEditForm
+            classes={classes}
+            classRecord={editingClass}
+            sanctioningBodies={sanctioningBodies}
+            onCancel={() => setEditingClass(null)}
+            onUpdateClass={async (id, input) => {
+              await onUpdateClass(id, input);
+              setEditingClass(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       {editingDivision ? (
-        <DivisionEditForm
-          classes={classes}
-          division={editingDivision}
-          sanctioningBodies={sanctioningBodies}
-          onCancel={() => setEditingDivision(null)}
-          onUpdateDivision={async (id, input) => {
-            await onUpdateDivision(id, input);
-            setEditingDivision(null);
-          }}
-        />
+        <ModalDialog className="class-program-modal" description={editingDivision.name} eyebrow="Programme" title="Modifier la division" onClose={() => setEditingDivision(null)}>
+          <DivisionEditForm
+            classes={classes}
+            division={editingDivision}
+            sanctioningBodies={sanctioningBodies}
+            onCancel={() => setEditingDivision(null)}
+            onUpdateDivision={async (id, input) => {
+              await onUpdateDivision(id, input);
+              setEditingDivision(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -2217,7 +2437,15 @@ function ClassesView({
               <div className="table-row" key={template.id}>
                 <div>
                   <strong>{template.name}</strong>
-                  <span className="muted-line">{[template.block_label, template.default_pattern ? `Pattern ${template.default_pattern}` : null].filter(Boolean).join(" - ") || template.code || "Preset"}</span>
+                  <span className="muted-line">
+                    {[
+                      template.block_label,
+                      template.category,
+                      template.default_pattern ? `Pattern ${template.default_pattern}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(" - ") || template.code || "Preset"}
+                  </span>
                   <button className="text-button inline-action" type="button" onClick={() => setEditingClassTemplate(template)}>
                     Edit
                   </button>
@@ -2229,9 +2457,12 @@ function ClassesView({
                     ? templateDivisions
                         .map((division) =>
                           [
+                            division.code ? `#${division.code}` : null,
                             division.name,
+                            isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "type NRHA à préciser" : null,
                             division.default_entry_fee == null ? null : `insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
                             division.default_judge_fee == null ? null : `juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+                            payoutTemplateDivisionSummary(division),
                           ]
                             .filter(Boolean)
                             .join(" "),
@@ -2264,15 +2495,23 @@ function ClassesView({
             <div className="table-row" key={division.id}>
               <div>
                 <strong>{division.name}</strong>
-                <span className="muted-line">{division.code ? `#${division.code}` : "Sans code"}</span>
+                <span className="muted-line">
+                  {[
+                    division.code ? `#${division.code}` : "Sans code",
+                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "Type NRHA à préciser" : null,
+                  ]
+                    .filter(Boolean)
+                    .join(" - ")}
+                </span>
               </div>
               <span>{findById(classTemplates, division.class_template_id)?.name ?? "Preset inconnu"}</span>
               <span>
                 {[
-                  division.default_entry_fee == null ? null : `Insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
-                  division.default_judge_fee == null ? null : `Juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
-                ]
-                  .filter(Boolean)
+	                  division.default_entry_fee == null ? null : `Insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
+	                  division.default_judge_fee == null ? null : `Juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+	                  payoutTemplateDivisionSummary(division),
+	                ]
+	                  .filter(Boolean)
                   .join(" - ") || "Aucun frais"}
               </span>
               <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
@@ -2320,8 +2559,10 @@ function ClassesView({
                   <span className="muted-line">
                     {[
                       classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
-                      isNrhaSanctioned(classRecord.sanctioning_body_codes) ? `NRHA slate ${classRecord.nrha_slate_number || "not set"}` : null,
+                      classRecord.nrha_slate_number ? `Slate / show technique ${classRecord.nrha_slate_number}` : null,
+                      concurrentClassLabel(classRecord, classes),
                       backNumberPolicyLabel(classRecord.back_number_policy),
+                      classEntriesCloseLabel(classRecord),
                     ]
                       .filter(Boolean)
                       .join(" - ")}
@@ -2358,9 +2599,11 @@ function ClassesView({
                 <span className="muted-line">
                   {[
                     division.code ? `#${division.code}` : null,
-                    division.entry_fee == null ? "Frais classe" : `Inscription ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
-                    division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
-                  ]
+                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "Type NRHA à préciser" : null,
+	                    division.entry_fee == null ? "Frais classe" : `Inscription ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
+	                    division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+	                    payoutDivisionSummary(division),
+	                  ]
                     .filter(Boolean)
                     .join(" - ")}
                 </span>
@@ -2470,6 +2713,7 @@ function EntriesView({
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={contactRoles}
             divisions={divisions}
+            entries={entries}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
@@ -2495,6 +2739,7 @@ function EntriesView({
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={contactRoles}
             divisions={divisions}
+            entries={entries}
             entry={editingEntry}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={horseHealthDocuments}
@@ -2645,8 +2890,11 @@ function ScoringView({
             const day = findById(showDays, classRecord.show_day_id);
             const show = findById(shows, classRecord.show_id);
             const preparedRunCount = setup?.runs.length ?? 0;
-            const status = setup?.finalized ? "Finalized" : setup ? "Prepared" : runs.length ? "Ready" : "No entries";
-            const canPrepare = runs.length > 0 && !setup?.locked_at && !setup?.finalized;
+            const entriesClosed = classEntriesAreClosed(classRecord);
+            const status = !entriesClosed ? "Inscriptions ouvertes" : setup?.finalized ? "Finalized" : setup ? "Ordre sorti" : runs.length ? "Pret a sortir" : "No entries";
+            const statusClass = !entriesClosed ? "warning" : setup?.finalized ? "closed" : setup ? "info" : runs.length ? "open" : "draft";
+            const canPrepare = entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
+            const prepareLabel = !entriesClosed ? "Sortie apres cutoff" : busyClassId === classRecord.id ? "Preparation" : setup ? "Rafraichir ordre" : "Sortir ordre";
 
             return (
               <div className="table-row" key={classRecord.id}>
@@ -2657,15 +2905,16 @@ function ScoringView({
                 <div>
                   <span>{showLabel(show)}</span>
                   <span className="muted-line">{day ? `${day.day_name || "Day"} - ${formatDate(day.day_date)}` : "No day assigned"}</span>
+                  <span className="muted-line">{classEntriesCloseLabel(classRecord)}</span>
                 </div>
                 <div>
                   <strong>{runs.length}</strong>
                   <span className="muted-line">{preparedRunCount ? `${preparedRunCount} saved` : "Not saved yet"}</span>
                 </div>
                 <div className="row-actions">
-                  <span className={`badge ${status.toLowerCase().replace(" ", "-")}`}>{status}</span>
+                  <span className={`badge ${statusClass}`}>{status}</span>
                   <button className="text-button" disabled={!canPrepare || busyClassId === classRecord.id} type="button" onClick={() => handlePrepare(classRecord)}>
-                    {busyClassId === classRecord.id ? "Preparing" : setup ? "Refresh setup" : "Prepare setup"}
+                    {prepareLabel}
                   </button>
                 </div>
               </div>
@@ -2804,32 +3053,55 @@ function MyHorsesView({
             <p>Chevaux liés à mon profil utilisateur.</p>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>Nom</span>
-            <span>Owner</span>
-            <span>Genre</span>
+        <div className="horse-list">
+          <div className="horse-list-row horse-list-head">
+            <span>Cheval</span>
+            <span>Statut</span>
+            <span>Références</span>
             <span>Action</span>
           </div>
-          {horses.map((horse) => (
-            <div className="table-row" key={horse.id}>
-              <strong>
-                {horse.name}
-                <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
-                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments, organization)}</span>
-              </strong>
-              <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
-              <span>{horse.gender || "Unset"}</span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                  Edit
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
-                  Supprimer
-                </button>
+          {horses.map((horse) => {
+            const healthDisplay = horseHealthDisplay(horse, horseHealthDocuments, organization);
+            const referenceChips = horseExternalReferenceChips(horse, horseExternalMemberships, externalOrganizations);
+
+            return (
+              <div className={`horse-list-row ${healthDisplay.summary.tone}`} key={horse.id}>
+                <div className="horse-list-identity">
+                  <strong>{horse.name}</strong>
+                  <span>
+                    {contactLabel(findById(contacts, horse.primary_owner_contact_id))} · {horseGenderLabel(horse.gender)}
+                  </span>
+                </div>
+                <div className="horse-list-status">
+                  <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
+                  <div className="horse-chip-row">
+                    {healthDisplay.chips.map((chip) => (
+                      <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}`}>
+                        <span>{chip.label}</span>
+                        <strong>{chip.value}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="horse-chip-row reference-chip-row">
+                  {referenceChips.map((chip) => (
+                    <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}-${chip.value}`}>
+                      <span>{chip.label}</span>
+                      <strong>{chip.value}</strong>
+                    </span>
+                  ))}
+                </div>
+                <div className="row-actions horse-row-actions">
+                  <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                    Edit
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
+                    Supprimer
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {!horses.length ? <EmptyState label="Aucun cheval lié à ton profil pour l'instant." /> : null}
         </div>
       </section>
@@ -3064,6 +3336,7 @@ function MyEntriesView({
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={contactRoles}
             divisions={divisions}
+            entries={entries}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
@@ -3089,6 +3362,7 @@ function MyEntriesView({
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={contactRoles}
             divisions={divisions}
+            entries={entries}
             entry={editingEntry}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={horseHealthDocuments}
@@ -3124,7 +3398,14 @@ function MyEntriesView({
           {entries.map((entry) => (
             <div className="table-row" key={entry.id}>
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
-              <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
+              <div>
+                <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
+                {entry.is_late ? (
+                  <span className="muted-line">
+                    Late +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}
+                  </span>
+                ) : null}
+              </div>
               <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
@@ -5251,6 +5532,7 @@ function SanctioningFields({
   backNumberPolicy,
   disabled = false,
   hideBackNumberPolicy = false,
+  label = "Sanctions",
   sanctioningBodies,
   sanctioningBodyCodes,
   onBackNumberPolicyChange,
@@ -5259,6 +5541,7 @@ function SanctioningFields({
   backNumberPolicy: BackNumberPolicy;
   disabled?: boolean;
   hideBackNumberPolicy?: boolean;
+  label?: string;
   sanctioningBodies: SanctioningBody[];
   sanctioningBodyCodes: string[];
   onBackNumberPolicyChange: (policy: BackNumberPolicy) => void;
@@ -5267,7 +5550,7 @@ function SanctioningFields({
   return (
     <div className="stack compact-stack">
       <div className="field-group">
-        <span className="contact-picker-label">Sanctions</span>
+        <span className="contact-picker-label">{label}</span>
         <div className="checkbox-grid">
           {sanctioningBodies.map((body) => (
             <label className="check-row" key={body.code}>
@@ -5332,8 +5615,812 @@ function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined) {
   }
 }
 
+const nrhaClassTypes = [
+  { label: "Category 1 - Ancillary, year-end eligible", value: "category_1_ancillary_year_end" },
+  { label: "Category 2 - Aged show", value: "category_2_aged_show" },
+  { label: "Category 3 - Youth", value: "category_3_youth" },
+  { label: "Category 4 - Breed or alliance", value: "category_4_breed_alliance" },
+  { label: "Category 5 - Ancillary, non year-end", value: "category_5_ancillary_non_year_end" },
+  { label: "Category 6 - Closed aged show", value: "category_6_closed_aged_show" },
+  { label: "Category 7 - Affiliate championship", value: "category_7_affiliate_championship" },
+  { label: "Category 8 - International / NGB", value: "category_8_international_ngb" },
+  { label: "Category 9 - Freestyle reining", value: "category_9_freestyle" },
+  { label: "Category 10 - Entry level", value: "category_10_entry_level" },
+  { label: "Category 11 - Other approved", value: "category_11_other_approved" },
+  { label: "Category 12 - Nominator incentive earnings", value: "category_12_nominator_incentive" },
+  { label: "Category 13 - Earnings/status limitations", value: "category_13_earnings_status_limited" },
+];
+
+const payoutScheduleOptions: Array<{ description: string; label: string; value: PayoutScheduleType }> = [
+  {
+    description: "Classe sans bourse. Les frais ne generent pas de payout aux concurrents.",
+    label: "Aucun payout",
+    value: "none",
+  },
+  {
+    description: "Standard NRHA pour la majorite des classes ancillary. Payout plus concentre selon les brackets officiels.",
+    label: "NRHA Schedule A",
+    value: "nrha_schedule_a",
+  },
+  {
+    description: "NRHA Category 1 avec 2,000$ ou plus en added money. Utilise le schedule officiel B.",
+    label: "NRHA Schedule B",
+    value: "nrha_schedule_b",
+  },
+  {
+    description: "Moins de places payees, montants plus eleves aux premieres positions.",
+    label: "Payout maison concentre",
+    value: "house_concentrated",
+  },
+  {
+    description: "Plus de places payees, montants plus petits par place pour encourager la participation.",
+    label: "Payout maison reparti",
+    value: "house_distributed",
+  },
+  {
+    description: "Tableau maison a definir par l'association avec ses propres tranches et pourcentages.",
+    label: "Payout maison custom",
+    value: "house_custom",
+  },
+  {
+    description: "La portion admissible retourne aux concurrents selon le tableau choisi, avec retainage a 0% ou configure clairement.",
+    label: "Jackpot 100%",
+    value: "jackpot_100",
+  },
+];
+
+type PayoutRuleBracket = {
+  max_entries?: number | string | null;
+  min_entries?: number | string | null;
+  percentages?: number[] | string;
+};
+
+type PayoutRules = {
+  custom_brackets?: PayoutRuleBracket[];
+  [key: string]: unknown;
+};
+
+function payoutScheduleOption(value: PayoutScheduleType | null | undefined) {
+  return payoutScheduleOptions.find((option) => option.value === value) ?? payoutScheduleOptions[0];
+}
+
+function payoutScheduleLabel(value: PayoutScheduleType | null | undefined) {
+  return payoutScheduleOption(value).label;
+}
+
+function payoutScheduleUsesCustomTable(value: PayoutScheduleType) {
+  return value === "house_concentrated" || value === "house_distributed" || value === "house_custom" || value === "jackpot_100";
+}
+
+function payoutRulesFromValue(value: Record<string, unknown> | null | undefined): PayoutRules {
+  return value && typeof value === "object" ? (value as PayoutRules) : {};
+}
+
+function payoutRulesHaveStoredRows(value: Record<string, unknown> | null | undefined) {
+  return Boolean(payoutRulesFromValue(value).custom_brackets?.length);
+}
+
+function defaultPayoutRulesFor(type: PayoutScheduleType): PayoutRules {
+  if (type === "house_concentrated") {
+    return {
+      preset: type,
+      custom_brackets: [
+        { min_entries: "1", max_entries: "1", percentages: "100" },
+        { min_entries: "2", max_entries: "5", percentages: "70, 30" },
+        { min_entries: "6", max_entries: "10", percentages: "50, 30, 20" },
+        { min_entries: "11", max_entries: "20", percentages: "45, 25, 15, 10, 5" },
+        { min_entries: "21", max_entries: "", percentages: "35, 25, 18, 12, 10" },
+      ],
+    };
+  }
+
+  if (type === "house_distributed" || type === "jackpot_100") {
+    return {
+      preset: type,
+      custom_brackets: [
+        { min_entries: "1", max_entries: "1", percentages: "100" },
+        { min_entries: "2", max_entries: "5", percentages: "60, 40" },
+        { min_entries: "6", max_entries: "10", percentages: "40, 30, 20, 10" },
+        { min_entries: "11", max_entries: "20", percentages: "30, 24, 18, 12, 10, 6" },
+        { min_entries: "21", max_entries: "", percentages: "25, 20, 16, 13, 10, 8, 5, 3" },
+      ],
+    };
+  }
+
+  return {
+    preset: type,
+    custom_brackets: [{ min_entries: "1", max_entries: "", percentages: "100" }],
+  };
+}
+
+function payoutRuleRows(rules: Record<string, unknown> | null | undefined) {
+  const parsedRules = payoutRulesFromValue(rules);
+  return parsedRules.custom_brackets?.length ? parsedRules.custom_brackets : defaultPayoutRulesFor("house_custom").custom_brackets ?? [];
+}
+
+function parsePayoutPercentages(value: PayoutRuleBracket["percentages"]) {
+  if (Array.isArray(value)) {
+    return value.filter((percent) => Number.isFinite(percent));
+  }
+
+  return String(value ?? "")
+    .split(/[,;\s]+/)
+    .map((part) => Number(part.trim()))
+    .filter((percent) => Number.isFinite(percent) && percent > 0);
+}
+
+function parseNullableRuleNumber(value: number | string | null | undefined) {
+  if (value === "" || value == null) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function matchingPayoutBracket(rules: Record<string, unknown> | null | undefined, entryCount: number) {
+  return payoutRuleRows(rules).find((row) => {
+    const minEntries = parseNullableRuleNumber(row.min_entries) ?? 1;
+    const maxEntries = parseNullableRuleNumber(row.max_entries);
+    return entryCount >= minEntries && (maxEntries == null || entryCount <= maxEntries);
+  });
+}
+
+function payoutPercentageTotal(row: PayoutRuleBracket) {
+  return parsePayoutPercentages(row.percentages).reduce((total, percent) => total + percent, 0);
+}
+
+function payoutPreview({
+  addedMoney,
+  entryCount,
+  entryFee,
+  payoutRules,
+  retainagePercent,
+  sanctioningFeePercent,
+  trophyOrPlaqueFee,
+}: {
+  addedMoney: string;
+  entryCount: string;
+  entryFee: string;
+  payoutRules: Record<string, unknown>;
+  retainagePercent: string;
+  sanctioningFeePercent: string;
+  trophyOrPlaqueFee: string;
+}) {
+  const parsedEntryCount = Math.max(1, Math.round(numericValue(entryCount) ?? 1));
+  const grossEntryFees = (numericValue(entryFee) ?? 0) * parsedEntryCount;
+  const baseAfterTrophy = Math.max(0, grossEntryFees - (numericValue(trophyOrPlaqueFee) ?? 0));
+  const sanctioningFee = baseAfterTrophy * ((numericValue(sanctioningFeePercent) ?? 0) / 100);
+  const netEntryFee = Math.max(0, baseAfterTrophy - sanctioningFee);
+  const retainage = netEntryFee * ((numericValue(retainagePercent) ?? 0) / 100);
+  const purse = Math.max(0, netEntryFee - retainage + (numericValue(addedMoney) ?? 0));
+  const bracket = matchingPayoutBracket(payoutRules, parsedEntryCount);
+  const percentages = bracket ? parsePayoutPercentages(bracket.percentages) : [];
+
+  return {
+    bracket,
+    entryCount: parsedEntryCount,
+    grossEntryFees,
+    paidPlaces: percentages.length,
+    payouts: percentages.map((percent, index) => ({
+      amount: purse * (percent / 100),
+      percent,
+      place: index + 1,
+    })),
+    purse,
+  };
+}
+
+type NrhaApprovedClass = {
+  code: string;
+  name: string;
+  nrhaClassType: string;
+};
+
+const nrhaApprovedClasses: NrhaApprovedClass[] = [
+  { code: "1100", name: "Open", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1110", name: "Prime Time Open", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1200", name: "Intermediate Open", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1301", name: "Limited Open", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1350", name: "Rookie Professional", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1400", name: "Non Pro", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1500", name: "Intermediate Non Pro", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1600", name: "Limited Non Pro", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1650", name: "Prime Time Non Pro", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1660", name: "Masters Non Pro", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1700", name: "Novice Horse Open Level 1", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1750", name: "Novice Horse Open Level 2", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1775", name: "Novice Horse Open Level 3", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1800", name: "Novice Horse Non Pro Level 1", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1850", name: "Novice Horse Non Pro Level 2", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "1875", name: "Novice Horse Non Pro Level 3", nrhaClassType: "category_1_ancillary_year_end" },
+  { code: "2100", name: "Level 4 Open - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2200", name: "Level 3 Open - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2300", name: "Level 2 Open - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2325", name: "Level 1 Open - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2350", name: "Prime Time Open-Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2400", name: "Level 4 Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2500", name: "Level 3 Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2600", name: "Level 2 Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2621", name: "Masters Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2625", name: "Level 1 Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2650", name: "Prime Time Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2700", name: "Youth Non Pro - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2720", name: "Youth 13 & Under - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2730", name: "Youth 14-18 - Aged Event", nrhaClassType: "category_2_aged_show" },
+  { code: "2800", name: "Amateur Derby", nrhaClassType: "category_2_aged_show" },
+  { code: "2900", name: "Snaffle Bit/Hackamore (3 YO) Open", nrhaClassType: "category_2_aged_show" },
+  { code: "2920", name: "Snaffle Bit/Hackamore (4 & U) Open", nrhaClassType: "category_2_aged_show" },
+  { code: "2930", name: "Snaffle Bit/Hackamore (5 & U) Open", nrhaClassType: "category_2_aged_show" },
+  { code: "2940", name: "Snaffle Bit/Hackamore (3 YO) Non Pro", nrhaClassType: "category_2_aged_show" },
+  { code: "2950", name: "Snaffle Bit/Hackamore (4 & U) Non Pro", nrhaClassType: "category_2_aged_show" },
+  { code: "2960", name: "Snaffle Bit/Hackamore (5 & U) Non Pro", nrhaClassType: "category_2_aged_show" },
+  { code: "3100", name: "Youth 13 & Under", nrhaClassType: "category_3_youth" },
+  { code: "3200", name: "Youth 14-18", nrhaClassType: "category_3_youth" },
+  { code: "3300", name: "Youth Rookie", nrhaClassType: "category_3_youth" },
+  { code: "3400", name: "Unrestricted Youth", nrhaClassType: "category_3_youth" },
+  { code: "3500", name: "10 & Under Short Stirrup", nrhaClassType: "category_3_youth" },
+  { code: "4670", name: "Open", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4680", name: "Junior Horse", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4681", name: "Senior Horse", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4690", name: "Non Pro", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4691", name: "Amateur", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4692", name: "Youth", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4693", name: "Youth 13 & Under", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4694", name: "Youth 14-18", nrhaClassType: "category_4_breed_alliance" },
+  { code: "4695", name: "Novice Amateur", nrhaClassType: "category_4_breed_alliance" },
+  { code: "5270", name: "Legends Non Pro", nrhaClassType: "category_5_ancillary_non_year_end" },
+  { code: "5300", name: "Rookie Level 1", nrhaClassType: "category_5_ancillary_non_year_end" },
+  { code: "5301", name: "Prime Time Rookie", nrhaClassType: "category_5_ancillary_non_year_end" },
+  { code: "5310", name: "Rookie Level 2", nrhaClassType: "category_5_ancillary_non_year_end" },
+  { code: "6210", name: "Level 4 Open - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6220", name: "Level 3 Open - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6230", name: "Level 2 Open - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6231", name: "Level 1 Open - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6234", name: "Masters Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6235", name: "Prime Time Open - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6236", name: "Open Gelding - Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6237", name: "Open Mare - Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6240", name: "Level 4 Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6250", name: "Level 3 Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6260", name: "Level 2 Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6261", name: "Level 1 Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6265", name: "Prime Time Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6266", name: "Non Pro Gelding - Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6267", name: "Non Pro Mare - Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6700", name: "Youth Non Pro - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6720", name: "Youth 13 & Under - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6730", name: "Youth 14-18 - Closed Aged Event", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "6800", name: "Amateur Derby", nrhaClassType: "category_6_closed_aged_show" },
+  { code: "9100", name: "Freestyle Open", nrhaClassType: "category_9_freestyle" },
+  { code: "9200", name: "Freestyle Non Pro", nrhaClassType: "category_9_freestyle" },
+  { code: "9300", name: "Freestyle Invitational", nrhaClassType: "category_9_freestyle" },
+  { code: "9400", name: "Freestyle Youth", nrhaClassType: "category_9_freestyle" },
+  { code: "10001", name: "Green Reiner Level 2", nrhaClassType: "category_10_entry_level" },
+  { code: "10002", name: "Green Reiner Level 1", nrhaClassType: "category_10_entry_level" },
+  { code: "10100", name: "Ride & Slide Open Level 1", nrhaClassType: "category_10_entry_level" },
+  { code: "10101", name: "Ride & Slide Non Pro Level 1", nrhaClassType: "category_10_entry_level" },
+  { code: "10102", name: "Ride & Slide Youth Level 1", nrhaClassType: "category_10_entry_level" },
+  { code: "10200", name: "Ride & Slide Open Level 2", nrhaClassType: "category_10_entry_level" },
+  { code: "10201", name: "Ride & Slide Non Pro Level 2", nrhaClassType: "category_10_entry_level" },
+  { code: "10202", name: "Ride & Slide Youth Level 2", nrhaClassType: "category_10_entry_level" },
+  { code: "11011", name: "Para-Reining", nrhaClassType: "category_11_other_approved" },
+  { code: "111100", name: "Other Open", nrhaClassType: "category_11_other_approved" },
+  { code: "111400", name: "Other Non Pro", nrhaClassType: "category_11_other_approved" },
+].sort((a, b) => Number(a.code) - Number(b.code));
+
+function findNrhaApprovedClass(code: string | null | undefined) {
+  return nrhaApprovedClasses.find((approvedClass) => approvedClass.code === code?.trim()) ?? null;
+}
+
+function NrhaApprovedClassSelect({
+  disabled = false,
+  value,
+  onChange,
+}: {
+  disabled?: boolean;
+  value: string;
+  onChange: (code: string) => void;
+}) {
+  const items = useMemo(() => {
+    const approvedClassItems = nrhaApprovedClasses.map((approvedClass) => ({
+      id: approvedClass.code,
+      label: `${approvedClass.code} ${approvedClass.name}`,
+      detail: nrhaClassTypeLabel(approvedClass.nrhaClassType),
+    }));
+
+    if (value && !findNrhaApprovedClass(value)) {
+      return [{ id: value, label: value, detail: "Code NRHA hors liste" }, ...approvedClassItems];
+    }
+
+    return approvedClassItems;
+  }, [value]);
+
+  return <SearchSelect allowEmpty disabled={disabled} items={items} maxVisibleItems={items.length} placeholder="Rechercher par numéro ou nom" value={value} onChange={onChange} />;
+}
+
+function applyNrhaApprovedClassChoice(
+  nextCode: string,
+  {
+    setCode,
+    setName,
+    setNrhaClassType,
+  }: {
+    setCode: (value: string) => void;
+    setName: (value: string) => void;
+    setNrhaClassType: (value: string) => void;
+  },
+) {
+  setCode(nextCode);
+
+  const approvedClass = findNrhaApprovedClass(nextCode);
+
+  if (approvedClass) {
+    setName(approvedClass.name);
+    setNrhaClassType(approvedClass.nrhaClassType);
+    return;
+  }
+
+  if (!nextCode) {
+    setNrhaClassType("");
+  }
+}
+
+function PayoutSettingsFields({
+  addedMoney,
+  currency = "CAD",
+  disabled = false,
+  entryFee,
+  payoutNotes,
+  payoutRules,
+  payoutScheduleType,
+  retainagePercent,
+  sanctioningFeePercent,
+  trophyOrPlaqueFee,
+  onAddedMoneyChange,
+  onPayoutNotesChange,
+  onPayoutRulesChange,
+  onPayoutScheduleTypeChange,
+  onRetainagePercentChange,
+  onSanctioningFeePercentChange,
+  onTrophyOrPlaqueFeeChange,
+}: {
+  addedMoney: string;
+  currency?: string;
+  disabled?: boolean;
+  entryFee: string;
+  payoutNotes: string;
+  payoutRules: Record<string, unknown>;
+  payoutScheduleType: PayoutScheduleType;
+  retainagePercent: string;
+  sanctioningFeePercent: string;
+  trophyOrPlaqueFee: string;
+  onAddedMoneyChange: (value: string) => void;
+  onPayoutNotesChange: (value: string) => void;
+  onPayoutRulesChange: (value: Record<string, unknown>) => void;
+  onPayoutScheduleTypeChange: (value: PayoutScheduleType) => void;
+  onRetainagePercentChange: (value: string) => void;
+  onSanctioningFeePercentChange: (value: string) => void;
+  onTrophyOrPlaqueFeeChange: (value: string) => void;
+}) {
+  const selectedPayout = payoutScheduleOption(payoutScheduleType);
+  const [previewEntryCount, setPreviewEntryCount] = useState("10");
+  const customRows = payoutRuleRows(payoutRules);
+  const preview = payoutPreview({
+    addedMoney,
+    entryCount: previewEntryCount,
+    entryFee,
+    payoutRules,
+    retainagePercent,
+    sanctioningFeePercent,
+    trophyOrPlaqueFee,
+  });
+
+  function handlePayoutScheduleTypeChange(nextType: PayoutScheduleType) {
+    onPayoutScheduleTypeChange(nextType);
+
+    if (payoutScheduleUsesCustomTable(nextType) && !payoutRulesHaveStoredRows(payoutRules)) {
+      onPayoutRulesChange(defaultPayoutRulesFor(nextType));
+    }
+  }
+
+  function handleLoadPreset(nextType = payoutScheduleType) {
+    onPayoutRulesChange(defaultPayoutRulesFor(nextType));
+  }
+
+  function handleRowChange(index: number, key: keyof PayoutRuleBracket, value: string) {
+    onPayoutRulesChange({
+      ...payoutRules,
+      custom_brackets: customRows.map((row, rowIndex) => (rowIndex === index ? { ...row, [key]: value } : row)),
+    });
+  }
+
+  function handleAddRow() {
+    onPayoutRulesChange({
+      ...payoutRules,
+      custom_brackets: [...customRows, { min_entries: "", max_entries: "", percentages: "" }],
+    });
+  }
+
+  function handleRemoveRow(index: number) {
+    onPayoutRulesChange({
+      ...payoutRules,
+      custom_brackets: customRows.filter((_, rowIndex) => rowIndex !== index),
+    });
+  }
+
+  return (
+    <fieldset className="stack nested-fieldset">
+      <legend>Bourses / payout</legend>
+      <label>
+        Type de payout
+        <select disabled={disabled} value={payoutScheduleType} onChange={(event) => handlePayoutScheduleTypeChange(event.target.value as PayoutScheduleType)}>
+          {payoutScheduleOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
+        <span className="input-help">{selectedPayout.description}</span>
+      </label>
+      <div className="form-grid">
+        <label>
+          Added money
+          <input disabled={disabled} min="0" step="0.01" type="number" value={addedMoney} onChange={(event) => onAddedMoneyChange(event.target.value)} />
+        </label>
+        <label>
+          Trophée / plaque
+          <input disabled={disabled} min="0" step="0.01" type="number" value={trophyOrPlaqueFee} onChange={(event) => onTrophyOrPlaqueFeeChange(event.target.value)} />
+        </label>
+      </div>
+      <div className="form-grid">
+        <label>
+          Retainage override %
+          <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={retainagePercent} onChange={(event) => onRetainagePercentChange(event.target.value)} />
+          <span className="input-help">Vide = utilise le réglage du show ou de l'association.</span>
+        </label>
+        <label>
+          Frais organisme %
+          <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={sanctioningFeePercent} onChange={(event) => onSanctioningFeePercentChange(event.target.value)} />
+          <span className="input-help">Ex.: NRHA 5%. Vide = aucun frais défini ici.</span>
+        </label>
+      </div>
+      {payoutScheduleUsesCustomTable(payoutScheduleType) ? (
+        <div className="payout-editor">
+          <div className="payout-editor-header">
+            <span className="contact-picker-label">Tableau maison</span>
+            <button className="text-button" disabled={disabled} type="button" onClick={() => handleLoadPreset()}>
+              Charger modèle
+            </button>
+          </div>
+          <div className="payout-rule-table">
+            <div className="payout-rule-row payout-rule-head">
+              <span>Min</span>
+              <span>Max</span>
+              <span>Places %</span>
+              <span>Total</span>
+              <span />
+            </div>
+            {customRows.map((row, index) => {
+              const total = payoutPercentageTotal(row);
+
+              return (
+                <div className="payout-rule-row" key={index}>
+                  <input disabled={disabled} min="1" type="number" value={String(row.min_entries ?? "")} onChange={(event) => handleRowChange(index, "min_entries", event.target.value)} />
+                  <input disabled={disabled} min="1" placeholder="+" type="number" value={String(row.max_entries ?? "")} onChange={(event) => handleRowChange(index, "max_entries", event.target.value)} />
+                  <input
+                    disabled={disabled}
+                    placeholder="Ex.: 50, 30, 20"
+                    value={Array.isArray(row.percentages) ? row.percentages.join(", ") : String(row.percentages ?? "")}
+                    onChange={(event) => handleRowChange(index, "percentages", event.target.value)}
+                  />
+                  <span className={Math.abs(total - 100) < 0.01 ? "payout-total-ok" : "payout-total-warning"}>{total ? `${total}%` : "-"}</span>
+                  <button aria-label="Supprimer la tranche" className="text-button danger" disabled={disabled || customRows.length <= 1} type="button" onClick={() => handleRemoveRow(index)}>
+                    X
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+          <button className="ghost-button" disabled={disabled} type="button" onClick={handleAddRow}>
+            <Plus size={16} />
+            Ajouter tranche
+          </button>
+          <label>
+            Aperçu avec
+            <input disabled={disabled} min="1" step="1" type="number" value={previewEntryCount} onChange={(event) => setPreviewEntryCount(event.target.value)} />
+          </label>
+          <div className="payout-preview">
+            <span>Entrées: {preview.entryCount}</span>
+            <span>Gross: {formatCurrency(preview.grossEntryFees, currency)}</span>
+            <span>Bourse: {formatCurrency(preview.purse, currency)}</span>
+            <span>Places payées: {preview.paidPlaces || "aucune"}</span>
+            {preview.payouts.length ? (
+              <ol>
+                {preview.payouts.map((payout) => (
+                  <li key={payout.place}>
+                    {payout.place}. {payout.percent}% - {formatCurrency(payout.amount, currency)}
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <span className="input-help">Aucune tranche ne correspond au nombre d'entrées choisi.</span>
+            )}
+          </div>
+        </div>
+      ) : null}
+      <label>
+        Notes de payout
+        <textarea disabled={disabled} rows={2} value={payoutNotes} onChange={(event) => onPayoutNotesChange(event.target.value)} />
+      </label>
+    </fieldset>
+  );
+}
+
+function payoutAmountSummary(value: number | null | undefined, label: string) {
+  return value ? `${label} ${formatCurrency(value, "CAD")}` : "";
+}
+
+function payoutDivisionSummary(division: Pick<Division, "added_money" | "payout_schedule_type" | "retainage_percent" | "trophy_or_plaque_fee">) {
+  return [
+    payoutScheduleLabel(division.payout_schedule_type),
+    payoutAmountSummary(division.added_money, "Added"),
+    payoutAmountSummary(division.trophy_or_plaque_fee, "Trophée"),
+    division.retainage_percent == null ? null : `Retainage ${division.retainage_percent}%`,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function payoutTemplateDivisionSummary(
+  division: Pick<ClassTemplateDivision, "default_added_money" | "default_payout_schedule_type" | "default_retainage_percent" | "default_trophy_or_plaque_fee">,
+) {
+  return [
+    payoutScheduleLabel(division.default_payout_schedule_type),
+    payoutAmountSummary(division.default_added_money, "Added"),
+    payoutAmountSummary(division.default_trophy_or_plaque_fee, "Trophée"),
+    division.default_retainage_percent == null ? null : `Retainage ${division.default_retainage_percent}%`,
+  ]
+    .filter(Boolean)
+    .join(" - ");
+}
+
+function nrhaClassTypeLabel(value: string | null | undefined) {
+  return nrhaClassTypes.find((type) => type.value === value)?.label ?? "";
+}
+
+function nrhaClassTypeFromRules(rules: EligibilityRules | null | undefined) {
+  return typeof rules?.nrha_class_type === "string" ? rules.nrha_class_type : "";
+}
+
+function concurrentClassIdFromRules(rules: EligibilityRules | null | undefined) {
+  return typeof rules?.concurrent_class_id === "string" ? rules.concurrent_class_id : "";
+}
+
+function concurrentGroupLabelFromRules(rules: EligibilityRules | null | undefined) {
+  return typeof rules?.concurrent_group_label === "string" ? rules.concurrent_group_label : "";
+}
+
+function concurrentClassLabel(classRecord: ClassRecord, classes: ClassRecord[]) {
+  const concurrentClassId = concurrentClassIdFromRules(classRecord.eligibility_rules);
+  const linkedClass = findById(classes, concurrentClassId);
+
+  if (linkedClass) {
+    return `Concurrent avec ${linkedClass.name}`;
+  }
+
+  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
+  return groupLabel ? `Concurrent: ${groupLabel}` : "";
+}
+
+function classProgramRules(
+  notes: string,
+  {
+    concurrentClass,
+  }: {
+    concurrentClass?: ClassRecord | null;
+  } = {},
+) {
+  const extras: EligibilityRules = {};
+
+  if (concurrentClass) {
+    extras.concurrent_class_id = concurrentClass.id;
+    extras.concurrent_group_label = concurrentClass.block_label || concurrentClass.name;
+  }
+
+  return eligibilityRulesFromNotes(notes, extras);
+}
+
 function showTimeInputValue(value: string | null | undefined, fallback: string) {
   return value ? value.slice(0, 5) : fallback;
+}
+
+function datetimeLocalInputValue(value: string | null | undefined) {
+  if (!value) {
+    return "";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "";
+  }
+
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function datetimeLocalToIso(value: string | null | undefined) {
+  if (!value) {
+    return null;
+  }
+
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function defaultEntriesCloseAtForShowDay(day: ShowDay | null | undefined) {
+  if (!day?.day_date) {
+    return "";
+  }
+
+  const date = new Date(`${day.day_date}T18:00:00`);
+  date.setDate(date.getDate() - 1);
+  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60 * 1000);
+  return offsetDate.toISOString().slice(0, 16);
+}
+
+function classEntriesCloseLabel(classRecord: ClassRecord) {
+  if (!classRecord.entries_close_at) {
+    return "Inscriptions sans fermeture";
+  }
+
+  const closeDate = new Date(classRecord.entries_close_at);
+
+  if (Number.isNaN(closeDate.getTime())) {
+    return "Fermeture invalide";
+  }
+
+  const lateLabel = classRecord.late_entries_allowed ? `late +${classRecord.late_entry_fee_percent ?? 50}%` : "late refusées";
+
+  return `Fermeture ${closeDate.toLocaleString("fr-CA", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  })} - ${lateLabel}`;
+}
+
+function classEntriesCloseDate(classRecord: ClassRecord | null | undefined) {
+  if (!classRecord?.entries_close_at) {
+    return null;
+  }
+
+  const closeDate = new Date(classRecord.entries_close_at);
+  return Number.isNaN(closeDate.getTime()) ? null : closeDate;
+}
+
+function classEntriesAreClosed(classRecord: ClassRecord | null | undefined) {
+  const closeDate = classEntriesCloseDate(classRecord);
+  return !closeDate || Date.now() >= closeDate.getTime();
+}
+
+function buildEntryDeadlineReadiness(classRecord: ClassRecord | null, entryFee: number | null | undefined, currency: string): { canProceed: boolean; message: InlineHealthMessage | null } {
+  const closeDate = classEntriesCloseDate(classRecord);
+
+  if (!classRecord || !closeDate) {
+    return { canProceed: true, message: null };
+  }
+
+  const closeLabel = closeDate.toLocaleString("fr-CA", {
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  if (Date.now() <= closeDate.getTime()) {
+    return {
+      canProceed: true,
+      message: {
+        tone: "info",
+        message: `Inscriptions ouvertes jusqu'au ${closeLabel}.`,
+      },
+    };
+  }
+
+  if (!classRecord.late_entries_allowed) {
+    return {
+      canProceed: false,
+      message: {
+        tone: "error",
+        message: `Les inscriptions sont fermees depuis le ${closeLabel}. Les inscriptions tardives ne sont pas acceptees pour cette classe.`,
+      },
+    };
+  }
+
+  const lateFeePercent = classRecord.late_entry_fee_percent ?? 50;
+  const lateFeeAmount = entryFee == null ? null : Math.round(entryFee * (lateFeePercent / 100) * 100) / 100;
+
+  return {
+    canProceed: true,
+    message: {
+      tone: "info",
+      message: `Inscription tardive: penalite de ${lateFeePercent}%${lateFeeAmount == null ? "" : ` (${formatCurrency(lateFeeAmount, currency)})`}.`,
+    },
+  };
+}
+
+const inactiveProgramEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
+
+function buildEntryProgramLimitReadiness({
+  division,
+  divisions,
+  entries,
+  existingEntryId,
+  horse,
+  ownerContact,
+  riderContact,
+  skip,
+}: {
+  division: Division | null | undefined;
+  divisions: Division[];
+  entries: Entry[];
+  existingEntryId?: string;
+  horse: Horse | null | undefined;
+  ownerContact: Contact | null | undefined;
+  riderContact: Contact | null | undefined;
+  skip?: boolean;
+}): { canProceed: boolean; message: InlineHealthMessage | null } {
+  if (skip || !division || !horse) {
+    return { canProceed: true, message: null };
+  }
+
+  const activeEntries = entries.filter((entry) => entry.id !== existingEntryId && !inactiveProgramEntryStatuses.has(entry.status));
+  const classDivisionIds = new Set(divisions.filter((candidate) => candidate.class_id === division.class_id).map((candidate) => candidate.id));
+  const duplicateHorseEntry = activeEntries.find((entry) => entry.horse_id === horse.id && classDivisionIds.has(entry.division_id));
+
+  if (duplicateHorseEntry) {
+    return {
+      canProceed: false,
+      message: {
+        tone: "error",
+        message: "Ce cheval est deja inscrit dans cette classe.",
+      },
+    };
+  }
+
+  const riderContactId = riderContact?.id ?? ownerContact?.id ?? null;
+
+  if (!riderContactId) {
+    return { canProceed: true, message: null };
+  }
+
+  const riderEntryCount = activeEntries.filter((entry) => entry.division_id === division.id && (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
+
+  if (riderEntryCount >= 3) {
+    return {
+      canProceed: false,
+      message: {
+        tone: "error",
+        message: "Ce cavalier a deja trois inscriptions dans cette division.",
+      },
+    };
+  }
+
+  if (riderEntryCount === 2) {
+    return {
+      canProceed: true,
+      message: {
+        tone: "info",
+        message: "Ce sera la 3e inscription de ce cavalier dans cette division.",
+      },
+    };
+  }
+
+  return { canProceed: true, message: null };
 }
 
 function showPaymentSummary(show: Show) {
@@ -5378,8 +6465,14 @@ function invoiceQuantityLabel(quantity: number) {
   return Number(quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 });
 }
 
-function eligibilityRulesFromNotes(notes: string): EligibilityRules {
-  return notes.trim() ? { notes: notes.trim() } : {};
+function eligibilityRulesFromNotes(notes: string, extras: EligibilityRules = {}): EligibilityRules {
+  const rules = { ...extras };
+
+  if (notes.trim()) {
+    rules.notes = notes.trim();
+  }
+
+  return rules;
 }
 
 function eligibilityNotesFromRules(rules: EligibilityRules | null | undefined) {
@@ -5390,10 +6483,12 @@ function ClassTemplateForm({
   organization,
   sanctioningBodies,
   onCreateClassTemplate,
+  onCreated,
 }: {
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -5445,6 +6540,7 @@ function ClassTemplateForm({
       setBackNumberPolicy("horse");
       setEligibilityNotes("");
       setNotes("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -5469,7 +6565,7 @@ function ClassTemplateForm({
             <input disabled={!organization} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Catégorie
+            Catégorie du bloc
             <input disabled={!organization} value={category} onChange={(event) => setCategory(event.target.value)} />
           </label>
         </div>
@@ -5490,6 +6586,7 @@ function ClassTemplateForm({
         <SanctioningFields
           backNumberPolicy={backNumberPolicy}
           disabled={!organization}
+          label="Sanctions par défaut du bloc"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
@@ -5517,23 +6614,50 @@ function ClassTemplateDivisionForm({
   organization,
   sanctioningBodies,
   onCreateClassTemplateDivision,
+  onCreated,
 }: {
   classTemplates: ClassTemplate[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
   const [templateId, setTemplateId] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
   const [judgeFee, setJudgeFee] = useState("");
+  const [payoutScheduleType, setPayoutScheduleType] = useState<PayoutScheduleType>("none");
+  const [addedMoney, setAddedMoney] = useState("");
+  const [retainagePercent, setRetainagePercent] = useState("");
+  const [trophyOrPlaqueFee, setTrophyOrPlaqueFee] = useState("");
+  const [sanctioningFeePercent, setSanctioningFeePercent] = useState("");
+  const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>({});
+  const [payoutNotes, setPayoutNotes] = useState("");
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[] | null>(null);
+  const [nrhaClassType, setNrhaClassType] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedTemplateId = templateId || classTemplates[0]?.id || "";
   const selectedTemplate = findById(classTemplates, selectedTemplateId);
   const selectedSanctioningBodyCodes = sanctioningBodyCodes ?? selectedTemplate?.sanctioning_body_codes ?? [];
+  const divisionIsNrha = isNrhaSanctioned(selectedSanctioningBodyCodes);
+
+  function handleDivisionSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaClassType("");
+    }
+  }
+
+  function handleNrhaApprovedClassChange(nextCode: string) {
+    applyNrhaApprovedClassChoice(nextCode, {
+      setCode,
+      setName,
+      setNrhaClassType,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5552,15 +6676,31 @@ function ClassTemplateDivisionForm({
         code,
         default_entry_fee: numericValue(entryFee),
         default_judge_fee: numericValue(judgeFee),
+        default_payout_schedule_type: payoutScheduleType,
+        default_added_money: numericValue(addedMoney) ?? 0,
+        default_retainage_percent: numericValue(retainagePercent) ?? null,
+        default_trophy_or_plaque_fee: numericValue(trophyOrPlaqueFee) ?? 0,
+        default_sanctioning_fee_percent: numericValue(sanctioningFeePercent) ?? null,
+        default_payout_rules: payoutRules,
+        default_payout_notes: payoutNotes.trim() || null,
         sanctioning_body_codes: selectedSanctioningBodyCodes,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes, divisionIsNrha && nrhaClassType ? { nrha_class_type: nrhaClassType } : {}),
       });
       setName("");
       setCode("");
       setEntryFee("");
       setJudgeFee("");
+      setPayoutScheduleType("none");
+      setAddedMoney("");
+      setRetainagePercent("");
+      setTrophyOrPlaqueFee("");
+      setSanctioningFeePercent("");
+      setPayoutRules({});
+      setPayoutNotes("");
       setEligibilityNotes("");
       setSanctioningBodyCodes(null);
+      setNrhaClassType("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -5587,12 +6727,16 @@ function ClassTemplateDivisionForm({
         </label>
         <div className="form-grid">
           <label>
-            Division
+            Nom de division
             <input disabled={!organization || !classTemplates.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            Code
-            <input disabled={!organization || !classTemplates.length} value={code} onChange={(event) => setCode(event.target.value)} />
+            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? (
+              <NrhaApprovedClassSelect disabled={!organization || !classTemplates.length} value={code} onChange={handleNrhaApprovedClassChange} />
+            ) : (
+              <input disabled={!organization || !classTemplates.length} value={code} onChange={(event) => setCode(event.target.value)} />
+            )}
           </label>
         </div>
         <div className="form-grid">
@@ -5605,15 +6749,48 @@ function ClassTemplateDivisionForm({
             <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
+        <PayoutSettingsFields
+          addedMoney={addedMoney}
+          currency={organization?.currency ?? "CAD"}
+          disabled={!organization || !classTemplates.length}
+          entryFee={entryFee}
+          payoutNotes={payoutNotes}
+          payoutRules={payoutRules}
+          payoutScheduleType={payoutScheduleType}
+          retainagePercent={retainagePercent}
+          sanctioningFeePercent={sanctioningFeePercent}
+          trophyOrPlaqueFee={trophyOrPlaqueFee}
+          onAddedMoneyChange={setAddedMoney}
+          onPayoutNotesChange={setPayoutNotes}
+          onPayoutRulesChange={setPayoutRules}
+          onPayoutScheduleTypeChange={setPayoutScheduleType}
+          onRetainagePercentChange={setRetainagePercent}
+          onSanctioningFeePercentChange={setSanctioningFeePercent}
+          onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
+        />
         <SanctioningFields
           backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
           disabled={!organization || !classTemplates.length}
           hideBackNumberPolicy
+          label="Sanctions de la division"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={selectedSanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
         />
+        {divisionIsNrha ? (
+          <label>
+            Type de classe NRHA de la division
+            <select disabled={!organization || !classTemplates.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
+              <option value="">À préciser</option>
+              {nrhaClassTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Critères d'éligibilité
           <textarea disabled={!organization || !classTemplates.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -5698,7 +6875,7 @@ function ClassTemplateEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Catégorie
+            Catégorie du bloc
             <input value={category} onChange={(event) => setCategory(event.target.value)} />
           </label>
         </div>
@@ -5718,6 +6895,7 @@ function ClassTemplateEditForm({
         </label>
         <SanctioningFields
           backNumberPolicy={backNumberPolicy}
+          label="Sanctions par défaut du bloc"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
@@ -5759,10 +6937,37 @@ function ClassTemplateDivisionEditForm({
   const [code, setCode] = useState(classTemplateDivision.code ?? "");
   const [entryFee, setEntryFee] = useState(classTemplateDivision.default_entry_fee == null ? "" : String(classTemplateDivision.default_entry_fee));
   const [judgeFee, setJudgeFee] = useState(classTemplateDivision.default_judge_fee == null ? "" : String(classTemplateDivision.default_judge_fee));
+  const [payoutScheduleType, setPayoutScheduleType] = useState<PayoutScheduleType>(classTemplateDivision.default_payout_schedule_type ?? "none");
+  const [addedMoney, setAddedMoney] = useState(classTemplateDivision.default_added_money == null ? "" : String(classTemplateDivision.default_added_money));
+  const [retainagePercent, setRetainagePercent] = useState(classTemplateDivision.default_retainage_percent == null ? "" : String(classTemplateDivision.default_retainage_percent));
+  const [trophyOrPlaqueFee, setTrophyOrPlaqueFee] = useState(classTemplateDivision.default_trophy_or_plaque_fee == null ? "" : String(classTemplateDivision.default_trophy_or_plaque_fee));
+  const [sanctioningFeePercent, setSanctioningFeePercent] = useState(
+    classTemplateDivision.default_sanctioning_fee_percent == null ? "" : String(classTemplateDivision.default_sanctioning_fee_percent),
+  );
+  const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>(classTemplateDivision.default_payout_rules ?? {});
+  const [payoutNotes, setPayoutNotes] = useState(classTemplateDivision.default_payout_notes ?? "");
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classTemplateDivision.eligibility_rules));
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classTemplateDivision.sanctioning_body_codes ?? []);
+  const [nrhaClassType, setNrhaClassType] = useState(nrhaClassTypeFromRules(classTemplateDivision.eligibility_rules));
   const [busy, setBusy] = useState(false);
   const selectedTemplate = findById(classTemplates, templateId);
+  const divisionIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleDivisionSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaClassType("");
+    }
+  }
+
+  function handleNrhaApprovedClassChange(nextCode: string) {
+    applyNrhaApprovedClassChoice(nextCode, {
+      setCode,
+      setName,
+      setNrhaClassType,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5780,8 +6985,15 @@ function ClassTemplateDivisionEditForm({
         code: code || null,
         default_entry_fee: numericValue(entryFee) ?? null,
         default_judge_fee: numericValue(judgeFee) ?? null,
+        default_payout_schedule_type: payoutScheduleType,
+        default_added_money: numericValue(addedMoney) ?? 0,
+        default_retainage_percent: numericValue(retainagePercent) ?? null,
+        default_trophy_or_plaque_fee: numericValue(trophyOrPlaqueFee) ?? 0,
+        default_sanctioning_fee_percent: numericValue(sanctioningFeePercent) ?? null,
+        default_payout_rules: payoutRules,
+        default_payout_notes: payoutNotes.trim() || null,
         sanctioning_body_codes: sanctioningBodyCodes,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes, divisionIsNrha && nrhaClassType ? { nrha_class_type: nrhaClassType } : {}),
       });
     } finally {
       setBusy(false);
@@ -5808,12 +7020,12 @@ function ClassTemplateDivisionEditForm({
         </label>
         <div className="form-grid">
           <label>
-            Division
+            Nom de division
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            Code
-            <input value={code} onChange={(event) => setCode(event.target.value)} />
+            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? <NrhaApprovedClassSelect value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
           </label>
         </div>
         <div className="form-grid">
@@ -5826,14 +7038,45 @@ function ClassTemplateDivisionEditForm({
             <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
+        <PayoutSettingsFields
+          addedMoney={addedMoney}
+          entryFee={entryFee}
+          payoutNotes={payoutNotes}
+          payoutRules={payoutRules}
+          payoutScheduleType={payoutScheduleType}
+          retainagePercent={retainagePercent}
+          sanctioningFeePercent={sanctioningFeePercent}
+          trophyOrPlaqueFee={trophyOrPlaqueFee}
+          onAddedMoneyChange={setAddedMoney}
+          onPayoutNotesChange={setPayoutNotes}
+          onPayoutRulesChange={setPayoutRules}
+          onPayoutScheduleTypeChange={setPayoutScheduleType}
+          onRetainagePercentChange={setRetainagePercent}
+          onSanctioningFeePercentChange={setSanctioningFeePercent}
+          onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
+        />
         <SanctioningFields
           backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
           hideBackNumberPolicy
+          label="Sanctions de la division"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
         />
+        {divisionIsNrha ? (
+          <label>
+            Type de classe NRHA de la division
+            <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
+              <option value="">À préciser</option>
+              {nrhaClassTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Critères d'éligibilité
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -5845,24 +7088,31 @@ function ClassTemplateDivisionEditForm({
 }
 
 function ClassForm({
+  classes,
   classTemplateDivisions,
   classTemplates,
+  defaultMode = "preset",
   organization,
   sanctioningBodies,
   showDays,
   shows,
   onCreateClass,
   onCreateDivision,
+  onCreated,
 }: {
+  classes: ClassRecord[];
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
+  defaultMode?: "preset" | "custom";
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   showDays: ShowDay[];
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
+  const [creationMode, setCreationMode] = useState<"preset" | "custom">(defaultMode);
   const [showId, setShowId] = useState("");
   const [showDayId, setShowDayId] = useState("");
   const [templateId, setTemplateId] = useState("");
@@ -5874,19 +7124,35 @@ function ClassForm({
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>("horse");
   const [nrhaSlateNumber, setNrhaSlateNumber] = useState("");
+  const [entriesCloseAt, setEntriesCloseAt] = useState("");
+  const [lateEntriesAllowed, setLateEntriesAllowed] = useState(true);
+  const [lateEntryFeePercent, setLateEntryFeePercent] = useState("50");
+  const [concurrentClassId, setConcurrentClassId] = useState("");
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShowDays = showDays.filter((day) => day.show_id === selectedShowId);
   const selectedShowDayId = showDayId && selectedShowDays.some((day) => day.id === showDayId) ? showDayId : selectedShowDays[0]?.id || "";
+  const selectedShowDay = findById(showDays, selectedShowDayId) ?? null;
+  const effectiveEntriesCloseAt = entriesCloseAt || defaultEntriesCloseAtForShowDay(selectedShowDay);
   const activeClassTemplates = classTemplates.filter((template) => template.is_active);
   const selectedTemplate = findById(classTemplates, templateId);
   const selectedTemplateDivisions = selectedTemplate ? classTemplateDivisions.filter((division) => division.class_template_id === selectedTemplate.id) : [];
-  const classIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+  const concurrentClassChoices = classes.filter((classRecord) => classRecord.show_id === selectedShowId);
+  const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     setShowDayId("");
+    setConcurrentClassId("");
+  }
+
+  function handleCreationModeChange(nextMode: "preset" | "custom") {
+    setCreationMode(nextMode);
+
+    if (nextMode === "custom") {
+      setTemplateId("");
+    }
   }
 
   function handleTemplateChange(nextTemplateId: string) {
@@ -5905,17 +7171,11 @@ function ClassForm({
     setSanctioningBodyCodes(template.sanctioning_body_codes ?? []);
     setBackNumberPolicy(template.back_number_policy ?? defaultBackNumberPolicy(template.sanctioning_body_codes ?? [], sanctioningBodies));
     setEligibilityNotes(eligibilityNotesFromRules(template.eligibility_rules));
-    if (!isNrhaSanctioned(template.sanctioning_body_codes)) {
-      setNrhaSlateNumber("");
-    }
   }
 
   function handleSanctioningBodyCodes(nextCodes: string[]) {
     setSanctioningBodyCodes(nextCodes);
     setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
-    if (!isNrhaSanctioned(nextCodes)) {
-      setNrhaSlateNumber("");
-    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -5939,8 +7199,13 @@ function ClassForm({
         pattern,
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
-        nrha_slate_number: classIsNrha ? nrhaSlateNumber.trim() || null : null,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        nrha_slate_number: nrhaSlateNumber.trim() || null,
+        entries_close_at: datetimeLocalToIso(effectiveEntriesCloseAt),
+        late_entries_allowed: lateEntriesAllowed,
+        late_entry_fee_percent: numericValue(lateEntryFeePercent) ?? 50,
+        eligibility_rules: classProgramRules(eligibilityNotes, {
+          concurrentClass: selectedConcurrentClass,
+        }),
         entry_fee: numericValue(entryFee),
       });
 
@@ -5955,6 +7220,13 @@ function ClassForm({
           level: templateDivision.level ?? undefined,
           entry_fee: templateDivision.default_entry_fee ?? undefined,
           judge_fee: templateDivision.default_judge_fee ?? undefined,
+          payout_schedule_type: templateDivision.default_payout_schedule_type ?? "none",
+          added_money: templateDivision.default_added_money ?? 0,
+          retainage_percent: templateDivision.default_retainage_percent ?? null,
+          trophy_or_plaque_fee: templateDivision.default_trophy_or_plaque_fee ?? 0,
+          sanctioning_fee_percent: templateDivision.default_sanctioning_fee_percent ?? null,
+          payout_rules: templateDivision.default_payout_rules ?? {},
+          payout_notes: templateDivision.default_payout_notes ?? null,
           sanctioning_body_codes: templateDivision.sanctioning_body_codes.length ? templateDivision.sanctioning_body_codes : sanctioningBodyCodes,
           eligibility_rules: templateDivision.eligibility_rules ?? {},
         });
@@ -5969,7 +7241,12 @@ function ClassForm({
       setSanctioningBodyCodes([]);
       setBackNumberPolicy("horse");
       setNrhaSlateNumber("");
+      setEntriesCloseAt("");
+      setLateEntriesAllowed(true);
+      setLateEntryFeePercent("50");
+      setConcurrentClassId("");
       setEligibilityNotes("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -5984,6 +7261,14 @@ function ClassForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
+        <div className="segmented-control">
+          <button className={creationMode === "preset" ? "active" : ""} disabled={!organization || !activeClassTemplates.length} type="button" onClick={() => handleCreationModeChange("preset")}>
+            Depuis preset
+          </button>
+          <button className={creationMode === "custom" ? "active" : ""} disabled={!organization} type="button" onClick={() => handleCreationModeChange("custom")}>
+            Classe libre
+          </button>
+        </div>
         <div className="form-grid">
           <label>
             Show
@@ -6007,31 +7292,33 @@ function ClassForm({
             </select>
           </label>
         </div>
-        <label>
-          Preset
-          <SearchSelect
-            allowEmpty
-            disabled={!organization || !activeClassTemplates.length}
-            items={activeClassTemplates.map((template) => {
-              const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
+        {creationMode === "preset" ? (
+          <label>
+            Preset
+            <SearchSelect
+              allowEmpty
+              disabled={!organization || !activeClassTemplates.length}
+              items={activeClassTemplates.map((template) => {
+                const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
 
-              return {
-                id: template.id,
-                label: template.name,
-                detail: [
-                  template.default_pattern ? `Pattern ${template.default_pattern}` : null,
-                  `${templateDivisions.length} division${templateDivisions.length === 1 ? "" : "s"}`,
-                  sanctionLabel(template.sanctioning_body_codes, sanctioningBodies),
-                ]
-                  .filter(Boolean)
-                  .join(" - "),
-              };
-            })}
-            placeholder="Search preset"
-            value={templateId}
-            onChange={handleTemplateChange}
-          />
-        </label>
+                return {
+                  id: template.id,
+                  label: template.name,
+                  detail: [
+                    template.default_pattern ? `Pattern ${template.default_pattern}` : null,
+                    `${templateDivisions.length} division${templateDivisions.length === 1 ? "" : "s"}`,
+                    sanctionLabel(template.sanctioning_body_codes, sanctioningBodies),
+                  ]
+                    .filter(Boolean)
+                    .join(" - "),
+                };
+              })}
+              placeholder="Search preset"
+              value={templateId}
+              onChange={handleTemplateChange}
+            />
+          </label>
+        ) : null}
         <label>
           Class name
           <input disabled={!organization || !shows.length} required value={name} onChange={(event) => setName(event.target.value)} />
@@ -6059,17 +7346,55 @@ function ClassForm({
         <SanctioningFields
           backNumberPolicy={backNumberPolicy}
           disabled={!organization || !shows.length}
+          label="Sanctions du bloc (optionnel)"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
-        {classIsNrha ? (
-          <label>
-            NRHA slate number
-            <input disabled={!organization || !shows.length} value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+        <label>
+          Slate / show technique
+          <input disabled={!organization || !shows.length} placeholder="Ex.: Slate 1, Slate 2, NRHA A" value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+        </label>
+        <fieldset className="stack nested-fieldset">
+          <legend>Inscriptions</legend>
+          <div className="form-grid">
+            <label>
+              Fermeture des inscriptions
+              <input disabled={!organization || !shows.length} type="datetime-local" value={effectiveEntriesCloseAt} onChange={(event) => setEntriesCloseAt(event.target.value)} />
+              <span className="input-help">Par défaut: veille de la classe à 18h.</span>
+            </label>
+            <label>
+              Pénalité late %
+              <input disabled={!organization || !shows.length || !lateEntriesAllowed} min="0" step="0.01" type="number" value={lateEntryFeePercent} onChange={(event) => setLateEntryFeePercent(event.target.value)} />
+              <span className="input-help">Ex.: 50 = 50% du frais d'inscription.</span>
+            </label>
+          </div>
+          <label className="checkbox-row">
+            <input checked={lateEntriesAllowed} disabled={!organization || !shows.length} type="checkbox" onChange={(event) => setLateEntriesAllowed(event.target.checked)} />
+            <span>Accepter les inscriptions tardives après la fermeture</span>
           </label>
-        ) : null}
+        </fieldset>
+        <label>
+          Court en même temps que
+          <SearchSelect
+            allowEmpty
+            disabled={!organization || !concurrentClassChoices.length}
+            items={concurrentClassChoices.map((classRecord) => ({
+              id: classRecord.id,
+              label: classRecord.name,
+              detail: [
+                classRecord.block_label || "Bloc sans nom",
+                classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : null,
+              ]
+                .filter(Boolean)
+                .join(" - "),
+            }))}
+            placeholder="Rechercher une classe concurrente"
+            value={concurrentClassId}
+            onChange={setConcurrentClassId}
+          />
+        </label>
         <label>
           Critères d'éligibilité
           <textarea disabled={!organization || !shows.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -6089,23 +7414,50 @@ function DivisionForm({
   sanctioningBodies,
   shows,
   onCreateDivision,
+  onCreated,
 }: {
   classes: ClassRecord[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
   const [classId, setClassId] = useState("");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
   const [judgeFee, setJudgeFee] = useState("");
+  const [payoutScheduleType, setPayoutScheduleType] = useState<PayoutScheduleType>("none");
+  const [addedMoney, setAddedMoney] = useState("");
+  const [retainagePercent, setRetainagePercent] = useState("");
+  const [trophyOrPlaqueFee, setTrophyOrPlaqueFee] = useState("");
+  const [sanctioningFeePercent, setSanctioningFeePercent] = useState("");
+  const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>({});
+  const [payoutNotes, setPayoutNotes] = useState("");
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
+  const [nrhaClassType, setNrhaClassType] = useState("");
   const [eligibilityNotes, setEligibilityNotes] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedClass = findById(classes, classId) ?? null;
   const selectedShow = selectedClass ? findById(shows, selectedClass.show_id) : null;
+  const divisionIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleDivisionSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaClassType("");
+    }
+  }
+
+  function handleNrhaApprovedClassChange(nextCode: string) {
+    applyNrhaApprovedClassChoice(nextCode, {
+      setCode,
+      setName,
+      setNrhaClassType,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6125,15 +7477,31 @@ function DivisionForm({
         code,
         entry_fee: numericValue(entryFee),
         judge_fee: numericValue(judgeFee),
+        payout_schedule_type: payoutScheduleType,
+        added_money: numericValue(addedMoney) ?? 0,
+        retainage_percent: numericValue(retainagePercent) ?? null,
+        trophy_or_plaque_fee: numericValue(trophyOrPlaqueFee) ?? 0,
+        sanctioning_fee_percent: numericValue(sanctioningFeePercent) ?? null,
+        payout_rules: payoutRules,
+        payout_notes: payoutNotes.trim() || null,
         sanctioning_body_codes: sanctioningBodyCodes,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes, divisionIsNrha && nrhaClassType ? { nrha_class_type: nrhaClassType } : {}),
       });
       setName("");
       setCode("");
       setEntryFee("");
       setJudgeFee("");
+      setPayoutScheduleType("none");
+      setAddedMoney("");
+      setRetainagePercent("");
+      setTrophyOrPlaqueFee("");
+      setSanctioningFeePercent("");
+      setPayoutRules({});
+      setPayoutNotes("");
       setSanctioningBodyCodes([]);
+      setNrhaClassType("");
       setEligibilityNotes("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -6160,12 +7528,16 @@ function DivisionForm({
         </label>
         <div className="form-grid">
           <label>
-            Division name
+            Nom de division
             <input disabled={!organization || !classes.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            Class #
-            <input disabled={!organization || !classes.length} value={code} onChange={(event) => setCode(event.target.value)} />
+            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? (
+              <NrhaApprovedClassSelect disabled={!organization || !classes.length} value={code} onChange={handleNrhaApprovedClassChange} />
+            ) : (
+              <input disabled={!organization || !classes.length} value={code} onChange={(event) => setCode(event.target.value)} />
+            )}
           </label>
         </div>
         <div className="form-grid">
@@ -6178,15 +7550,48 @@ function DivisionForm({
             <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
+        <PayoutSettingsFields
+          addedMoney={addedMoney}
+          currency={organization?.currency ?? "CAD"}
+          disabled={!organization || !classes.length}
+          entryFee={entryFee}
+          payoutNotes={payoutNotes}
+          payoutRules={payoutRules}
+          payoutScheduleType={payoutScheduleType}
+          retainagePercent={retainagePercent}
+          sanctioningFeePercent={sanctioningFeePercent}
+          trophyOrPlaqueFee={trophyOrPlaqueFee}
+          onAddedMoneyChange={setAddedMoney}
+          onPayoutNotesChange={setPayoutNotes}
+          onPayoutRulesChange={setPayoutRules}
+          onPayoutScheduleTypeChange={setPayoutScheduleType}
+          onRetainagePercentChange={setRetainagePercent}
+          onSanctioningFeePercentChange={setSanctioningFeePercent}
+          onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
+        />
         <SanctioningFields
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           disabled={!organization || !classes.length}
           hideBackNumberPolicy
+          label="Sanctions de la division"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
         />
+        {divisionIsNrha ? (
+          <label>
+            Type de classe NRHA de la division
+            <select disabled={!organization || !classes.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
+              <option value="">À préciser</option>
+              {nrhaClassTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Critères d'éligibilité
           <textarea disabled={!organization || !classes.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -6201,11 +7606,13 @@ function DivisionForm({
 }
 
 function ClassEditForm({
+  classes,
   classRecord,
   sanctioningBodies,
   onCancel,
   onUpdateClass,
 }: {
+  classes: ClassRecord[];
   classRecord: ClassRecord;
   sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
@@ -6219,17 +7626,19 @@ function ClassEditForm({
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classRecord.sanctioning_body_codes ?? []);
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classRecord.back_number_policy ?? "horse");
   const [nrhaSlateNumber, setNrhaSlateNumber] = useState(classRecord.nrha_slate_number ?? "");
+  const [entriesCloseAt, setEntriesCloseAt] = useState(datetimeLocalInputValue(classRecord.entries_close_at));
+  const [lateEntriesAllowed, setLateEntriesAllowed] = useState(classRecord.late_entries_allowed ?? true);
+  const [lateEntryFeePercent, setLateEntryFeePercent] = useState(classRecord.late_entry_fee_percent == null ? "50" : String(classRecord.late_entry_fee_percent));
+  const [concurrentClassId, setConcurrentClassId] = useState(concurrentClassIdFromRules(classRecord.eligibility_rules));
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classRecord.eligibility_rules));
   const [status, setStatus] = useState<ClassRecord["status"]>(classRecord.status);
   const [busy, setBusy] = useState(false);
-  const classIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+  const concurrentClassChoices = classes.filter((candidate) => candidate.show_id === classRecord.show_id && candidate.id !== classRecord.id);
+  const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
 
   function handleSanctioningBodyCodes(nextCodes: string[]) {
     setSanctioningBodyCodes(nextCodes);
     setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
-    if (!isNrhaSanctioned(nextCodes)) {
-      setNrhaSlateNumber("");
-    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -6244,8 +7653,13 @@ function ClassEditForm({
         pattern: pattern || null,
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
-        nrha_slate_number: classIsNrha ? nrhaSlateNumber.trim() || null : null,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        nrha_slate_number: nrhaSlateNumber.trim() || null,
+        entries_close_at: datetimeLocalToIso(entriesCloseAt),
+        late_entries_allowed: lateEntriesAllowed,
+        late_entry_fee_percent: numericValue(lateEntryFeePercent) ?? 50,
+        eligibility_rules: classProgramRules(eligibilityNotes, {
+          concurrentClass: selectedConcurrentClass,
+        }),
         entry_fee: numericValue(entryFee) ?? null,
         status,
       });
@@ -6289,17 +7703,50 @@ function ClassEditForm({
         </div>
         <SanctioningFields
           backNumberPolicy={backNumberPolicy}
+          label="Sanctions du bloc (optionnel)"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
-        {classIsNrha ? (
-          <label>
-            NRHA slate number
-            <input value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+        <label>
+          Slate / show technique
+          <input placeholder="Ex.: Slate 1, Slate 2, NRHA A" value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
+        </label>
+        <fieldset className="stack nested-fieldset">
+          <legend>Inscriptions</legend>
+          <div className="form-grid">
+            <label>
+              Fermeture des inscriptions
+              <input type="datetime-local" value={entriesCloseAt} onChange={(event) => setEntriesCloseAt(event.target.value)} />
+              <span className="input-help">L'ordre de passage peut etre sorti manuellement apres cette heure.</span>
+            </label>
+            <label>
+              Penalite late %
+              <input disabled={!lateEntriesAllowed} min="0" step="0.01" type="number" value={lateEntryFeePercent} onChange={(event) => setLateEntryFeePercent(event.target.value)} />
+              <span className="input-help">Ex.: 50 = 50% du frais d'inscription.</span>
+            </label>
+          </div>
+          <label className="checkbox-row">
+            <input checked={lateEntriesAllowed} type="checkbox" onChange={(event) => setLateEntriesAllowed(event.target.checked)} />
+            <span>Accepter les inscriptions tardives apres la fermeture</span>
           </label>
-        ) : null}
+        </fieldset>
+        <label>
+          Court en même temps que
+          <SearchSelect
+            allowEmpty
+            disabled={!concurrentClassChoices.length}
+            items={concurrentClassChoices.map((candidate) => ({
+              id: candidate.id,
+              label: candidate.name,
+              detail: candidate.block_label || "Bloc sans nom",
+            }))}
+            placeholder="Rechercher une classe concurrente"
+            value={concurrentClassId}
+            onChange={setConcurrentClassId}
+          />
+        </label>
         <label>
           Critères d'éligibilité
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -6337,10 +7784,35 @@ function DivisionEditForm({
   const [code, setCode] = useState(division.code ?? "");
   const [entryFee, setEntryFee] = useState(division.entry_fee == null ? "" : String(division.entry_fee));
   const [judgeFee, setJudgeFee] = useState(division.judge_fee == null ? "" : String(division.judge_fee));
+  const [payoutScheduleType, setPayoutScheduleType] = useState<PayoutScheduleType>(division.payout_schedule_type ?? "none");
+  const [addedMoney, setAddedMoney] = useState(division.added_money == null ? "" : String(division.added_money));
+  const [retainagePercent, setRetainagePercent] = useState(division.retainage_percent == null ? "" : String(division.retainage_percent));
+  const [trophyOrPlaqueFee, setTrophyOrPlaqueFee] = useState(division.trophy_or_plaque_fee == null ? "" : String(division.trophy_or_plaque_fee));
+  const [sanctioningFeePercent, setSanctioningFeePercent] = useState(division.sanctioning_fee_percent == null ? "" : String(division.sanctioning_fee_percent));
+  const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>(division.payout_rules ?? {});
+  const [payoutNotes, setPayoutNotes] = useState(division.payout_notes ?? "");
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(division.sanctioning_body_codes ?? []);
+  const [nrhaClassType, setNrhaClassType] = useState(nrhaClassTypeFromRules(division.eligibility_rules));
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(division.eligibility_rules));
   const [busy, setBusy] = useState(false);
   const selectedClass = findById(classes, classId);
+  const divisionIsNrha = isNrhaSanctioned(sanctioningBodyCodes);
+
+  function handleDivisionSanctioningBodyCodes(nextCodes: string[]) {
+    setSanctioningBodyCodes(nextCodes);
+
+    if (!isNrhaSanctioned(nextCodes)) {
+      setNrhaClassType("");
+    }
+  }
+
+  function handleNrhaApprovedClassChange(nextCode: string) {
+    applyNrhaApprovedClassChoice(nextCode, {
+      setCode,
+      setName,
+      setNrhaClassType,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6359,8 +7831,15 @@ function DivisionEditForm({
         code: code || null,
         entry_fee: numericValue(entryFee) ?? null,
         judge_fee: numericValue(judgeFee) ?? null,
+        payout_schedule_type: payoutScheduleType,
+        added_money: numericValue(addedMoney) ?? 0,
+        retainage_percent: numericValue(retainagePercent) ?? null,
+        trophy_or_plaque_fee: numericValue(trophyOrPlaqueFee) ?? 0,
+        sanctioning_fee_percent: numericValue(sanctioningFeePercent) ?? null,
+        payout_rules: payoutRules,
+        payout_notes: payoutNotes.trim() || null,
         sanctioning_body_codes: sanctioningBodyCodes,
-        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
+        eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes, divisionIsNrha && nrhaClassType ? { nrha_class_type: nrhaClassType } : {}),
       });
     } finally {
       setBusy(false);
@@ -6387,12 +7866,12 @@ function DivisionEditForm({
         </label>
         <div className="form-grid">
           <label>
-            Division name
+            Nom de division
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            Class #
-            <input value={code} onChange={(event) => setCode(event.target.value)} />
+            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? <NrhaApprovedClassSelect value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
           </label>
         </div>
         <div className="form-grid">
@@ -6405,14 +7884,45 @@ function DivisionEditForm({
             <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
+        <PayoutSettingsFields
+          addedMoney={addedMoney}
+          entryFee={entryFee}
+          payoutNotes={payoutNotes}
+          payoutRules={payoutRules}
+          payoutScheduleType={payoutScheduleType}
+          retainagePercent={retainagePercent}
+          sanctioningFeePercent={sanctioningFeePercent}
+          trophyOrPlaqueFee={trophyOrPlaqueFee}
+          onAddedMoneyChange={setAddedMoney}
+          onPayoutNotesChange={setPayoutNotes}
+          onPayoutRulesChange={setPayoutRules}
+          onPayoutScheduleTypeChange={setPayoutScheduleType}
+          onRetainagePercentChange={setRetainagePercent}
+          onSanctioningFeePercentChange={setSanctioningFeePercent}
+          onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
+        />
         <SanctioningFields
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           hideBackNumberPolicy
+          label="Sanctions de la division"
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={setSanctioningBodyCodes}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
         />
+        {divisionIsNrha ? (
+          <label>
+            Type de classe NRHA de la division
+            <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
+              <option value="">À préciser</option>
+              {nrhaClassTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           Critères d'éligibilité
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
@@ -6429,6 +7939,7 @@ function EntryForm({
   contactExternalMemberships,
   contactRoles,
   divisions,
+  entries,
   externalOrganizations,
   horseHealthDocuments,
   horses,
@@ -6448,6 +7959,7 @@ function EntryForm({
   contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
+  entries: Entry[];
   externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
@@ -6482,7 +7994,7 @@ function EntryForm({
   }, [createdHorse, horses]);
   const selectedHorse = findById(visibleHorses, horseId) ?? null;
   const selectedDivision = findById(availableDivisions, divisionId) ?? null;
-  const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
+  const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) ?? null : null;
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
   const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
   const selectedRiderContact = findById(contacts, riderContactId) ?? null;
@@ -6507,8 +8019,36 @@ function EntryForm({
     riderContact: selectedRiderContact,
     show: selectedShow,
   });
-  const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId && entryReadiness.canProceed);
   const baseFee = selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? undefined;
+  const entryDeadlineReadiness = buildEntryDeadlineReadiness(selectedClass, baseFee, organization?.currency ?? "CAD");
+  const entryProgramLimitReadiness = buildEntryProgramLimitReadiness({
+    division: selectedDivision,
+    divisions,
+    entries,
+    horse: selectedHorse,
+    ownerContact: selectedOwnerContact,
+    riderContact: selectedRiderContact,
+  });
+  const canCreate = Boolean(
+    organization &&
+      profileId &&
+      selectedShowId &&
+      selectedHorse &&
+      selectedDivision &&
+      selectedPayerId &&
+      entryReadiness.canProceed &&
+      entryDeadlineReadiness.canProceed &&
+      entryProgramLimitReadiness.canProceed,
+  );
+  const entryHeaderMessage = canCreate
+    ? "Draft now, checkout later."
+    : selectedHorse
+      ? entryReadiness.canProceed
+        ? entryDeadlineReadiness.canProceed
+          ? entryProgramLimitReadiness.message?.message ?? "Choose a division and payer."
+          : entryDeadlineReadiness.message?.message ?? "Choose a division and payer."
+        : entryReadiness.message
+      : "Add a show, horse and division first.";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6544,7 +8084,7 @@ function EntryForm({
       <div className="panel-header">
         <div>
           <h2>New draft entry</h2>
-          <p>{canCreate ? "Draft now, checkout later." : selectedHorse ? entryReadiness.message : "Add a show, horse and division first."}</p>
+          <p>{entryHeaderMessage}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -6640,6 +8180,8 @@ function EntryForm({
             onChange={setDivisionId}
           />
         </label>
+        <InlineHealthMessage value={selectedDivision ? entryDeadlineReadiness.message : null} />
+        <InlineHealthMessage value={selectedDivision ? entryProgramLimitReadiness.message : null} />
         <div className="form-grid">
           <ContactPicker
             allowEmpty
@@ -6683,6 +8225,7 @@ function EntryEditForm({
   contactExternalMemberships,
   contactRoles,
   divisions,
+  entries,
   entry,
   externalOrganizations,
   horseHealthDocuments,
@@ -6700,6 +8243,7 @@ function EntryEditForm({
   contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
+  entries: Entry[];
   entry: Entry;
   externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
@@ -6749,8 +8293,18 @@ function EntryEditForm({
     skipContactRequirements: skipsEntryReadiness,
     skipHorseHealth: skipsEntryReadiness,
   });
+  const entryProgramLimitReadiness = buildEntryProgramLimitReadiness({
+    division: selectedDivision,
+    divisions,
+    entries,
+    existingEntryId: entry.id,
+    horse: selectedHorse,
+    ownerContact: selectedOwnerContact,
+    riderContact: selectedRiderContact,
+    skip: skipsEntryReadiness,
+  });
   const effectiveFee = numericValue(baseFee) ?? selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? null;
-  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && entryReadiness.canProceed);
+  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -6782,7 +8336,7 @@ function EntryEditForm({
       <div className="panel-header">
         <div>
           <h2>Edit entry</h2>
-          <p>{entryReadiness.canProceed ? horseLabel(selectedHorse) : entryReadiness.message}</p>
+          <p>{entryReadiness.canProceed ? entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse) : entryReadiness.message}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -6841,6 +8395,7 @@ function EntryEditForm({
             onChange={setDivisionId}
           />
         </label>
+        <InlineHealthMessage value={selectedDivision ? entryProgramLimitReadiness.message : null} />
         <div className="form-grid">
           <ContactPicker
             allowEmpty

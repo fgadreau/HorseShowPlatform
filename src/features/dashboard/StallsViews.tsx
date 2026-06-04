@@ -98,7 +98,7 @@ export function StallsView({
       label: "Reservations",
     },
     {
-      detail: "Ajouter une demande pour un exposant.",
+      detail: "Ajouter une demande pour un compétiteur.",
       icon: Plus,
       key: "new-reservation",
       label: "Nouvelle reservation",
@@ -770,7 +770,7 @@ function StallOptionForm({
         <div className="form-section">
           <div className="form-section-header">
             <strong>Periode offerte</strong>
-            <span>{usesDailyReservations ? "Les exposants choisiront les journees." : "Reservation pour tout le show, sans choix de journee."}</span>
+            <span>{usesDailyReservations ? "Les compétiteurs choisiront les journees." : "Reservation pour tout le show, sans choix de journee."}</span>
           </div>
           <div className="segmented-control">
             <button className={reservationPeriodMode === "full_show" ? "active" : ""} type="button" onClick={() => setReservationPeriodMode("full_show")}>

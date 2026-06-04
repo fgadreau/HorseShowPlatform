@@ -50,6 +50,24 @@ Items prevus:
 - Taxes appliquees selon les produits taxables.
 - Paiement complete ou statut manuel approuve selon la politique du show.
 
+### Fermeture des inscriptions et ordre de passage
+
+Avant le calcul final des resultats et des bourses, l'app doit gerer la fermeture operationnelle des inscriptions:
+
+- Chaque bloc de classe peut avoir une date/heure de fermeture des inscriptions, avec un defaut logique: la veille de la classe a 18h.
+- Une association peut accepter les inscriptions tardives apres cette fermeture.
+- Le frais late par defaut est 50% du frais d'inscription, mais il doit rester configurable par classe/show.
+- Si les inscriptions tardives sont refusees, l'inscription doit etre bloquee apres la fermeture.
+- Si elles sont acceptees, la penalite doit etre facturee comme une ligne separee pour rester claire sur la facture.
+- L'ordre de passage ne doit pas etre publie automatiquement au cutoff. Le cutoff rend l'action disponible, mais la sortie/publication reste une action manuelle du gestionnaire.
+- Les inscriptions tardives acceptees doivent etre ajoutees au debut de la classe avec des numeros d'ordre de passage negatifs.
+- Lors de l'inscription, un cavalier ne peut pas etre inscrit plus de trois fois dans une meme division.
+- Lors de l'inscription, un meme cheval ne peut etre inscrit qu'une seule fois par classe, meme si la classe contient plusieurs divisions.
+- Lors de la generation de l'ordre de passage, l'app doit viser le plus grand espacement possible entre les passages du meme cavalier.
+- Le minimum vise est huit chevaux entre deux passages du meme cavalier. Si ce minimum est mathematiquement impossible, l'app doit maximiser l'ecart et produire un avertissement futur.
+- Le reste de l'ordre doit rester aleatoire.
+- HSP reste la source officielle des inscriptions. ShowScore peut recevoir ou consulter l'ordre de passage prepare, mais les classements, resultats officiels et payout final seront traites dans une phase ulterieure.
+
 ## Centre de notifications
 
 Il faudra un centre de notifications pour les gestionnaires d'association et, plus tard, pour les utilisateurs finaux.
@@ -195,11 +213,16 @@ Le PDF `NRHA_Approved_Classes.pdf` contient une premiere liste exploitable de co
 
 Dans l'app:
 
-- Une classe peut representer un bloc dans l'horaire ou un slate.
-- Une division peut representer l'option precise ou le concurrent s'inscrit.
+- Un show reel peut contenir un ou plusieurs slates NRHA, c'est-a-dire des shows techniques aux yeux de la NRHA.
+- Un slate contient des blocs de classe dans l'horaire.
+- Un bloc de classe peut contenir des divisions mixtes: NRHA, maison, AQR, ou autres.
+- Une division represente l'option precise ou le concurrent s'inscrit, ex. `1100 Open`.
+- La categorie NRHA doit donc etre stockee sur la division, pas sur le bloc.
 - Plusieurs divisions peuvent courir ensemble dans le meme bloc.
 
-Le mapping exact NRHA devra etre decide cas par cas, parce que certains numeros officiels ressemblent davantage a des divisions qu'a des blocs horaires.
+Le mapping NRHA officiel doit donc commencer par les divisions ou divisions de preset. Le bloc reste l'objet d'horaire, et le slate regroupe les blocs qui appartiennent au meme show technique.
+
+La saisie d'une division NRHA doit proposer une liste deroulante triee par numero de classe, basee sur les 89 classes du PDF approuve NRHA fourni. La selection remplit le numero, le nom officiel et la categorie NRHA de la division.
 
 ## Added money, jackpot, payback et retainage
 
@@ -209,6 +232,33 @@ Les organismes ne gerent pas tous les bourses de la meme facon. Il faut donc sep
 - Regles financieres du show.
 - Regles financieres de la classe/division.
 - Regles propres a l'organisme.
+
+### Heritages et overrides financiers
+
+Le retainage est souvent un reglage de l'association, mais il doit pouvoir etre modifie pour un show ou pour une division precise.
+
+Ordre d'heritage recommande:
+
+1. Association: retainage par defaut, devise principale, numeros de taxes, taux de taxes par defaut.
+2. Show: override de retainage, devise du show, taux de reference utiles pour rapports.
+3. Division: override final pour retainage, added money, jackpot, trophy/plaque fee, frais organisme et payout schedule.
+
+Le setup de division doit inclure le prix du trophee/plaque, parce que ce montant peut etre retire du calcul de bourse avant le payout selon l'organisme.
+
+### Types de payout
+
+Chaque payout schedule devrait avoir un court descriptif pour aider le gestionnaire a choisir:
+
+- NRHA Schedule A: standard NRHA pour la majorite des classes ancillary. Payout plus concentre selon les brackets; moins de concurrents peuvent recevoir de l'argent dans certains cas, mais les premieres positions recoivent une plus grosse portion.
+- NRHA Schedule B: utilise pour les classes NRHA Category 1 avec 2,000$ ou plus en added money. Payout adapte aux classes avec added money important.
+- Payout maison concentre: moins de places payees, montants plus eleves aux premieres positions.
+- Payout maison reparti: plus de places payees, montants plus petits par place, utile pour encourager la participation.
+- Jackpot 100%: la portion admissible retourne aux concurrents selon le tableau choisi, avec retainage a 0% ou tres clairement configure.
+- Aucun payout: classe sans bourse.
+
+Le payout maison doit etre facile a remplir: tranches par nombre d'entrees, nombre de places payees et pourcentage par place, avec validation que le total donne 100%.
+
+Premiere approche implementee dans le setup de division: un tableau maison stocke dans `payout_rules.custom_brackets`, avec min/max d'entrees et pourcentages par place. L'interface affiche un apercu estimatif de la bourse selon un nombre d'entrees simule. Le calcul final officiel, les egalites, scratches, rapports et paiements aux gagnants viendront dans une phase separee.
 
 ### NRHA payback
 
@@ -232,6 +282,21 @@ net_entry_fee - show_retainage_amount = final_net_entry_fee
 final_net_entry_fee + added_money = purse
 purse * payback_schedule = payout per placing
 ```
+
+### Devises et rapports organismes
+
+L'app doit pouvoir calculer les bourses dans la devise du show, par exemple CAD pour une association canadienne.
+
+Certains organismes, comme NRHA, operent en USD. Le payout aux concurrents peut rester en CAD si le show est en CAD, mais les rapports envoyes a NRHA devront convertir les montants selon le taux de reference annuel reconnu par NRHA pour l'annee concernee.
+
+Information a prevoir:
+
+- Devise principale de l'association.
+- Devise du show, avec override possible.
+- Devise de rapport par organisme externe, ex. NRHA en USD.
+- Taux de reference annuel par organisme et par annee.
+- Date ou annee de reference du rapport.
+- Montant original, devise originale, montant converti et taux utilise dans chaque rapport organisme.
 
 ## Taxes et numeros de taxes
 
@@ -277,7 +342,10 @@ Noms indicatifs a raffiner avant implementation:
 - `payback_schedules`
 - `payback_schedule_brackets`
 - `class_financial_rules`
+- `organization_exchange_rates`
+- `organization_report_currency_rules`
 - `payout_calculations`
+- `sanctioning_body_reports`
 - `notifications` ou `tasks`
 
 ## Phases de mise en place
@@ -305,6 +373,7 @@ Noms indicatifs a raffiner avant implementation:
 
 - Modeliser schedules A/B et autres schedules futurs.
 - Ajouter added money, jackpot, retainage, trophy/plaque fees et frais organisme.
+- Ajouter devise du show et taux de reference organisme pour rapports.
 - Calculer la bourse estimative et finale.
 
 ### Phase 5: Notifications et checklists
@@ -316,9 +385,9 @@ Noms indicatifs a raffiner avant implementation:
 
 ## Questions ouvertes
 
-- Est-ce que le retainage est defini par association, par show, par classe, ou les trois avec override?
 - Les taxes doivent-elles etre configurees par type de produit ou par produit individuel?
 - Comment chaque organisme gere-t-il les jackpots, added money, incentives et earnings?
 - Quels memberships peuvent etre achetes directement dans l'app?
 - Quels paiements doivent bloquer l'inscription et lesquels peuvent rester manuels?
-- Quelle granularite est souhaitee pour NRHA: classe officielle comme division ou comme classe horaire?
+- A quel moment faut-il convertir le champ de slate en table dediee avec numerotation, dates, restrictions et rapports par organisme?
+- Comment importer ou confirmer les taux annuels officiels NRHA et autres organismes?

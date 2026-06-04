@@ -21,7 +21,7 @@ const localLoginAccounts = [
   },
   {
     email: "phase1.org-a-owner@example.test",
-    label: "Exposant",
+    label: "Compétiteur",
     password: "phase1-password",
   },
 ];

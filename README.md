@@ -54,7 +54,7 @@ When the app runs on `localhost` or `127.0.0.1`, the auth screen shows seed-acco
 
 - Admin association: `phase1.org-a-admin@example.test`
 - Secretary: `phase1.org-a-secretary@example.test`
-- Exhibitor: `phase1.org-a-owner@example.test`
+- Competitor: `phase1.org-a-owner@example.test`
 
 All three use `phase1-password`. If login fails after resetting the database, rerun the Supabase seed.
 
@@ -77,7 +77,7 @@ All three use `phase1-password`. If login fails after resetting the database, re
 ## Next Build Steps
 
 1. Create the Supabase project and run `supabase/migrations/0001_initial_schema.sql`.
-2. Confirm RLS behavior with test users for platform admin, organization admin, secretary and exhibitor.
+2. Confirm RLS behavior with test users for platform admin, organization admin, secretary and competitor.
 3. Add contacts, horses, entries and invoice creation workflows.
 4. Add Edge Functions for Stripe checkout/webhook and Resend email.
 5. Connect Vercel environment variables and deploy the frontend.

@@ -71,6 +71,7 @@ export function SearchSelect({
   allowEmpty = false,
   disabled = false,
   items,
+  maxVisibleItems = 30,
   placeholder,
   value,
   onChange,
@@ -78,6 +79,7 @@ export function SearchSelect({
   allowEmpty?: boolean;
   disabled?: boolean;
   items: Array<{ id: string; label: string; detail?: string }>;
+  maxVisibleItems?: number;
   placeholder: string;
   value: string;
   onChange: (id: string) => void;
@@ -98,7 +100,7 @@ export function SearchSelect({
   }, [open, selectedLabel]);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const visibleItems = (normalizedQuery ? items.filter((item) => itemSearchLabel(item).toLowerCase().includes(normalizedQuery)) : items).slice(0, 30);
+  const visibleItems = (normalizedQuery ? items.filter((item) => itemSearchLabel(item).toLowerCase().includes(normalizedQuery)) : items).slice(0, maxVisibleItems);
 
   useEffect(() => {
     setActiveIndex(0);

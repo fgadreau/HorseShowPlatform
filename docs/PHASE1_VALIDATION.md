@@ -7,7 +7,7 @@ Phase 1 locks down the Supabase foundation before the MVP workflows grow:
 - migrations apply cleanly through `0004_phase1_rls_hardening.sql`
 - duplicated `organization_id` values stay aligned with their parent records
 - RLS isolates associations from each other
-- exhibitors can only touch their own linked contact, horse, entry and invoice records
+- competitors can only touch their own linked contact, horse, entry and invoice records
 - ShowScore staff roles can see/use only the module surfaces they are assigned to
 
 ## Files Added

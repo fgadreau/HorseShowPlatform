@@ -55,6 +55,8 @@ import type {
 } from "../types/domain";
 import { buildShowScoreRunsForClass } from "./showScoreAdapters";
 
+const inactiveEntryStatuses: Entry["status"][] = ["cancelled", "scratched", "scratched_pending_refund"];
+
 export type AppContext = {
   profile: UserProfile;
   organizations: Organization[];
@@ -1490,6 +1492,13 @@ export async function createClassTemplateDivision(input: ClassTemplateDivisionIn
       level: input.level ?? null,
       default_entry_fee: input.default_entry_fee ?? null,
       default_judge_fee: input.default_judge_fee ?? null,
+      default_payout_schedule_type: input.default_payout_schedule_type ?? "none",
+      default_added_money: input.default_added_money ?? 0,
+      default_retainage_percent: input.default_retainage_percent ?? null,
+      default_trophy_or_plaque_fee: input.default_trophy_or_plaque_fee ?? 0,
+      default_sanctioning_fee_percent: input.default_sanctioning_fee_percent ?? null,
+      default_payout_rules: input.default_payout_rules ?? {},
+      default_payout_notes: input.default_payout_notes || null,
       sanctioning_body_codes: input.sanctioning_body_codes ?? [],
       eligibility_rules: input.eligibility_rules ?? {},
       sort_order: input.sort_order ?? 1,
@@ -1536,10 +1545,14 @@ export async function createClass(input: ClassInput) {
       arena: input.arena || null,
       pattern: input.pattern || null,
       custom_pattern: input.custom_pattern ?? null,
-      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
-      back_number_policy: input.back_number_policy ?? "horse",
-      nrha_slate_number: input.nrha_slate_number || null,
-      eligibility_rules: input.eligibility_rules ?? {},
+	      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+	      back_number_policy: input.back_number_policy ?? "horse",
+	      nrha_slate_number: input.nrha_slate_number || null,
+	      entries_close_at: input.entries_close_at ?? null,
+	      late_entries_allowed: input.late_entries_allowed ?? true,
+	      late_entry_fee_percent: input.late_entry_fee_percent ?? 50,
+	      draw_prepared_at: input.draw_prepared_at ?? null,
+	      eligibility_rules: input.eligibility_rules ?? {},
       judge_name: input.judge_name || null,
       sort_order: input.sort_order ?? 1,
       entry_fee: input.entry_fee ?? null,
@@ -1586,6 +1599,13 @@ export async function createDivision(input: DivisionInput) {
       level: input.level ?? null,
       entry_fee: input.entry_fee ?? null,
       judge_fee: input.judge_fee ?? null,
+      payout_schedule_type: input.payout_schedule_type ?? "none",
+      added_money: input.added_money ?? 0,
+      retainage_percent: input.retainage_percent ?? null,
+      trophy_or_plaque_fee: input.trophy_or_plaque_fee ?? 0,
+      sanctioning_fee_percent: input.sanctioning_fee_percent ?? null,
+      payout_rules: input.payout_rules ?? {},
+      payout_notes: input.payout_notes || null,
       sanctioning_body_codes: input.sanctioning_body_codes ?? [],
       eligibility_rules: input.eligibility_rules ?? {},
     })
@@ -1615,6 +1635,126 @@ export async function updateDivision(id: string, input: DivisionUpdateInput) {
   return data;
 }
 
+async function resolveLateEntryFee(input: EntryInput) {
+  const client = requireSupabase();
+  const { data: division, error: divisionError } = await client
+    .from("divisions")
+    .select("entry_fee, class_id")
+    .eq("id", input.division_id)
+    .single<{ entry_fee: number | null; class_id: string }>();
+
+  if (divisionError) {
+    throw divisionError;
+  }
+
+  const { data: classRecord, error: classError } = await client
+    .from("classes")
+    .select("entry_fee, entries_close_at, late_entries_allowed, late_entry_fee_percent")
+    .eq("id", division.class_id)
+    .single<Pick<ClassRecord, "entries_close_at" | "entry_fee" | "late_entries_allowed" | "late_entry_fee_percent">>();
+
+  if (classError) {
+    throw classError;
+  }
+
+  const baseFee = input.base_fee ?? division.entry_fee ?? classRecord.entry_fee ?? null;
+  const isLate = Boolean(classRecord.entries_close_at && Date.now() > new Date(classRecord.entries_close_at).getTime());
+
+  if (isLate && !classRecord.late_entries_allowed) {
+    throw new Error("Les inscriptions sont fermées pour cette classe.");
+  }
+
+  const lateFeePercent = isLate ? classRecord.late_entry_fee_percent ?? 50 : 0;
+  const lateFeeAmount = isLate && baseFee != null ? Math.round(baseFee * (lateFeePercent / 100) * 100) / 100 : 0;
+
+  return {
+    baseFee,
+    isLate,
+    lateFeeAmount,
+    lateFeePercent,
+  };
+}
+
+async function assertEntryProgramLimits(input: {
+  entry_id?: string;
+  division_id: string;
+  horse_id: string;
+  owner_contact_id: string;
+  rider_contact_id: string | null;
+  status?: Entry["status"];
+}) {
+  if (input.status && inactiveEntryStatuses.includes(input.status)) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const inactiveStatusFilter = `(${inactiveEntryStatuses.join(",")})`;
+  const { data: division, error: divisionError } = await client
+    .from("divisions")
+    .select("id, class_id")
+    .eq("id", input.division_id)
+    .single<Pick<Division, "id" | "class_id">>();
+
+  if (divisionError) {
+    throw divisionError;
+  }
+
+  const { data: classDivisions, error: classDivisionsError } = await client
+    .from("divisions")
+    .select("id")
+    .eq("class_id", division.class_id)
+    .returns<Array<Pick<Division, "id">>>();
+
+  if (classDivisionsError) {
+    throw classDivisionsError;
+  }
+
+  const classDivisionIds = (classDivisions ?? []).map((classDivision) => classDivision.id);
+  let horseEntryQuery = client
+    .from("entries")
+    .select("id", { count: "exact", head: true })
+    .eq("horse_id", input.horse_id)
+    .in("division_id", classDivisionIds)
+    .not("status", "in", inactiveStatusFilter);
+
+  if (input.entry_id) {
+    horseEntryQuery = horseEntryQuery.neq("id", input.entry_id);
+  }
+
+  const { count: horseEntryCount, error: horseEntryError } = await horseEntryQuery;
+
+  if (horseEntryError) {
+    throw horseEntryError;
+  }
+
+  if ((horseEntryCount ?? 0) > 0) {
+    throw new Error("Un même cheval ne peut être inscrit qu'une fois par classe.");
+  }
+
+  const riderContactId = input.rider_contact_id ?? input.owner_contact_id;
+  let riderEntryQuery = client
+    .from("entries")
+    .select("id, rider_contact_id, owner_contact_id")
+    .eq("division_id", input.division_id)
+    .not("status", "in", inactiveStatusFilter);
+
+  if (input.entry_id) {
+    riderEntryQuery = riderEntryQuery.neq("id", input.entry_id);
+  }
+
+  const { data: riderEntries, error: riderEntriesError } = await riderEntryQuery.returns<Array<Pick<Entry, "id" | "rider_contact_id" | "owner_contact_id">>>();
+
+  if (riderEntriesError) {
+    throw riderEntriesError;
+  }
+
+  const riderEntryCount = (riderEntries ?? []).filter((entry) => (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
+
+  if (riderEntryCount >= 3) {
+    throw new Error("Un cavalier ne peut pas être inscrit plus de trois fois dans une même division.");
+  }
+}
+
 export async function createEntry(input: EntryInput) {
   const client = requireSupabase();
   await ensureEntryOrganizationLinks({
@@ -1632,6 +1772,13 @@ export async function createEntry(input: EntryInput) {
     payer_contact_id: input.payer_contact_id,
     rider_contact_id: input.rider_contact_id ?? null,
   });
+  await assertEntryProgramLimits({
+    division_id: input.division_id,
+    horse_id: input.horse_id,
+    owner_contact_id: input.owner_contact_id,
+    rider_contact_id: input.rider_contact_id ?? null,
+  });
+  const lateEntry = await resolveLateEntryFee(input);
 
   const { data, error } = await client
     .from("entries")
@@ -1644,8 +1791,11 @@ export async function createEntry(input: EntryInput) {
       owner_contact_id: input.owner_contact_id,
       rider_contact_id: input.rider_contact_id || null,
       payer_contact_id: input.payer_contact_id,
-      base_fee: input.base_fee ?? null,
-      total_fees: input.base_fee ?? null,
+      base_fee: lateEntry.baseFee,
+      total_fees: lateEntry.baseFee == null ? null : lateEntry.baseFee + lateEntry.lateFeeAmount,
+      is_late: lateEntry.isLate,
+      late_fee_percent: lateEntry.lateFeePercent,
+      late_fee_amount: lateEntry.lateFeeAmount,
       status: "draft",
     })
     .select("*")
@@ -1699,6 +1849,14 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
       owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
       payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
       rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
+    });
+    await assertEntryProgramLimits({
+      entry_id: id,
+      division_id: input.division_id ?? existing.division_id,
+      horse_id: input.horse_id ?? existing.horse_id,
+      owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
+      rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
+      status: nextEntryStatus,
     });
   }
 
@@ -1930,14 +2088,26 @@ export async function prepareShowScoreClassSetup(input: {
   contacts: Contact[];
 }) {
   const client = requireSupabase();
+  const closeDate = input.classRecord.entries_close_at ? new Date(input.classRecord.entries_close_at) : null;
+
+  if (closeDate && !Number.isNaN(closeDate.getTime()) && Date.now() < closeDate.getTime()) {
+    throw new Error("Les inscriptions ne sont pas encore fermees pour cette classe.");
+  }
+
   const runs = buildShowScoreRunsForClass(input.classRecord.id, input.entries, {
     contacts: input.contacts,
     divisions: input.divisions,
     horses: input.horses,
   });
+
+  if (!runs.length) {
+    throw new Error("Aucune inscription a envoyer dans l'ordre de passage.");
+  }
+
   const judges = input.classRecord.judge_name
     ? [{ id: "judge-1", name: input.classRecord.judge_name, order: 1 }]
     : [{ id: "judge-1", name: "", order: 1 }];
+  const preparedAt = new Date().toISOString();
 
   const { data, error } = await client
     .from("show_score_class_setups")
@@ -1960,6 +2130,12 @@ export async function prepareShowScoreClassSetup(input: {
 
   if (error) {
     throw error;
+  }
+
+  const { error: classError } = await client.from("classes").update({ draw_prepared_at: preparedAt }).eq("id", input.classRecord.id);
+
+  if (classError) {
+    throw classError;
   }
 
   return data;

@@ -263,6 +263,8 @@ export type EligibilityRules = {
   [key: string]: unknown;
 };
 
+export type PayoutScheduleType = "none" | "nrha_schedule_a" | "nrha_schedule_b" | "house_concentrated" | "house_distributed" | "house_custom" | "jackpot_100";
+
 export type ClassTemplate = {
   id: string;
   organization_id: string;
@@ -291,6 +293,13 @@ export type ClassTemplateDivision = {
   level: number | null;
   default_entry_fee: number | null;
   default_judge_fee: number | null;
+  default_payout_schedule_type: PayoutScheduleType;
+  default_added_money: number;
+  default_retainage_percent: number | null;
+  default_trophy_or_plaque_fee: number;
+  default_sanctioning_fee_percent: number | null;
+  default_payout_rules: Record<string, unknown>;
+  default_payout_notes: string | null;
   sanctioning_body_codes: string[];
   eligibility_rules: EligibilityRules;
   sort_order: number;
@@ -314,6 +323,10 @@ export type ClassRecord = {
   sanctioning_body_codes: string[];
   back_number_policy: BackNumberPolicy;
   nrha_slate_number: string | null;
+  entries_close_at: string | null;
+  late_entries_allowed: boolean;
+  late_entry_fee_percent: number;
+  draw_prepared_at: string | null;
   eligibility_rules: EligibilityRules;
   judge_name: string | null;
   sort_order: number;
@@ -371,6 +384,13 @@ export type Division = {
   code: string | null;
   entry_fee: number | null;
   judge_fee: number | null;
+  payout_schedule_type: PayoutScheduleType;
+  added_money: number;
+  retainage_percent: number | null;
+  trophy_or_plaque_fee: number;
+  sanctioning_fee_percent: number | null;
+  payout_rules: Record<string, unknown>;
+  payout_notes: string | null;
   sanctioning_body_codes: string[];
   eligibility_rules: EligibilityRules;
   created_at: string;
@@ -390,6 +410,9 @@ export type Entry = {
   entry_number: number | null;
   base_fee: number | null;
   total_fees: number | null;
+  is_late: boolean;
+  late_fee_percent: number;
+  late_fee_amount: number;
   created_at: string;
 };
 
@@ -562,6 +585,10 @@ export type ClassInput = {
   sanctioning_body_codes?: string[];
   back_number_policy?: BackNumberPolicy;
   nrha_slate_number?: string | null;
+  entries_close_at?: string | null;
+  late_entries_allowed?: boolean;
+  late_entry_fee_percent?: number;
+  draw_prepared_at?: string | null;
   eligibility_rules?: EligibilityRules;
   judge_name?: string;
   sort_order?: number;
@@ -580,6 +607,10 @@ export type ClassUpdateInput = {
   sanctioning_body_codes?: string[];
   back_number_policy?: BackNumberPolicy;
   nrha_slate_number?: string | null;
+  entries_close_at?: string | null;
+  late_entries_allowed?: boolean;
+  late_entry_fee_percent?: number;
+  draw_prepared_at?: string | null;
   eligibility_rules?: EligibilityRules;
   judge_name?: string | null;
   sort_order?: number;
@@ -597,6 +628,13 @@ export type DivisionInput = {
   level?: number;
   entry_fee?: number;
   judge_fee?: number;
+  payout_schedule_type?: PayoutScheduleType;
+  added_money?: number;
+  retainage_percent?: number | null;
+  trophy_or_plaque_fee?: number;
+  sanctioning_fee_percent?: number | null;
+  payout_rules?: Record<string, unknown>;
+  payout_notes?: string | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
 };
@@ -610,6 +648,13 @@ export type DivisionUpdateInput = {
   level?: number | null;
   entry_fee?: number | null;
   judge_fee?: number | null;
+  payout_schedule_type?: PayoutScheduleType;
+  added_money?: number | null;
+  retainage_percent?: number | null;
+  trophy_or_plaque_fee?: number | null;
+  sanctioning_fee_percent?: number | null;
+  payout_rules?: Record<string, unknown>;
+  payout_notes?: string | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
 };
@@ -653,6 +698,13 @@ export type ClassTemplateDivisionInput = {
   level?: number;
   default_entry_fee?: number;
   default_judge_fee?: number;
+  default_payout_schedule_type?: PayoutScheduleType;
+  default_added_money?: number;
+  default_retainage_percent?: number | null;
+  default_trophy_or_plaque_fee?: number;
+  default_sanctioning_fee_percent?: number | null;
+  default_payout_rules?: Record<string, unknown>;
+  default_payout_notes?: string | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
   sort_order?: number;
@@ -666,6 +718,13 @@ export type ClassTemplateDivisionUpdateInput = {
   level?: number | null;
   default_entry_fee?: number | null;
   default_judge_fee?: number | null;
+  default_payout_schedule_type?: PayoutScheduleType;
+  default_added_money?: number | null;
+  default_retainage_percent?: number | null;
+  default_trophy_or_plaque_fee?: number | null;
+  default_sanctioning_fee_percent?: number | null;
+  default_payout_rules?: Record<string, unknown>;
+  default_payout_notes?: string | null;
   sanctioning_body_codes?: string[];
   eligibility_rules?: EligibilityRules;
   sort_order?: number;
@@ -682,6 +741,9 @@ export type EntryInput = {
   rider_contact_id?: string;
   payer_contact_id: string;
   base_fee?: number;
+  is_late?: boolean;
+  late_fee_percent?: number;
+  late_fee_amount?: number;
 };
 
 export type EntryUpdateInput = {
@@ -693,6 +755,9 @@ export type EntryUpdateInput = {
   status?: Entry["status"];
   base_fee?: number | null;
   total_fees?: number | null;
+  is_late?: boolean;
+  late_fee_percent?: number;
+  late_fee_amount?: number;
 };
 
 export type StallOptionInput = {
