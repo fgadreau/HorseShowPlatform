@@ -8,6 +8,9 @@ Documenter les décisions d’architecture MVP pour la plateforme Horse Show Pla
 - Support minimal viable pour inscriptions, facturation, paiements, stalls, et administration show.
 - Priorité à la sécurité, à l’isolation des données, et à une implémentation simple mais évolutive.
 
+## Documents de conception actifs
+- `docs/SHOW_READINESS_AND_CLASS_FINANCE.md` : décisions produit à reprendre pour checklists utilisateur, exigences show/class, OPTS, préréglages NRHA/AQHA/NSBA, memberships achetables, taxes, added money, jackpot, retainage, payback et centre de notifications.
+
 ## Stack retenue
 - Frontend : React
 - Base de données + Auth + Storage : Supabase

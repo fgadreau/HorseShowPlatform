@@ -1580,6 +1580,12 @@ export async function createEntry(input: EntryInput) {
     created_by_user_id: input.created_by_user_id,
   });
   await assertHorseCogginsValidForShow(input.horse_id, input.show_id);
+  await assertEntryShowLevelMembershipRequirements({
+    organization_id: input.organization_id,
+    owner_contact_id: input.owner_contact_id,
+    payer_contact_id: input.payer_contact_id,
+    rider_contact_id: input.rider_contact_id ?? null,
+  });
 
   const { data, error } = await client
     .from("entries")
@@ -1642,6 +1648,12 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
 
   if (!["cancelled", "scratched", "scratched_pending_refund"].includes(nextEntryStatus)) {
     await assertHorseCogginsValidForShow(input.horse_id ?? existing.horse_id, existing.show_id);
+    await assertEntryShowLevelMembershipRequirements({
+      organization_id: existing.organization_id,
+      owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
+      payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
+      rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
+    });
   }
 
   const { data, error } = await client
@@ -2169,6 +2181,139 @@ async function assertHorseCogginsValidForShow(horseId: string | null | undefined
 
     throw new Error(error.message || "Le Coggins du cheval n'est pas valide pour ce show.");
   }
+}
+
+async function assertEntryShowLevelMembershipRequirements(input: {
+  organization_id: string;
+  owner_contact_id: string | null | undefined;
+  payer_contact_id: string | null | undefined;
+  rider_contact_id: string | null | undefined;
+}) {
+  const requirements = await loadRequiredExternalMembershipRequirements(input.organization_id);
+  const riderRequirementIds = membershipRequirementIdsForType(requirements, "rider");
+
+  if (riderRequirementIds.length && !input.rider_contact_id) {
+    throw new Error("Choisir un cavalier avant de creer l'inscription: cette association exige des numeros de membre pour les riders.");
+  }
+
+  await assertContactExternalMembershipRequirements({
+    contact_id: input.owner_contact_id,
+    contact_type: "owner",
+    requirements,
+    role_label: "Proprietaire",
+  });
+  await assertContactExternalMembershipRequirements({
+    contact_id: input.rider_contact_id,
+    contact_type: "rider",
+    requirements,
+    role_label: "Cavalier",
+  });
+  await assertContactExternalMembershipRequirements({
+    contact_id: input.payer_contact_id,
+    contact_type: "payer",
+    requirements,
+    role_label: "Payeur",
+  });
+}
+
+async function loadRequiredExternalMembershipRequirements(organizationId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_external_membership_requirements")
+    .select("external_organization_id,contact_type,is_required")
+    .eq("organization_id", organizationId)
+    .eq("is_required", true)
+    .returns<Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "organization_external_membership_requirements")) {
+      return [];
+    }
+
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+async function assertContactExternalMembershipRequirements(input: {
+  contact_id: string | null | undefined;
+  contact_type: Contact["type"];
+  requirements: Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>;
+  role_label: string;
+}) {
+  const requiredOrganizationIds = membershipRequirementIdsForType(input.requirements, input.contact_type);
+
+  if (!requiredOrganizationIds.length) {
+    return;
+  }
+
+  if (!input.contact_id) {
+    throw new Error(`${input.role_label} requis: cette association exige des numeros de membre obligatoires.`);
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("contact_external_memberships")
+    .select("external_organization_id,membership_number,status")
+    .eq("contact_id", input.contact_id)
+    .in("external_organization_id", requiredOrganizationIds)
+    .returns<Array<Pick<ContactExternalMembership, "external_organization_id" | "membership_number" | "status">>>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "contact_external_memberships")) {
+      return;
+    }
+
+    throw error;
+  }
+
+  const validOrganizationIds = new Set(
+    (data ?? [])
+      .filter((membership) => membership.membership_number.trim() && membership.status !== "expired")
+      .map((membership) => membership.external_organization_id),
+  );
+  const missingOrganizationIds = requiredOrganizationIds.filter((organizationId) => !validOrganizationIds.has(organizationId));
+
+  if (!missingOrganizationIds.length) {
+    return;
+  }
+
+  const labels = await loadExternalOrganizationLabels(missingOrganizationIds);
+  throw new Error(`${input.role_label}: numeros de membre obligatoires manquants ou expires (${labels.join(", ")}).`);
+}
+
+async function loadExternalOrganizationLabels(ids: string[]) {
+  if (!ids.length) {
+    return [];
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("external_organizations")
+    .select("id,code,name")
+    .in("id", ids)
+    .returns<Array<Pick<ExternalOrganization, "id" | "code" | "name">>>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "external_organizations")) {
+      return ids;
+    }
+
+    throw error;
+  }
+
+  return ids.map((id) => {
+    const organization = data?.find((candidate) => candidate.id === id);
+    return organization?.code || organization?.name || id;
+  });
+}
+
+function membershipRequirementIdsForType(
+  requirements: Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>,
+  contactType: Contact["type"],
+) {
+  return requirements.filter((requirement) => requirement.is_required && requirement.contact_type === contactType).map((requirement) => requirement.external_organization_id);
 }
 
 async function ensureEntryOrganizationLinks(input: {

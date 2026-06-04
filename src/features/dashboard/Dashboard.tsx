@@ -22,6 +22,7 @@ import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, fo
 import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
 import { getHorseCogginsValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HorseCogginsValidity } from "../../lib/health";
 import type { Locale, Translation } from "../../lib/i18n";
+import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
 import { MyStallsView, StallsView } from "./StallsViews";
 import { buildShowScoreRunsForClass } from "../../services/showScoreAdapters";
@@ -445,11 +446,14 @@ export function Dashboard({
           <EntriesView
             classes={selectedOrganizationClasses}
             contacts={selectedOrganizationContacts}
+            contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
+            externalOrganizations={externalOrganizations}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
@@ -546,11 +550,14 @@ export function Dashboard({
           <MyEntriesView
             classes={selectedOrganizationClasses}
             contacts={personalContacts}
+            contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={personalEntries}
+            externalOrganizations={externalOrganizations}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={personalHorses}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
@@ -881,6 +888,31 @@ function InlineHealthMessage({ value }: { value: InlineHealthMessage | null }) {
   }
 
   return <p className={`inline-health-message ${value.tone}`}>{value.message}</p>;
+}
+
+function ReadinessChecklist({ readiness }: { readiness: ReadinessResult | null }) {
+  if (!readiness?.items.length) {
+    return null;
+  }
+
+  return (
+    <div className={`readiness-mini-list ${readiness.status}`}>
+      <div className={`inline-health-message ${readinessTone(readiness)}`}>{readiness.message}</div>
+      {readiness.items.map((item) => {
+        const Icon = item.blocking ? AlertCircle : CheckCircle2;
+
+        return (
+          <div className={readinessItemClassName(item)} key={item.key}>
+            <Icon size={16} />
+            <span>
+              <strong>{item.title}</strong>
+              <small>{item.detail}</small>
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function OverviewView({
@@ -1751,11 +1783,14 @@ function ClassesView({
 function EntriesView({
   classes,
   contacts,
+  contactExternalMemberships,
   contactRoles,
   divisions,
   entries,
+  externalOrganizations,
   horseHealthDocuments,
   horses,
+  membershipRequirements,
   organization,
   profileId,
   shows,
@@ -1766,11 +1801,14 @@ function EntriesView({
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
+  externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
@@ -1808,10 +1846,13 @@ function EntriesView({
       <EntryForm
         classes={classes}
         contacts={contacts}
+        contactExternalMemberships={contactExternalMemberships}
         contactRoles={contactRoles}
         divisions={divisions}
+        externalOrganizations={externalOrganizations}
         horseHealthDocuments={horseHealthDocuments}
         horses={horses}
+        membershipRequirements={membershipRequirements}
         organization={organization}
         profileId={profileId}
         shows={shows}
@@ -1823,11 +1864,14 @@ function EntriesView({
         <EntryEditForm
           classes={classes}
           contacts={contacts}
+          contactExternalMemberships={contactExternalMemberships}
           contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
+          externalOrganizations={externalOrganizations}
           horseHealthDocuments={horseHealthDocuments}
           horses={horses}
+          membershipRequirements={membershipRequirements}
           organization={organization}
           profileId={profileId}
           shows={shows}
@@ -2263,11 +2307,14 @@ function MyContactsView({
 function MyEntriesView({
   classes,
   contacts,
+  contactExternalMemberships,
   contactRoles,
   divisions,
   entries,
+  externalOrganizations,
   horseHealthDocuments,
   horses,
+  membershipRequirements,
   organization,
   profileId,
   shows,
@@ -2278,11 +2325,14 @@ function MyEntriesView({
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
   entries: Entry[];
+  externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
@@ -2320,10 +2370,13 @@ function MyEntriesView({
       <EntryForm
         classes={classes}
         contacts={contacts}
+        contactExternalMemberships={contactExternalMemberships}
         contactRoles={contactRoles}
         divisions={divisions}
+        externalOrganizations={externalOrganizations}
         horseHealthDocuments={horseHealthDocuments}
         horses={horses}
+        membershipRequirements={membershipRequirements}
         organization={organization}
         profileId={profileId}
         shows={shows}
@@ -2335,11 +2388,14 @@ function MyEntriesView({
         <EntryEditForm
           classes={classes}
           contacts={contacts}
+          contactExternalMemberships={contactExternalMemberships}
           contactRoles={contactRoles}
           divisions={divisions}
           entry={editingEntry}
+          externalOrganizations={externalOrganizations}
           horseHealthDocuments={horseHealthDocuments}
           horses={horses}
+          membershipRequirements={membershipRequirements}
           organization={organization}
           profileId={profileId}
           shows={shows}
@@ -5561,10 +5617,13 @@ function DivisionEditForm({
 function EntryForm({
   classes,
   contacts,
+  contactExternalMemberships,
   contactRoles,
   divisions,
+  externalOrganizations,
   horseHealthDocuments,
   horses,
+  membershipRequirements,
   organization,
   profileId,
   shows,
@@ -5573,10 +5632,13 @@ function EntryForm({
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
+  externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
@@ -5596,6 +5658,9 @@ function EntryForm({
   const selectedDivision = findById(availableDivisions, divisionId) ?? null;
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
+  const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
+  const selectedRiderContact = findById(contacts, riderContactId) ?? null;
+  const selectedPayerContact = findById(contacts, selectedPayerId) ?? null;
   const selectedCogginsValidity = selectedHorse
     ? getHorseCogginsValidity({
         documents: horseHealthDocuments,
@@ -5604,8 +5669,19 @@ function EntryForm({
         referenceDate: selectedShow?.start_date ?? null,
       })
     : null;
-  const healthBlocksEntry = Boolean(selectedHorse && organizationRequiresHealthVerification(organization) && selectedCogginsValidity && !selectedCogginsValidity.valid);
-  const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId && !healthBlocksEntry);
+  const entryReadiness = buildEntryShowReadiness({
+    contactExternalMemberships,
+    documents: horseHealthDocuments,
+    externalOrganizations,
+    horse: selectedHorse,
+    membershipRequirements,
+    organization,
+    ownerContact: selectedOwnerContact,
+    payerContact: selectedPayerContact,
+    riderContact: selectedRiderContact,
+    show: selectedShow,
+  });
+  const canCreate = Boolean(organization && profileId && selectedShowId && selectedHorse && selectedDivision && selectedPayerId && entryReadiness.canProceed);
   const baseFee = selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? undefined;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -5641,7 +5717,7 @@ function EntryForm({
       <div className="panel-header">
         <div>
           <h2>New draft entry</h2>
-          <p>{canCreate ? "Draft now, checkout later." : healthBlocksEntry ? cogginsValidityMessage(selectedCogginsValidity!) : "Add a show, horse and division first."}</p>
+          <p>{canCreate ? "Draft now, checkout later." : selectedHorse ? entryReadiness.message : "Add a show, horse and division first."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -5739,6 +5815,7 @@ function EntryForm({
             onCreateContact={onCreateContact}
           />
         </div>
+        <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
           Create draft entry
@@ -5751,11 +5828,14 @@ function EntryForm({
 function EntryEditForm({
   classes,
   contacts,
+  contactExternalMemberships,
   contactRoles,
   divisions,
   entry,
+  externalOrganizations,
   horseHealthDocuments,
   horses,
+  membershipRequirements,
   organization,
   profileId,
   shows,
@@ -5765,11 +5845,14 @@ function EntryEditForm({
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
+  contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
   divisions: Division[];
   entry: Entry;
+  externalOrganizations: ExternalOrganization[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
@@ -5788,6 +5871,10 @@ function EntryEditForm({
   const selectedDivision = findById(divisions, divisionId);
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
   const selectedShow = findById(shows, entry.show_id) ?? null;
+  const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
+  const selectedRiderContact = findById(contacts, riderContactId) ?? null;
+  const selectedPayerContact = findById(contacts, payerContactId) ?? null;
+  const skipsEntryReadiness = ["cancelled", "scratched", "scratched_pending_refund"].includes(status);
   const selectedCogginsValidity = selectedHorse
     ? getHorseCogginsValidity({
         documents: horseHealthDocuments,
@@ -5796,15 +5883,22 @@ function EntryEditForm({
         referenceDate: selectedShow?.start_date ?? null,
       })
     : null;
-  const healthBlocksEntry = Boolean(
-    selectedHorse &&
-      organizationRequiresHealthVerification(organization) &&
-      selectedCogginsValidity &&
-      !selectedCogginsValidity.valid &&
-      !["cancelled", "scratched", "scratched_pending_refund"].includes(status),
-  );
+  const entryReadiness = buildEntryShowReadiness({
+    contactExternalMemberships,
+    documents: horseHealthDocuments,
+    externalOrganizations,
+    horse: selectedHorse,
+    membershipRequirements,
+    organization,
+    ownerContact: selectedOwnerContact,
+    payerContact: selectedPayerContact,
+    riderContact: selectedRiderContact,
+    show: selectedShow,
+    skipContactRequirements: skipsEntryReadiness,
+    skipHorseHealth: skipsEntryReadiness,
+  });
   const effectiveFee = numericValue(baseFee) ?? selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? null;
-  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && !healthBlocksEntry);
+  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && entryReadiness.canProceed);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -5836,7 +5930,7 @@ function EntryEditForm({
       <div className="panel-header">
         <div>
           <h2>Edit entry</h2>
-          <p>{healthBlocksEntry && selectedCogginsValidity ? cogginsValidityMessage(selectedCogginsValidity) : horseLabel(selectedHorse)}</p>
+          <p>{entryReadiness.canProceed ? horseLabel(selectedHorse) : entryReadiness.message}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -5920,6 +6014,7 @@ function EntryEditForm({
             onCreateContact={onCreateContact}
           />
         </div>
+        <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
         <div className="form-grid">
           <label>
             Status
