@@ -1026,6 +1026,15 @@ button:focus-visible {
   justify-self: start;
 }
 
+.form-launch-panel .panel-header {
+  align-items: center;
+}
+
+.form-launch-panel .row-actions,
+.form-launch-panel > .panel-header > .primary-button {
+  flex-shrink: 0;
+}
+
 .modal-backdrop {
   align-items: center;
   background: rgba(18, 32, 28, 0.44);
@@ -1068,6 +1077,38 @@ button:focus-visible {
   color: #687873;
   line-height: 1.4;
   margin: 5px 0 0;
+}
+
+.form-modal .panel,
+.form-modal .edit-panel {
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+
+.form-modal .panel > .panel-header,
+.form-modal .edit-panel > .panel-header {
+  display: none;
+}
+
+.horse-form-modal {
+  max-width: 980px;
+  width: min(100%, 980px);
+}
+
+.entry-form-modal {
+  max-width: 920px;
+  width: min(100%, 920px);
+}
+
+.reservation-form-modal {
+  max-width: 980px;
+  width: min(100%, 980px);
+}
+
+.contact-create-modal {
+  max-width: 620px;
+  width: min(100%, 620px);
 }
 
 .health-horse-modal {
@@ -1371,6 +1412,11 @@ button:focus-visible {
   color: #14221e;
   font-size: 13px;
   font-weight: 700;
+}
+
+.inline-picker-field {
+  display: grid;
+  gap: 6px;
 }
 
 .contact-picker-row {

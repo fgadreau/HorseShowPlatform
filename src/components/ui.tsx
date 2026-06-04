@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe2, X } from "lucide-react";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { Locale } from "../lib/i18n";
 import { contactLabel, findById, itemSearchLabel } from "../lib/display";
 import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization } from "../types/domain";
@@ -16,6 +16,53 @@ export function LanguageToggle({ locale, onLocaleChange }: { locale: Locale; onL
       <button className={locale === "en" ? "active" : ""} type="button" onClick={() => onLocaleChange("en")}>
         EN
       </button>
+    </div>
+  );
+}
+
+export function ModalDialog({
+  children,
+  className = "",
+  description,
+  eyebrow,
+  title,
+  onClose,
+}: {
+  children: ReactNode;
+  className?: string;
+  description?: string;
+  eyebrow?: string;
+  title: string;
+  onClose: () => void;
+}) {
+  const titleId = useMemo(() => `modal-${Math.random().toString(36).slice(2)}`, []);
+
+  useEffect(() => {
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="modal-backdrop">
+      <section aria-labelledby={titleId} aria-modal="true" className={`assistant-modal form-modal ${className}`.trim()} role="dialog">
+        <div className="assistant-modal-header">
+          <div>
+            {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
+            <h2 id={titleId}>{title}</h2>
+            {description ? <p>{description}</p> : null}
+          </div>
+          <button aria-label="Close modal" className="icon-button" type="button" onClick={onClose}>
+            <X size={18} />
+          </button>
+        </div>
+        {children}
+      </section>
     </div>
   );
 }
@@ -276,83 +323,92 @@ export function ContactPicker({
             disabled={disabled || !organization}
             type="button"
             onClick={() => {
-              setCreating((current) => !current);
+              setCreating(true);
               setErrorMessage("");
             }}
           >
-            {creating ? "Close" : "+ Contact"}
+            + Contact
           </button>
         </div>
       </div>
 
       {creating ? (
-        <div className="contact-create-inline">
-          <div className="inline-form-header">
-            <strong>New {roleLabel.toLowerCase()}</strong>
-            <span>This contact will receive the {roleLabel.toLowerCase()} role automatically.</span>
+        <ModalDialog
+          className="contact-create-modal"
+          description={`This contact will receive the ${roleLabel.toLowerCase()} role automatically.`}
+          eyebrow="Contact"
+          title={`New ${roleLabel.toLowerCase()}`}
+          onClose={() => {
+            if (!busy) {
+              setCreating(false);
+              setErrorMessage("");
+            }
+          }}
+        >
+          <div className="contact-create-inline">
+            <div className="form-grid">
+              <label>
+                First name
+                <input
+                  required
+                  value={firstName}
+                  onChange={(event) => {
+                    setFirstName(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+              <label>
+                Last name
+                <input
+                  required
+                  value={lastName}
+                  onChange={(event) => {
+                    setLastName(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                Email
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(event) => {
+                    setEmail(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+              <label>
+                Phone
+                <input
+                  value={phone}
+                  onChange={(event) => {
+                    setPhone(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+            </div>
+            <label>
+              Barn
+              <input
+                value={barnName}
+                onChange={(event) => {
+                  setBarnName(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
+            </label>
+            {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
+            <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
+              {busy ? "Creating..." : "Create and select"}
+            </button>
           </div>
-          <div className="form-grid">
-            <label>
-              First name
-              <input
-                required
-                value={firstName}
-                onChange={(event) => {
-                  setFirstName(event.target.value);
-                  setErrorMessage("");
-                }}
-              />
-            </label>
-            <label>
-              Last name
-              <input
-                required
-                value={lastName}
-                onChange={(event) => {
-                  setLastName(event.target.value);
-                  setErrorMessage("");
-                }}
-              />
-            </label>
-          </div>
-          <div className="form-grid">
-            <label>
-              Email
-              <input
-                type="email"
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setErrorMessage("");
-                }}
-              />
-            </label>
-            <label>
-              Phone
-              <input
-                value={phone}
-                onChange={(event) => {
-                  setPhone(event.target.value);
-                  setErrorMessage("");
-                }}
-              />
-            </label>
-          </div>
-          <label>
-            Barn
-            <input
-              value={barnName}
-              onChange={(event) => {
-                setBarnName(event.target.value);
-                setErrorMessage("");
-              }}
-            />
-          </label>
-          {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
-          <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
-            {busy ? "Creating..." : "Create and select"}
-          </button>
-        </div>
+        </ModalDialog>
       ) : null}
     </div>
   );

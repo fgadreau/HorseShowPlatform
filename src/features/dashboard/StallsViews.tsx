@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import type { FormEvent } from "react";
 import type { ComponentType } from "react";
 import { ClipboardList, Plus, Warehouse } from "lucide-react";
-import { ContactPicker, EmptyState, FormActions, Metric, SearchSelect, ViewIntro } from "../../components/ui";
+import { ContactPicker, EmptyState, FormActions, Metric, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { getHorseCogginsValidity, getHorseVaccineValidity, organizationRequiresHealthVerification, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import {
@@ -81,6 +81,7 @@ export function StallsView({
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
 }) {
+  const [creatingOption, setCreatingOption] = useState(false);
   const [editingOption, setEditingOption] = useState<StallOption | null>(null);
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
   const [activeTab, setActiveTab] = useState<AssociationReservationTab>("reservations");
@@ -145,6 +146,7 @@ export function StallsView({
         items={associationTabs}
         onChange={(tab) => {
           setActiveTab(tab);
+          setCreatingOption(false);
           setEditingBooking(null);
           setEditingOption(null);
         }}
@@ -153,25 +155,27 @@ export function StallsView({
       {activeTab === "reservations" ? (
         <>
           {editingBooking ? (
-            <StallBookingEditForm
-              booking={editingBooking}
-              contacts={contacts}
-              contactRoles={contactRoles}
-              currency={currency}
-              horseHealthDocuments={horseHealthDocuments}
-              horses={horses}
-              organization={organization}
-              profileId={profileId}
-              showDays={showDays}
-              shows={shows}
-              stallOptions={stallOptions}
-              onCancel={() => setEditingBooking(null)}
-              onCreateContact={onCreateContact}
-              onUpdateStallBooking={async (id, input) => {
-                await onUpdateStallBooking(id, input);
-                setEditingBooking(null);
-              }}
-            />
+            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow="Reservations" title="Modifier la reservation" onClose={() => setEditingBooking(null)}>
+              <StallBookingEditForm
+                booking={editingBooking}
+                contacts={contacts}
+                contactRoles={contactRoles}
+                currency={currency}
+                horseHealthDocuments={horseHealthDocuments}
+                horses={horses}
+                organization={organization}
+                profileId={profileId}
+                showDays={showDays}
+                shows={shows}
+                stallOptions={stallOptions}
+                onCancel={() => setEditingBooking(null)}
+                onCreateContact={onCreateContact}
+                onUpdateStallBooking={async (id, input) => {
+                  await onUpdateStallBooking(id, input);
+                  setEditingBooking(null);
+                }}
+              />
+            </ModalDialog>
           ) : null}
 
           <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
@@ -179,41 +183,69 @@ export function StallsView({
       ) : null}
 
       {activeTab === "new-reservation" ? (
-        <StallBookingForm
-          bookings={bookings}
-          contacts={contacts}
-          contactRoles={contactRoles}
-          currency={currency}
-          defaultStatus="reserved"
-          horseHealthDocuments={horseHealthDocuments}
-          horses={horses}
-          organization={organization}
-          profileId={profileId}
-          showDays={showDays}
-          shows={shows}
-          stallOptions={stallOptions}
-          title="Nouvelle reservation"
-          onCreateContact={onCreateContact}
-          onCreateStallBooking={onCreateStallBooking}
-        />
+        <ModalDialog className="reservation-form-modal" description="Creer une demande sans quitter la gestion des reservations." eyebrow="Reservations" title="Nouvelle reservation" onClose={() => setActiveTab("reservations")}>
+          <StallBookingForm
+            bookings={bookings}
+            contacts={contacts}
+            contactRoles={contactRoles}
+            currency={currency}
+            defaultStatus="reserved"
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            organization={organization}
+            profileId={profileId}
+            showDays={showDays}
+            shows={shows}
+            stallOptions={stallOptions}
+            title="Nouvelle reservation"
+            onCreateContact={onCreateContact}
+            onCreateStallBooking={onCreateStallBooking}
+            onCreated={() => setActiveTab("reservations")}
+          />
+        </ModalDialog>
       ) : null}
 
       {activeTab === "options" ? (
         <>
-          <StallOptionForm organization={organization} showDays={showDays} shows={shows} onCreateStallOption={onCreateStallOption} />
+          <section className="panel span-2 form-launch-panel">
+            <div className="panel-header">
+              <div>
+                <h2>Options reservables</h2>
+                <p>Ajoute un produit de reservation sans quitter la liste d'inventaire.</p>
+              </div>
+              <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingOption(true)}>
+                <Plus size={18} />
+                Option
+              </button>
+            </div>
+          </section>
+
+          {creatingOption ? (
+            <ModalDialog className="reservation-form-modal" description="Stall, tack, ripe, foin, camping ou extra." eyebrow="Reservations" title="Nouvelle option" onClose={() => setCreatingOption(false)}>
+              <StallOptionForm
+                organization={organization}
+                showDays={showDays}
+                shows={shows}
+                onCreateStallOption={onCreateStallOption}
+                onCreated={() => setCreatingOption(false)}
+              />
+            </ModalDialog>
+          ) : null}
 
           {editingOption ? (
-            <StallOptionEditForm
-              currency={currency}
-              option={editingOption}
-              showDays={showDays}
-              shows={shows}
-              onCancel={() => setEditingOption(null)}
-              onUpdateStallOption={async (id, input) => {
-                await onUpdateStallOption(id, input);
-                setEditingOption(null);
-              }}
-            />
+            <ModalDialog className="reservation-form-modal" description={editingOption.name} eyebrow="Reservations" title="Modifier l'option" onClose={() => setEditingOption(null)}>
+              <StallOptionEditForm
+                currency={currency}
+                option={editingOption}
+                showDays={showDays}
+                shows={shows}
+                onCancel={() => setEditingOption(null)}
+                onUpdateStallOption={async (id, input) => {
+                  await onUpdateStallOption(id, input);
+                  setEditingOption(null);
+                }}
+              />
+            </ModalDialog>
           ) : null}
 
           <StallOptionsTable currency={currency} options={stallOptions} shows={shows} onEdit={setEditingOption} />
@@ -324,25 +356,27 @@ export function MyStallsView({
       {activeTab === "my-reservations" ? (
         <>
           {editingBooking ? (
-            <StallBookingEditForm
-              booking={editingBooking}
-              contacts={contacts}
-              contactRoles={contactRoles}
-              currency={currency}
-              horseHealthDocuments={horseHealthDocuments}
-              horses={horses}
-              organization={organization}
-              profileId={profileId}
-              showDays={showDays}
-              shows={shows}
-              stallOptions={stallOptions}
-              onCancel={() => setEditingBooking(null)}
-              onCreateContact={onCreateContact}
-              onUpdateStallBooking={async (id, input) => {
-                await onUpdateStallBooking(id, input);
-                setEditingBooking(null);
-              }}
-            />
+            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow="Mon espace" title="Modifier la reservation" onClose={() => setEditingBooking(null)}>
+              <StallBookingEditForm
+                booking={editingBooking}
+                contacts={contacts}
+                contactRoles={contactRoles}
+                currency={currency}
+                horseHealthDocuments={horseHealthDocuments}
+                horses={horses}
+                organization={organization}
+                profileId={profileId}
+                showDays={showDays}
+                shows={shows}
+                stallOptions={stallOptions}
+                onCancel={() => setEditingBooking(null)}
+                onCreateContact={onCreateContact}
+                onUpdateStallBooking={async (id, input) => {
+                  await onUpdateStallBooking(id, input);
+                  setEditingBooking(null);
+                }}
+              />
+            </ModalDialog>
           ) : null}
 
           <StallBookingsTable
@@ -359,24 +393,27 @@ export function MyStallsView({
       ) : null}
 
       {activeTab === "new-reservation" ? (
-        <StallBookingForm
-          allowStatusEdit={false}
-          bookings={bookings}
-          contacts={contacts}
-          contactRoles={contactRoles}
-          currency={currency}
-          defaultStatus="requested"
-          horseHealthDocuments={horseHealthDocuments}
-          horses={horses}
-          organization={organization}
-          profileId={profileId}
-          showDays={showDays}
-          shows={shows}
-          stallOptions={stallOptions}
-          title="Nouvelle reservation"
-          onCreateContact={onCreateContact}
-          onCreateStallBooking={onCreateStallBooking}
-        />
+        <ModalDialog className="reservation-form-modal" description="Demande un stall, camping ou extra sans quitter tes reservations." eyebrow="Mon espace" title="Nouvelle reservation" onClose={() => setActiveTab("my-reservations")}>
+          <StallBookingForm
+            allowStatusEdit={false}
+            bookings={bookings}
+            contacts={contacts}
+            contactRoles={contactRoles}
+            currency={currency}
+            defaultStatus="requested"
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            organization={organization}
+            profileId={profileId}
+            showDays={showDays}
+            shows={shows}
+            stallOptions={stallOptions}
+            title="Nouvelle reservation"
+            onCreateContact={onCreateContact}
+            onCreateStallBooking={onCreateStallBooking}
+            onCreated={() => setActiveTab("my-reservations")}
+          />
+        </ModalDialog>
       ) : null}
 
       {activeTab === "available-options" ? <StallOptionsTable currency={currency} options={availableOptions} shows={shows} /> : null}
@@ -544,11 +581,13 @@ function StallOptionForm({
   showDays,
   shows,
   onCreateStallOption,
+  onCreated,
 }: {
   organization: Organization | null;
   showDays: ShowDay[];
   shows: Show[];
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
   const [showId, setShowId] = useState("");
   const [presetKey, setPresetKey] = useState("stall");
@@ -627,6 +666,7 @@ function StallOptionForm({
       setEndDayId("");
       setNotes("");
       setPresetKey("stall");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -997,6 +1037,7 @@ function StallBookingForm({
   title,
   onCreateContact,
   onCreateStallBooking,
+  onCreated,
 }: {
   allowStatusEdit?: boolean;
   bookings: StallBooking[];
@@ -1014,6 +1055,7 @@ function StallBookingForm({
   title: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
+  onCreated?: () => void;
 }) {
   const firstStallOption = stallOptions.find((option) => isStallReservationOption(option));
   const [showId, setShowId] = useState("");
@@ -1458,6 +1500,7 @@ function StallBookingForm({
       setResponsibleContactId("");
       setSelectedContactRoles(requiredReservationContactRoles);
       setNotes("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }

@@ -17,7 +17,7 @@ import {
   Warehouse,
   X,
 } from "lucide-react";
-import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
+import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
 import { getHorseCogginsValidity, getHorseVaccineValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
@@ -482,8 +482,11 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
           />
         ) : null}
 
@@ -586,8 +589,11 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
           />
         ) : null}
 
@@ -1570,6 +1576,8 @@ function PeopleView({
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
+  const [creatingContact, setCreatingContact] = useState(false);
+  const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
@@ -1609,60 +1617,94 @@ function PeopleView({
         ]}
       />
 
-      <ContactForm
-        externalOrganizations={externalOrganizations}
-        membershipRequirements={membershipRequirements}
-        organization={organization}
-        onCreateContact={onCreateContact}
-      />
-      <HorseForm
-        contacts={contacts}
-        contactRoles={contactRoles}
-        createdByUserId={createdByUserId}
-        externalOrganizations={externalOrganizations}
-        organization={organization}
-        onCreateContact={onCreateContact}
-        onCreateHorse={onCreateHorse}
-        onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-        onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
-      />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Ajouter au registre</h2>
+            <p>Ouvre le bon formulaire sans quitter la liste des contacts et chevaux.</p>
+          </div>
+          <div className="row-actions">
+            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingContact(true)}>
+              <Plus size={18} />
+              Contact
+            </button>
+            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
+              <Plus size={18} />
+              Cheval
+            </button>
+          </div>
+        </div>
+      </section>
+
+      {creatingContact ? (
+        <ModalDialog description={organization ? organization.name : "Create an organization first."} eyebrow="Registre" title="Nouveau contact" onClose={() => setCreatingContact(false)}>
+          <ContactForm
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            onCreateContact={onCreateContact}
+            onCreated={() => setCreatingContact(false)}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {creatingHorse ? (
+        <ModalDialog description={contacts.length ? "Connecte le cheval a un proprietaire." : "Cree un contact proprietaire directement dans ce formulaire au besoin."} eyebrow="Registre" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
+          <HorseForm
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={createdByUserId}
+            externalOrganizations={externalOrganizations}
+            organization={organization}
+            onCreateContact={onCreateContact}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onCreated={() => setCreatingHorse(false)}
+          />
+        </ModalDialog>
+      ) : null}
 
       {editingContact ? (
-        <ContactEditForm
-          contact={editingContact}
-          contactExternalMemberships={contactExternalMemberships}
-          externalOrganizations={externalOrganizations}
-          membershipRequirements={membershipRequirements}
-          onCancel={() => setEditingContact(null)}
-          onUpdateContact={async (id, input) => {
-            await onUpdateContact(id, input);
-            setEditingContact(null);
-          }}
-        />
+        <ModalDialog description={contactLabel(editingContact)} eyebrow="Registre" title="Modifier le contact" onClose={() => setEditingContact(null)}>
+          <ContactEditForm
+            contact={editingContact}
+            contactExternalMemberships={contactExternalMemberships}
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
+            onCancel={() => setEditingContact(null)}
+            onUpdateContact={async (id, input) => {
+              await onUpdateContact(id, input);
+              setEditingContact(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       {editingHorse ? (
-        <HorseEditForm
-          contacts={contacts}
-          contactRoles={contactRoles}
-          canManageHealthDocuments={canManageHealthDocuments}
-          createdByUserId={createdByUserId}
-          externalOrganizations={externalOrganizations}
-          horseExternalMemberships={horseExternalMemberships}
-          horseHealthDocuments={horseHealthDocuments}
-          horseContacts={horseContacts}
-          organization={organization}
-          horse={editingHorse}
-          onCancel={() => setEditingHorse(null)}
-          onCreateContact={onCreateContact}
-          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
-          onUpdateHorse={async (id, input) => {
-            await onUpdateHorse(id, input);
-            setEditingHorse(null);
-          }}
-          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
-        />
+        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Registre" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
+          <HorseEditForm
+            contacts={contacts}
+            contactRoles={contactRoles}
+            canManageHealthDocuments={canManageHealthDocuments}
+            createdByUserId={createdByUserId}
+            externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
+            horseHealthDocuments={horseHealthDocuments}
+            horseContacts={horseContacts}
+            organization={organization}
+            horse={editingHorse}
+            onCancel={() => setEditingHorse(null)}
+            onCreateContact={onCreateContact}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+            onUpdateHorse={async (id, input) => {
+              await onUpdateHorse(id, input);
+              setEditingHorse(null);
+            }}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -2353,8 +2395,11 @@ function EntriesView({
   shows,
   onCreateContact,
   onCreateEntry,
+  onCreateHorse,
+  onCreateHorseHealthDocument,
   onDeleteEntry,
   onUpdateEntry,
+  onVerifyGvlCogginsDocument,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
@@ -2371,9 +2416,13 @@ function EntriesView({
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
+  const [creatingEntry, setCreatingEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
   async function handleDeleteEntry(entry: Entry) {
@@ -2400,45 +2449,68 @@ function EntriesView({
         ]}
       />
 
-      <EntryForm
-        classes={classes}
-        contacts={contacts}
-        contactExternalMemberships={contactExternalMemberships}
-        contactRoles={contactRoles}
-        divisions={divisions}
-        externalOrganizations={externalOrganizations}
-        horseHealthDocuments={horseHealthDocuments}
-        horses={horses}
-        membershipRequirements={membershipRequirements}
-        organization={organization}
-        profileId={profileId}
-        shows={shows}
-        onCreateContact={onCreateContact}
-        onCreateEntry={onCreateEntry}
-      />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Nouvelle inscription</h2>
+            <p>Ouvre le formulaire et complete les contacts ou chevaux manquants sans changer de page.</p>
+          </div>
+          <button className="primary-button" disabled={!organization || !shows.length || !divisions.length} type="button" onClick={() => setCreatingEntry(true)}>
+            <Plus size={18} />
+            Inscription
+          </button>
+        </div>
+      </section>
+
+      {creatingEntry ? (
+        <ModalDialog className="entry-form-modal" description="Brouillon maintenant, checkout plus tard." eyebrow="Inscriptions" title="Nouvelle inscription" onClose={() => setCreatingEntry(false)}>
+          <EntryForm
+            classes={classes}
+            contacts={contacts}
+            contactExternalMemberships={contactExternalMemberships}
+            contactRoles={contactRoles}
+            divisions={divisions}
+            externalOrganizations={externalOrganizations}
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            profileId={profileId}
+            shows={shows}
+            onCreateContact={onCreateContact}
+            onCreateEntry={onCreateEntry}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onCreated={() => setCreatingEntry(false)}
+          />
+        </ModalDialog>
+      ) : null}
 
       {editingEntry ? (
-        <EntryEditForm
-          classes={classes}
-          contacts={contacts}
-          contactExternalMemberships={contactExternalMemberships}
-          contactRoles={contactRoles}
-          divisions={divisions}
-          entry={editingEntry}
-          externalOrganizations={externalOrganizations}
-          horseHealthDocuments={horseHealthDocuments}
-          horses={horses}
-          membershipRequirements={membershipRequirements}
-          organization={organization}
-          profileId={profileId}
-          shows={shows}
-          onCancel={() => setEditingEntry(null)}
-          onCreateContact={onCreateContact}
-          onUpdateEntry={async (id, input) => {
-            await onUpdateEntry(id, input);
-            setEditingEntry(null);
-          }}
-        />
+        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow="Inscriptions" title="Modifier l'inscription" onClose={() => setEditingEntry(null)}>
+          <EntryEditForm
+            classes={classes}
+            contacts={contacts}
+            contactExternalMemberships={contactExternalMemberships}
+            contactRoles={contactRoles}
+            divisions={divisions}
+            entry={editingEntry}
+            externalOrganizations={externalOrganizations}
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            profileId={profileId}
+            shows={shows}
+            onCancel={() => setEditingEntry(null)}
+            onCreateContact={onCreateContact}
+            onUpdateEntry={async (id, input) => {
+              await onUpdateEntry(id, input);
+              setEditingEntry(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -2643,6 +2715,7 @@ function MyHorsesView({
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
+  const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
   async function handleDeleteHorse(horse: Horse) {
@@ -2668,40 +2741,60 @@ function MyHorsesView({
         ]}
       />
 
-      <HorseForm
-        contacts={contacts}
-        contactRoles={contactRoles}
-        createdByUserId={profileId}
-        externalOrganizations={externalOrganizations}
-        organization={organization}
-        onCreateContact={onCreateContact}
-        onCreateHorse={onCreateHorse}
-        onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-        onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
-      />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Ajouter un cheval</h2>
+            <p>Ajoute ses infos, ses contacts et ses documents santé sans sortir de cette page.</p>
+          </div>
+          <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
+            <Plus size={18} />
+            Cheval
+          </button>
+        </div>
+      </section>
+
+      {creatingHorse ? (
+        <ModalDialog description="Ajoute le cheval a ton profil et complete les documents requis." eyebrow="Mon espace" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
+          <HorseForm
+            contacts={contacts}
+            contactRoles={contactRoles}
+            createdByUserId={profileId}
+            externalOrganizations={externalOrganizations}
+            organization={organization}
+            onCreateContact={onCreateContact}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onCreated={() => setCreatingHorse(false)}
+          />
+        </ModalDialog>
+      ) : null}
 
       {editingHorse ? (
-        <HorseEditForm
-          contacts={contacts}
-          contactRoles={contactRoles}
-          canManageHealthDocuments={canManageHealthDocuments}
-          createdByUserId={profileId}
-          externalOrganizations={externalOrganizations}
-          horseExternalMemberships={horseExternalMemberships}
-          horseHealthDocuments={horseHealthDocuments}
-          horseContacts={horseContacts}
-          organization={organization}
-          horse={editingHorse}
-          onCancel={() => setEditingHorse(null)}
-          onCreateContact={onCreateContact}
-          onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-          onReviewHorseHealthDocument={onReviewHorseHealthDocument}
-          onUpdateHorse={async (id, input) => {
-            await onUpdateHorse(id, input);
-            setEditingHorse(null);
-          }}
-          onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
-        />
+        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Mon espace" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
+          <HorseEditForm
+            contacts={contacts}
+            contactRoles={contactRoles}
+            canManageHealthDocuments={canManageHealthDocuments}
+            createdByUserId={profileId}
+            externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
+            horseHealthDocuments={horseHealthDocuments}
+            horseContacts={horseContacts}
+            organization={organization}
+            horse={editingHorse}
+            onCancel={() => setEditingHorse(null)}
+            onCreateContact={onCreateContact}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+            onUpdateHorse={async (id, input) => {
+              await onUpdateHorse(id, input);
+              setEditingHorse(null);
+            }}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -2767,6 +2860,7 @@ function MyContactsView({
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
+  const [creatingContact, setCreatingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const canCreateLinkedContact = Boolean(organization && profileId);
   const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
@@ -2796,33 +2890,51 @@ function MyContactsView({
         ]}
       />
 
-      {canCreateLinkedContact ? (
-        <ContactForm
-          key={defaultContactType}
-          createdByUserId={profileId}
-          defaultType={defaultContactType}
-          linkedUserId={profileId}
-          externalOrganizations={externalOrganizations}
-          membershipRequirements={membershipRequirements}
-          organization={organization}
-          title={contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}
-          description={contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}
-          onCreateContact={onCreateContact}
-        />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>{contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}</h2>
+            <p>{contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}</p>
+          </div>
+          <button className="primary-button" disabled={!canCreateLinkedContact} type="button" onClick={() => setCreatingContact(true)}>
+            <Plus size={18} />
+            Contact
+          </button>
+        </div>
+      </section>
+
+      {creatingContact && canCreateLinkedContact ? (
+        <ModalDialog eyebrow="Mon espace" title={contacts.length ? "Nouveau cavalier / contact" : "Premier contact"} onClose={() => setCreatingContact(false)}>
+          <ContactForm
+            key={defaultContactType}
+            createdByUserId={profileId}
+            defaultType={defaultContactType}
+            linkedUserId={profileId}
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            title={contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}
+            description={contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}
+            onCreateContact={onCreateContact}
+            onCreated={() => setCreatingContact(false)}
+          />
+        </ModalDialog>
       ) : null}
 
       {editingContact ? (
-        <ContactEditForm
-          contact={editingContact}
-          contactExternalMemberships={contactExternalMemberships}
-          externalOrganizations={externalOrganizations}
-          membershipRequirements={membershipRequirements}
-          onCancel={() => setEditingContact(null)}
-          onUpdateContact={async (id, input) => {
-            await onUpdateContact(id, input);
-            setEditingContact(null);
-          }}
-        />
+        <ModalDialog description={contactLabel(editingContact)} eyebrow="Mon espace" title="Modifier le contact" onClose={() => setEditingContact(null)}>
+          <ContactEditForm
+            contact={editingContact}
+            contactExternalMemberships={contactExternalMemberships}
+            externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
+            onCancel={() => setEditingContact(null)}
+            onUpdateContact={async (id, input) => {
+              await onUpdateContact(id, input);
+              setEditingContact(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -2877,8 +2989,11 @@ function MyEntriesView({
   shows,
   onCreateContact,
   onCreateEntry,
+  onCreateHorse,
+  onCreateHorseHealthDocument,
   onDeleteEntry,
   onUpdateEntry,
+  onVerifyGvlCogginsDocument,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
@@ -2895,9 +3010,13 @@ function MyEntriesView({
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
 }) {
+  const [creatingEntry, setCreatingEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
 
   async function handleDeleteEntry(entry: Entry) {
@@ -2924,45 +3043,68 @@ function MyEntriesView({
         ]}
       />
 
-      <EntryForm
-        classes={classes}
-        contacts={contacts}
-        contactExternalMemberships={contactExternalMemberships}
-        contactRoles={contactRoles}
-        divisions={divisions}
-        externalOrganizations={externalOrganizations}
-        horseHealthDocuments={horseHealthDocuments}
-        horses={horses}
-        membershipRequirements={membershipRequirements}
-        organization={organization}
-        profileId={profileId}
-        shows={shows}
-        onCreateContact={onCreateContact}
-        onCreateEntry={onCreateEntry}
-      />
+      <section className="panel span-2 form-launch-panel">
+        <div className="panel-header">
+          <div>
+            <h2>Nouvelle inscription</h2>
+            <p>Inscris un cheval et complete les infos manquantes sans quitter la page.</p>
+          </div>
+          <button className="primary-button" disabled={!organization || !shows.length || !divisions.length} type="button" onClick={() => setCreatingEntry(true)}>
+            <Plus size={18} />
+            Inscription
+          </button>
+        </div>
+      </section>
+
+      {creatingEntry ? (
+        <ModalDialog className="entry-form-modal" description="Brouillon maintenant, checkout plus tard." eyebrow="Mon espace" title="Nouvelle inscription" onClose={() => setCreatingEntry(false)}>
+          <EntryForm
+            classes={classes}
+            contacts={contacts}
+            contactExternalMemberships={contactExternalMemberships}
+            contactRoles={contactRoles}
+            divisions={divisions}
+            externalOrganizations={externalOrganizations}
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            profileId={profileId}
+            shows={shows}
+            onCreateContact={onCreateContact}
+            onCreateEntry={onCreateEntry}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onCreated={() => setCreatingEntry(false)}
+          />
+        </ModalDialog>
+      ) : null}
 
       {editingEntry ? (
-        <EntryEditForm
-          classes={classes}
-          contacts={contacts}
-          contactExternalMemberships={contactExternalMemberships}
-          contactRoles={contactRoles}
-          divisions={divisions}
-          entry={editingEntry}
-          externalOrganizations={externalOrganizations}
-          horseHealthDocuments={horseHealthDocuments}
-          horses={horses}
-          membershipRequirements={membershipRequirements}
-          organization={organization}
-          profileId={profileId}
-          shows={shows}
-          onCancel={() => setEditingEntry(null)}
-          onCreateContact={onCreateContact}
-          onUpdateEntry={async (id, input) => {
-            await onUpdateEntry(id, input);
-            setEditingEntry(null);
-          }}
-        />
+        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow="Mon espace" title="Modifier l'inscription" onClose={() => setEditingEntry(null)}>
+          <EntryEditForm
+            classes={classes}
+            contacts={contacts}
+            contactExternalMemberships={contactExternalMemberships}
+            contactRoles={contactRoles}
+            divisions={divisions}
+            entry={editingEntry}
+            externalOrganizations={externalOrganizations}
+            horseHealthDocuments={horseHealthDocuments}
+            horses={horses}
+            membershipRequirements={membershipRequirements}
+            organization={organization}
+            profileId={profileId}
+            shows={shows}
+            onCancel={() => setEditingEntry(null)}
+            onCreateContact={onCreateContact}
+            onUpdateEntry={async (id, input) => {
+              await onUpdateEntry(id, input);
+              setEditingEntry(null);
+            }}
+          />
+        </ModalDialog>
       ) : null}
 
       <section className="panel span-2">
@@ -4029,6 +4171,7 @@ function ContactForm({
   organization,
   title = "New contact",
   onCreateContact,
+  onCreated,
 }: {
   createdByUserId?: string;
   defaultType?: Contact["type"];
@@ -4039,6 +4182,7 @@ function ContactForm({
   organization: Organization | null;
   title?: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreated?: () => void;
 }) {
   const [type, setType] = useState<Contact["type"]>(defaultType);
   const [firstName, setFirstName] = useState("");
@@ -4087,6 +4231,7 @@ function ContactForm({
       setPhone("");
       setBarnName("");
       setMembershipNumbers({});
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -4178,6 +4323,7 @@ function HorseForm({
   onCreateHorse,
   onCreateHorseHealthDocument,
   onVerifyGvlCogginsDocument,
+  onCreated,
 }: {
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -4188,6 +4334,7 @@ function HorseForm({
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onCreated?: (horse: Horse) => void;
 }) {
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
@@ -4301,6 +4448,7 @@ function HorseForm({
       setVaccineCertificateFile(null);
       setVaccineAdministeredOn("");
       setExternalReferenceNumbers({});
+      onCreated?.(horse);
     } finally {
       setBusy(false);
     }
@@ -6290,6 +6438,10 @@ function EntryForm({
   shows,
   onCreateContact,
   onCreateEntry,
+  onCreateHorse,
+  onCreateHorseHealthDocument,
+  onVerifyGvlCogginsDocument,
+  onCreated,
 }: {
   classes: ClassRecord[];
   contacts: Contact[];
@@ -6305,7 +6457,13 @@ function EntryForm({
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
+  onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
+  onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onCreated?: () => void;
 }) {
+  const [creatingHorse, setCreatingHorse] = useState(false);
+  const [createdHorse, setCreatedHorse] = useState<Horse | null>(null);
   const [showId, setShowId] = useState("");
   const [horseId, setHorseId] = useState("");
   const [divisionId, setDivisionId] = useState("");
@@ -6315,7 +6473,14 @@ function EntryForm({
   const selectedShowId = showId || shows[0]?.id || "";
   const availableDivisions = selectedShowId ? divisions.filter((division) => division.show_id === selectedShowId) : divisions;
   const selectedShow = findById(shows, selectedShowId) ?? null;
-  const selectedHorse = findById(horses, horseId) ?? null;
+  const visibleHorses = useMemo(() => {
+    if (!createdHorse || horses.some((horse) => horse.id === createdHorse.id)) {
+      return horses;
+    }
+
+    return [createdHorse, ...horses];
+  }, [createdHorse, horses]);
+  const selectedHorse = findById(visibleHorses, horseId) ?? null;
   const selectedDivision = findById(availableDivisions, divisionId) ?? null;
   const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
@@ -6368,6 +6533,7 @@ function EntryForm({
       });
       setRiderContactId("");
       setPayerContactId("");
+      onCreated?.();
     } finally {
       setBusy(false);
     }
@@ -6392,29 +6558,54 @@ function EntryForm({
             ))}
           </select>
         </label>
-        <label>
-          Horse
-          <SearchSelect
-            disabled={!horses.length}
-            items={horses.map((horse) => {
-              const validity = getHorseHealthValidity({
-                documents: horseHealthDocuments,
-                horseId: horse.id,
-                organization,
-                referenceDate: selectedShow?.start_date ?? null,
-              });
+        <div className="inline-picker-field">
+          <span className="contact-picker-label">Horse</span>
+          <div className="contact-picker-row">
+            <SearchSelect
+              disabled={!visibleHorses.length}
+              items={visibleHorses.map((horse) => {
+                const validity = getHorseHealthValidity({
+                  documents: horseHealthDocuments,
+                  horseId: horse.id,
+                  organization,
+                  referenceDate: selectedShow?.start_date ?? null,
+                });
 
-              return {
-                id: horse.id,
-                label: horse.name,
-                detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
-              };
-            })}
-            placeholder="Search horse"
-            value={selectedHorse?.id ?? ""}
-            onChange={setHorseId}
-          />
-        </label>
+                return {
+                  id: horse.id,
+                  label: horse.name,
+                  detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
+                };
+              })}
+              placeholder="Search horse"
+              value={selectedHorse?.id ?? ""}
+              onChange={setHorseId}
+            />
+            <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
+              + Cheval
+            </button>
+          </div>
+        </div>
+        {creatingHorse ? (
+          <ModalDialog className="horse-form-modal" description="Le cheval sera selectionne dans l'inscription apres sa creation." eyebrow="Inscriptions" title="Ajouter un cheval" onClose={() => setCreatingHorse(false)}>
+            <HorseForm
+              contacts={contacts}
+              contactRoles={contactRoles}
+              createdByUserId={profileId}
+              externalOrganizations={externalOrganizations}
+              organization={organization}
+              onCreateContact={onCreateContact}
+              onCreateHorse={onCreateHorse}
+              onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+              onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+              onCreated={(horse) => {
+                setCreatedHorse(horse);
+                setHorseId(horse.id);
+                setCreatingHorse(false);
+              }}
+            />
+          </ModalDialog>
+        ) : null}
         <InlineHealthMessage
           value={
             selectedHealthValidity
