@@ -13,6 +13,7 @@ import {
   createClass,
   createClassTemplate,
   createClassTemplateDivision,
+  createBackNumberRange,
   createContact,
   createDivision,
   createEntry,
@@ -22,17 +23,26 @@ import {
   createShow,
   createStallBooking,
   createStallOption,
+  deleteClass,
+  deleteClassTemplate,
+  deleteClassTemplateDivision,
+  deleteBackNumber,
   deleteEntry,
   deleteContact,
+  deleteDivision,
   deleteHorse,
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
+  assignBackNumber,
+  assignNextBackNumber,
+  releaseBackNumber,
   reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   updateClass,
   updateClassTemplate,
   updateClassTemplateDivision,
+  updateBackNumberStatus,
   updateContact,
   updateDivision,
   updateEntry,
@@ -174,6 +184,39 @@ export default function App() {
       t={t}
       onChangeOrganization={setSelectedOrganizationId}
       onLocaleChange={handleLocaleChange}
+      onCreateBackNumberRange={async (input) => {
+        const created = await createBackNumberRange(input);
+        setNotice({
+          tone: "success",
+          message: created.length ? `${created.length} dossard${created.length === 1 ? "" : "s"} ajoute${created.length === 1 ? "" : "s"}.` : "Aucun nouveau dossard a ajouter dans cette plage.",
+        });
+        await refreshContext();
+      }}
+      onAssignBackNumber={async (input) => {
+        const assignment = await assignBackNumber(input);
+        setNotice({ tone: "success", message: `Dossard ${assignment.number} assigne.` });
+        await refreshContext();
+      }}
+      onAssignNextBackNumber={async (input) => {
+        const assignment = await assignNextBackNumber(input);
+        setNotice({ tone: "success", message: `Dossard ${assignment.number} assigne.` });
+        await refreshContext();
+      }}
+      onReleaseBackNumber={async (id) => {
+        const assignment = await releaseBackNumber(id);
+        setNotice({ tone: "success", message: `Dossard ${assignment.number} libere.` });
+        await refreshContext();
+      }}
+      onUpdateBackNumberStatus={async (id, status) => {
+        const backNumber = await updateBackNumberStatus(id, status);
+        setNotice({ tone: "success", message: `Dossard ${backNumber.number} mis a jour.` });
+        await refreshContext();
+      }}
+      onDeleteBackNumber={async (id) => {
+        await deleteBackNumber(id);
+        setNotice({ tone: "success", message: "Dossard supprime." });
+        await refreshContext();
+      }}
       onCreateOrganization={async (input) => {
         if (!context?.profile) {
           return;
@@ -252,45 +295,65 @@ export default function App() {
         setNotice({ tone: "success", message: "Horse and related test data deleted." });
         await refreshContext();
       }}
-      onCreateClass={async (input) => {
-        const classRecord = await createClass(input);
-        setNotice({ tone: "success", message: "Class created." });
-        await refreshContext();
-        return classRecord;
-      }}
-      onCreateClassTemplate={async (input) => {
-        await createClassTemplate(input);
-        setNotice({ tone: "success", message: "Class preset created." });
-        await refreshContext();
-      }}
-      onUpdateClassTemplate={async (id, input) => {
-        await updateClassTemplate(id, input);
-        setNotice({ tone: "success", message: "Class preset updated." });
-        await refreshContext();
-      }}
-      onCreateClassTemplateDivision={async (input) => {
-        await createClassTemplateDivision(input);
-        setNotice({ tone: "success", message: "Preset division created." });
-        await refreshContext();
-      }}
-      onUpdateClassTemplateDivision={async (id, input) => {
-        await updateClassTemplateDivision(id, input);
-        setNotice({ tone: "success", message: "Preset division updated." });
-        await refreshContext();
-      }}
-      onUpdateClass={async (id, input) => {
-        await updateClass(id, input);
-        setNotice({ tone: "success", message: "Class updated." });
-        await refreshContext();
-      }}
-      onCreateDivision={async (input) => {
-        await createDivision(input);
-        setNotice({ tone: "success", message: "Division created." });
-        await refreshContext();
-      }}
-      onUpdateDivision={async (id, input) => {
-        await updateDivision(id, input);
-        setNotice({ tone: "success", message: "Division updated." });
+	      onCreateClass={async (input) => {
+	        const classRecord = await createClass(input);
+	        setNotice({ tone: "success", message: "Bloc créé." });
+	        await refreshContext();
+	        return classRecord;
+	      }}
+	      onCreateClassTemplate={async (input) => {
+	        await createClassTemplate(input);
+	        setNotice({ tone: "success", message: "Bloc preset créé." });
+	        await refreshContext();
+	      }}
+	      onDeleteClassTemplate={async (id) => {
+	        await deleteClassTemplate(id);
+	        setNotice({ tone: "success", message: "Bloc preset supprimé." });
+	        await refreshContext();
+	      }}
+	      onUpdateClassTemplate={async (id, input) => {
+	        await updateClassTemplate(id, input);
+	        setNotice({ tone: "success", message: "Bloc preset mis à jour." });
+	        await refreshContext();
+	      }}
+	      onCreateClassTemplateDivision={async (input) => {
+	        await createClassTemplateDivision(input);
+	        setNotice({ tone: "success", message: "Classe de bloc preset créée." });
+	        await refreshContext();
+	      }}
+	      onDeleteClassTemplateDivision={async (id) => {
+	        await deleteClassTemplateDivision(id);
+	        setNotice({ tone: "success", message: "Classe de bloc preset supprimée." });
+	        await refreshContext();
+	      }}
+	      onUpdateClassTemplateDivision={async (id, input) => {
+	        await updateClassTemplateDivision(id, input);
+	        setNotice({ tone: "success", message: "Classe de bloc preset mise à jour." });
+	        await refreshContext();
+	      }}
+	      onDeleteClass={async (id) => {
+	        await deleteClass(id);
+	        setNotice({ tone: "success", message: "Bloc supprimé." });
+	        await refreshContext();
+	      }}
+	      onUpdateClass={async (id, input) => {
+	        await updateClass(id, input);
+	        setNotice({ tone: "success", message: "Bloc mis à jour." });
+	        await refreshContext();
+	      }}
+	      onCreateDivision={async (input) => {
+	        await createDivision(input);
+	        setNotice({ tone: "success", message: "Classe créée." });
+	        await refreshContext();
+	      }}
+	      onDeleteDivision={async (id) => {
+	        await deleteDivision(id);
+	        setNotice({ tone: "success", message: "Classe supprimée." });
+	        await refreshContext();
+	      }}
+	      onUpdateDivision={async (id, input) => {
+	        await updateDivision(id, input);
+	        setNotice({ tone: "success", message: "Classe mise à jour." });
         await refreshContext();
       }}
       onCreateEntry={async (input) => {

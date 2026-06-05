@@ -247,6 +247,23 @@ export type HorseContact = {
 };
 
 export type BackNumberPolicy = "horse" | "horse_rider_team" | "entry" | "custom";
+export type BackNumberAssignmentMode = "horse" | "horse_rider_team";
+export type BackNumberStatus = "available" | "assigned" | "reserved" | "lost" | "retired";
+
+export type OrganizationBackNumber = {
+  id: string;
+  organization_id: string;
+  number: number;
+  status: BackNumberStatus;
+  assignment_mode: BackNumberAssignmentMode;
+  assigned_horse_id: string | null;
+  assigned_rider_contact_id: string | null;
+  assigned_at: string | null;
+  created_by_user_id: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type SanctioningBody = {
   code: string;
@@ -740,6 +757,7 @@ export type EntryInput = {
   owner_contact_id: string;
   rider_contact_id?: string;
   payer_contact_id: string;
+  entry_number?: number | null;
   base_fee?: number;
   is_late?: boolean;
   late_fee_percent?: number;
@@ -752,6 +770,7 @@ export type EntryUpdateInput = {
   owner_contact_id?: string;
   rider_contact_id?: string | null;
   payer_contact_id?: string;
+  entry_number?: number | null;
   status?: Entry["status"];
   base_fee?: number | null;
   total_fees?: number | null;

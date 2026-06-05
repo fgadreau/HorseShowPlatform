@@ -12,12 +12,12 @@ npm run test:draw
 
 Ce qui est valide:
 
-- 45 runs dans une grosse classe.
+- 45 runs dans un gros bloc.
 - 3 late entries placees au debut avec des draws negatifs.
 - Les draws reguliers commencent a 1 et restent sequentiels.
 - Les entries cancelled/scratched ne deviennent pas des runs.
-- Aucun cheval n'est inscrit deux fois dans la meme classe.
-- Aucun cavalier n'a plus de trois inscriptions dans une division.
+- Aucun cheval n'est inscrit deux fois dans le meme bloc.
+- Aucun cavalier n'a plus de trois inscriptions dans une classe.
 - Dans le cas faisable, le meme cavalier a au moins 8 chevaux entre ses passages.
 - Un cas court volontairement impossible garde toutes les inscriptions et expose l'ecart compresse.
 
@@ -26,9 +26,10 @@ Ce qui est valide:
 Le seed local cree un show complet visible dans l'app:
 
 - Show: `Draw Test Mega Classic`
-- Classe `Draw Test 1100 Open`: 45 inscriptions actives, dont 3 late.
-- Classe `Draw Test Mixed Non Pro`: 32 inscriptions actives, dont 2 late.
-- Classe `Draw Test Short Edge`: 7 inscriptions actives, cas volontairement trop court pour garantir 8 chevaux entre toutes les repetitions.
+- Bloc `Draw Test 1100 Open`: 45 inscriptions actives, dont 3 late.
+- Bloc `Draw Test Mixed Non Pro`: 32 inscriptions actives, dont 2 late.
+- Bloc `Draw Test Short Edge`: 7 inscriptions actives, cas volontairement trop court pour garantir 8 chevaux entre toutes les repetitions.
+- Quelques inscriptions n'ont volontairement pas de numero de dossard pour valider l'affichage `A assigner`.
 
 Commande:
 
@@ -43,7 +44,7 @@ Le seed suppose que les migrations sont appliquees et que `supabase/seed.sql` a 
 1. Se connecter avec `phase1.org-a-secretary@example.test`.
 2. Aller dans `Scoring`.
 3. Selectionner `Draw Test Mega Classic`.
-4. Cliquer `Sortir ordre` sur les classes de test.
+4. Cliquer `Sortir ordre` sur les blocs de test.
 5. Verifier que les late entries apparaissent en draws negatifs au debut, puis les draws reguliers commencent a 1.
 
 La publication automatique n'est pas attendue: le cutoff rend l'action possible, mais le gestionnaire sort l'ordre manuellement.

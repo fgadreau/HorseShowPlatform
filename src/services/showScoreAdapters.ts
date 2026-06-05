@@ -69,6 +69,7 @@ export type ShowScoreRun = {
   rider: string;
   horse: string;
   owner: string;
+  divisionNames: string[];
   isLate: boolean;
   drawGroup: "late" | "regular";
 };
@@ -233,6 +234,7 @@ function toShowScoreRun(
     rider: formatContactName(rider),
     horse: horse.name,
     owner: formatContactName(owner),
+    divisionNames: [divisionDisplayName(division)],
     isLate: entry.is_late,
     drawGroup: entry.is_late ? "late" : "regular",
   };
@@ -256,6 +258,10 @@ function formatContactName(contact: Contact | undefined) {
   }
 
   return [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim();
+}
+
+function divisionDisplayName(division: Division) {
+  return [division.code, division.name].filter(Boolean).join(" - ");
 }
 
 function formatLocation(show: Show) {

@@ -36,6 +36,7 @@ import type {
   Invoice,
   InvoiceLineItem,
   Organization,
+  OrganizationBackNumber,
   OrganizationExternalMembershipRequirement,
   OrganizationInput,
   OrganizationMember,
@@ -75,6 +76,7 @@ export type AppContext = {
   horses: Horse[];
   horseOrganizationLinks: HorseOrganizationLink[];
   horseContacts: HorseContact[];
+  organizationBackNumbers: OrganizationBackNumber[];
   classes: ClassRecord[];
   classTemplates: ClassTemplate[];
   classTemplateDivisions: ClassTemplateDivision[];
@@ -172,6 +174,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     horsesResult,
     horseOrganizationLinksResult,
     horseContactsResult,
+    organizationBackNumbersResult,
     classesResult,
     classTemplatesResult,
     classTemplateDivisionsResult,
@@ -198,6 +201,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
     client.from("horse_organization_links").select("*").order("created_at", { ascending: false }).returns<HorseOrganizationLink[]>(),
     client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
+    client.from("organization_back_numbers").select("*").order("number", { ascending: true }).returns<OrganizationBackNumber[]>(),
     client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
     client.from("class_templates").select("*").order("sort_order", { ascending: true }).returns<ClassTemplate[]>(),
     client.from("class_template_divisions").select("*").order("sort_order", { ascending: true }).returns<ClassTemplateDivision[]>(),
@@ -319,6 +323,16 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw horseContactsResult.error;
   }
 
+  const organizationBackNumbers = organizationBackNumbersResult.error
+    ? isMissingSchemaError(organizationBackNumbersResult.error, "organization_back_numbers")
+      ? []
+      : null
+    : organizationBackNumbersResult.data ?? [];
+
+  if (!organizationBackNumbers) {
+    throw organizationBackNumbersResult.error;
+  }
+
   if (classesResult.error) {
     throw classesResult.error;
   }
@@ -395,6 +409,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     horses: horsesResult.data ?? [],
     horseOrganizationLinks,
     horseContacts: horseContactsResult.data ?? [],
+    organizationBackNumbers,
     classes: classesResult.data ?? [],
     classTemplates,
     classTemplateDivisions,
@@ -1480,6 +1495,15 @@ export async function updateClassTemplate(id: string, input: ClassTemplateUpdate
   return data;
 }
 
+export async function deleteClassTemplate(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("class_templates").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createClassTemplateDivision(input: ClassTemplateDivisionInput) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -1528,6 +1552,15 @@ export async function updateClassTemplateDivision(id: string, input: ClassTempla
   }
 
   return data;
+}
+
+export async function deleteClassTemplateDivision(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("class_template_divisions").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function createClass(input: ClassInput) {
@@ -1585,6 +1618,15 @@ export async function updateClass(id: string, input: ClassUpdateInput) {
   return data;
 }
 
+export async function deleteClass(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("classes").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createDivision(input: DivisionInput) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -1635,6 +1677,347 @@ export async function updateDivision(id: string, input: DivisionUpdateInput) {
   return data;
 }
 
+export async function deleteDivision(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("divisions").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function createBackNumberRange(input: {
+  organization_id: string;
+  start_number: number;
+  end_number: number;
+  assignment_mode?: OrganizationBackNumber["assignment_mode"];
+  status?: Exclude<OrganizationBackNumber["status"], "assigned">;
+  notes?: string | null;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const startNumber = Math.min(input.start_number, input.end_number);
+  const endNumber = Math.max(input.start_number, input.end_number);
+
+  if (!Number.isInteger(startNumber) || !Number.isInteger(endNumber) || startNumber < 1) {
+    throw new Error("La plage de dossards doit contenir des numeros entiers positifs.");
+  }
+
+  if (endNumber - startNumber > 999) {
+    throw new Error("La plage est trop grande. Ajoute au maximum 1000 dossards a la fois.");
+  }
+
+  const { data: existing, error: selectError } = await client
+    .from("organization_back_numbers")
+    .select("number")
+    .eq("organization_id", input.organization_id)
+    .gte("number", startNumber)
+    .lte("number", endNumber)
+    .returns<Array<Pick<OrganizationBackNumber, "number">>>();
+
+  if (selectError) {
+    throw selectError;
+  }
+
+  const existingNumbers = new Set((existing ?? []).map((row) => row.number));
+  const rows = Array.from({ length: endNumber - startNumber + 1 }, (_, index) => startNumber + index)
+    .filter((number) => !existingNumbers.has(number))
+    .map((number) => ({
+      organization_id: input.organization_id,
+      number,
+      status: input.status ?? "available",
+      assignment_mode: input.assignment_mode ?? "horse",
+      created_by_user_id: input.created_by_user_id ?? null,
+      notes: input.notes?.trim() || null,
+    }));
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const { data, error } = await client
+    .from("organization_back_numbers")
+    .insert(rows)
+    .select("*")
+    .returns<OrganizationBackNumber[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function assignBackNumber(input: {
+  organization_id: string;
+  number: number;
+  horse_id: string;
+  rider_contact_id?: string | null;
+  assignment_mode: OrganizationBackNumber["assignment_mode"];
+  transfer_existing?: boolean;
+  created_by_user_id?: string | null;
+  notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const number = normalizeBackNumber(input.number);
+  const riderContactId = input.assignment_mode === "horse_rider_team" ? input.rider_contact_id || null : null;
+
+  if (input.assignment_mode === "horse_rider_team" && !riderContactId) {
+    throw new Error("Un dossard par equipe doit avoir un cavalier.");
+  }
+
+  const { data: existing, error: selectError } = await client
+    .from("organization_back_numbers")
+    .select("*")
+    .eq("organization_id", input.organization_id)
+    .eq("number", number)
+    .maybeSingle<OrganizationBackNumber>();
+
+  if (selectError) {
+    throw selectError;
+  }
+
+  const existingTargetMatches =
+    existing?.status === "assigned" &&
+    existing.assigned_horse_id === input.horse_id &&
+    existing.assignment_mode === input.assignment_mode &&
+    (input.assignment_mode === "horse" || existing.assigned_rider_contact_id === riderContactId);
+
+  if (existing && existing.status !== "available" && !existingTargetMatches && !input.transfer_existing) {
+    throw new Error(`Le dossard ${number} est deja ${backNumberStatusErrorLabel(existing.status)}.`);
+  }
+
+  await releaseExistingBackNumberAssignment({
+    organization_id: input.organization_id,
+    assignment_mode: input.assignment_mode,
+    horse_id: input.horse_id,
+    rider_contact_id: riderContactId,
+    except_back_number_id: existing?.id ?? null,
+  });
+
+  const payload = {
+    organization_id: input.organization_id,
+    number,
+    status: "assigned" as const,
+    assignment_mode: input.assignment_mode,
+    assigned_horse_id: input.horse_id,
+    assigned_rider_contact_id: riderContactId,
+    assigned_at: new Date().toISOString(),
+    created_by_user_id: input.created_by_user_id ?? existing?.created_by_user_id ?? null,
+    notes: input.notes?.trim() || existing?.notes || null,
+  };
+
+  const query = existing
+    ? client.from("organization_back_numbers").update(payload).eq("id", existing.id)
+    : client.from("organization_back_numbers").insert(payload);
+  const { data, error } = await query.select("*").single<OrganizationBackNumber>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function assignNextBackNumber(input: {
+  organization_id: string;
+  horse_id: string;
+  rider_contact_id?: string | null;
+  assignment_mode: OrganizationBackNumber["assignment_mode"];
+  created_by_user_id?: string | null;
+  notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_back_numbers")
+    .select("number")
+    .eq("organization_id", input.organization_id)
+    .eq("status", "available")
+    .order("number", { ascending: true })
+    .limit(1)
+    .maybeSingle<Pick<OrganizationBackNumber, "number">>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Aucun dossard disponible dans l'inventaire de cette association.");
+  }
+
+  return assignBackNumber({
+    ...input,
+    number: data.number,
+  });
+}
+
+export async function releaseBackNumber(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_back_numbers")
+    .update({
+      status: "available",
+      assigned_horse_id: null,
+      assigned_rider_contact_id: null,
+      assigned_at: null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single<OrganizationBackNumber>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateBackNumberStatus(id: string, status: Exclude<OrganizationBackNumber["status"], "assigned">) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_back_numbers")
+    .update({
+      status,
+      assigned_horse_id: null,
+      assigned_rider_contact_id: null,
+      assigned_at: null,
+    })
+    .eq("id", id)
+    .select("*")
+    .single<OrganizationBackNumber>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteBackNumber(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("organization_back_numbers").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function releaseExistingBackNumberAssignment(input: {
+  organization_id: string;
+  assignment_mode: OrganizationBackNumber["assignment_mode"];
+  horse_id: string;
+  rider_contact_id: string | null;
+  except_back_number_id?: string | null;
+}) {
+  const client = requireSupabase();
+  let query = client
+    .from("organization_back_numbers")
+    .update({
+      status: "available",
+      assigned_horse_id: null,
+      assigned_rider_contact_id: null,
+      assigned_at: null,
+    })
+    .eq("organization_id", input.organization_id)
+    .eq("status", "assigned")
+    .eq("assignment_mode", input.assignment_mode)
+    .eq("assigned_horse_id", input.horse_id);
+
+  if (input.assignment_mode === "horse_rider_team") {
+    query = query.eq("assigned_rider_contact_id", input.rider_contact_id);
+  }
+
+  if (input.except_back_number_id) {
+    query = query.neq("id", input.except_back_number_id);
+  }
+
+  const { error } = await query;
+
+  if (error) {
+    throw error;
+  }
+}
+
+async function resolveEntryBackNumber(input: EntryInput) {
+  const client = requireSupabase();
+  const { data: division, error: divisionError } = await client
+    .from("divisions")
+    .select("class_id")
+    .eq("id", input.division_id)
+    .single<Pick<Division, "class_id">>();
+
+  if (divisionError) {
+    throw divisionError;
+  }
+
+  const { data: classRecord, error: classError } = await client
+    .from("classes")
+    .select("back_number_policy")
+    .eq("id", division.class_id)
+    .single<Pick<ClassRecord, "back_number_policy">>();
+
+  if (classError) {
+    throw classError;
+  }
+
+  if (classRecord.back_number_policy === "entry" || classRecord.back_number_policy === "custom") {
+    return null;
+  }
+
+  const riderContactId = input.rider_contact_id || input.owner_contact_id;
+  let query = client
+    .from("organization_back_numbers")
+    .select("number")
+    .eq("organization_id", input.organization_id)
+    .eq("status", "assigned")
+    .eq("assignment_mode", classRecord.back_number_policy)
+    .eq("assigned_horse_id", input.horse_id);
+
+  if (classRecord.back_number_policy === "horse_rider_team") {
+    query = query.eq("assigned_rider_contact_id", riderContactId);
+  }
+
+  const { data, error } = await query.limit(1).maybeSingle<Pick<OrganizationBackNumber, "number">>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "organization_back_numbers")) {
+      return null;
+    }
+
+    throw error;
+  }
+
+  return data?.number ?? null;
+}
+
+function normalizeBackNumber(value: number) {
+  if (!Number.isInteger(value) || value < 1) {
+    throw new Error("Le numero de dossard doit etre un entier positif.");
+  }
+
+  return value;
+}
+
+function backNumberStatusErrorLabel(status: OrganizationBackNumber["status"]) {
+  if (status === "assigned") {
+    return "assigne a un autre cheval ou une autre equipe";
+  }
+
+  if (status === "reserved") {
+    return "reserve";
+  }
+
+  if (status === "lost") {
+    return "marque perdu";
+  }
+
+  if (status === "retired") {
+    return "retire";
+  }
+
+  return "indisponible";
+}
+
 async function resolveLateEntryFee(input: EntryInput) {
   const client = requireSupabase();
   const { data: division, error: divisionError } = await client
@@ -1661,7 +2044,7 @@ async function resolveLateEntryFee(input: EntryInput) {
   const isLate = Boolean(classRecord.entries_close_at && Date.now() > new Date(classRecord.entries_close_at).getTime());
 
   if (isLate && !classRecord.late_entries_allowed) {
-    throw new Error("Les inscriptions sont fermées pour cette classe.");
+    throw new Error("Les inscriptions sont fermées pour ce bloc.");
   }
 
   const lateFeePercent = isLate ? classRecord.late_entry_fee_percent ?? 50 : 0;
@@ -1728,7 +2111,7 @@ async function assertEntryProgramLimits(input: {
   }
 
   if ((horseEntryCount ?? 0) > 0) {
-    throw new Error("Un même cheval ne peut être inscrit qu'une fois par classe.");
+    throw new Error("Un même cheval ne peut être inscrit qu'une fois par bloc.");
   }
 
   const riderContactId = input.rider_contact_id ?? input.owner_contact_id;
@@ -1751,7 +2134,7 @@ async function assertEntryProgramLimits(input: {
   const riderEntryCount = (riderEntries ?? []).filter((entry) => (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
 
   if (riderEntryCount >= 3) {
-    throw new Error("Un cavalier ne peut pas être inscrit plus de trois fois dans une même division.");
+    throw new Error("Un cavalier ne peut pas être inscrit plus de trois fois dans une même classe.");
   }
 }
 
@@ -1779,19 +2162,21 @@ export async function createEntry(input: EntryInput) {
     rider_contact_id: input.rider_contact_id ?? null,
   });
   const lateEntry = await resolveLateEntryFee(input);
+  const resolvedEntryNumber = input.entry_number === undefined ? await resolveEntryBackNumber(input) : input.entry_number;
 
   const { data, error } = await client
     .from("entries")
     .insert({
       organization_id: input.organization_id,
-      show_id: input.show_id,
-      horse_id: input.horse_id,
-      division_id: input.division_id,
-      created_by_user_id: input.created_by_user_id,
-      owner_contact_id: input.owner_contact_id,
-      rider_contact_id: input.rider_contact_id || null,
-      payer_contact_id: input.payer_contact_id,
-      base_fee: lateEntry.baseFee,
+	      show_id: input.show_id,
+	      horse_id: input.horse_id,
+	      division_id: input.division_id,
+	      created_by_user_id: input.created_by_user_id,
+	      owner_contact_id: input.owner_contact_id,
+	      rider_contact_id: input.rider_contact_id || null,
+	      payer_contact_id: input.payer_contact_id,
+	      entry_number: resolvedEntryNumber ?? null,
+	      base_fee: lateEntry.baseFee,
       total_fees: lateEntry.baseFee == null ? null : lateEntry.baseFee + lateEntry.lateFeeAmount,
       is_late: lateEntry.isLate,
       late_fee_percent: lateEntry.lateFeePercent,
@@ -2091,7 +2476,7 @@ export async function prepareShowScoreClassSetup(input: {
   const closeDate = input.classRecord.entries_close_at ? new Date(input.classRecord.entries_close_at) : null;
 
   if (closeDate && !Number.isNaN(closeDate.getTime()) && Date.now() < closeDate.getTime()) {
-    throw new Error("Les inscriptions ne sont pas encore fermees pour cette classe.");
+    throw new Error("Les inscriptions ne sont pas encore fermees pour ce bloc.");
   }
 
   const runs = buildShowScoreRunsForClass(input.classRecord.id, input.entries, {

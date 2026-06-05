@@ -24,12 +24,13 @@ function main() {
   assertEqual(
     largeRuns.map((run) => run.entryId).join(","),
     repeatedLargeRuns.map((run) => run.entryId).join(","),
-    "draw should be deterministic for the same class and entries",
+    "draw should be deterministic for the same bloc and entries",
   );
   assertLateRunsStartWithNegativeDraws(largeRuns, 3);
   assertRegularDrawsAreSequential(largeRuns, 42);
   assertNoInactiveEntries(largeRuns, largeFixture.entries);
   assertNoOutsideClassEntries(largeRuns, largeFixture.classRecord.id);
+  assertRunsIncludeDrawSheetFields(largeRuns);
   assertNoHorseDuplicatePerClass(largeFixture);
   assertMaxThreeEntriesPerRiderDivision(largeFixture);
   assertMinimumRiderSpacing(largeRuns, minimumGapWithEightHorsesBetween);
@@ -43,14 +44,14 @@ function main() {
   assertHasCompressedRiderGap(impossibleRuns, minimumGapWithEightHorsesBetween);
 
   console.log("Draw test program OK");
-  console.log(`Large class: ${largeRuns.length} runs, ${countLateRuns(largeRuns)} late, minimum repeated-rider gap ${minimumRepeatedRiderGap(largeRuns)}.`);
+  console.log(`Large bloc: ${largeRuns.length} runs, ${countLateRuns(largeRuns)} late, minimum repeated-rider gap ${minimumRepeatedRiderGap(largeRuns)}.`);
   console.log(`Impossible edge case: ${impossibleRuns.length} runs, minimum repeated-rider gap ${minimumRepeatedRiderGap(impossibleRuns)}.`);
 }
 
 function buildLargeDrawFixture(): DrawFixture {
   const classRecord = makeClass("draw-class-open", "Draw Test 1100 Open");
   const openDivision = makeDivision("draw-division-open", classRecord.id, "1100 Open", "1100");
-  const otherClassDivision = makeDivision("draw-division-other-class", "draw-class-other", "Other Class Division", "9999");
+  const otherClassDivision = makeDivision("draw-division-other-class", "draw-class-other", "Other Bloc Class", "9999");
   const riders = Array.from({ length: 17 }, (_, index) => makeContact(`rider-${index + 1}`, "rider", "Draw Rider", String(index + 1).padStart(2, "0")));
   const owners = Array.from({ length: 50 }, (_, index) => makeContact(`owner-${index + 1}`, "owner", "Draw Owner", String(index + 1).padStart(2, "0")));
   const contacts = [...riders, ...owners];
@@ -213,7 +214,7 @@ function makeEntry(
     rider_contact_id: rider.id,
     payer_contact_id: horse.primary_owner_contact_id,
     status,
-    entry_number: null,
+    entry_number: entryNumberForHorse(horse),
     base_fee: 125,
     total_fees: isLate ? 187.5 : 125,
     is_late: isLate,
@@ -226,7 +227,7 @@ function makeEntry(
 function assertLateRunsStartWithNegativeDraws(runs: ShowScoreRun[], lateCount: number) {
   const lateDraws = runs.slice(0, lateCount).map((run) => run.draw);
 
-  assertEqual(lateDraws.join(","), "-3,-2,-1", "late entries should start the class with negative draw numbers");
+  assertEqual(lateDraws.join(","), "-3,-2,-1", "late entries should start the bloc with negative draw numbers");
   assert(runs.slice(0, lateCount).every((run) => run.isLate && run.drawGroup === "late"), "late runs should be first and marked as late");
   assert(runs.slice(lateCount).every((run) => !run.isLate && run.drawGroup === "regular"), "regular runs should follow late runs");
 }
@@ -245,7 +246,13 @@ function assertNoInactiveEntries(runs: ShowScoreRun[], entries: Entry[]) {
 }
 
 function assertNoOutsideClassEntries(runs: ShowScoreRun[], classId: string) {
-  assert(runs.every((run) => run.classId === classId), "runs should only include entries from the requested class");
+  assert(runs.every((run) => run.classId === classId), "runs should only include entries from the requested bloc");
+}
+
+function assertRunsIncludeDrawSheetFields(runs: ShowScoreRun[]) {
+  assert(runs.every((run) => run.backNumber), "runs should include back numbers when entries have assigned dossards");
+  assert(runs.every((run) => run.owner), "runs should include owner display names");
+  assert(runs.every((run) => run.divisionNames.some((name) => name.includes("Open"))), "runs should include entered class names");
 }
 
 function assertNoHorseDuplicatePerClass(fixture: DrawFixture) {
@@ -253,7 +260,12 @@ function assertNoHorseDuplicatePerClass(fixture: DrawFixture) {
   const activeEntries = fixture.entries.filter((entry) => classDivisionIds.has(entry.division_id) && entry.status !== "cancelled" && entry.status !== "scratched" && entry.status !== "scratched_pending_refund");
   const horseIds = activeEntries.map((entry) => entry.horse_id);
 
-  assertEqual(new Set(horseIds).size, horseIds.length, "a horse should only appear once per class");
+  assertEqual(new Set(horseIds).size, horseIds.length, "a horse should only appear once per bloc");
+}
+
+function entryNumberForHorse(horse: Horse) {
+  const match = horse.id.match(/\d+/);
+  return match ? 100 + Number(match[0]) : null;
 }
 
 function assertMaxThreeEntriesPerRiderDivision(fixture: DrawFixture) {
@@ -266,7 +278,7 @@ function assertMaxThreeEntriesPerRiderDivision(fixture: DrawFixture) {
   }
 
   for (const [key, count] of counts) {
-    assert(count <= 3, `rider/division ${key} has more than three entries`);
+    assert(count <= 3, `rider/class ${key} has more than three entries`);
   }
 }
 

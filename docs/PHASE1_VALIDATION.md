@@ -13,7 +13,7 @@ Phase 1 locks down the Supabase foundation before the MVP workflows grow:
 ## Files Added
 
 - `supabase/migrations/0004_phase1_rls_hardening.sql`
-  - adds tenant-consistency triggers for show roles, show days, classes, divisions, horses, entries, stalls, invoices and payments
+  - adds tenant-consistency triggers for show roles, show days, legacy classes/divisions (product blocs/classes), horses, entries, stalls, invoices and payments
   - adds helper functions for horse entry/stall/payment permissions
   - tightens self-service RLS policies for horses, horse contacts, entries and stall bookings
   - tightens client-side audit event writes

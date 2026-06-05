@@ -27,9 +27,12 @@ import { associationNavigation, associationViewKeys, personalNavigation } from "
 import { MyStallsView, StallsView } from "./StallsViews";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
 import {
+  assignBackNumber,
+  assignNextBackNumber,
   createClass,
   createClassTemplate,
   createClassTemplateDivision,
+  createBackNumberRange,
   createContact,
   createDivision,
   createEntry,
@@ -39,17 +42,24 @@ import {
   createShow,
   createStallBooking,
   createStallOption,
+  deleteClass,
+  deleteClassTemplate,
+  deleteClassTemplateDivision,
+  deleteBackNumber,
   deleteEntry,
   deleteContact,
+  deleteDivision,
   deleteHorse,
   deleteStallBooking,
   getHorseHealthDocumentFileUrl,
+  releaseBackNumber,
   reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   slugify,
   updateClass,
   updateClassTemplate,
   updateClassTemplateDivision,
+  updateBackNumberStatus,
   updateContact,
   updateDivision,
   updateEntry,
@@ -80,6 +90,7 @@ import type {
   Invoice,
   InvoiceLineItem,
   Organization,
+  OrganizationBackNumber,
   OrganizationExternalMembershipRequirement,
   PayoutScheduleType,
   SanctioningBody,
@@ -99,6 +110,12 @@ export function Dashboard({
   selectedOrganizationId,
   t,
   onChangeOrganization,
+  onCreateBackNumberRange,
+  onAssignBackNumber,
+  onAssignNextBackNumber,
+  onReleaseBackNumber,
+  onUpdateBackNumberStatus,
+  onDeleteBackNumber,
   onCreateClass,
   onCreateClassTemplate,
   onCreateClassTemplateDivision,
@@ -111,8 +128,12 @@ export function Dashboard({
   onCreateShow,
   onCreateStallBooking,
   onCreateStallOption,
-  onDeleteEntry,
+  onDeleteClass,
+  onDeleteClassTemplate,
+  onDeleteClassTemplateDivision,
   onDeleteContact,
+  onDeleteDivision,
+  onDeleteEntry,
   onDeleteHorse,
   onDeleteStallBooking,
   onLocaleChange,
@@ -143,6 +164,12 @@ export function Dashboard({
   selectedOrganizationId: string;
   t: Translation;
   onChangeOrganization: (organizationId: string) => void;
+  onCreateBackNumberRange: (input: Parameters<typeof createBackNumberRange>[0]) => Promise<void>;
+  onAssignBackNumber: (input: Parameters<typeof assignBackNumber>[0]) => Promise<void>;
+  onAssignNextBackNumber: (input: Parameters<typeof assignNextBackNumber>[0]) => Promise<void>;
+  onReleaseBackNumber: (id: Parameters<typeof releaseBackNumber>[0]) => Promise<void>;
+  onUpdateBackNumberStatus: (id: string, status: Parameters<typeof updateBackNumberStatus>[1]) => Promise<void>;
+  onDeleteBackNumber: (id: Parameters<typeof deleteBackNumber>[0]) => Promise<void>;
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
@@ -155,8 +182,12 @@ export function Dashboard({
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
-  onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
+  onDeleteClass: (id: Parameters<typeof deleteClass>[0]) => Promise<void>;
+  onDeleteClassTemplate: (id: Parameters<typeof deleteClassTemplate>[0]) => Promise<void>;
+  onDeleteClassTemplateDivision: (id: Parameters<typeof deleteClassTemplateDivision>[0]) => Promise<void>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
+  onDeleteDivision: (id: Parameters<typeof deleteDivision>[0]) => Promise<void>;
+  onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
@@ -194,6 +225,7 @@ export function Dashboard({
   const horseHealthDocuments = context?.horseHealthDocuments ?? [];
   const horses = context?.horses ?? [];
   const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
+  const organizationBackNumbers = context?.organizationBackNumbers ?? [];
   const classes = context?.classes ?? [];
   const classTemplates = context?.classTemplates ?? [];
   const classTemplateDivisions = context?.classTemplateDivisions ?? [];
@@ -256,6 +288,9 @@ export function Dashboard({
   const selectedOrganizationHorseContacts = selectedOrganization
     ? context?.horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(horseContact.horse_id)) ?? []
     : [];
+  const selectedOrganizationBackNumbers = selectedOrganization
+    ? organizationBackNumbers.filter((backNumber) => backNumber.organization_id === selectedOrganization.id)
+    : [];
   const selectedOrganizationClasses = selectedOrganization
     ? classes.filter((classRecord) => classRecord.organization_id === selectedOrganization.id)
     : [];
@@ -289,6 +324,11 @@ export function Dashboard({
   );
   const personalHorses = selectedOrganizationHorses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
+  const personalBackNumbers = selectedOrganizationBackNumbers.filter(
+    (backNumber) =>
+      (backNumber.assigned_horse_id ? personalHorseIds.has(backNumber.assigned_horse_id) : false) ||
+      (backNumber.assigned_rider_contact_id ? personalContactIds.has(backNumber.assigned_rider_contact_id) : false),
+  );
   const personalHorseHealthDocuments = selectedOrganizationHorseHealthDocuments.filter((document) => personalHorseIds.has(document.horse_id));
   const personalEntries = selectedOrganizationEntries.filter(
     (entry) =>
@@ -308,6 +348,24 @@ export function Dashboard({
   const personalInvoiceLineItems = selectedOrganizationInvoiceLineItems.filter((item) => personalInvoiceIds.has(item.invoice_id));
   const openShows = selectedOrganizationShows.filter((show) => show.status === "open").length;
   const unpaidBalance = selectedOrganizationInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const selectedOrganizationNotifications = buildNotificationItems({
+    backNumbers: selectedOrganizationBackNumbers,
+    classes: selectedOrganizationClasses,
+    contactExternalMemberships,
+    contacts: selectedOrganizationContacts,
+    divisions: selectedOrganizationDivisions,
+    entries: selectedOrganizationEntries,
+    externalOrganizations,
+    horseHealthDocuments: selectedOrganizationHorseHealthDocuments,
+    horses: selectedOrganizationHorses,
+    invoices: selectedOrganizationInvoices,
+    membershipRequirements: selectedOrganizationMembershipRequirements,
+    organization: selectedOrganization,
+    showDays: selectedOrganizationShowDays,
+    showScoreClassSetups: selectedOrganizationShowScoreSetups,
+    shows: selectedOrganizationShows,
+    stallOptions: selectedOrganizationStallOptions,
+  });
 
   return (
     <main className="app-shell">
@@ -377,6 +435,14 @@ export function Dashboard({
             invoices={selectedOrganizationInvoices}
             unpaidBalance={unpaidBalance}
             onCreateOrganization={onCreateOrganization}
+          />
+        ) : null}
+
+        {effectiveView === "notifications" ? (
+          <NotificationsView
+            notifications={selectedOrganizationNotifications}
+            organization={selectedOrganization}
+            onViewChange={onViewChange}
           />
         ) : null}
 
@@ -451,6 +517,7 @@ export function Dashboard({
             classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
             classTemplates={selectedOrganizationClassTemplates}
             divisions={selectedOrganizationDivisions}
+            entries={selectedOrganizationEntries}
             organization={selectedOrganization}
             sanctioningBodies={sanctioningBodies}
             showDays={selectedOrganizationShowDays}
@@ -459,6 +526,10 @@ export function Dashboard({
             onCreateClassTemplate={onCreateClassTemplate}
             onCreateClassTemplateDivision={onCreateClassTemplateDivision}
             onCreateDivision={onCreateDivision}
+            onDeleteClass={onDeleteClass}
+            onDeleteClassTemplate={onDeleteClassTemplate}
+            onDeleteClassTemplateDivision={onDeleteClassTemplateDivision}
+            onDeleteDivision={onDeleteDivision}
             onUpdateClass={onUpdateClass}
             onUpdateClassTemplate={onUpdateClassTemplate}
             onUpdateClassTemplateDivision={onUpdateClassTemplateDivision}
@@ -488,6 +559,23 @@ export function Dashboard({
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+          />
+        ) : null}
+
+        {effectiveView === "back-numbers" ? (
+          <BackNumbersView
+            backNumbers={selectedOrganizationBackNumbers}
+            contacts={selectedOrganizationContacts}
+            horseContacts={selectedOrganizationHorseContacts}
+            horses={selectedOrganizationHorses}
+            organization={selectedOrganization}
+            profileId={context?.profile.id ?? ""}
+            onAssignBackNumber={onAssignBackNumber}
+            onAssignNextBackNumber={onAssignNextBackNumber}
+            onCreateBackNumberRange={onCreateBackNumberRange}
+            onDeleteBackNumber={onDeleteBackNumber}
+            onReleaseBackNumber={onReleaseBackNumber}
+            onUpdateBackNumberStatus={onUpdateBackNumberStatus}
           />
         ) : null}
 
@@ -595,6 +683,15 @@ export function Dashboard({
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+          />
+        ) : null}
+
+        {effectiveView === "my-back-numbers" ? (
+          <MyBackNumbersView
+            backNumbers={personalBackNumbers}
+            contacts={selectedOrganizationContacts}
+            horses={personalHorses}
+            organization={selectedOrganization}
           />
         ) : null}
 
@@ -1331,6 +1428,348 @@ function ReadinessChecklist({ readiness }: { readiness: ReadinessResult | null }
   );
 }
 
+type NotificationCategory = "health" | "entries" | "back-numbers" | "billing" | "memberships" | "program";
+type NotificationPriority = "critical" | "warning" | "info";
+
+type NotificationItem = {
+  actionLabel: string;
+  category: NotificationCategory;
+  detail: string;
+  id: string;
+  meta: string;
+  priority: NotificationPriority;
+  title: string;
+  view: ViewKey;
+};
+
+const notificationCategoryFilters: Array<{ key: "all" | NotificationCategory; label: string }> = [
+  { key: "all", label: "Toutes" },
+  { key: "health", label: "Santé" },
+  { key: "entries", label: "Inscriptions" },
+  { key: "back-numbers", label: "Dossards" },
+  { key: "memberships", label: "Memberships" },
+  { key: "billing", label: "Facturation" },
+  { key: "program", label: "Programme" },
+];
+
+function NotificationsView({
+  notifications,
+  organization,
+  onViewChange,
+}: {
+  notifications: NotificationItem[];
+  organization: Organization | null;
+  onViewChange: (view: ViewKey) => void;
+}) {
+  const [categoryFilter, setCategoryFilter] = useState<"all" | NotificationCategory>("all");
+  const criticalCount = notifications.filter((notification) => notification.priority === "critical").length;
+  const warningCount = notifications.filter((notification) => notification.priority === "warning").length;
+  const infoCount = notifications.filter((notification) => notification.priority === "info").length;
+  const visibleNotifications = categoryFilter === "all" ? notifications : notifications.filter((notification) => notification.category === categoryFilter);
+
+  return (
+    <div className="content-grid">
+      <ViewIntro
+        eyebrow="Operations"
+        title="Centre de notifications"
+        description="Surveille les tâches calculées depuis la santé, les inscriptions, les dossards, les memberships et la facturation."
+        stats={[
+          { label: "Urgentes", value: String(criticalCount) },
+          { label: "À traiter", value: String(warningCount) },
+          { label: "Infos", value: String(infoCount) },
+        ]}
+      />
+
+      <section className="metric-grid span-2">
+        <Metric detail={organization?.name ?? "Association active"} label="Urgentes" value={String(criticalCount)} />
+        <Metric detail="Validation ou correction requise." label="À traiter" value={String(warningCount)} />
+        <Metric detail="Suivi opérationnel." label="Information" value={String(infoCount)} />
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Tâches calculées</h2>
+            <p>{notifications.length ? `${notifications.length} notification${notifications.length === 1 ? "" : "s"} active${notifications.length === 1 ? "" : "s"}.` : "Rien à traiter pour l'instant."}</p>
+          </div>
+        </div>
+
+        <div className="notification-filter-row">
+          {notificationCategoryFilters.map((filter) => {
+            const count = filter.key === "all" ? notifications.length : notifications.filter((notification) => notification.category === filter.key).length;
+
+            return (
+              <button className={categoryFilter === filter.key ? "active" : ""} key={filter.key} type="button" onClick={() => setCategoryFilter(filter.key)}>
+                {filter.label}
+                <span>{count}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="notification-list">
+          {visibleNotifications.map((notification) => (
+            <article className={`notification-card ${notification.priority}`} key={notification.id}>
+              <div className="notification-card-main">
+                <span className={`notification-priority ${notification.priority}`}>{notificationPriorityLabel(notification.priority)}</span>
+                <div>
+                  <strong>{notification.title}</strong>
+                  <p>{notification.detail}</p>
+                  <small>{notification.meta}</small>
+                </div>
+              </div>
+              <button className="text-button" type="button" onClick={() => onViewChange(notification.view)}>
+                {notification.actionLabel}
+              </button>
+            </article>
+          ))}
+          {!visibleNotifications.length ? <EmptyState label={categoryFilter === "all" ? "Aucune notification active." : "Aucune notification dans cette catégorie."} /> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function buildNotificationItems(input: {
+  backNumbers: OrganizationBackNumber[];
+  classes: ClassRecord[];
+  contactExternalMemberships: ContactExternalMembership[];
+  contacts: Contact[];
+  divisions: Division[];
+  entries: Entry[];
+  externalOrganizations: ExternalOrganization[];
+  horseHealthDocuments: HorseHealthDocument[];
+  horses: Horse[];
+  invoices: Invoice[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  organization: Organization | null;
+  showDays: ShowDay[];
+  showScoreClassSetups: ShowScoreClassSetup[];
+  shows: Show[];
+  stallOptions: StallOption[];
+}) {
+  const today = todayDateValue();
+  const referenceShow = referenceShowForNotifications(input.shows, today);
+  const activeEntries = input.entries.filter((entry) => !inactiveProgramEntryStatuses.has(entry.status));
+  const notifications: NotificationItem[] = [];
+
+  for (const document of input.horseHealthDocuments.filter((candidate) => candidate.status === "pending_review")) {
+    const horse = findById(input.horses, document.horse_id);
+    notifications.push({
+      actionLabel: "Valider",
+      category: "health",
+      detail: `${healthDocumentTypeLabel(document.document_type)} pour ${horseLabel(horse)}.`,
+      id: `health-document-${document.id}`,
+      meta: `${healthVerificationSourceLabel(document.verification_source)} - ${healthDocumentDateLabel(document)}`,
+      priority: "warning",
+      title: "Document santé à valider",
+      view: "health",
+    });
+  }
+
+  for (const alert of buildHealthAlerts({
+    documents: input.horseHealthDocuments,
+    horses: input.horses,
+    organization: input.organization,
+    referenceShow,
+    today,
+  }).filter((alert) => alert.label !== "En revision")) {
+    notifications.push({
+      actionLabel: "Voir santé",
+      category: "health",
+      detail: `${alert.horse.name}: ${alert.detail}`,
+      id: `health-alert-${alert.key}`,
+      meta: alert.referenceLabel,
+      priority: alert.tone === "error" ? "critical" : "warning",
+      title: `Santé cheval - ${alert.label}`,
+      view: "health",
+    });
+  }
+
+  for (const entry of activeEntries.filter((candidate) => !candidate.entry_number)) {
+    const division = findById(input.divisions, entry.division_id);
+    const classRecord = division ? findById(input.classes, division.class_id) : null;
+    const show = findById(input.shows, entry.show_id);
+    const cutoffPassed = classRecord ? classEntriesAreClosed(classRecord) : false;
+
+    notifications.push({
+      actionLabel: "Assigner",
+      category: "back-numbers",
+      detail: `${horseLabel(findById(input.horses, entry.horse_id))} - ${divisionLabel(division, input.classes)}.`,
+      id: `entry-back-number-${entry.id}`,
+      meta: [show?.name, cutoffPassed ? "cutoff passé" : "avant cutoff"].filter(Boolean).join(" - "),
+      priority: cutoffPassed ? "critical" : "warning",
+      title: "Dossard manquant",
+      view: "back-numbers",
+    });
+  }
+
+  buildMembershipNotificationItems({
+    activeEntries,
+    contactExternalMemberships: input.contactExternalMemberships,
+    contacts: input.contacts,
+    divisions: input.divisions,
+    externalOrganizations: input.externalOrganizations,
+    horseHealthDocuments: input.horseHealthDocuments,
+    horses: input.horses,
+    membershipRequirements: input.membershipRequirements,
+    organization: input.organization,
+    shows: input.shows,
+  }).forEach((notification) => notifications.push(notification));
+
+  for (const invoice of input.invoices.filter((candidate) => !["paid", "void"].includes(candidate.status) && Number(candidate.balance_due ?? 0) > 0)) {
+    const show = findById(input.shows, invoice.show_id);
+    notifications.push({
+      actionLabel: "Voir facture",
+      category: "billing",
+      detail: `${invoice.invoice_number}: ${formatCurrency(invoice.balance_due, input.organization?.currency ?? "CAD")} à recevoir.`,
+      id: `invoice-${invoice.id}`,
+      meta: [show?.name, invoice.due_date ? `Échéance ${formatDate(invoice.due_date)}` : null].filter(Boolean).join(" - ") || "Facturation",
+      priority: invoice.status === "overdue" ? "critical" : "warning",
+      title: invoice.status === "overdue" ? "Facture en retard" : "Solde de facture ouvert",
+      view: "billing",
+    });
+  }
+
+  for (const classRecord of input.classes) {
+    const classDivisionIds = new Set(input.divisions.filter((division) => division.class_id === classRecord.id).map((division) => division.id));
+    const classEntries = activeEntries.filter((entry) => classDivisionIds.has(entry.division_id));
+
+    if (!classEntries.length || !classEntriesAreClosed(classRecord) || classRecord.draw_prepared_at) {
+      continue;
+    }
+
+    const missingBackNumberCount = classEntries.filter((entry) => !entry.entry_number).length;
+    notifications.push({
+      actionLabel: "Préparer",
+      category: "entries",
+      detail: `${classRecord.name}: ${classEntries.length} inscription${classEntries.length === 1 ? "" : "s"} prête${classEntries.length === 1 ? "" : "s"} pour l'ordre de passage.`,
+      id: `draw-ready-${classRecord.id}`,
+      meta: missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} manquant${missingBackNumberCount === 1 ? "" : "s"}` : "Cutoff passé",
+      priority: missingBackNumberCount ? "critical" : "warning",
+      title: "Ordre de passage à sortir",
+      view: missingBackNumberCount ? "back-numbers" : "scoring",
+    });
+  }
+
+  for (const show of input.shows.filter((candidate) => candidate.status !== "archived" && candidate.end_date >= today)) {
+    const incompleteItems = buildShowReadinessItems(show, {
+      classes: input.classes,
+      divisions: input.divisions,
+      entries: input.entries,
+      invoices: input.invoices,
+      showDays: input.showDays,
+      showScoreClassSetups: input.showScoreClassSetups,
+      stallOptions: input.stallOptions,
+    }).filter((item) => !item.done && item.key !== "publication" && item.key !== "billing");
+
+    if (!incompleteItems.length) {
+      continue;
+    }
+
+    notifications.push({
+      actionLabel: "Ouvrir show",
+      category: "program",
+      detail: `${show.name}: ${incompleteItems.map((item) => item.title.toLowerCase()).join(", ")} à compléter.`,
+      id: `show-readiness-${show.id}`,
+      meta: `${formatDate(show.start_date)} - ${formatDate(show.end_date)}`,
+      priority: show.status === "open" ? "warning" : "info",
+      title: "Show incomplet",
+      view: "shows",
+    });
+  }
+
+  return notifications.sort((first, second) => notificationPriorityRank(first.priority) - notificationPriorityRank(second.priority) || first.category.localeCompare(second.category) || first.title.localeCompare(second.title));
+}
+
+function buildMembershipNotificationItems(input: {
+  activeEntries: Entry[];
+  contactExternalMemberships: ContactExternalMembership[];
+  contacts: Contact[];
+  divisions: Division[];
+  externalOrganizations: ExternalOrganization[];
+  horseHealthDocuments: HorseHealthDocument[];
+  horses: Horse[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  organization: Organization | null;
+  shows: Show[];
+}) {
+  const grouped = new Map<string, NotificationItem & { count: number }>();
+
+  for (const entry of input.activeEntries) {
+    const horse = findById(input.horses, entry.horse_id);
+    const readiness = buildEntryShowReadiness({
+      contactExternalMemberships: input.contactExternalMemberships,
+      documents: input.horseHealthDocuments,
+      externalOrganizations: input.externalOrganizations,
+      horse,
+      membershipRequirements: input.membershipRequirements,
+      organization: input.organization,
+      ownerContact: findById(input.contacts, entry.owner_contact_id),
+      payerContact: findById(input.contacts, entry.payer_contact_id),
+      riderContact: findById(input.contacts, entry.rider_contact_id),
+      show: findById(input.shows, entry.show_id),
+      skipHorseHealth: true,
+    });
+
+    for (const item of readiness.blockingItems.filter((candidate) => candidate.key.startsWith("contact."))) {
+      const existing = grouped.get(item.key);
+
+      if (existing) {
+        existing.count += 1;
+        existing.meta = `${existing.count} inscription${existing.count === 1 ? "" : "s"} touchée${existing.count === 1 ? "" : "s"}`;
+        continue;
+      }
+
+      grouped.set(item.key, {
+        actionLabel: "Corriger contact",
+        category: "memberships",
+        count: 1,
+        detail: item.detail,
+        id: `membership-${item.key}`,
+        meta: "1 inscription touchée",
+        priority: item.status === "pending" ? "warning" : "critical",
+        title: item.title,
+        view: "people",
+      });
+    }
+  }
+
+  return Array.from(grouped.values()).map(({ count: _count, ...notification }) => notification);
+}
+
+function referenceShowForNotifications(shows: Show[], today: string) {
+  const upcomingShows = [...shows]
+    .filter((show) => show.status !== "archived" && show.end_date >= today)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date));
+
+  return upcomingShows[0] ?? [...shows].filter((show) => show.status !== "archived").sort((a, b) => a.start_date.localeCompare(b.start_date))[0] ?? null;
+}
+
+function notificationPriorityLabel(priority: NotificationPriority) {
+  if (priority === "critical") {
+    return "Urgent";
+  }
+
+  if (priority === "warning") {
+    return "À traiter";
+  }
+
+  return "Info";
+}
+
+function notificationPriorityRank(priority: NotificationPriority) {
+  if (priority === "critical") {
+    return 0;
+  }
+
+  if (priority === "warning") {
+    return 1;
+  }
+
+  return 2;
+}
+
 function OverviewView({
   openShows,
   organization,
@@ -1401,7 +1840,7 @@ function OverviewView({
       title: "People and horses",
     },
     {
-      detail: showEntries.length ? `${activeEntries} active or pending entries for the next show.` : "Classes are ready, but no entries have been started.",
+	      detail: showEntries.length ? `${activeEntries} active or pending entries for the next show.` : "Blocs are ready, but no entries have been started.",
       icon: showEntries.length ? CheckCircle2 : ClipboardList,
       state: showEntries.length ? "Moving" : "Waiting",
       title: "Entry pipeline",
@@ -1436,7 +1875,7 @@ function OverviewView({
             </span>
             <span>
               <Trophy size={16} />
-              {showClasses.length} class{showClasses.length === 1 ? "" : "es"}
+	              {showClasses.length} bloc{showClasses.length === 1 ? "" : "s"}
             </span>
           </div>
         </div>
@@ -1513,7 +1952,7 @@ function OverviewView({
           </div>
         </div>
         <div className="progress-stack">
-          <ProgressMeter label="Entries vs classes" value={entryProgress} detail={`${showEntries.length} entries across ${showClasses.length} classes`} />
+	          <ProgressMeter label="Entries vs blocs" value={entryProgress} detail={`${showEntries.length} entries across ${showClasses.length} blocs`} />
           <ProgressMeter label="Reservation inventory used" value={stallUsage} detail={`${stallsBooked} booked, ${stallsAvailable} available`} />
           <ProgressMeter label="Invoices paid" value={invoiceProgress} detail={`${paidInvoices} paid of ${showInvoices.length} invoices`} />
         </div>
@@ -2228,6 +2667,7 @@ function ClassesView({
   classTemplateDivisions,
   classTemplates,
   divisions,
+  entries,
   organization,
   sanctioningBodies,
   showDays,
@@ -2236,6 +2676,10 @@ function ClassesView({
   onCreateClassTemplate,
   onCreateClassTemplateDivision,
   onCreateDivision,
+  onDeleteClass,
+  onDeleteClassTemplate,
+  onDeleteClassTemplateDivision,
+  onDeleteDivision,
   onUpdateClass,
   onUpdateClassTemplate,
   onUpdateClassTemplateDivision,
@@ -2245,6 +2689,7 @@ function ClassesView({
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
   divisions: Division[];
+  entries: Entry[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   showDays: ShowDay[];
@@ -2253,6 +2698,10 @@ function ClassesView({
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
+  onDeleteClass: (id: string) => Promise<void>;
+  onDeleteClassTemplate: (id: string) => Promise<void>;
+  onDeleteClassTemplateDivision: (id: string) => Promise<void>;
+  onDeleteDivision: (id: string) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
   onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
@@ -2267,52 +2716,117 @@ function ClassesView({
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingDivision, setEditingDivision] = useState<Division | null>(null);
 
+  async function handleDeleteClassTemplate(template: ClassTemplate) {
+    const templateClassCount = classTemplateDivisions.filter((division) => division.class_template_id === template.id).length;
+    const message = templateClassCount
+      ? `Supprimer le bloc preset "${template.name}" et ses ${templateClassCount} classe${templateClassCount === 1 ? "" : "s"} de bloc preset?`
+      : `Supprimer le bloc preset "${template.name}"?`;
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    await onDeleteClassTemplate(template.id);
+    if (editingClassTemplate?.id === template.id) {
+      setEditingClassTemplate(null);
+    }
+  }
+
+  async function handleDeleteClassTemplateDivision(division: ClassTemplateDivision) {
+    if (!window.confirm(`Supprimer la classe de bloc preset "${division.name}"? Les classes deja creees depuis ce bloc preset resteront dans leurs blocs.`)) {
+      return;
+    }
+
+    await onDeleteClassTemplateDivision(division.id);
+    if (editingClassTemplateDivision?.id === division.id) {
+      setEditingClassTemplateDivision(null);
+    }
+  }
+
+  async function handleDeleteClass(classRecord: ClassRecord) {
+    const classDivisions = divisions.filter((division) => division.class_id === classRecord.id);
+    const classDivisionIds = new Set(classDivisions.map((division) => division.id));
+    const entryCount = entries.filter((entry) => classDivisionIds.has(entry.division_id)).length;
+    const message = [
+      `Supprimer le bloc "${classRecord.name}"?`,
+      classDivisions.length ? `${classDivisions.length} classe${classDivisions.length === 1 ? " sera supprimee" : "s seront supprimees"}.` : null,
+      entryCount ? `${entryCount} inscription${entryCount === 1 ? " liee sera aussi supprimee" : "s liees seront aussi supprimees"}.` : null,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    await onDeleteClass(classRecord.id);
+    if (editingClass?.id === classRecord.id) {
+      setEditingClass(null);
+    }
+  }
+
+  async function handleDeleteDivision(division: Division) {
+    const entryCount = entries.filter((entry) => entry.division_id === division.id).length;
+    const message = entryCount
+      ? `Supprimer la classe "${division.name}"? ${entryCount} inscription${entryCount === 1 ? " liee sera aussi supprimee" : "s liees seront aussi supprimees"}.`
+      : `Supprimer la classe "${division.name}"?`;
+
+    if (!window.confirm(message)) {
+      return;
+    }
+
+    await onDeleteDivision(division.id);
+    if (editingDivision?.id === division.id) {
+      setEditingDivision(null);
+    }
+  }
+
   return (
     <div className="content-grid">
-      <ViewIntro
-        eyebrow="Programme"
-        title="Classes et divisions"
-        description="Structure le programme sportif: classes, divisions, frais et statuts d'ouverture."
-        stats={[
-          { label: "Classes", value: String(classes.length) },
-          { label: "Divisions", value: String(divisions.length) },
-          { label: "Presets", value: String(classTemplates.length) },
-        ]}
+	      <ViewIntro
+	        eyebrow="Programme"
+	        title="Blocs et classes"
+	        description="Structure le programme sportif: slates techniques, blocs, classes, frais et statuts d'ouverture."
+	        stats={[
+	          { label: "Blocs", value: String(classes.length) },
+	          { label: "Classes", value: String(divisions.length) },
+	          { label: "Presets", value: String(classTemplates.length) },
+	        ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
-          <div>
-            <h2>Ajouter au programme</h2>
-            <p>Crée une classe depuis un preset, une classe custom ou une division sans quitter le programme.</p>
-          </div>
+	          <div>
+	            <h2>Ajouter au programme</h2>
+	            <p>Crée un bloc depuis un bloc preset, un bloc custom ou une classe sans quitter le programme.</p>
+	          </div>
           <div className="row-actions">
             <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingClassTemplate(true)}>
               <Plus size={18} />
-              Preset
+              Bloc preset
             </button>
-            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
-              <Plus size={18} />
-              Division preset
-            </button>
-            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
-              <Plus size={18} />
-              Classe preset
-            </button>
-            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
-              <Plus size={18} />
-              Classe libre
-            </button>
-            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
-              <Plus size={18} />
-              Division
-            </button>
+	            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
+	              <Plus size={18} />
+	              Classe de bloc preset
+	            </button>
+	            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
+	              <Plus size={18} />
+	              Bloc preset
+	            </button>
+	            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
+	              <Plus size={18} />
+	              Bloc libre
+	            </button>
+	            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
+	              <Plus size={18} />
+	              Classe
+	            </button>
           </div>
         </div>
       </section>
 
       {creatingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description="Catalogue réutilisable de l'association." eyebrow="Programme" title="Nouveau preset" onClose={() => setCreatingClassTemplate(false)}>
+        <ModalDialog className="class-program-modal" description="Catalogue réutilisable de l'association." eyebrow="Programme" title="Nouveau bloc preset" onClose={() => setCreatingClassTemplate(false)}>
           <ClassTemplateForm
             organization={organization}
             sanctioningBodies={sanctioningBodies}
@@ -2323,7 +2837,7 @@ function ClassesView({
       ) : null}
 
       {creatingClassTemplateDivision ? (
-        <ModalDialog className="class-program-modal" description="Division régulière rattachée à un preset." eyebrow="Programme" title="Division de preset" onClose={() => setCreatingClassTemplateDivision(false)}>
+	        <ModalDialog className="class-program-modal" description="Classe régulière rattachée à un bloc preset." eyebrow="Programme" title="Classe de bloc preset" onClose={() => setCreatingClassTemplateDivision(false)}>
           <ClassTemplateDivisionForm
             classTemplates={classTemplates}
             organization={organization}
@@ -2335,7 +2849,7 @@ function ClassesView({
       ) : null}
 
       {creatingClass ? (
-        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? "Choisis un preset ou passe en classe libre au besoin." : "Crée une classe hors catalogue."} eyebrow="Programme" title={creatingClass === "preset" ? "Nouvelle classe depuis preset" : "Nouvelle classe libre"} onClose={() => setCreatingClass(null)}>
+	        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? "Choisis un bloc preset ou passe en bloc libre au besoin." : "Crée un bloc hors catalogue."} eyebrow="Programme" title={creatingClass === "preset" ? "Nouveau bloc depuis bloc preset" : "Nouveau bloc libre"} onClose={() => setCreatingClass(null)}>
           <ClassForm
             classes={classes}
             classTemplateDivisions={classTemplateDivisions}
@@ -2353,13 +2867,13 @@ function ClassesView({
       ) : null}
 
       {creatingDivision ? (
-        <ModalDialog className="class-program-modal" description="Ajoute une option d'inscription sous une classe existante." eyebrow="Programme" title="Nouvelle division" onClose={() => setCreatingDivision(false)}>
+	        <ModalDialog className="class-program-modal" description="Ajoute une classe d'inscription sous un bloc existant." eyebrow="Programme" title="Nouvelle classe" onClose={() => setCreatingDivision(false)}>
           <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(false)} />
         </ModalDialog>
       ) : null}
 
       {editingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow="Programme" title="Modifier le preset" onClose={() => setEditingClassTemplate(null)}>
+        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow="Programme" title="Modifier le bloc preset" onClose={() => setEditingClassTemplate(null)}>
           <ClassTemplateEditForm
             classTemplate={editingClassTemplate}
             sanctioningBodies={sanctioningBodies}
@@ -2373,7 +2887,7 @@ function ClassesView({
       ) : null}
 
       {editingClassTemplateDivision ? (
-        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow="Programme" title="Modifier la division de preset" onClose={() => setEditingClassTemplateDivision(null)}>
+	        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow="Programme" title="Modifier la classe de bloc preset" onClose={() => setEditingClassTemplateDivision(null)}>
           <ClassTemplateDivisionEditForm
             classTemplates={classTemplates}
             classTemplateDivision={editingClassTemplateDivision}
@@ -2388,7 +2902,7 @@ function ClassesView({
       ) : null}
 
       {editingClass ? (
-        <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow="Programme" title="Modifier la classe" onClose={() => setEditingClass(null)}>
+	        <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow="Programme" title="Modifier le bloc" onClose={() => setEditingClass(null)}>
           <ClassEditForm
             classes={classes}
             classRecord={editingClass}
@@ -2403,7 +2917,7 @@ function ClassesView({
       ) : null}
 
       {editingDivision ? (
-        <ModalDialog className="class-program-modal" description={editingDivision.name} eyebrow="Programme" title="Modifier la division" onClose={() => setEditingDivision(null)}>
+	        <ModalDialog className="class-program-modal" description={editingDivision.name} eyebrow="Programme" title="Modifier la classe" onClose={() => setEditingDivision(null)}>
           <DivisionEditForm
             classes={classes}
             division={editingDivision}
@@ -2419,17 +2933,17 @@ function ClassesView({
 
       <section className="panel span-2">
         <div className="panel-header">
-          <div>
-            <h2>Presets réguliers</h2>
-            <p>{classTemplates.length ? `${classTemplates.length} preset${classTemplates.length === 1 ? "" : "s"} configuré${classTemplates.length === 1 ? "" : "s"}.` : "Le catalogue de classes récurrentes de l'association."}</p>
+	          <div>
+	            <h2>Blocs presets</h2>
+	            <p>{classTemplates.length ? `${classTemplates.length} bloc${classTemplates.length === 1 ? "" : "s"} preset configuré${classTemplates.length === 1 ? "" : "s"}.` : "Le catalogue de blocs récurrents de l'association."}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Preset</span>
+            <span>Bloc preset</span>
             <span>Sanctions</span>
             <span>Dossard</span>
-            <span>Divisions</span>
+	            <span>Classes</span>
           </div>
           {classTemplates.map((template) => {
             const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
@@ -2444,10 +2958,13 @@ function ClassesView({
                       template.default_pattern ? `Pattern ${template.default_pattern}` : null,
                     ]
                       .filter(Boolean)
-                      .join(" - ") || template.code || "Preset"}
+                      .join(" - ") || template.code || "Bloc preset"}
                   </span>
                   <button className="text-button inline-action" type="button" onClick={() => setEditingClassTemplate(template)}>
                     Edit
+                  </button>
+                  <button className="text-button danger-text inline-action" type="button" onClick={() => handleDeleteClassTemplate(template)}>
+                    Supprimer
                   </button>
                 </div>
                 <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies)}</span>
@@ -2468,26 +2985,26 @@ function ClassesView({
                             .join(" "),
                         )
                         .join(", ")
-                    : "Aucune division"}
+	                    : "Aucune classe"}
                 </span>
               </div>
             );
           })}
-          {!classTemplates.length ? <EmptyState label="Crée le premier preset régulier de cette association." /> : null}
+          {!classTemplates.length ? <EmptyState label="Crée le premier bloc preset de cette association." /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Divisions de presets</h2>
-            <p>{classTemplateDivisions.length ? `${classTemplateDivisions.length} division${classTemplateDivisions.length === 1 ? "" : "s"} de preset.` : "Ajoute les divisions régulières sous un preset."}</p>
+	            <h2>Classes de blocs presets</h2>
+	            <p>{classTemplateDivisions.length ? `${classTemplateDivisions.length} classe${classTemplateDivisions.length === 1 ? "" : "s"} de bloc preset.` : "Ajoute les classes régulières sous un bloc preset."}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Division</span>
-            <span>Preset</span>
+	            <span>Classe</span>
+            <span>Bloc preset</span>
             <span>Frais</span>
             <span>Action</span>
           </div>
@@ -2504,7 +3021,7 @@ function ClassesView({
                     .join(" - ")}
                 </span>
               </div>
-              <span>{findById(classTemplates, division.class_template_id)?.name ?? "Preset inconnu"}</span>
+              <span>{findById(classTemplates, division.class_template_id)?.name ?? "Bloc preset inconnu"}</span>
               <span>
                 {[
 	                  division.default_entry_fee == null ? null : `Insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
@@ -2514,25 +3031,30 @@ function ClassesView({
 	                  .filter(Boolean)
                   .join(" - ") || "Aucun frais"}
               </span>
-              <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplateDivision(division)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
-          {!classTemplateDivisions.length ? <EmptyState label="Aucune division de preset pour l'instant." /> : null}
+	          {!classTemplateDivisions.length ? <EmptyState label="Aucune classe de bloc preset pour l'instant." /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Class book</h2>
-            <p>{classes.length ? `${classes.length} class${classes.length === 1 ? "" : "es"} configured.` : "Classes and divisions define what people can enter."}</p>
+	            <h2>Blocs</h2>
+	            <p>{classes.length ? `${classes.length} bloc${classes.length === 1 ? "" : "s"} configuré${classes.length === 1 ? "" : "s"}.` : "Les blocs regroupent les classes qui partagent un ordre de passage."}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Class</span>
+	            <span>Bloc</span>
             <span>Show</span>
             <span>Programme</span>
             <span>Action</span>
@@ -2544,7 +3066,7 @@ function ClassesView({
                 <div>
                   <strong>{classRecord.name}</strong>
                   <span className="muted-line">
-                    {classDivisions.length ? `${classDivisions.length} division${classDivisions.length === 1 ? "" : "s"}` : "No divisions"}
+	                    {classDivisions.length ? `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}` : "Aucune classe"}
                     {classRecord.entry_fee == null ? "" : ` - ${formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}`}
                   </span>
                 </div>
@@ -2568,27 +3090,32 @@ function ClassesView({
                       .join(" - ")}
                   </span>
                 </div>
-                <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
-                  Edit
-                </button>
+                <div className="row-actions">
+                  <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
+                    Edit
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
+                    Supprimer
+                  </button>
+                </div>
               </div>
             );
           })}
-          {!classes.length ? <EmptyState label="Create the first class for a show." /> : null}
+	          {!classes.length ? <EmptyState label="Crée le premier bloc du show." /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Divisions</h2>
-            <p>{divisions.length ? `${divisions.length} division${divisions.length === 1 ? "" : "s"} configured.` : "Divisions sit under classes."}</p>
+	            <h2>Classes</h2>
+	            <p>{divisions.length ? `${divisions.length} classe${divisions.length === 1 ? "" : "s"} configurée${divisions.length === 1 ? "" : "s"}.` : "Les classes sont rattachées aux blocs."}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Division</span>
-            <span>Class</span>
+	            <span>Classe</span>
+	            <span>Bloc</span>
             <span>Sanctions</span>
             <span>Action</span>
           </div>
@@ -2608,14 +3135,19 @@ function ClassesView({
                     .join(" - ")}
                 </span>
               </div>
-              <span>{findById(classes, division.class_id)?.name ?? "Unknown class"}</span>
+	              <span>{findById(classes, division.class_id)?.name ?? "Bloc inconnu"}</span>
               <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies)}</span>
-              <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
-                Edit
-              </button>
+              <div className="row-actions">
+                <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
+                  Edit
+                </button>
+                <button className="text-button danger-text" type="button" onClick={() => handleDeleteDivision(division)}>
+                  Supprimer
+                </button>
+              </div>
             </div>
           ))}
-          {!divisions.length ? <EmptyState label="Create a division after creating a class." /> : null}
+	          {!divisions.length ? <EmptyState label="Crée une classe après avoir créé un bloc." /> : null}
         </div>
       </section>
     </div>
@@ -2768,13 +3300,16 @@ function EntriesView({
         <div className="table">
           <div className="table-row table-head">
             <span>Horse</span>
-            <span>Division</span>
+	            <span>Classe</span>
             <span>Owner</span>
             <span>Action</span>
           </div>
           {entries.map((entry) => (
             <div className="table-row" key={entry.id}>
-              <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
+              <div>
+                <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
+                <span className="muted-line">Dossard: {entry.entry_number ?? "a assigner"}</span>
+              </div>
               <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
               <div className="row-actions">
@@ -2787,7 +3322,7 @@ function EntriesView({
               </div>
             </div>
           ))}
-          {!entries.length ? <EmptyState label="Create a draft entry after adding contacts, horses, classes and divisions." /> : null}
+	          {!entries.length ? <EmptyState label="Crée un brouillon après avoir ajouté les contacts, chevaux, blocs et classes." /> : null}
         </div>
       </section>
     </div>
@@ -2851,15 +3386,15 @@ function ScoringView({
       <ViewIntro
         eyebrow="Scoring"
         title="Preparation ShowScore"
-        description="Prepare les classes, runs, chevaux et cavaliers qui doivent etre envoyes vers le scoring."
+	        description="Prepare les blocs, runs, chevaux et cavaliers qui doivent etre envoyes vers le scoring."
         stats={[
-          { label: "Classes", value: String(visibleClasses.length) },
+	          { label: "Blocs", value: String(visibleClasses.length) },
           { label: "Runs", value: String(totalRuns) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric label="Scoring classes" value={String(visibleClasses.length)} />
+	        <Metric label="Scoring blocs" value={String(visibleClasses.length)} />
         <Metric label="Runs from entries" value={String(totalRuns)} />
         <Metric label="Prepared setups" value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
       </section>
@@ -2868,7 +3403,7 @@ function ScoringView({
         <div className="panel-header">
           <div>
             <h2>ShowScore bridge</h2>
-            <p>Prepare scoring setup runs from HSP entries while keeping associations, classes, horses and riders aligned.</p>
+	            <p>Prepare scoring setup runs from HSP entries while keeping associations, blocs, horses and riders aligned.</p>
           </div>
           <select value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
             {shows.map((show) => (
@@ -2880,7 +3415,7 @@ function ScoringView({
         </div>
         <div className="table scoring-table">
           <div className="table-row table-head">
-            <span>Class</span>
+	            <span>Bloc</span>
             <span>Schedule</span>
             <span>Runs</span>
             <span>ShowScore</span>
@@ -2906,6 +3441,7 @@ function ScoringView({
             const lateRunCount = drawRuns.filter((run) => run.isLate || run.drawGroup === "late").length;
             const regularRunCount = Math.max(0, drawRuns.length - lateRunCount);
             const lastRegularDraw = drawRuns.reduce((highest, run) => (run.draw > 0 ? Math.max(highest, run.draw) : highest), 0);
+            const missingBackNumberCount = drawRuns.filter((run) => !run.backNumber.trim()).length;
 
             return (
               <div className="scoring-class-group" key={classRecord.id}>
@@ -2940,36 +3476,38 @@ function ScoringView({
                       <span>{lateRunCount} late</span>
                       <span>{regularRunCount} reguliers</span>
                       <span>Dernier draw {lastRegularDraw || "-"}</span>
+                      <span>{missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} a assigner` : "Dossards complets"}</span>
                     </div>
                     <div className="draw-list">
                       <div className="draw-list-row draw-list-head">
                         <span>Draw</span>
-                        <span>Cheval</span>
+                        <span>Dossard</span>
                         <span>Cavalier</span>
-                        <span>Division</span>
+                        <span>Cheval</span>
+                        <span>Propriétaire</span>
+	                        <span>Classes inscrites</span>
                         <span>Statut</span>
                       </div>
-                      {drawRuns.map((run) => {
-                        const division = findById(divisions, run.divisionId);
-                        return (
-                          <div className="draw-list-row" key={`${run.entryId}-${run.draw}`}>
-                            <strong>{formatDrawNumber(run.draw)}</strong>
-                            <span>{run.horse || "-"}</span>
-                            <span>{run.rider || "-"}</span>
-                            <span>{division ? divisionLabel(division, classes) : run.divisionId || "-"}</span>
-                            <span className={`badge ${run.isLate || run.drawGroup === "late" ? "warning" : "info"}`}>
-                              {run.isLate || run.drawGroup === "late" ? "Late" : "Regular"}
-                            </span>
-                          </div>
-                        );
-                      })}
+                      {drawRuns.map((run) => (
+                        <div className="draw-list-row" key={`${run.entryId}-${run.draw}`}>
+                          <strong>{formatDrawNumber(run.draw)}</strong>
+                          <span className={run.backNumber.trim() ? undefined : "draw-missing-value"}>{formatBackNumber(run.backNumber)}</span>
+                          <span>{run.rider || "-"}</span>
+                          <span>{run.horse || "-"}</span>
+                          <span>{run.owner || "-"}</span>
+                          <span>{formatRunDivisionNames(run, divisions, classes)}</span>
+                          <span className={`badge ${run.isLate || run.drawGroup === "late" ? "warning" : "info"}`}>
+                            {run.isLate || run.drawGroup === "late" ? "Late" : "Regular"}
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
                 ) : null}
               </div>
             );
           })}
-          {!visibleClasses.length ? <EmptyState label="Create classes before preparing ShowScore setups." /> : null}
+	          {!visibleClasses.length ? <EmptyState label="Crée des blocs avant de préparer ShowScore." /> : null}
         </div>
       </section>
     </div>
@@ -2987,6 +3525,7 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
       }
 
       const drawGroup = stringFromRecord(run, "drawGroup") === "late" || booleanFromRecord(run, "isLate") ? "late" : "regular";
+      const divisionNames = stringArrayFromRecord(run, "divisionNames");
 
       return {
         id: stringFromRecord(run, "id") || entryId,
@@ -3003,6 +3542,7 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
         rider: stringFromRecord(run, "rider"),
         horse: stringFromRecord(run, "horse"),
         owner: stringFromRecord(run, "owner"),
+        divisionNames: divisionNames.length ? divisionNames : stringArrayFromRecord(run, "division_names"),
         isLate: drawGroup === "late",
         drawGroup,
       };
@@ -3014,6 +3554,23 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
 function stringFromRecord(record: Record<string, unknown>, key: string) {
   const value = record[key];
   return typeof value === "string" ? value : "";
+}
+
+function stringArrayFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === "string" && Boolean(item.trim()));
+  }
+
+  if (typeof value === "string" && value.trim()) {
+    return value
+      .split(/[,;]+/)
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  return [];
 }
 
 function numberFromRecord(record: Record<string, unknown>, key: string) {
@@ -3038,6 +3595,480 @@ function booleanFromRecord(record: Record<string, unknown>, key: string) {
 
 function formatDrawNumber(draw: number) {
   return draw < 0 ? String(draw) : `#${draw}`;
+}
+
+function formatBackNumber(backNumber: string) {
+  return backNumber.trim() || "A assigner";
+}
+
+function formatRunDivisionNames(run: ShowScoreRun, divisions: Division[], classes: ClassRecord[]) {
+  if (run.divisionNames.length) {
+    return run.divisionNames.join(", ");
+  }
+
+  const division = findById(divisions, run.divisionId);
+  return division ? divisionLabel(division, classes) : run.divisionId || "-";
+}
+
+function entryNumberValue(value: string) {
+  if (!value.trim()) {
+    return null;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : null;
+}
+
+function BackNumbersView({
+  backNumbers,
+  contacts,
+  horseContacts,
+  horses,
+  organization,
+  profileId,
+  onAssignBackNumber,
+  onAssignNextBackNumber,
+  onCreateBackNumberRange,
+  onDeleteBackNumber,
+  onReleaseBackNumber,
+  onUpdateBackNumberStatus,
+}: {
+  backNumbers: OrganizationBackNumber[];
+  contacts: Contact[];
+  horseContacts: HorseContact[];
+  horses: Horse[];
+  organization: Organization | null;
+  profileId: string;
+  onAssignBackNumber: (input: Parameters<typeof assignBackNumber>[0]) => Promise<void>;
+  onAssignNextBackNumber: (input: Parameters<typeof assignNextBackNumber>[0]) => Promise<void>;
+  onCreateBackNumberRange: (input: Parameters<typeof createBackNumberRange>[0]) => Promise<void>;
+  onDeleteBackNumber: (id: Parameters<typeof deleteBackNumber>[0]) => Promise<void>;
+  onReleaseBackNumber: (id: Parameters<typeof releaseBackNumber>[0]) => Promise<void>;
+  onUpdateBackNumberStatus: (id: string, status: Parameters<typeof updateBackNumberStatus>[1]) => Promise<void>;
+}) {
+  const [startNumber, setStartNumber] = useState("");
+  const [endNumber, setEndNumber] = useState("");
+  const [rangeNotes, setRangeNotes] = useState("");
+  const [rangeMode, setRangeMode] = useState<OrganizationBackNumber["assignment_mode"]>("horse");
+  const [assignmentMode, setAssignmentMode] = useState<OrganizationBackNumber["assignment_mode"]>("horse");
+  const [horseId, setHorseId] = useState("");
+  const [riderContactId, setRiderContactId] = useState("");
+  const [number, setNumber] = useState("");
+  const [forceTransfer, setForceTransfer] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const sortedBackNumbers = [...backNumbers].sort((first, second) => first.number - second.number);
+  const selectedHorse = findById(horses, horseId) ?? null;
+  const selectedRiderId = assignmentMode === "horse_rider_team" ? riderContactId : null;
+  const selectedAssignment = selectedHorse
+    ? backNumbers.find(
+        (backNumber) =>
+          backNumber.status === "assigned" &&
+          backNumber.assignment_mode === assignmentMode &&
+          backNumber.assigned_horse_id === selectedHorse.id &&
+          (assignmentMode === "horse" || backNumber.assigned_rider_contact_id === selectedRiderId),
+      )
+    : null;
+  const availableCount = backNumbers.filter((backNumber) => backNumber.status === "available").length;
+  const assignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned").length;
+  const teamAssignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned" && backNumber.assignment_mode === "horse_rider_team").length;
+
+  async function handleCreateRange(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization) {
+      return;
+    }
+
+    const start = entryNumberValue(startNumber);
+    const end = entryNumberValue(endNumber || startNumber);
+
+    if (!start || !end) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onCreateBackNumberRange({
+        organization_id: organization.id,
+        start_number: start,
+        end_number: end,
+        assignment_mode: rangeMode,
+        notes: rangeNotes,
+        created_by_user_id: profileId || null,
+      });
+      setStartNumber("");
+      setEndNumber("");
+      setRangeNotes("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAssign(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization || !selectedHorse) {
+      return;
+    }
+
+    const parsedNumber = entryNumberValue(number);
+
+    if (!parsedNumber) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onAssignBackNumber({
+        organization_id: organization.id,
+        number: parsedNumber,
+        horse_id: selectedHorse.id,
+        rider_contact_id: assignmentMode === "horse_rider_team" ? riderContactId : null,
+        assignment_mode: assignmentMode,
+        transfer_existing: forceTransfer,
+        created_by_user_id: profileId || null,
+      });
+      setNumber("");
+      setForceTransfer(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleAssignNext() {
+    if (!organization || !selectedHorse) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onAssignNextBackNumber({
+        organization_id: organization.id,
+        horse_id: selectedHorse.id,
+        rider_contact_id: assignmentMode === "horse_rider_team" ? riderContactId : null,
+        assignment_mode: assignmentMode,
+        created_by_user_id: profileId || null,
+      });
+      setForceTransfer(false);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleDeleteBackNumber(backNumber: OrganizationBackNumber) {
+    if (!window.confirm(`Supprimer le dossard ${backNumber.number}?`)) {
+      return;
+    }
+
+    await onDeleteBackNumber(backNumber.id);
+  }
+
+  const canAssign = Boolean(
+    organization &&
+      selectedHorse &&
+      (assignmentMode === "horse" || riderContactId) &&
+      entryNumberValue(number),
+  );
+  const canAssignNext = Boolean(organization && selectedHorse && availableCount > 0 && (assignmentMode === "horse" || riderContactId));
+
+  return (
+    <div className="content-grid">
+      <ViewIntro
+        eyebrow="Secrétariat"
+        title="Dossards"
+        description="Gere le stock de dossards de l'association et assigne les numeros par cheval ou par equipe cheval+cavalier."
+        stats={[
+          { label: "Inventaire", value: String(backNumbers.length) },
+          { label: "Disponibles", value: String(availableCount) },
+          { label: "Assignes", value: String(assignedCount) },
+          { label: "Par equipe", value: String(teamAssignedCount) },
+        ]}
+      />
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Ajouter un inventaire</h2>
+            <p>Ajoute une plage de dossards physiques ou virtuels sans ecraser les numeros existants.</p>
+          </div>
+        </div>
+        <form className="stack" onSubmit={handleCreateRange}>
+          <div className="form-grid">
+            <label>
+              Premier dossard
+              <input min="1" required step="1" type="number" value={startNumber} onChange={(event) => setStartNumber(event.target.value)} />
+            </label>
+            <label>
+              Dernier dossard
+              <input min="1" step="1" type="number" value={endNumber} onChange={(event) => setEndNumber(event.target.value)} />
+              <span className="input-help">Laisse vide pour ajouter un seul numero.</span>
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Mode par defaut
+              <select value={rangeMode} onChange={(event) => setRangeMode(event.target.value as OrganizationBackNumber["assignment_mode"])}>
+                <option value="horse">Cheval</option>
+                <option value="horse_rider_team">Equipe cheval+cavalier</option>
+              </select>
+            </label>
+            <label>
+              Notes
+              <input value={rangeNotes} onChange={(event) => setRangeNotes(event.target.value)} />
+            </label>
+          </div>
+          <button className="primary-button" disabled={busy || !organization} type="submit">
+            <Plus size={18} />
+            Ajouter les dossards
+          </button>
+        </form>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Assigner un dossard</h2>
+            <p>Choisis le mode selon la regle de l'association ou du bloc.</p>
+          </div>
+        </div>
+        <form className="stack" onSubmit={handleAssign}>
+          <label>
+            Mode d'assignation
+            <select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as OrganizationBackNumber["assignment_mode"])}>
+              <option value="horse">Par cheval</option>
+              <option value="horse_rider_team">Par equipe cheval+cavalier</option>
+            </select>
+          </label>
+          <label>
+            Cheval
+            <SearchSelect
+              disabled={!horses.length}
+              items={horses.map((horse) => ({
+                id: horse.id,
+                label: horse.name,
+                detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
+              }))}
+              placeholder="Rechercher un cheval"
+              value={horseId}
+              onChange={setHorseId}
+            />
+          </label>
+          {assignmentMode === "horse_rider_team" ? (
+            <label>
+              Cavalier
+              <SearchSelect
+                disabled={!contacts.length}
+                items={contacts.map((contact) => ({
+                  id: contact.id,
+                  label: contactLabel(contact),
+                  detail: contactBackNumberDetail(contact, selectedHorse, horseContacts),
+                }))}
+                placeholder="Rechercher un cavalier"
+                value={riderContactId}
+                onChange={setRiderContactId}
+              />
+            </label>
+          ) : null}
+          <div className="form-grid">
+            <label>
+              Numero exact
+              <input min="1" step="1" type="number" value={number} onChange={(event) => setNumber(event.target.value)} />
+              <span className="input-help">{selectedAssignment ? `Dossard actuel: ${selectedAssignment.number}.` : "Le numero peut deja etre dans l'inventaire ou etre cree a l'assignation."}</span>
+            </label>
+            <label className="checkbox-card">
+              <input checked={forceTransfer} type="checkbox" onChange={(event) => setForceTransfer(event.target.checked)} />
+              Transferer si le dossard est deja attribue
+            </label>
+          </div>
+          <div className="row-actions">
+            <button className="primary-button" disabled={busy || !canAssign} type="submit">
+              Assigner le numero
+            </button>
+            <button className="ghost-button" disabled={busy || !canAssignNext} type="button" onClick={() => void handleAssignNext()}>
+              Assigner le prochain disponible
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Registre des dossards</h2>
+            <p>{backNumbers.length ? `${backNumbers.length} dossard${backNumbers.length === 1 ? "" : "s"} dans l'association.` : "Ajoute une plage pour commencer."}</p>
+          </div>
+        </div>
+        <div className="table back-number-table">
+          <div className="table-row table-head">
+            <span>Dossard</span>
+            <span>Assignation</span>
+            <span>Statut</span>
+            <span>Action</span>
+          </div>
+          {sortedBackNumbers.map((backNumber) => (
+            <div className="table-row" key={backNumber.id}>
+              <div>
+                <strong>#{backNumber.number}</strong>
+                <span className="muted-line">{backNumberModeLabel(backNumber.assignment_mode)}</span>
+              </div>
+              <div>
+                <strong>{backNumberAssigneeLabel(backNumber, horses, contacts)}</strong>
+                <span className="muted-line">{backNumber.notes || backNumberAssignmentMeta(backNumber)}</span>
+              </div>
+              <div>
+                {backNumber.status === "assigned" ? (
+                  <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status)}</span>
+                ) : (
+                  <select value={backNumber.status} onChange={(event) => void onUpdateBackNumberStatus(backNumber.id, event.target.value as Parameters<typeof updateBackNumberStatus>[1])}>
+                    <option value="available">Disponible</option>
+                    <option value="reserved">Reserve</option>
+                    <option value="lost">Perdu</option>
+                    <option value="retired">Retire</option>
+                  </select>
+                )}
+              </div>
+              <div className="row-actions">
+                {backNumber.status === "assigned" ? (
+                  <button className="text-button" type="button" onClick={() => void onReleaseBackNumber(backNumber.id)}>
+                    Liberer
+                  </button>
+                ) : null}
+                <button className="text-button danger-text" type="button" onClick={() => void handleDeleteBackNumber(backNumber)}>
+                  Supprimer
+                </button>
+              </div>
+            </div>
+          ))}
+          {!backNumbers.length ? <EmptyState label="Aucun dossard dans l'inventaire." /> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MyBackNumbersView({
+  backNumbers,
+  contacts,
+  horses,
+  organization,
+}: {
+  backNumbers: OrganizationBackNumber[];
+  contacts: Contact[];
+  horses: Horse[];
+  organization: Organization | null;
+}) {
+  const sortedBackNumbers = [...backNumbers].sort((first, second) => first.number - second.number);
+
+  return (
+    <div className="content-grid">
+      <ViewIntro
+        eyebrow="Mon espace"
+        title="Mes dossards"
+        description="Consulte les dossards deja lies a tes chevaux ou equipes dans l'association active."
+        stats={[
+          { label: "Association", value: organization?.short_name || organization?.name || "-" },
+          { label: "Dossards", value: String(backNumbers.length) },
+        ]}
+      />
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>Dossards assignes</h2>
+            <p>{backNumbers.length ? "Ces numeros seront repris automatiquement dans les inscriptions admissibles." : "Aucun dossard lie a tes chevaux pour l'instant."}</p>
+          </div>
+        </div>
+        <div className="table back-number-table">
+          <div className="table-row table-head">
+            <span>Dossard</span>
+            <span>Assignation</span>
+            <span>Mode</span>
+            <span>Statut</span>
+          </div>
+          {sortedBackNumbers.map((backNumber) => (
+            <div className="table-row" key={backNumber.id}>
+              <strong>#{backNumber.number}</strong>
+              <span>{backNumberAssigneeLabel(backNumber, horses, contacts)}</span>
+              <span>{backNumberModeLabel(backNumber.assignment_mode)}</span>
+              <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status)}</span>
+            </div>
+          ))}
+          {!backNumbers.length ? <EmptyState label="Le secretariat pourra assigner un dossard lorsque necessaire." /> : null}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function backNumberAssigneeLabel(backNumber: OrganizationBackNumber, horses: Horse[], contacts: Contact[]) {
+  const horse = backNumber.assigned_horse_id ? findById(horses, backNumber.assigned_horse_id) : undefined;
+  const rider = backNumber.assigned_rider_contact_id ? findById(contacts, backNumber.assigned_rider_contact_id) : undefined;
+
+  if (backNumber.status !== "assigned") {
+    return "Non assigne";
+  }
+
+  if (backNumber.assignment_mode === "horse_rider_team") {
+    return `${horseLabel(horse)} + ${contactLabel(rider)}`;
+  }
+
+  return horseLabel(horse);
+}
+
+function backNumberAssignmentMeta(backNumber: OrganizationBackNumber) {
+  if (backNumber.status === "assigned" && backNumber.assigned_at) {
+    return `Assigne le ${formatDate(backNumber.assigned_at.slice(0, 10))}`;
+  }
+
+  return "Inventaire association";
+}
+
+function backNumberModeLabel(mode: OrganizationBackNumber["assignment_mode"]) {
+  return mode === "horse_rider_team" ? "Equipe cheval+cavalier" : "Cheval";
+}
+
+function backNumberStatusLabel(status: OrganizationBackNumber["status"]) {
+  if (status === "available") {
+    return "Disponible";
+  }
+
+  if (status === "assigned") {
+    return "Assigne";
+  }
+
+  if (status === "reserved") {
+    return "Reserve";
+  }
+
+  if (status === "lost") {
+    return "Perdu";
+  }
+
+  return "Retire";
+}
+
+function backNumberStatusBadgeClass(status: OrganizationBackNumber["status"]) {
+  if (status === "available" || status === "assigned") {
+    return "info";
+  }
+
+  if (status === "reserved") {
+    return "warning";
+  }
+
+  return "error";
+}
+
+function contactBackNumberDetail(contact: Contact, selectedHorse: Horse | null, horseContacts: HorseContact[]) {
+  if (!selectedHorse) {
+    return contact.email || contact.type;
+  }
+
+  const horseContact = horseContacts.find((candidate) => candidate.horse_id === selectedHorse.id && candidate.contact_id === contact.id);
+  return horseContact ? `Lie au cheval - ${horseContact.role}` : contact.email || contact.type;
 }
 
 function MyHorsesView({
@@ -3504,7 +4535,7 @@ function MyEntriesView({
         <div className="table">
           <div className="table-row table-head">
             <span>Cheval</span>
-            <span>Division</span>
+	            <span>Classe</span>
             <span>Statut</span>
             <span>Action</span>
           </div>
@@ -4335,21 +5366,21 @@ function buildShowReadinessItems(
       view: "shows",
       actionLabel: "Vérifier",
     },
-    {
-      key: "classes",
-      title: "Classes",
-      detail: showClasses.length ? `${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} au programme.` : "Aucune classe créée.",
-      done: showClasses.length > 0,
-      view: "classes",
-      actionLabel: showClasses.length ? "Ajuster" : "Ajouter",
-    },
-    {
-      key: "divisions",
-      title: "Divisions",
-      detail: showDivisions.length ? `${showDivisions.length} division${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.` : "Aucune division disponible.",
-      done: showDivisions.length > 0,
-      view: "classes",
-      actionLabel: showDivisions.length ? "Ajuster" : "Ajouter",
+	    {
+	      key: "classes",
+	      title: "Blocs",
+	      detail: showClasses.length ? `${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} au programme.` : "Aucun bloc créé.",
+	      done: showClasses.length > 0,
+	      view: "classes",
+	      actionLabel: showClasses.length ? "Ajuster" : "Ajouter",
+	    },
+	    {
+	      key: "divisions",
+	      title: "Classes",
+	      detail: showDivisions.length ? `${showDivisions.length} classe${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.` : "Aucune classe disponible.",
+	      done: showDivisions.length > 0,
+	      view: "classes",
+	      actionLabel: showDivisions.length ? "Ajuster" : "Ajouter",
     },
     {
       key: "stalls",
@@ -4367,10 +5398,10 @@ function buildShowReadinessItems(
       view: "entries",
       actionLabel: "Ouvrir",
     },
-    {
-      key: "scoring",
-      title: "Scoring",
-      detail: showClasses.length ? `${preparedClasses}/${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} préparée${showClasses.length === 1 ? "" : "s"}.` : "Crée des classes avant le scoring.",
+	    {
+	      key: "scoring",
+	      title: "Scoring",
+	      detail: showClasses.length ? `${preparedClasses}/${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} préparé${showClasses.length === 1 ? "" : "s"}.` : "Crée des blocs avant le scoring.",
       done: showClasses.length > 0 && preparedClasses === showClasses.length,
       view: "scoring",
       actionLabel: "Préparer",
@@ -6318,12 +7349,12 @@ function concurrentClassLabel(classRecord: ClassRecord, classes: ClassRecord[]) 
   const concurrentClassId = concurrentClassIdFromRules(classRecord.eligibility_rules);
   const linkedClass = findById(classes, concurrentClassId);
 
-  if (linkedClass) {
-    return `Concurrent avec ${linkedClass.name}`;
-  }
+	  if (linkedClass) {
+	    return `Bloc concurrent avec ${linkedClass.name}`;
+	  }
 
-  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
-  return groupLabel ? `Concurrent: ${groupLabel}` : "";
+	  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
+	  return groupLabel ? `Bloc concurrent: ${groupLabel}` : "";
 }
 
 function classProgramRules(
@@ -6500,7 +7531,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: false,
       message: {
         tone: "error",
-        message: "Ce cheval est deja inscrit dans cette classe.",
+	        message: "Ce cheval est deja inscrit dans ce bloc.",
       },
     };
   }
@@ -6518,7 +7549,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: false,
       message: {
         tone: "error",
-        message: "Ce cavalier a deja trois inscriptions dans cette division.",
+	        message: "Ce cavalier a deja trois inscriptions dans cette classe.",
       },
     };
   }
@@ -6528,7 +7559,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: true,
       message: {
         tone: "info",
-        message: "Ce sera la 3e inscription de ce cavalier dans cette division.",
+	        message: "Ce sera la 3e inscription de ce cavalier dans cette classe.",
       },
     };
   }
@@ -6663,7 +7694,7 @@ function ClassTemplateForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>Nouveau preset</h2>
+          <h2>Nouveau bloc preset</h2>
           <p>Catalogue régulier de l'association.</p>
         </div>
       </div>
@@ -6684,7 +7715,7 @@ function ClassTemplateForm({
         </div>
         <div className="form-grid">
           <label>
-            Bloc horaire
+	            Libellé horaire
             <input disabled={!organization} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -6715,7 +7746,7 @@ function ClassTemplateForm({
         </label>
         <button className="primary-button" disabled={busy || !organization} type="submit">
           <Plus size={18} />
-          Create preset
+          Créer le bloc preset
         </button>
       </form>
     </section>
@@ -6823,24 +7854,34 @@ function ClassTemplateDivisionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>Division de preset</h2>
-          <p>{selectedTemplate ? selectedTemplate.name : "Crée un preset d'abord."}</p>
+	          <h2>Classe de bloc preset</h2>
+	          <p>{selectedTemplate ? selectedTemplate.name : "Crée un bloc preset d'abord."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Preset
+          Bloc preset
           <SearchSelect
             disabled={!organization || !classTemplates.length}
             items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
-            placeholder="Search preset"
+            placeholder="Rechercher un bloc preset"
             value={selectedTemplate?.id ?? ""}
             onChange={setTemplateId}
           />
         </label>
+        <SanctioningFields
+          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
+          disabled={!organization || !classTemplates.length}
+          hideBackNumberPolicy
+	          label="Sanctions de la classe"
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={selectedSanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
+        />
         <div className="form-grid">
           <label>
-            Nom de division
+	            Nom de classe
             <input disabled={!organization || !classTemplates.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
@@ -6881,19 +7922,9 @@ function ClassTemplateDivisionForm({
           onSanctioningFeePercentChange={setSanctioningFeePercent}
           onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
         />
-        <SanctioningFields
-          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
-          disabled={!organization || !classTemplates.length}
-          hideBackNumberPolicy
-          label="Sanctions de la division"
-          sanctioningBodies={sanctioningBodies}
-          sanctioningBodyCodes={selectedSanctioningBodyCodes}
-          onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
-        />
         {divisionIsNrha ? (
           <label>
-            Type de classe NRHA de la division
+	            Type de classe NRHA
             <select disabled={!organization || !classTemplates.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
               <option value="">À préciser</option>
               {nrhaClassTypes.map((type) => (
@@ -6910,7 +7941,7 @@ function ClassTemplateDivisionForm({
         </label>
         <button className="primary-button" disabled={busy || !organization || !classTemplates.length} type="submit">
           <Plus size={18} />
-          Create preset division
+	          Créer la classe de bloc preset
         </button>
       </form>
     </section>
@@ -6973,7 +8004,7 @@ function ClassTemplateEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>Edit preset</h2>
+          <h2>Modifier le bloc preset</h2>
           <p>{classTemplate.name}</p>
         </div>
       </div>
@@ -6994,7 +8025,7 @@ function ClassTemplateEditForm({
         </div>
         <div className="form-grid">
           <label>
-            Bloc horaire
+	            Libellé horaire
             <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -7024,7 +8055,7 @@ function ClassTemplateEditForm({
         </label>
         <label className="check-row">
           <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
-          <span>Preset actif</span>
+          <span>Bloc preset actif</span>
         </label>
         <FormActions busy={busy} onCancel={onCancel} />
       </form>
@@ -7117,23 +8148,32 @@ function ClassTemplateDivisionEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>Edit preset division</h2>
+	          <h2>Modifier la classe de bloc preset</h2>
           <p>{classTemplateDivision.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Preset
+          Bloc preset
           <SearchSelect
             items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
-            placeholder="Search preset"
+            placeholder="Rechercher un bloc preset"
             value={templateId}
             onChange={setTemplateId}
           />
         </label>
+        <SanctioningFields
+          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
+          hideBackNumberPolicy
+	          label="Sanctions de la classe"
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
+        />
         <div className="form-grid">
           <label>
-            Nom de division
+	            Nom de classe
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
@@ -7168,18 +8208,9 @@ function ClassTemplateDivisionEditForm({
           onSanctioningFeePercentChange={setSanctioningFeePercent}
           onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
         />
-        <SanctioningFields
-          backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
-          hideBackNumberPolicy
-          label="Sanctions de la division"
-          sanctioningBodies={sanctioningBodies}
-          sanctioningBodyCodes={sanctioningBodyCodes}
-          onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
-        />
         {divisionIsNrha ? (
           <label>
-            Type de classe NRHA de la division
+	            Type de classe NRHA
             <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
               <option value="">À préciser</option>
               {nrhaClassTypes.map((type) => (
@@ -7369,17 +8400,17 @@ function ClassForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New class</h2>
-          <p>{shows.length ? "Create classes for a show." : "Create a show first."}</p>
+	          <h2>Nouveau bloc</h2>
+	          <p>{shows.length ? "Crée des blocs pour un show." : "Crée un show d'abord."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <div className="segmented-control">
           <button className={creationMode === "preset" ? "active" : ""} disabled={!organization || !activeClassTemplates.length} type="button" onClick={() => handleCreationModeChange("preset")}>
-            Depuis preset
+            Depuis bloc preset
           </button>
           <button className={creationMode === "custom" ? "active" : ""} disabled={!organization} type="button" onClick={() => handleCreationModeChange("custom")}>
-            Classe libre
+	            Bloc libre
           </button>
         </div>
         <div className="form-grid">
@@ -7407,7 +8438,7 @@ function ClassForm({
         </div>
         {creationMode === "preset" ? (
           <label>
-            Preset
+            Bloc preset
             <SearchSelect
               allowEmpty
               disabled={!organization || !activeClassTemplates.length}
@@ -7419,21 +8450,21 @@ function ClassForm({
                   label: template.name,
                   detail: [
                     template.default_pattern ? `Pattern ${template.default_pattern}` : null,
-                    `${templateDivisions.length} division${templateDivisions.length === 1 ? "" : "s"}`,
+	                    `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`,
                     sanctionLabel(template.sanctioning_body_codes, sanctioningBodies),
                   ]
                     .filter(Boolean)
                     .join(" - "),
                 };
               })}
-              placeholder="Search preset"
+              placeholder="Rechercher un bloc preset"
               value={templateId}
               onChange={handleTemplateChange}
             />
           </label>
         ) : null}
         <label>
-          Class name
+	          Nom du bloc
           <input disabled={!organization || !shows.length} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -7442,13 +8473,13 @@ function ClassForm({
             <input disabled={!organization || !shows.length} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Entry fee
+            Frais d'inscription
             <input disabled={!organization || !shows.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Bloc horaire
+	            Libellé horaire
             <input disabled={!organization || !shows.length} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -7475,7 +8506,7 @@ function ClassForm({
             <label>
               Fermeture des inscriptions
               <input disabled={!organization || !shows.length} type="datetime-local" value={effectiveEntriesCloseAt} onChange={(event) => setEntriesCloseAt(event.target.value)} />
-              <span className="input-help">Par défaut: veille de la classe à 18h.</span>
+	              <span className="input-help">Par défaut: veille du bloc à 18h.</span>
             </label>
             <label>
               Pénalité late %
@@ -7489,7 +8520,7 @@ function ClassForm({
           </label>
         </fieldset>
         <label>
-          Court en même temps que
+	          Court en même temps qu'un autre bloc
           <SearchSelect
             allowEmpty
             disabled={!organization || !concurrentClassChoices.length}
@@ -7497,13 +8528,13 @@ function ClassForm({
               id: classRecord.id,
               label: classRecord.name,
               detail: [
-                classRecord.block_label || "Bloc sans nom",
+	                classRecord.block_label || "Libellé horaire absent",
                 classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : null,
               ]
                 .filter(Boolean)
                 .join(" - "),
             }))}
-            placeholder="Rechercher une classe concurrente"
+	            placeholder="Rechercher un bloc concurrent"
             value={concurrentClassId}
             onChange={setConcurrentClassId}
           />
@@ -7514,7 +8545,7 @@ function ClassForm({
         </label>
         <button className="primary-button" disabled={busy || !organization || !shows.length} type="submit">
           <Plus size={18} />
-          {selectedTemplate ? `Create class + ${selectedTemplateDivisions.length} divisions` : "Create class"}
+	          {selectedTemplate ? `Créer bloc + ${selectedTemplateDivisions.length} classes` : "Créer le bloc"}
         </button>
       </form>
     </section>
@@ -7624,24 +8655,34 @@ function DivisionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New division</h2>
-          <p>{selectedShow ? selectedShow.name : "Create a class first."}</p>
+	          <h2>Nouvelle classe</h2>
+	          <p>{selectedShow ? selectedShow.name : "Crée un bloc d'abord."}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Class
+	          Bloc
           <SearchSelect
             disabled={!organization || !classes.length}
             items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: showLabel(findById(shows, classRecord.show_id)) }))}
-            placeholder="Search class"
+	            placeholder="Rechercher un bloc"
             value={selectedClass?.id ?? ""}
             onChange={setClassId}
           />
         </label>
+        <SanctioningFields
+          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
+          disabled={!organization || !classes.length}
+          hideBackNumberPolicy
+	          label="Sanctions de la classe"
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
+        />
         <div className="form-grid">
           <label>
-            Nom de division
+	            Nom de classe
             <input disabled={!organization || !classes.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
@@ -7682,19 +8723,9 @@ function DivisionForm({
           onSanctioningFeePercentChange={setSanctioningFeePercent}
           onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
         />
-        <SanctioningFields
-          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
-          disabled={!organization || !classes.length}
-          hideBackNumberPolicy
-          label="Sanctions de la division"
-          sanctioningBodies={sanctioningBodies}
-          sanctioningBodyCodes={sanctioningBodyCodes}
-          onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
-        />
         {divisionIsNrha ? (
           <label>
-            Type de classe NRHA de la division
+	            Type de classe NRHA
             <select disabled={!organization || !classes.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
               <option value="">À préciser</option>
               {nrhaClassTypes.map((type) => (
@@ -7711,7 +8742,7 @@ function DivisionForm({
         </label>
         <button className="primary-button" disabled={busy || !organization || !classes.length} type="submit">
           <Plus size={18} />
-          Create division
+	          Créer la classe
         </button>
       </form>
     </section>
@@ -7785,13 +8816,13 @@ function ClassEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit class</h2>
+          <h2>Modifier le bloc</h2>
           <p>{classRecord.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Class name
+          <label>
+	          Nom du bloc
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -7800,13 +8831,13 @@ function ClassEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Entry fee
+            Frais d'inscription
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Bloc horaire
+            Libellé horaire
             <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -7846,16 +8877,16 @@ function ClassEditForm({
           </label>
         </fieldset>
         <label>
-          Court en même temps que
+	          Court en même temps qu'un autre bloc
           <SearchSelect
             allowEmpty
             disabled={!concurrentClassChoices.length}
             items={concurrentClassChoices.map((candidate) => ({
               id: candidate.id,
               label: candidate.name,
-              detail: candidate.block_label || "Bloc sans nom",
+	              detail: candidate.block_label || "Libellé horaire absent",
             }))}
-            placeholder="Rechercher une classe concurrente"
+	            placeholder="Rechercher un bloc concurrent"
             value={concurrentClassId}
             onChange={setConcurrentClassId}
           />
@@ -7963,23 +8994,32 @@ function DivisionEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit division</h2>
+	          <h2>Modifier la classe</h2>
           <p>{division.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Class
+	          Bloc
           <SearchSelect
             items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: classRecord.code ?? "" }))}
-            placeholder="Search class"
+	            placeholder="Rechercher un bloc"
             value={classId}
             onChange={setClassId}
           />
         </label>
+        <SanctioningFields
+          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
+          hideBackNumberPolicy
+	          label="Sanctions de la classe"
+          sanctioningBodies={sanctioningBodies}
+          sanctioningBodyCodes={sanctioningBodyCodes}
+          onBackNumberPolicyChange={() => undefined}
+          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
+        />
         <div className="form-grid">
           <label>
-            Nom de division
+	            Nom de classe
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
@@ -8014,18 +9054,9 @@ function DivisionEditForm({
           onSanctioningFeePercentChange={setSanctioningFeePercent}
           onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
         />
-        <SanctioningFields
-          backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
-          hideBackNumberPolicy
-          label="Sanctions de la division"
-          sanctioningBodies={sanctioningBodies}
-          sanctioningBodyCodes={sanctioningBodyCodes}
-          onBackNumberPolicyChange={() => undefined}
-          onSanctioningBodyCodesChange={handleDivisionSanctioningBodyCodes}
-        />
         {divisionIsNrha ? (
           <label>
-            Type de classe NRHA de la division
+	            Type de classe NRHA
             <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
               <option value="">À préciser</option>
               {nrhaClassTypes.map((type) => (
@@ -8094,6 +9125,7 @@ function EntryForm({
   const [divisionId, setDivisionId] = useState("");
   const [payerContactId, setPayerContactId] = useState("");
   const [riderContactId, setRiderContactId] = useState("");
+  const [entryNumber, setEntryNumber] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const availableDivisions = selectedShowId ? divisions.filter((division) => division.show_id === selectedShowId) : divisions;
@@ -8158,10 +9190,10 @@ function EntryForm({
     : selectedHorse
       ? entryReadiness.canProceed
         ? entryDeadlineReadiness.canProceed
-          ? entryProgramLimitReadiness.message?.message ?? "Choose a division and payer."
-          : entryDeadlineReadiness.message?.message ?? "Choose a division and payer."
+	          ? entryProgramLimitReadiness.message?.message ?? "Choisis une classe et un payeur."
+	          : entryDeadlineReadiness.message?.message ?? "Choisis une classe et un payeur."
         : entryReadiness.message
-      : "Add a show, horse and division first.";
+	      : "Ajoute un show, un cheval et une classe d'abord.";
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -8182,8 +9214,10 @@ function EntryForm({
         owner_contact_id: selectedHorse.primary_owner_contact_id,
         rider_contact_id: riderContactId || undefined,
         payer_contact_id: selectedPayerId,
+        entry_number: entryNumberValue(entryNumber) ?? undefined,
         base_fee: baseFee,
       });
+      setEntryNumber("");
       setRiderContactId("");
       setPayerContactId("");
       onCreated?.();
@@ -8270,7 +9304,7 @@ function EntryForm({
           }
         />
         <label>
-          Division
+	          Classe
           <SearchSelect
             disabled={!availableDivisions.length}
             items={availableDivisions.map((division) => {
@@ -8288,13 +9322,20 @@ function EntryForm({
                   .join(" - "),
               };
             })}
-            placeholder="Search division"
+	            placeholder="Rechercher une classe"
             value={selectedDivision?.id ?? ""}
             onChange={setDivisionId}
           />
         </label>
         <InlineHealthMessage value={selectedDivision ? entryDeadlineReadiness.message : null} />
         <InlineHealthMessage value={selectedDivision ? entryProgramLimitReadiness.message : null} />
+        <div className="form-grid">
+          <label>
+            Numéro de dossard
+            <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
+            <span className="input-help">Peut etre ajoute plus tard dans l'edit si le dossard n'est pas encore assigne.</span>
+          </label>
+        </div>
         <div className="form-grid">
           <ContactPicker
             allowEmpty
@@ -8373,6 +9414,7 @@ function EntryEditForm({
   const [divisionId, setDivisionId] = useState(entry.division_id);
   const [riderContactId, setRiderContactId] = useState(entry.rider_contact_id ?? "");
   const [payerContactId, setPayerContactId] = useState(entry.payer_contact_id);
+  const [entryNumber, setEntryNumber] = useState(entry.entry_number == null ? "" : String(entry.entry_number));
   const [status, setStatus] = useState<Entry["status"]>(entry.status);
   const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
   const [busy, setBusy] = useState(false);
@@ -8435,6 +9477,7 @@ function EntryEditForm({
         owner_contact_id: selectedHorse.primary_owner_contact_id,
         rider_contact_id: riderContactId || null,
         payer_contact_id: payerContactId,
+        entry_number: entryNumberValue(entryNumber),
         status,
         base_fee: effectiveFee,
         total_fees: effectiveFee,
@@ -8486,7 +9529,7 @@ function EntryEditForm({
           }
         />
         <label>
-          Division
+	          Classe
           <SearchSelect
             items={divisions.map((division) => {
               const classRecord = findById(classes, division.class_id);
@@ -8503,7 +9546,7 @@ function EntryEditForm({
                   .join(" - "),
               };
             })}
-            placeholder="Search division"
+	            placeholder="Rechercher une classe"
             value={divisionId}
             onChange={setDivisionId}
           />
@@ -8547,6 +9590,10 @@ function EntryEditForm({
               <option value="completed">Completed</option>
               <option value="cancelled">Cancelled</option>
             </select>
+          </label>
+          <label>
+            Numéro de dossard
+            <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
           </label>
           <label>
             Base fee

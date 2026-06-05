@@ -26,7 +26,7 @@ export function showLabel(show: Show | undefined) {
 
 export function divisionLabel(division: Division | undefined, classes: ClassRecord[]) {
   if (!division) {
-    return "Unknown division";
+    return "Unknown class";
   }
 
   const classRecord = findById(classes, division.class_id);

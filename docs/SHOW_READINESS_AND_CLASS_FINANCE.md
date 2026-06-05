@@ -1,6 +1,6 @@
-# Show readiness, class presets, eligibility, and finance
+# Show readiness, bloc/class presets, eligibility, and finance
 
-Ce document garde les decisions produit a reprendre plus tard pour les chantiers de preparation pre-saison, exigences d'inscription, préréglages de classes, notifications, taxes et calcul de bourses.
+Ce document garde les decisions produit a reprendre plus tard pour les chantiers de preparation pre-saison, exigences d'inscription, prereglages de blocs/classes, notifications, taxes et calcul de bourses.
 
 ## Principe central
 
@@ -43,8 +43,8 @@ Items prevus:
 - Cheval admissible pour le show.
 - Coggins et sante valides a la date de reference du show.
 - Adhesions show-level satisfaites.
-- Classe/division choisie.
-- Exigences class-level satisfaites.
+- Classe choisie.
+- Exigences de classe satisfaites.
 - Stalls, tack stalls, camping et extras choisis.
 - Facture generee avec lignes visibles.
 - Taxes appliquees selon les produits taxables.
@@ -54,35 +54,77 @@ Items prevus:
 
 Avant le calcul final des resultats et des bourses, l'app doit gerer la fermeture operationnelle des inscriptions:
 
-- Chaque bloc de classe peut avoir une date/heure de fermeture des inscriptions, avec un defaut logique: la veille de la classe a 18h.
+- Chaque bloc peut avoir une date/heure de fermeture des inscriptions, avec un defaut logique: la veille du bloc a 18h.
 - Une association peut accepter les inscriptions tardives apres cette fermeture.
-- Le frais late par defaut est 50% du frais d'inscription, mais il doit rester configurable par classe/show.
+- Le frais late par defaut est 50% du frais d'inscription, mais il doit rester configurable par bloc/show.
 - Si les inscriptions tardives sont refusees, l'inscription doit etre bloquee apres la fermeture.
 - Si elles sont acceptees, la penalite doit etre facturee comme une ligne separee pour rester claire sur la facture.
 - L'ordre de passage ne doit pas etre publie automatiquement au cutoff. Le cutoff rend l'action disponible, mais la sortie/publication reste une action manuelle du gestionnaire.
-- Les inscriptions tardives acceptees doivent etre ajoutees au debut de la classe avec des numeros d'ordre de passage negatifs.
-- Lors de l'inscription, un cavalier ne peut pas etre inscrit plus de trois fois dans une meme division.
-- Lors de l'inscription, un meme cheval ne peut etre inscrit qu'une seule fois par classe, meme si la classe contient plusieurs divisions.
+- Les inscriptions tardives acceptees doivent etre ajoutees au debut du bloc avec des numeros d'ordre de passage negatifs.
+- La feuille de draw doit afficher: draw, numero de dossard, cavalier, cheval, proprietaire et classes inscrites.
+- Le numero de dossard doit pouvoir etre saisi a l'inscription ou ajoute/modifie plus tard. Les dossards manquants devront devenir un rappel/notification avant publication officielle ou envoi vers le scoring.
+- A terme, le dossard devrait probablement etre gere au niveau show + cheval/competiteur, puis propage aux inscriptions, pour eviter de le ressaisir dans chaque classe.
+- Lors de l'inscription, un cavalier ne peut pas etre inscrit plus de trois fois dans une meme classe.
+- Lors de l'inscription, un meme cheval ne peut etre inscrit qu'une seule fois par bloc, meme si le bloc contient plusieurs classes.
 - Lors de la generation de l'ordre de passage, l'app doit viser le plus grand espacement possible entre les passages du meme cavalier.
 - Le minimum vise est huit chevaux entre deux passages du meme cavalier. Si ce minimum est mathematiquement impossible, l'app doit maximiser l'ecart et produire un avertissement futur.
 - Le reste de l'ordre doit rester aleatoire.
 - HSP reste la source officielle des inscriptions. ShowScore peut recevoir ou consulter l'ordre de passage prepare, mais les classements, resultats officiels et payout final seront traites dans une phase ulterieure.
 
+### Gestion des dossards
+
+Le dossard doit devenir un objet gere par association, et non seulement un champ temporaire sur une inscription.
+
+V1 implemente:
+
+- `organization_back_numbers`: inventaire des numeros physiques ou virtuels d'une association.
+- Un numero est unique dans une association.
+- Un dossard peut etre `available`, `assigned`, `reserved`, `lost` ou `retired`.
+- Une assignation peut etre faite par cheval ou par equipe `cheval + cavalier`, selon le mode de gestion de l'association ou du bloc.
+- Un cheval ne peut pas avoir deux dossards actifs en mode `cheval` pour la meme association.
+- Une meme equipe `cheval + cavalier` ne peut pas avoir deux dossards actifs en mode `equipe` pour la meme association.
+- Le secretariat doit pouvoir creer un inventaire de dossards disponibles, par exemple une plage de `100` a `299`, parce que les dossards physiques sont deja imprimes.
+- Un dossard peut exister sans cheval assigne: dossard disponible/orphelin.
+- L'association doit pouvoir assigner automatiquement le prochain dossard disponible ou choisir manuellement un numero.
+- Les inscriptions reprennent automatiquement le dossard deja assigne si le bloc utilise une politique `cheval` ou `equipe cheval+cavalier`.
+
+Ecrans V1:
+
+- Onglet `Dossards` cote association: inventaire, plages disponibles, assignes, orphelins, perdus/retires, historique.
+- Onglet `Mes dossards` cote utilisateur: dossards actifs visibles pour les chevaux/equipes relies au compte.
+- Dans les inscriptions: si aucun numero manuel n'est saisi, l'app tente de reprendre le dossard actif selon la politique du bloc.
+
+Etapes futures:
+
+- Le concurrent doit pouvoir choisir "laisser l'association m'assigner un dossard" directement dans l'inscription.
+- Le dossard doit pouvoir etre change par le proprietaire autorise ou l'agent autorise selon les permissions.
+- Si un dossard est deja assigne a un autre cheval et que l'utilisateur est proprietaire/agent autorise de cet autre cheval, l'app peut proposer de retirer le dossard de l'autre cheval et de l'assigner au nouveau.
+- Si l'utilisateur n'a pas ce droit sur l'autre cheval, l'app doit bloquer l'assignation et demander un autre dossard.
+- Audit futur: qui a assigne, transfere, libere ou retire le dossard.
+
 ## Centre de notifications
 
-Il faudra un centre de notifications pour les gestionnaires d'association et, plus tard, pour les utilisateurs finaux.
+Le centre de notifications V1 est calcule a la volee pour les gestionnaires d'association. Il ne stocke pas encore de statut lu/resolu, mais il donne une liste operationnelle des taches a traiter depuis les donnees existantes.
 
-Notifications gestionnaire:
+Notifications V1 gestionnaire:
 
 - Coggins en revision manuelle.
 - Certificat vaccin en revision manuelle.
 - Document de sante qui vient a echeance.
 - Cheval avec document expire mais deja lie a un show futur.
 - Adhesion obligatoire manquante ou expiree.
-- Membership d'association achete mais en attente de paiement/approbation.
+- Dossard manquant sur une inscription.
+- Ordre de passage a sortir apres cutoff.
 - Facture impayee ou paiement manuel a confirmer.
+- Show actif ou futur avec programme/configuration incomplete.
 
-Les notifications peuvent etre de deux types:
+Notifications futures:
+
+- Membership d'association achete mais en attente de paiement/approbation.
+- Notifications cote utilisateur final.
+- Marquer lu/resolu, assigner a un gestionnaire et garder un historique.
+
+Les notifications peuvent evoluer vers deux types:
 
 - Persistantes: creees dans une table `notifications` ou `tasks`, marquees lues/resolues.
 - Calculees: derivees a la volee depuis les documents de sante, memberships, entries et factures.
@@ -117,9 +159,9 @@ Exemples:
 
 Ces exigences appartiennent a l'association ou au show, pas a une classe precise.
 
-### Class-level requirements
+### Class requirements
 
-Ces exigences determinent si un couple cavalier/cheval peut entrer dans une classe/division.
+Ces exigences determinent si un couple cavalier/cheval peut entrer dans une classe precise.
 
 Exemples:
 
@@ -129,7 +171,7 @@ Exemples:
 - Membership NSBA requis pour certaines classes.
 - Regles d'age, statut, earnings, rookie, youth, non pro, open, etc.
 
-Ces exigences doivent etre liees aux class presets, classes ou divisions.
+Ces exigences doivent etre liees aux presets de classes, aux classes, ou parfois au bloc lorsque l'exigence concerne tout le bloc.
 
 ## OPTS et assurance provinciale
 
@@ -168,7 +210,7 @@ Ces produits doivent pouvoir:
 - Mettre a jour un statut de membership lorsque le paiement est confirme.
 - Avoir une regle taxable ou non taxable selon l'association.
 
-## Prereglages de classes
+## Prereglages de blocs et classes
 
 L'app doit avoir une bibliotheque de préréglages par organisme.
 
@@ -209,20 +251,22 @@ Exemples:
 
 Le PDF `NRHA_Approved_Classes.pdf` contient une premiere liste exploitable de codes et noms.
 
-### Classes, divisions et slates
+### Slates, blocs et classes
 
 Dans l'app:
 
 - Un show reel peut contenir un ou plusieurs slates NRHA, c'est-a-dire des shows techniques aux yeux de la NRHA.
-- Un slate contient des blocs de classe dans l'horaire.
-- Un bloc de classe peut contenir des divisions mixtes: NRHA, maison, AQR, ou autres.
-- Une division represente l'option precise ou le concurrent s'inscrit, ex. `1100 Open`.
-- La categorie NRHA doit donc etre stockee sur la division, pas sur le bloc.
-- Plusieurs divisions peuvent courir ensemble dans le meme bloc.
+- Un slate contient des blocs dans l'horaire.
+- Un bloc peut contenir des classes mixtes: NRHA, maison, AQR, ou autres.
+- Une classe represente l'option precise ou le concurrent s'inscrit, ex. `1100 Open`.
+- La categorie NRHA doit donc etre stockee sur la classe, pas sur le bloc.
+- Plusieurs classes peuvent courir ensemble dans le meme bloc.
 
-Le mapping NRHA officiel doit donc commencer par les divisions ou divisions de preset. Le bloc reste l'objet d'horaire, et le slate regroupe les blocs qui appartiennent au meme show technique.
+Le mapping NRHA officiel doit donc commencer par les classes ou classes de preset. Le bloc reste l'objet d'horaire, et le slate regroupe les blocs qui appartiennent au meme show technique.
 
-La saisie d'une division NRHA doit proposer une liste deroulante triee par numero de classe, basee sur les 89 classes du PDF approuve NRHA fourni. La selection remplit le numero, le nom officiel et la categorie NRHA de la division.
+La saisie d'une classe NRHA doit proposer une liste deroulante triee par numero de classe, basee sur les 89 classes du PDF approuve NRHA fourni. La selection remplit le numero, le nom officiel et la categorie NRHA de la classe.
+
+Note technique actuelle: dans le schema existant, la table HSP `classes` correspond au produit "bloc", et la table HSP `divisions` correspond au produit "classe". Les libelles utilisateurs doivent suivre la nomenclature produit, meme si les noms techniques internes restent historiques pour l'instant.
 
 ## Added money, jackpot, payback et retainage
 
@@ -230,20 +274,20 @@ Les organismes ne gerent pas tous les bourses de la meme facon. Il faut donc sep
 
 - Regles financieres de l'association.
 - Regles financieres du show.
-- Regles financieres de la classe/division.
+- Regles financieres de la classe.
 - Regles propres a l'organisme.
 
 ### Heritages et overrides financiers
 
-Le retainage est souvent un reglage de l'association, mais il doit pouvoir etre modifie pour un show ou pour une division precise.
+Le retainage est souvent un reglage de l'association, mais il doit pouvoir etre modifie pour un show ou pour une classe precise.
 
 Ordre d'heritage recommande:
 
 1. Association: retainage par defaut, devise principale, numeros de taxes, taux de taxes par defaut.
 2. Show: override de retainage, devise du show, taux de reference utiles pour rapports.
-3. Division: override final pour retainage, added money, jackpot, trophy/plaque fee, frais organisme et payout schedule.
+3. Classe: override final pour retainage, added money, jackpot, trophy/plaque fee, frais organisme et payout schedule.
 
-Le setup de division doit inclure le prix du trophee/plaque, parce que ce montant peut etre retire du calcul de bourse avant le payout selon l'organisme.
+Le setup de classe doit inclure le prix du trophee/plaque, parce que ce montant peut etre retire du calcul de bourse avant le payout selon l'organisme.
 
 ### Types de payout
 
@@ -258,7 +302,7 @@ Chaque payout schedule devrait avoir un court descriptif pour aider le gestionna
 
 Le payout maison doit etre facile a remplir: tranches par nombre d'entrees, nombre de places payees et pourcentage par place, avec validation que le total donne 100%.
 
-Premiere approche implementee dans le setup de division: un tableau maison stocke dans `payout_rules.custom_brackets`, avec min/max d'entrees et pourcentages par place. L'interface affiche un apercu estimatif de la bourse selon un nombre d'entrees simule. Le calcul final officiel, les egalites, scratches, rapports et paiements aux gagnants viendront dans une phase separee.
+Premiere approche implementee dans le setup de classe: un tableau maison stocke dans `payout_rules.custom_brackets`, avec min/max d'entrees et pourcentages par place. L'interface affiche un apercu estimatif de la bourse selon un nombre d'entrees simule. Le calcul final officiel, les egalites, scratches, rapports et paiements aux gagnants viendront dans une phase separee.
 
 ### NRHA payback
 
@@ -352,7 +396,7 @@ Noms indicatifs a raffiner avant implementation:
 
 ### Phase 1: Catalogue et requirements
 
-- Modeliser les class presets officiels.
+- Modeliser les presets de classes officiels.
 - Importer une premiere liste NRHA.
 - Separer requirements show-level et class-level.
 - Ajouter la notion de requirement group pour OPTS.

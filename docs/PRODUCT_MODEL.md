@@ -28,7 +28,7 @@ For organization admins, show secretaries and show organizers.
 Expected workflows:
 
 - Configure shows
-- Configure classes, divisions and pricing
+- Configure slates, blocs, classes and pricing
 - Search existing contacts, horses and entries
 - Create or edit records on behalf of competitors when needed
 - Manage invoices, payments, scratches and refunds
@@ -40,20 +40,22 @@ Admin data entry should avoid large dropdown menus. As the system grows, selecto
 
 Short lists such as status, language or role can remain dropdowns.
 
-## Class Program Structure
+## Program Structure
 
 The scheduling and sanctioning model should follow this hierarchy:
 
 - Real show
 - Slate / technical show
-- Class block
-- Division
+- Bloc
+- Class
 
-A slate is a technical show for sanctioning bodies such as NRHA. For example, NRHA does not accept two `1100 Open` divisions inside the same technical show, so a real event running that division twice needs a second slate.
+A slate is a technical show for sanctioning bodies such as NRHA. For example, NRHA does not accept two `1100 Open` classes inside the same technical show, so a real event running that class twice needs a second slate.
 
-A class block is the schedule object. It can contain mixed divisions, such as NRHA, house, AQR or other divisions running together.
+A bloc is the schedule object. It can contain mixed classes, such as NRHA, house, AQR or other classes running together.
 
-The official sanctioned identity belongs on the division. For NRHA, fields such as `1100 Open` and the NRHA class category belong on the division or division preset, not on the class block.
+The official sanctioned identity belongs on the class. For NRHA, fields such as `1100 Open` and the NRHA class category belong on the class or class preset, not on the bloc.
+
+Current internal table names are legacy names: HSP `classes` are product blocs, and HSP `divisions` are product classes. A physical SQL rename should be treated as a separate migration project.
 
 ## Editability
 
@@ -62,8 +64,8 @@ Most records created in the MVP must be editable:
 - Shows
 - Contacts
 - Horses
+- Blocs
 - Classes
-- Divisions
 - Draft entries
 
 Future restrictions can be added once records move into sensitive states, such as paid invoices, completed entries or audited payment records.

@@ -33,7 +33,7 @@ It creates:
 
 - Core auth profile tables
 - Organizations and memberships
-- Shows, show roles, show days, classes and divisions
+- Shows, show roles, show days, blocs and classes
 - Contacts, horses and horse-contact permissions
 - Entries, stall options and stall bookings
 - Invoices, line items, payments and audit events

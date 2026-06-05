@@ -20,7 +20,7 @@ Primary references:
 
 Horse Show Platform should become the canonical system for show administration, entries, people, horses, billing and permissions.
 
-ShowScore should become the scoring/results module inside that platform, not a second independent source of truth for associations, shows, classes or people.
+ShowScore should become the scoring/results module inside that platform, not a second independent source of truth for associations, shows, blocs/classes or people.
 
 In the UI, the customer-facing word can still be "Association". In the HSP database, the canonical table can remain `organizations`.
 
@@ -28,7 +28,7 @@ In the UI, the customer-facing word can still be "Association". In the HSP datab
 
 Migration `supabase/migrations/0003_show_score_alignment.sql` starts this bridge by:
 
-- adding compatibility fields to HSP `organizations`, `shows`, `show_days` and `classes`
+- adding compatibility fields to HSP `organizations`, `shows`, `show_days` and legacy `classes`
 - adding nullable legacy ShowScore ids for future imports
 - creating the first `show_score_*` module tables with UUID foreign keys back to HSP records
 - adding RLS helpers and policies for admin, secretary, judge, scribe and announcer access
@@ -42,6 +42,8 @@ Adapter file `src/services/showScoreAdapters.ts` also starts the code bridge by 
 - `toShowScoreClass`
 - `buildShowScoreRunsForClass`
 
+Product vocabulary note: HSP legacy table `classes` is the product bloc, and HSP legacy table `divisions` is the product class. ShowScore still uses "class" for the scoring setup object, so adapters keep the technical names while UI/docs should say bloc/class.
+
 ## Source Of Truth
 
 | Domain | Canonical owner | Notes |
@@ -51,13 +53,13 @@ Adapter file `src/services/showScoreAdapters.ts` also starts the code bridge by 
 | Association membership | HSP `organization_members` | Roles must expand or map to include scoring roles. |
 | Show event | HSP `shows` | ShowScore `shows` should reference the HSP show. |
 | Show days | HSP `show_days` | ShowScore `days` maps cleanly to this table. |
-| Classes | HSP `classes` | ShowScore classes are scoring classes. HSP should add missing scoring metadata or use an extension table. |
-| Divisions | HSP `divisions` | ShowScore does not currently model divisions as first-class records. |
+| Blocs | HSP `classes` legacy table | ShowScore classes map to scoring blocs. HSP should add missing scoring metadata or use an extension table. |
+| Classes | HSP `divisions` legacy table | ShowScore does not currently model product classes as first-class records. |
 | Contacts / riders / owners / payers | HSP `contacts` | ShowScore runs currently store names as text snapshots. |
 | Horses | HSP `horses` | ShowScore runs currently store horse names as text snapshots. |
-| Entries | HSP `entries` | ShowScore class setup runs should be generated from HSP entries. |
+| Entries | HSP `entries` | ShowScore bloc setup runs should be generated from HSP entries. |
 | Draw / back numbers | HSP entry workflow, then ShowScore setup snapshot | The locked scoring draw should preserve a snapshot for audit/history. |
-| Scoring sessions | ShowScore module | Keep as module-owned data linked to HSP classes. |
+| Scoring sessions | ShowScore module | Keep as module-owned data linked to HSP blocs. |
 | Official results | ShowScore module | Results should become immutable once validated. |
 | Publication state | ShowScore module | Public/live views should read from explicit publication state. |
 | Billing / stalls / payments | HSP | Not present in ShowScore. |
@@ -153,7 +155,7 @@ Recommended path:
 
 ShowScore `class_setups.runs` currently stores display fields such as rider, horse and owner as text.
 
-HSP entries are normalized and reference horse, rider, owner, payer and division records.
+HSP entries are normalized and reference horse, rider, owner, payer and product class records through the legacy `division_id` field.
 
 Recommended run payload:
 
@@ -171,7 +173,8 @@ Recommended run payload:
   "backNumber": "123",
   "rider": "Display rider name snapshot",
   "horse": "Display horse name snapshot",
-  "owner": "Display owner name snapshot"
+  "owner": "Display owner name snapshot",
+  "divisionNames": ["1100 - Open"]
 }
 ```
 
@@ -201,15 +204,16 @@ Avoid importing ShowScore base tables named `associations`, `shows`, `days` and 
 
 - Keep user-facing label "Association".
 - Keep DB table `organizations`.
+- Treat HSP legacy `classes` as product blocs and legacy `divisions` as product classes in UI text.
 - Add any missing low-risk fields HSP needs for ShowScore compatibility:
   - `organizations.short_name`
   - `shows.venue`
   - `show_days.sort_order`
-  - `classes.arena`
-  - `classes.pattern`
-  - `classes.custom_pattern`
-  - `classes.judge_name`
-  - `classes.sort_order`
+  - `classes.arena` for bloc/scoring setup
+  - `classes.pattern` for bloc/scoring setup
+  - `classes.custom_pattern` for bloc/scoring setup
+  - `classes.judge_name` for bloc/scoring setup
+  - `classes.sort_order` for bloc order
 
 Some of these may move to a scoring settings table instead of core tables if we want stricter separation.
 
@@ -220,7 +224,7 @@ Create ShowScore module tables in HSP with UUID foreign keys to:
 - `organizations.id`
 - `shows.id`
 - `show_days.id`
-- `classes.id`
+- `classes.id` legacy bloc id
 - `entries.id`
 - `contacts.id`
 - `horses.id`
@@ -239,14 +243,14 @@ This avoids rewriting every ShowScore screen at once.
 
 ### Phase 4: Generate Draws From HSP Entries
 
-Use HSP entries as the source for class setup runs.
+Use HSP entries as the source for bloc setup runs.
 
 Admin/secretary workflow:
 
 1. Entries are created in HSP by competitors or support staff.
 2. Secretary reviews entries.
 3. Draw/back numbers are assigned.
-4. ShowScore class setup receives a locked snapshot for scoring.
+4. ShowScore bloc setup receives a locked snapshot for scoring.
 5. Scoring, official results and publication happen in the ShowScore module.
 
 ### Phase 5: Preserve Existing ShowScore Data

@@ -3,11 +3,13 @@ import type { Translation } from "../lib/i18n";
 
 export type ViewKey =
   | "overview"
+  | "notifications"
   | "shows"
   | "people"
   | "health"
   | "classes"
   | "entries"
+  | "back-numbers"
   | "stalls"
   | "scoring"
   | "billing"
@@ -15,6 +17,7 @@ export type ViewKey =
   | "my-horses"
   | "my-riders"
   | "my-entries"
+  | "my-back-numbers"
   | "my-stalls"
   | "my-invoices";
 
