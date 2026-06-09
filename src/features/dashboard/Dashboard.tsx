@@ -599,6 +599,8 @@ export function Dashboard({
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
+            invoiceLineItems={selectedOrganizationInvoiceLineItems}
+            invoices={selectedOrganizationInvoices}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             showDays={selectedOrganizationShowDays}
@@ -719,6 +721,8 @@ export function Dashboard({
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
+            invoiceLineItems={personalInvoiceLineItems}
+            invoices={personalInvoices}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             showDays={selectedOrganizationShowDays}

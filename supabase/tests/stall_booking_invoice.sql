@@ -7,6 +7,91 @@ begin;
 grant usage on schema public to anon, authenticated;
 grant select, insert, update, delete on all tables in schema public to anon, authenticated;
 
+delete from public.invoices
+where organization_id = '30000000-0000-0000-0000-000000000001'
+  and show_id = '40000000-0000-0000-0000-000000000001'
+  and payer_contact_id = '70000000-0000-0000-0000-000000000001'
+  and status = 'draft';
+
+insert into public.shows (
+  id,
+  organization_id,
+  name,
+  slug,
+  start_date,
+  end_date,
+  venue,
+  location,
+  status,
+  timezone,
+  default_currency,
+  tax_rate,
+  is_public,
+  created_by_user_id
+)
+values (
+  '40000000-0000-0000-0000-000000000101',
+  '30000000-0000-0000-0000-000000000001',
+  'Phase 1 Balance Block Classic',
+  'phase-1-balance-block-classic',
+  '2026-08-10',
+  '2026-08-12',
+  'Main Arena',
+  'Ottawa, ON',
+  'open',
+  'America/Toronto',
+  'CAD',
+  13.00,
+  false,
+  '20000000-0000-0000-0000-000000000002'
+)
+on conflict (id) do update
+set
+  name = excluded.name,
+  start_date = excluded.start_date,
+  end_date = excluded.end_date,
+  updated_at = now();
+
+insert into public.stall_options (
+  id,
+  organization_id,
+  show_id,
+  name,
+  description,
+  price,
+  total_quantity,
+  available_quantity,
+  duration_days,
+  show_day_start_id,
+  show_day_end_id,
+  category
+)
+select
+  'c0000000-0000-0000-0000-000000000101',
+  '30000000-0000-0000-0000-000000000001',
+  '40000000-0000-0000-0000-000000000101',
+  'Camping',
+  'Camping spot for balance blocking test.',
+  95.00,
+  10,
+  10,
+  3,
+  sd.id,
+  sd.id,
+  'camping'
+from public.show_days sd
+where sd.show_id = '40000000-0000-0000-0000-000000000101'
+  and sd.day_date = '2026-08-10'
+limit 1
+on conflict (id) do update
+set
+  price = excluded.price,
+  total_quantity = excluded.total_quantity,
+  available_quantity = excluded.available_quantity,
+  show_day_start_id = excluded.show_day_start_id,
+  show_day_end_id = excluded.show_day_end_id,
+  updated_at = now();
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -105,6 +190,49 @@ begin
 
   if invoice_total <> 395.50 then
     raise exception 'Expected invoice total 395.50, got %', invoice_total;
+  end if;
+end;
+$$;
+
+do $$
+declare
+  block_error text;
+begin
+  begin
+    insert into public.stall_bookings (
+      id,
+      organization_id,
+      show_id,
+      stall_option_id,
+      created_by_user_id,
+      booker_contact_id,
+      payer_contact_id,
+      status,
+      show_day_start_id,
+      show_day_end_id,
+      quantity,
+      notes
+    )
+    values (
+      'd1000000-0000-0000-0000-000000000101',
+      '30000000-0000-0000-0000-000000000001',
+      '40000000-0000-0000-0000-000000000101',
+      'c0000000-0000-0000-0000-000000000101',
+      '20000000-0000-0000-0000-000000000004',
+      '70000000-0000-0000-0000-000000000001',
+      '70000000-0000-0000-0000-000000000001',
+      'requested',
+      (select id from public.show_days where show_id = '40000000-0000-0000-0000-000000000101' and day_date = '2026-08-10' limit 1),
+      (select id from public.show_days where show_id = '40000000-0000-0000-0000-000000000101' and day_date = '2026-08-10' limit 1),
+      1,
+      'Open balance block test'
+    );
+  exception when others then
+    block_error := sqlerrm;
+  end;
+
+  if block_error is null or block_error not like 'Solde de facture ouvert:%' then
+    raise exception 'Expected open invoice balance to block another show reservation, got %', coalesce(block_error, 'no error');
   end if;
 end;
 $$;

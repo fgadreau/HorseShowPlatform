@@ -318,6 +318,40 @@ set
   can_book_stalls = excluded.can_book_stalls,
   can_pay_invoices = excluded.can_pay_invoices;
 
+insert into public.horse_health_documents (
+  id,
+  organization_id,
+  horse_id,
+  document_type,
+  status,
+  verification_source,
+  certificate_number,
+  issuer_name,
+  test_or_administered_on,
+  result,
+  horse_name,
+  reviewed_by_user_id,
+  reviewed_at,
+  created_by_user_id
+)
+values
+  ('82000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', 'coggins_eia', 'approved', 'manual', 'P1-A-COGGINS-2026', 'Phase 1 Vet', '2026-01-15', 'negative', 'Phase One Whiz', '20000000-0000-0000-0000-000000000002', now(), '20000000-0000-0000-0000-000000000004'),
+  ('82000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', 'combo_vaccine', 'approved', 'manual', 'P1-A-VACCINE-2026', 'Phase 1 Vet', '2026-01-15', null, 'Phase One Whiz', '20000000-0000-0000-0000-000000000002', now(), '20000000-0000-0000-0000-000000000004'),
+  ('82000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', 'coggins_eia', 'approved', 'manual', 'P1-B-COGGINS-2026', 'Phase 1 Vet', '2026-01-15', 'negative', 'Phase One Slide', '20000000-0000-0000-0000-000000000006', now(), '20000000-0000-0000-0000-000000000006'),
+  ('82000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', 'combo_vaccine', 'approved', 'manual', 'P1-B-VACCINE-2026', 'Phase 1 Vet', '2026-01-15', null, 'Phase One Slide', '20000000-0000-0000-0000-000000000006', now(), '20000000-0000-0000-0000-000000000006')
+on conflict (id) do update
+set
+  status = excluded.status,
+  verification_source = excluded.verification_source,
+  certificate_number = excluded.certificate_number,
+  issuer_name = excluded.issuer_name,
+  test_or_administered_on = excluded.test_or_administered_on,
+  result = excluded.result,
+  horse_name = excluded.horse_name,
+  reviewed_by_user_id = excluded.reviewed_by_user_id,
+  reviewed_at = excluded.reviewed_at,
+  updated_at = now();
+
 insert into public.entries (
   id,
   organization_id,
@@ -358,10 +392,11 @@ insert into public.invoices (
   total_paid
 )
 values
-  ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', 'P1A-2026-0001', '70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'sent', 150.00, 19.50, 169.50, 0.00),
-  ('a0000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', 'P1B-2026-0001', '70000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006', 'sent', 145.00, 18.85, 163.85, 0.00)
+  ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '0001', '70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'sent', 150.00, 19.50, 169.50, 0.00),
+  ('a0000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '0001', '70000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006', 'sent', 145.00, 18.85, 163.85, 0.00)
 on conflict (id) do update
 set
+  invoice_number = excluded.invoice_number,
   status = excluded.status,
   subtotal = excluded.subtotal,
   tax_amount = excluded.tax_amount,

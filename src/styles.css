@@ -2466,6 +2466,19 @@ button:focus-visible {
   gap: 10px;
 }
 
+.reservation-status-stack {
+  align-items: flex-start;
+  display: grid;
+  gap: 5px;
+  justify-items: start;
+}
+
+.reservation-status-stack small {
+  color: #687873;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .badge {
   background: #eef2f0;
   border-radius: 999px;
@@ -2482,6 +2495,9 @@ button:focus-visible {
 .badge.open,
 .badge.paid,
 .badge.approved,
+.badge.active,
+.badge.completed,
+.badge.reserved,
 .badge.verified,
 .badge.info {
   background: #dff7e8;
@@ -2506,6 +2522,7 @@ button:focus-visible {
 
 .badge.archived,
 .badge.void,
+.badge.cancelled,
 .badge.rejected,
 .badge.error {
   background: #f1f5f9;
