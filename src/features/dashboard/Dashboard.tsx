@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
+  Download,
   FileText,
   LogOut,
   MapPin,
@@ -18,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
+import { canadianProvinceOptions, countryOptions, currencyOptions, taxPresetById, taxPresetForLocation, taxPresetIdForValues, taxPresetsForLocation, type TaxPreset } from "../../lib/billingSettings";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
 import { getHorseCogginsValidity, getHorseVaccineValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
@@ -627,9 +629,12 @@ export function Dashboard({
 
         {effectiveView === "billing" ? (
           <BillingView
+            contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
             invoices={selectedOrganizationInvoices}
             lineItems={selectedOrganizationInvoiceLineItems}
+            organization={selectedOrganization}
+            shows={selectedOrganizationShows}
             unpaidBalance={unpaidBalance}
           />
         ) : null}
@@ -728,9 +733,12 @@ export function Dashboard({
 
         {effectiveView === "my-invoices" ? (
           <BillingView
+            contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
             invoices={personalInvoices}
             lineItems={personalInvoiceLineItems}
+            organization={selectedOrganization}
+            shows={selectedOrganizationShows}
             unpaidBalance={personalInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0)}
           />
         ) : null}
@@ -1634,7 +1642,7 @@ function buildNotificationItems(input: {
     notifications.push({
       actionLabel: "Voir facture",
       category: "billing",
-      detail: `${invoice.invoice_number}: ${formatCurrency(invoice.balance_due, input.organization?.currency ?? "CAD")} à recevoir.`,
+      detail: `#${formatInvoiceNumber(invoice.invoice_number)}: ${formatCurrency(invoice.balance_due, input.organization?.currency ?? "CAD")} à recevoir.`,
       id: `invoice-${invoice.id}`,
       meta: [show?.name, invoice.due_date ? `Échéance ${formatDate(invoice.due_date)}` : null].filter(Boolean).join(" - ") || "Facturation",
       priority: invoice.status === "overdue" ? "critical" : "warning",
@@ -4725,19 +4733,27 @@ function MyEntriesView({
 }
 
 function BillingView({
+  contacts,
   currency,
   invoices,
   lineItems,
+  organization,
+  shows,
   unpaidBalance,
 }: {
+  contacts: AppContext["contacts"];
   currency: string;
   invoices: AppContext["invoices"];
   lineItems: AppContext["invoiceLineItems"];
+  organization: Organization | null;
+  shows: AppContext["shows"];
   unpaidBalance: number;
 }) {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
   const selectedInvoice = findById(invoices, selectedInvoiceId) ?? null;
   const selectedInvoiceLineItems = selectedInvoice ? lineItems.filter((item) => item.invoice_id === selectedInvoice.id) : [];
+  const selectedInvoiceShow = selectedInvoice ? findById(shows, selectedInvoice.show_id) : undefined;
+  const selectedInvoicePayer = selectedInvoice ? findById(contacts, selectedInvoice.payer_contact_id) : undefined;
 
   return (
     <div className="content-grid">
@@ -4762,6 +4778,9 @@ function BillingView({
           currency={currency}
           invoice={selectedInvoice}
           lineItems={selectedInvoiceLineItems}
+          organization={organization}
+          payerContact={selectedInvoicePayer}
+          show={selectedInvoiceShow}
           onClose={() => setSelectedInvoiceId("")}
         />
       ) : null}
@@ -4782,16 +4801,24 @@ function BillingView({
           </div>
           {invoices.map((invoice) => {
             const invoiceLineItems = lineItems.filter((item) => item.invoice_id === invoice.id);
+            const invoiceShow = findById(shows, invoice.show_id);
+            const payerContact = findById(contacts, invoice.payer_contact_id);
             return (
               <div className="invoice-group" key={invoice.id}>
                 <div className={`table-row invoice-summary-row ${selectedInvoiceId === invoice.id ? "selected" : ""}`}>
                   <button className="invoice-number-button" type="button" onClick={() => setSelectedInvoiceId(invoice.id)}>
                     <FileText size={16} />
-                    <strong>{invoice.invoice_number}</strong>
+                    <span>
+                      <strong>#{formatInvoiceNumber(invoice.invoice_number)}</strong>
+                      <small>{showLabel(invoiceShow)}</small>
+                    </span>
                   </button>
-                  <span className={`badge ${invoice.status}`}>{invoice.status.replace("_", " ")}</span>
+                  <span className={`badge ${invoice.status}`}>{invoiceStatusLabel(invoice.status)}</span>
                   <span>{formatCurrency(invoice.total_amount, currency)}</span>
-                  <span>{formatCurrency(invoice.balance_due, currency)}</span>
+                  <span>
+                    <strong>{formatCurrency(invoice.balance_due, currency)}</strong>
+                    <span className="muted-line">{contactLabel(payerContact)}</span>
+                  </span>
                 </div>
                 {invoiceLineItems.map((item) => (
                   <div className="table-row invoice-line-row" key={item.id}>
@@ -4818,55 +4845,594 @@ function InvoiceDetailPanel({
   currency,
   invoice,
   lineItems,
+  organization,
+  payerContact,
+  show,
   onClose,
 }: {
   currency: string;
   invoice: AppContext["invoices"][number];
   lineItems: AppContext["invoiceLineItems"];
+  organization: Organization | null;
+  payerContact: Contact | undefined;
+  show: Show | undefined;
   onClose: () => void;
 }) {
+  const invoiceDocument = buildInvoiceDocumentData({ currency, invoice, lineItems, organization, payerContact, show });
+
   return (
     <section className="panel span-2 invoice-detail-panel">
-      <div className="panel-header">
+      <div className="panel-header invoice-panel-header">
         <div>
-          <h2>{invoice.invoice_number}</h2>
-          <p>
-            {invoice.status.replace("_", " ")} · Émise le {formatDate(invoice.issue_date)}
-            {invoice.due_date ? ` · Due ${formatDate(invoice.due_date)}` : ""}
-          </p>
+          <p className="eyebrow">Version numérique</p>
+          <h2>Facture #{invoiceDocument.invoiceNumber}</h2>
+          <p>{invoiceDocument.organizationName} · {invoiceDocument.showName}</p>
         </div>
-        <button className="icon-button" type="button" aria-label="Fermer la facture" onClick={onClose}>
-          <X size={18} />
-        </button>
-      </div>
-      <div className="invoice-detail-totals">
-        <Metric label="Sous-total" value={formatCurrency(invoice.subtotal, currency)} />
-        <Metric label="Taxes" value={formatCurrency(invoice.tax_amount, currency)} />
-        <Metric label="Total" value={formatCurrency(invoice.total_amount, currency)} />
-        <Metric label="Balance" value={formatCurrency(invoice.balance_due, currency)} />
-      </div>
-      <div className="table invoice-detail-table">
-        <div className="table-row table-head invoice-detail-row">
-          <span>Description</span>
-          <span>Qté</span>
-          <span>Prix</span>
-          <span>Total</span>
+        <div className="invoice-panel-actions">
+          <button className="ghost-button" type="button" onClick={() => exportInvoicePdf(invoiceDocument)}>
+            <Download size={16} />
+            Exporter PDF
+          </button>
+          <button className="icon-button" type="button" aria-label="Fermer la facture" onClick={onClose}>
+            <X size={18} />
+          </button>
         </div>
-        {lineItems.map((item) => (
-          <div className="table-row invoice-detail-row" key={item.id}>
-            <div>
-              <strong>{item.description}</strong>
-              <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
-            </div>
-            <span>{invoiceQuantityLabel(item.quantity)} x</span>
-            <span>{formatCurrency(item.unit_price, currency)}</span>
-            <span>{formatCurrency(item.total_price + item.tax_amount, currency)}</span>
+      </div>
+
+      <article className="invoice-document" aria-label={`Facture ${invoiceDocument.invoiceNumber}`}>
+        <header className="invoice-document-header">
+          <div>
+            <span className="invoice-document-kicker">Association</span>
+            <h3>{invoiceDocument.organizationName}</h3>
+            {invoiceDocument.organizationContactLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
           </div>
-        ))}
-        {!lineItems.length ? <EmptyState label="Aucune ligne sur cette facture." /> : null}
-      </div>
+          <div className="invoice-document-number">
+            <span>Facture</span>
+            <strong>#{invoiceDocument.invoiceNumber}</strong>
+            <small>{invoiceDocument.statusLabel}</small>
+          </div>
+        </header>
+
+        <section className="invoice-document-show">
+          <div>
+            <span className="invoice-document-kicker">Show</span>
+            <strong>{invoiceDocument.showName}</strong>
+            <span>{invoiceDocument.showDates}</span>
+            {invoiceDocument.showLocation ? <span>{invoiceDocument.showLocation}</span> : null}
+          </div>
+          <div>
+            <span className="invoice-document-kicker">Dates</span>
+            <strong>Émise le {invoiceDocument.issueDate}</strong>
+            <span>{invoiceDocument.dueDate ? `Échéance ${invoiceDocument.dueDate}` : "Aucune échéance définie"}</span>
+          </div>
+        </section>
+
+        <section className="invoice-document-parties">
+          <div>
+            <span className="invoice-document-kicker">Facturé à</span>
+            <strong>{invoiceDocument.payerName}</strong>
+            {invoiceDocument.payerContactLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </div>
+          <div>
+            <span className="invoice-document-kicker">Informations de facturation</span>
+            {invoiceDocument.organizationAddressLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+            {invoiceDocument.organizationTaxLines.map((line) => (
+              <span key={line}>{line}</span>
+            ))}
+          </div>
+        </section>
+
+        <div className="table invoice-detail-table">
+          <div className="table-row table-head invoice-detail-row">
+            <span>Description</span>
+            <span>Qté</span>
+            <span>Prix</span>
+            <span>Taxes</span>
+            <span>Total</span>
+          </div>
+          {lineItems.map((item) => (
+            <div className="table-row invoice-detail-row" key={item.id}>
+              <div>
+                <strong>{item.description}</strong>
+                <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
+              </div>
+              <span>{invoiceQuantityLabel(item.quantity)}</span>
+              <span>{formatCurrency(item.unit_price, currency)}</span>
+              <span>{formatCurrency(item.tax_amount, currency)}</span>
+              <span>{formatCurrency(Number(item.total_price) + Number(item.tax_amount), currency)}</span>
+            </div>
+          ))}
+          {!lineItems.length ? <EmptyState label="Aucune ligne sur cette facture." /> : null}
+        </div>
+
+        <footer className="invoice-document-footer">
+          <dl className="invoice-document-totals">
+            <div>
+              <dt>Sous-total</dt>
+              <dd>{invoiceDocument.subtotal}</dd>
+            </div>
+            <div>
+              <dt>{invoiceDocument.taxLabel}</dt>
+              <dd>{invoiceDocument.taxAmount}</dd>
+            </div>
+            <div>
+              <dt>Total</dt>
+              <dd>{invoiceDocument.totalAmount}</dd>
+            </div>
+            <div className="invoice-document-balance">
+              <dt>Balance</dt>
+              <dd>{invoiceDocument.balanceDue}</dd>
+            </div>
+          </dl>
+        </footer>
+      </article>
     </section>
   );
+}
+
+type InvoiceDocumentLine = {
+  description: string;
+  subtotal: string;
+  tax: string;
+  total: string;
+  typeLabel: string;
+  unitPrice: string;
+  quantity: string;
+};
+
+type InvoiceDocumentData = {
+  balanceDue: string;
+  dueDate: string | null;
+  invoiceNumber: string;
+  issueDate: string;
+  lineItems: InvoiceDocumentLine[];
+  organizationAddressLines: string[];
+  organizationContactLines: string[];
+  organizationName: string;
+  organizationTaxLines: string[];
+  payerContactLines: string[];
+  payerName: string;
+  showDates: string;
+  showLocation: string;
+  showName: string;
+  statusLabel: string;
+  subtotal: string;
+  taxAmount: string;
+  taxLabel: string;
+  totalAmount: string;
+};
+
+function buildInvoiceDocumentData({
+  currency,
+  invoice,
+  lineItems,
+  organization,
+  payerContact,
+  show,
+}: {
+  currency: string;
+  invoice: Invoice;
+  lineItems: InvoiceLineItem[];
+  organization: Organization | null;
+  payerContact: Contact | undefined;
+  show: Show | undefined;
+}): InvoiceDocumentData {
+  const organizationName = organizationInvoiceName(organization);
+  const taxRate = Number(show?.tax_rate ?? organization?.tax_rate ?? 0);
+  const taxName = trimmedText(organization?.tax_name) ?? "Taxes";
+
+  return {
+    balanceDue: formatCurrency(invoice.balance_due, currency),
+    dueDate: invoice.due_date ? formatDate(invoice.due_date) : null,
+    invoiceNumber: formatInvoiceNumber(invoice.invoice_number),
+    issueDate: formatDate(invoice.issue_date),
+    lineItems: lineItems.map((item) => ({
+      description: item.description,
+      quantity: invoiceQuantityLabel(item.quantity),
+      subtotal: formatCurrency(item.total_price, currency),
+      tax: formatCurrency(item.tax_amount, currency),
+      total: formatCurrency(Number(item.total_price) + Number(item.tax_amount), currency),
+      typeLabel: invoiceItemTypeLabel(item.item_type),
+      unitPrice: formatCurrency(item.unit_price, currency),
+    })),
+    organizationAddressLines: organizationAddressLines(organization),
+    organizationContactLines: compactLines([organization?.billing_email, organization?.billing_phone]),
+    organizationName,
+    organizationTaxLines: organizationTaxLines(organization),
+    payerContactLines: compactLines([payerContact?.email, payerContact?.phone]),
+    payerName: contactLabel(payerContact),
+    showDates: showDateRange(show),
+    showLocation: showLocationLine(show),
+    showName: showLabel(show),
+    statusLabel: invoiceStatusLabel(invoice.status),
+    subtotal: formatCurrency(invoice.subtotal, currency),
+    taxAmount: formatCurrency(invoice.tax_amount, currency),
+    taxLabel: taxRate > 0 ? `${taxName} (${invoiceQuantityLabel(taxRate)}%)` : taxName,
+    totalAmount: formatCurrency(invoice.total_amount, currency),
+  };
+}
+
+function exportInvoicePdf(invoiceDocument: InvoiceDocumentData) {
+  const printWindow = window.open("", "_blank", "width=900,height=1200");
+
+  if (!printWindow) {
+    window.print();
+    return;
+  }
+
+  printWindow.opener = null;
+  printWindow.document.open();
+  printWindow.document.write(renderInvoicePrintHtml(invoiceDocument));
+  printWindow.document.close();
+  printWindow.focus();
+}
+
+function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
+  const lines = invoiceDocument.lineItems.length
+    ? invoiceDocument.lineItems
+        .map(
+          (item) => `
+            <tr>
+              <td>
+                <strong>${escapeHtml(item.description)}</strong>
+                <span>${escapeHtml(item.typeLabel)}</span>
+              </td>
+              <td>${escapeHtml(item.quantity)}</td>
+              <td>${escapeHtml(item.unitPrice)}</td>
+              <td>${escapeHtml(item.tax)}</td>
+              <td>${escapeHtml(item.total)}</td>
+            </tr>
+          `,
+        )
+        .join("")
+    : `<tr><td colspan="5">Aucune ligne sur cette facture.</td></tr>`;
+
+  return `<!doctype html>
+    <html lang="fr">
+      <head>
+        <meta charset="utf-8" />
+        <title>Facture ${escapeHtml(invoiceDocument.invoiceNumber)}</title>
+        <style>
+          @page { margin: 18mm; size: letter; }
+          * { box-sizing: border-box; }
+          body {
+            color: #15231f;
+            font-family: Inter, Arial, sans-serif;
+            margin: 0;
+          }
+          .invoice {
+            display: grid;
+            gap: 24px;
+          }
+          header {
+            align-items: start;
+            border-bottom: 2px solid #13201d;
+            display: grid;
+            gap: 24px;
+            grid-template-columns: 1fr auto;
+            padding-bottom: 18px;
+          }
+          h1, h2, h3, p { margin: 0; }
+          h1 { font-size: 30px; }
+          h2 { font-size: 20px; }
+          .kicker {
+            color: #5f716b;
+            display: block;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+          }
+          .number {
+            text-align: right;
+          }
+          .number strong {
+            display: block;
+            font-size: 34px;
+          }
+          .grid {
+            display: grid;
+            gap: 18px;
+            grid-template-columns: 1fr 1fr;
+          }
+          .block {
+            border-bottom: 1px solid #d8e3df;
+            display: grid;
+            gap: 5px;
+            padding-bottom: 14px;
+          }
+          .block strong {
+            font-size: 15px;
+          }
+          .muted {
+            color: #5f716b;
+          }
+          table {
+            border-collapse: collapse;
+            width: 100%;
+          }
+          th {
+            background: #eef3f1;
+            color: #51615d;
+            font-size: 11px;
+            text-align: left;
+            text-transform: uppercase;
+          }
+          th, td {
+            border-bottom: 1px solid #dfe8e4;
+            padding: 10px;
+            vertical-align: top;
+          }
+          td span {
+            color: #697a74;
+            display: block;
+            font-size: 12px;
+            margin-top: 3px;
+          }
+          th:not(:first-child), td:not(:first-child) {
+            text-align: right;
+            white-space: nowrap;
+          }
+          .totals {
+            display: grid;
+            gap: 8px;
+            justify-self: end;
+            min-width: 260px;
+          }
+          .totals div {
+            align-items: center;
+            display: flex;
+            justify-content: space-between;
+          }
+          .totals .balance {
+            border-top: 2px solid #13201d;
+            font-size: 18px;
+            font-weight: 800;
+            margin-top: 4px;
+            padding-top: 10px;
+          }
+        </style>
+      </head>
+      <body>
+        <main class="invoice">
+          <header>
+            <div>
+              <span class="kicker">Association</span>
+              <h1>${escapeHtml(invoiceDocument.organizationName)}</h1>
+              ${invoiceDocument.organizationContactLines.map((line) => `<p class="muted">${escapeHtml(line)}</p>`).join("")}
+            </div>
+            <div class="number">
+              <span class="kicker">Facture</span>
+              <strong>#${escapeHtml(invoiceDocument.invoiceNumber)}</strong>
+              <p class="muted">${escapeHtml(invoiceDocument.statusLabel)}</p>
+            </div>
+          </header>
+          <section class="grid">
+            <div class="block">
+              <span class="kicker">Show</span>
+              <h2>${escapeHtml(invoiceDocument.showName)}</h2>
+              <p>${escapeHtml(invoiceDocument.showDates)}</p>
+              ${invoiceDocument.showLocation ? `<p class="muted">${escapeHtml(invoiceDocument.showLocation)}</p>` : ""}
+            </div>
+            <div class="block">
+              <span class="kicker">Dates</span>
+              <strong>Émise le ${escapeHtml(invoiceDocument.issueDate)}</strong>
+              <p>${escapeHtml(invoiceDocument.dueDate ? `Échéance ${invoiceDocument.dueDate}` : "Aucune échéance définie")}</p>
+            </div>
+            <div class="block">
+              <span class="kicker">Facturé à</span>
+              <strong>${escapeHtml(invoiceDocument.payerName)}</strong>
+              ${invoiceDocument.payerContactLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+            </div>
+            <div class="block">
+              <span class="kicker">Informations de facturation</span>
+              ${invoiceDocument.organizationAddressLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+              ${invoiceDocument.organizationTaxLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
+            </div>
+          </section>
+          <table>
+            <thead>
+              <tr>
+                <th>Description</th>
+                <th>Qté</th>
+                <th>Prix</th>
+                <th>Taxes</th>
+                <th>Total</th>
+              </tr>
+            </thead>
+            <tbody>${lines}</tbody>
+          </table>
+          <section class="totals">
+            <div><span>Sous-total</span><strong>${escapeHtml(invoiceDocument.subtotal)}</strong></div>
+            <div><span>${escapeHtml(invoiceDocument.taxLabel)}</span><strong>${escapeHtml(invoiceDocument.taxAmount)}</strong></div>
+            <div><span>Total</span><strong>${escapeHtml(invoiceDocument.totalAmount)}</strong></div>
+            <div class="balance"><span>Balance</span><strong>${escapeHtml(invoiceDocument.balanceDue)}</strong></div>
+          </section>
+        </main>
+        <script>
+          window.addEventListener("load", () => setTimeout(() => window.print(), 150));
+        </script>
+      </body>
+    </html>`;
+}
+
+function organizationInvoiceName(organization: Organization | null) {
+  return trimmedText(organization?.billing_name) ?? organization?.name ?? "Association";
+}
+
+function organizationAddressLines(organization: Organization | null) {
+  const cityLine = compactInline([organization?.city, organization?.state, organization?.zip_code], " ");
+  const lines = compactLines([organization?.address, organization?.address_line2, cityLine, organization?.country]);
+  return lines.length ? lines : ["Adresse à compléter dans les réglages"];
+}
+
+function organizationTaxLines(organization: Organization | null) {
+  return compactLines([
+    organization?.tax_number ? `${trimmedText(organization.tax_name) ?? "No de taxe"}: ${organization.tax_number}` : null,
+    organization?.secondary_tax_number ? `${trimmedText(organization.secondary_tax_name) ?? "No de taxe"}: ${organization.secondary_tax_number}` : null,
+  ]);
+}
+
+function showDateRange(show: Show | undefined) {
+  if (!show) {
+    return "Show non associé";
+  }
+
+  if (show.start_date === show.end_date) {
+    return formatDate(show.start_date);
+  }
+
+  return `${formatDate(show.start_date)} - ${formatDate(show.end_date)}`;
+}
+
+function showLocationLine(show: Show | undefined) {
+  if (!show) {
+    return "";
+  }
+
+  const location = trimmedText(show.venue) ?? trimmedText(show.location);
+  const cityLine = compactInline([show.city, show.state, show.country], ", ");
+  return compactInline([location, cityLine], " - ");
+}
+
+function invoiceStatusLabel(status: Invoice["status"]) {
+  switch (status) {
+    case "draft":
+      return "Brouillon";
+    case "sent":
+      return "Envoyée";
+    case "viewed":
+      return "Consultée";
+    case "partially_paid":
+      return "Partiellement payée";
+    case "paid":
+      return "Payée";
+    case "overdue":
+      return "En retard";
+    case "void":
+      return "Annulée";
+    default:
+      return status;
+  }
+}
+
+function formatInvoiceNumber(value: string) {
+  const normalized = value.trim();
+  return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, "0") : normalized;
+}
+
+function compactLines(values: Array<string | null | undefined>) {
+  return values.map(trimmedText).filter((value): value is string => Boolean(value));
+}
+
+function compactInline(values: Array<string | null | undefined>, separator: string) {
+  return compactLines(values).join(separator);
+}
+
+function trimmedText(value: string | null | undefined) {
+  const nextValue = value?.trim();
+  return nextValue ? nextValue : null;
+}
+
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (character) => {
+    switch (character) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "\"":
+        return "&quot;";
+      case "'":
+        return "&#039;";
+      default:
+        return character;
+    }
+  });
+}
+
+type OrganizationBillingFormState = {
+  name: string;
+  shortName: string;
+  primaryContactName: string;
+  primaryContactEmail: string;
+  primaryContactPhone: string;
+  billingName: string;
+  billingEmail: string;
+  billingPhone: string;
+  address: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zipCode: string;
+  country: string;
+  currency: string;
+  taxPresetId: string;
+  taxName: string;
+  taxRate: string;
+  taxNumber: string;
+  secondaryTaxName: string;
+  secondaryTaxNumber: string;
+};
+
+function organizationBillingFormState(organization: Organization | null): OrganizationBillingFormState {
+  const country = (organization?.country ?? "CA").toUpperCase();
+  const state = (organization?.state ?? (country === "CA" ? "QC" : "")).toUpperCase();
+  const locationPreset = taxPresetForLocation(country, state);
+  const taxName = organization?.tax_name ?? locationPreset.taxName;
+  const taxRate = organization?.tax_rate ?? locationPreset.rate ?? 0;
+
+  return {
+    name: organization?.name ?? "",
+    shortName: organization?.short_name ?? "",
+    primaryContactName: organization?.primary_contact_name ?? "",
+    primaryContactEmail: organization?.primary_contact_email ?? "",
+    primaryContactPhone: organization?.primary_contact_phone ?? "",
+    billingName: organization?.billing_name ?? organization?.name ?? "",
+    billingEmail: organization?.billing_email ?? organization?.primary_contact_email ?? "",
+    billingPhone: organization?.billing_phone ?? organization?.primary_contact_phone ?? "",
+    address: organization?.address ?? "",
+    addressLine2: organization?.address_line2 ?? "",
+    city: organization?.city ?? "",
+    state,
+    zipCode: organization?.zip_code ?? "",
+    country,
+    currency: organization?.currency ?? "CAD",
+    taxPresetId: taxPresetIdForValues(country, state, taxRate, taxName),
+    taxName,
+    taxRate: taxRateValue(taxRate),
+    taxNumber: organization?.tax_number ?? "",
+    secondaryTaxName: organization?.secondary_tax_name ?? locationPreset.secondaryTaxName ?? "",
+    secondaryTaxNumber: organization?.secondary_tax_number ?? "",
+  };
+}
+
+function applyTaxPresetToBillingForm(current: OrganizationBillingFormState, preset: TaxPreset, preserveManualRate = false): OrganizationBillingFormState {
+  return {
+    ...current,
+    taxPresetId: preset.id,
+    taxName: preset.taxName,
+    taxRate: preset.rate == null ? (preserveManualRate ? current.taxRate : "0") : taxRateValue(preset.rate),
+    secondaryTaxName: preset.secondaryTaxName ?? "",
+  };
+}
+
+function taxRateValue(value: number) {
+  return Number.isInteger(value) ? String(value) : String(value);
+}
+
+function taxRateNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
 function SettingsView({
@@ -4885,10 +5451,15 @@ function SettingsView({
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
 }) {
   const [busyRequirementId, setBusyRequirementId] = useState("");
+  const [billingBusy, setBillingBusy] = useState(false);
+  const [billingForm, setBillingForm] = useState<OrganizationBillingFormState>(() => organizationBillingFormState(organization));
   const [healthBusy, setHealthBusy] = useState(false);
   const [backNumberPolicy, setBackNumberPolicy] = useState<OrganizationBackNumber["assignment_mode"]>(organizationBackNumberMode(organization));
   const [healthRequired, setHealthRequired] = useState(organizationRequiresHealthVerification(organization));
   const [cogginsValidityMonths, setCogginsValidityMonths] = useState<6 | 12>(organizationCogginsValidityMonths(organization));
+  const isCanadaBillingAddress = billingForm.country === "CA";
+  const availableTaxPresets = taxPresetsForLocation(billingForm.country, billingForm.state);
+  const selectedTaxPresetId = availableTaxPresets.some((preset) => preset.id === billingForm.taxPresetId) ? billingForm.taxPresetId : "manual";
   const riderRequirementIds = new Set(
     membershipRequirements
       .filter((requirement) => requirement.contact_type === "rider" && requirement.is_required)
@@ -4896,10 +5467,39 @@ function SettingsView({
   );
 
   useEffect(() => {
+    setBillingForm(organizationBillingFormState(organization));
     setBackNumberPolicy(organizationBackNumberMode(organization));
     setHealthRequired(organizationRequiresHealthVerification(organization));
     setCogginsValidityMonths(organizationCogginsValidityMonths(organization));
   }, [organization]);
+
+  function handleBillingFieldChange(field: keyof OrganizationBillingFormState, value: string) {
+    setBillingForm((current) => {
+      let next = { ...current, [field]: value };
+
+      if (field === "country") {
+        next.country = value.toUpperCase();
+
+        if (next.country === "CA" && !canadianProvinceOptions.some((province) => province.value === next.state)) {
+          next.state = "QC";
+        }
+
+        next = applyTaxPresetToBillingForm(next, taxPresetForLocation(next.country, next.state));
+      }
+
+      if (field === "state") {
+        next.state = value.toUpperCase();
+        next = applyTaxPresetToBillingForm(next, taxPresetForLocation(next.country, next.state));
+      }
+
+      return next;
+    });
+  }
+
+  function handleTaxPresetChange(presetId: string) {
+    const preset = taxPresetById(presetId);
+    setBillingForm((current) => applyTaxPresetToBillingForm({ ...current, taxPresetId: preset.id }, preset, true));
+  }
 
   async function handleRequirementToggle(externalOrganizationId: string, isRequired: boolean) {
     if (!organization) {
@@ -4940,6 +5540,43 @@ function SettingsView({
     }
   }
 
+  async function handleBillingSettingsSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization || !billingForm.name.trim()) {
+      return;
+    }
+
+    setBillingBusy(true);
+
+    try {
+      await onUpdateOrganizationHealthSettings(organization.id, {
+        name: billingForm.name,
+        short_name: billingForm.shortName,
+        primary_contact_name: billingForm.primaryContactName,
+        primary_contact_email: billingForm.primaryContactEmail,
+        primary_contact_phone: billingForm.primaryContactPhone,
+        billing_name: billingForm.billingName,
+        billing_email: billingForm.billingEmail,
+        billing_phone: billingForm.billingPhone,
+        address: billingForm.address,
+        address_line2: billingForm.addressLine2,
+        city: billingForm.city,
+        state: billingForm.state,
+        zip_code: billingForm.zipCode,
+        country: billingForm.country,
+        currency: billingForm.currency,
+        tax_rate: taxRateNumber(billingForm.taxRate),
+        tax_name: billingForm.taxName,
+        tax_number: billingForm.taxNumber,
+        secondary_tax_name: billingForm.secondaryTaxName,
+        secondary_tax_number: billingForm.secondaryTaxNumber,
+      });
+    } finally {
+      setBillingBusy(false);
+    }
+  }
+
   return (
     <div className="content-grid">
       <ViewIntro
@@ -4967,27 +5604,145 @@ function SettingsView({
         </dl>
       </section>
 
-      <section className="panel">
+      <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Organization</h2>
-            <p>{organization?.slug ?? "No organization selected"}</p>
+            <h2>Informations de facturation</h2>
+            <p>{organization?.slug ?? "Aucune association selectionnee"}</p>
           </div>
         </div>
-        <dl className="detail-list">
-          <div>
-            <dt>Currency</dt>
-            <dd>{organization?.currency ?? "CAD"}</dd>
+        <form className="stack" onSubmit={handleBillingSettingsSubmit}>
+          <div className="form-grid">
+            <label>
+              Nom de l'association
+              <input disabled={!organization || billingBusy} value={billingForm.name} onChange={(event) => handleBillingFieldChange("name", event.target.value)} />
+            </label>
+            <label>
+              Abréviation
+              <input disabled={!organization || billingBusy} value={billingForm.shortName} onChange={(event) => handleBillingFieldChange("shortName", event.target.value)} />
+            </label>
           </div>
-          <div>
-            <dt>Tax rate</dt>
-            <dd>{organization ? `${organization.tax_rate}%` : "0%"}</dd>
+          <div className="form-grid">
+            <label>
+              Contact principal
+              <input disabled={!organization || billingBusy} value={billingForm.primaryContactName} onChange={(event) => handleBillingFieldChange("primaryContactName", event.target.value)} />
+            </label>
+            <label>
+              Email principal
+              <input disabled={!organization || billingBusy} type="email" value={billingForm.primaryContactEmail} onChange={(event) => handleBillingFieldChange("primaryContactEmail", event.target.value)} />
+            </label>
+            <label>
+              Téléphone principal
+              <input disabled={!organization || billingBusy} value={billingForm.primaryContactPhone} onChange={(event) => handleBillingFieldChange("primaryContactPhone", event.target.value)} />
+            </label>
           </div>
-          <div>
-            <dt>Plan</dt>
-            <dd>{organization?.subscription_plan ?? "free"}</dd>
+          <div className="form-grid">
+            <label>
+              Nom légal sur facture
+              <input disabled={!organization || billingBusy} value={billingForm.billingName} onChange={(event) => handleBillingFieldChange("billingName", event.target.value)} />
+            </label>
+            <label>
+              Email de facturation
+              <input disabled={!organization || billingBusy} type="email" value={billingForm.billingEmail} onChange={(event) => handleBillingFieldChange("billingEmail", event.target.value)} />
+            </label>
+            <label>
+              Téléphone de facturation
+              <input disabled={!organization || billingBusy} value={billingForm.billingPhone} onChange={(event) => handleBillingFieldChange("billingPhone", event.target.value)} />
+            </label>
           </div>
-        </dl>
+          <div className="form-grid">
+            <label>
+              Adresse
+              <input disabled={!organization || billingBusy} value={billingForm.address} onChange={(event) => handleBillingFieldChange("address", event.target.value)} />
+            </label>
+            <label>
+              Appartement, bureau ou suite
+              <input disabled={!organization || billingBusy} value={billingForm.addressLine2} onChange={(event) => handleBillingFieldChange("addressLine2", event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Ville
+              <input disabled={!organization || billingBusy} value={billingForm.city} onChange={(event) => handleBillingFieldChange("city", event.target.value)} />
+            </label>
+            <label>
+              Pays
+              <select disabled={!organization || billingBusy} value={billingForm.country} onChange={(event) => handleBillingFieldChange("country", event.target.value)}>
+                {countryOptions.map((country) => (
+                  <option key={country.value} value={country.value}>
+                    {country.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              {isCanadaBillingAddress ? "Province" : "État / région"}
+              {isCanadaBillingAddress ? (
+                <select disabled={!organization || billingBusy} value={billingForm.state} onChange={(event) => handleBillingFieldChange("state", event.target.value)}>
+                  {canadianProvinceOptions.map((province) => (
+                    <option key={province.value} value={province.value}>
+                      {province.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input disabled={!organization || billingBusy} value={billingForm.state} onChange={(event) => handleBillingFieldChange("state", event.target.value)} />
+              )}
+            </label>
+            <label>
+              Code postal
+              <input disabled={!organization || billingBusy} value={billingForm.zipCode} onChange={(event) => handleBillingFieldChange("zipCode", event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Devise
+              <select disabled={!organization || billingBusy} value={billingForm.currency} onChange={(event) => handleBillingFieldChange("currency", event.target.value)}>
+                {currencyOptions.map((currency) => (
+                  <option key={currency.value} value={currency.value}>
+                    {currency.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Taxe de vente
+              <select disabled={!organization || billingBusy} value={selectedTaxPresetId} onChange={(event) => handleTaxPresetChange(event.target.value)}>
+                {availableTaxPresets.map((preset) => (
+                  <option key={preset.id} value={preset.id}>
+                    {preset.label}
+                  </option>
+                ))}
+              </select>
+              <span className="input-help">Le taux reste modifiable pour les exemptions, exceptions ou taxes locales.</span>
+            </label>
+            <label>
+              Taux de taxe effectif (%)
+              <input disabled={!organization || billingBusy} min="0" step="0.001" type="number" value={billingForm.taxRate} onChange={(event) => handleBillingFieldChange("taxRate", event.target.value)} />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Libellé taxe principale
+              <input disabled={!organization || billingBusy} value={billingForm.taxName} onChange={(event) => handleBillingFieldChange("taxName", event.target.value)} />
+            </label>
+            <label>
+              No taxe principale
+              <input disabled={!organization || billingBusy} value={billingForm.taxNumber} onChange={(event) => handleBillingFieldChange("taxNumber", event.target.value)} />
+            </label>
+            <label>
+              Libellé taxe secondaire
+              <input disabled={!organization || billingBusy} placeholder="TVQ, PST, RST..." value={billingForm.secondaryTaxName} onChange={(event) => handleBillingFieldChange("secondaryTaxName", event.target.value)} />
+            </label>
+            <label>
+              No taxe secondaire
+              <input disabled={!organization || billingBusy} value={billingForm.secondaryTaxNumber} onChange={(event) => handleBillingFieldChange("secondaryTaxNumber", event.target.value)} />
+            </label>
+          </div>
+          <button className="primary-button" disabled={!organization || billingBusy || !billingForm.name.trim()} type="submit">
+            {billingBusy ? "Enregistrement..." : "Enregistrer les infos de facturation"}
+          </button>
+        </form>
       </section>
 
       <section className="panel span-2">

@@ -7,14 +7,24 @@ export type Organization = {
   primary_contact_name: string | null;
   primary_contact_email: string | null;
   primary_contact_phone: string | null;
+  billing_name: string | null;
+  billing_email: string | null;
+  billing_phone: string | null;
+  address: string | null;
+  address_line2: string | null;
   city: string | null;
   state: string | null;
+  zip_code: string | null;
   country: string | null;
   logo_url: string | null;
   website_url: string | null;
   timezone: string;
   currency: string;
   tax_rate: number;
+  tax_name: string | null;
+  tax_number: string | null;
+  secondary_tax_name: string | null;
+  secondary_tax_number: string | null;
   back_number_policy: OrganizationBackNumberAssignmentMode;
   health_verification_required: boolean;
   coggins_validity_months: 6 | 12;
@@ -482,6 +492,33 @@ export type OrganizationInput = {
   primary_contact_email?: string;
   timezone?: string;
   currency?: string;
+};
+
+export type OrganizationSettingsInput = {
+  name?: string;
+  short_name?: string | null;
+  primary_contact_name?: string | null;
+  primary_contact_email?: string | null;
+  primary_contact_phone?: string | null;
+  billing_name?: string | null;
+  billing_email?: string | null;
+  billing_phone?: string | null;
+  address?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  country?: string | null;
+  timezone?: string;
+  currency?: string;
+  tax_rate?: number;
+  tax_name?: string | null;
+  tax_number?: string | null;
+  secondary_tax_name?: string | null;
+  secondary_tax_number?: string | null;
+  back_number_policy?: Organization["back_number_policy"];
+  health_verification_required?: boolean;
+  coggins_validity_months?: 6 | 12;
 };
 
 export type ShowInput = {

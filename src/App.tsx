@@ -432,7 +432,7 @@ export default function App() {
       }}
       onUpdateOrganizationHealthSettings={async (id, input) => {
         await updateOrganizationHealthSettings(id, input);
-        setNotice({ tone: "success", message: "Regles de sante mises a jour." });
+        setNotice({ tone: "success", message: "Reglages de l'association mis a jour." });
         await refreshContext();
       }}
       onViewChange={setActiveView}

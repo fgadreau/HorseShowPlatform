@@ -40,6 +40,7 @@ import type {
   OrganizationExternalMembershipRequirement,
   OrganizationInput,
   OrganizationMember,
+  OrganizationSettingsInput,
   SanctioningBody,
   Show,
   ShowDay,
@@ -466,16 +467,35 @@ export async function createOrganization(profileId: string, input: OrganizationI
 
 export async function updateOrganizationHealthSettings(
   id: string,
-  input: {
-    back_number_policy?: Organization["back_number_policy"];
-    health_verification_required: boolean;
-    coggins_validity_months: 6 | 12;
-  },
+  input: OrganizationSettingsInput,
 ) {
   const client = requireSupabase();
+  const payload = {
+    ...input,
+    name: input.name?.trim(),
+    short_name: nullableTrim(input.short_name),
+    primary_contact_name: nullableTrim(input.primary_contact_name),
+    primary_contact_email: nullableTrim(input.primary_contact_email),
+    primary_contact_phone: nullableTrim(input.primary_contact_phone),
+    billing_name: nullableTrim(input.billing_name),
+    billing_email: nullableTrim(input.billing_email),
+    billing_phone: nullableTrim(input.billing_phone),
+    address: nullableTrim(input.address),
+    address_line2: nullableTrim(input.address_line2),
+    city: nullableTrim(input.city),
+    state: normalizeState(input.state),
+    zip_code: nullableTrim(input.zip_code),
+    country: normalizeCountry(input.country),
+    currency: input.currency?.trim().toUpperCase(),
+    tax_rate: input.tax_rate === undefined ? undefined : normalizeTaxRate(input.tax_rate),
+    tax_name: nullableTrim(input.tax_name),
+    tax_number: nullableTrim(input.tax_number),
+    secondary_tax_name: nullableTrim(input.secondary_tax_name),
+    secondary_tax_number: nullableTrim(input.secondary_tax_number),
+  };
   const { data, error } = await client
     .from("organizations")
-    .update(input)
+    .update(cleanPayload(payload))
     .eq("id", id)
     .select("*")
     .single<Organization>();
@@ -3309,6 +3329,34 @@ function birthYearFromDate(value: string | null | undefined) {
 
 function cleanPayload<T extends Record<string, unknown>>(input: T) {
   return Object.fromEntries(Object.entries(input).filter(([, value]) => value !== undefined));
+}
+
+function nullableTrim(value?: string | null) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value?.trim() || null;
+}
+
+function normalizeCountry(value?: string | null) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value?.trim().toUpperCase().slice(0, 2) || null;
+}
+
+function normalizeState(value?: string | null) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return value?.trim().toUpperCase() || null;
+}
+
+function normalizeTaxRate(value: number) {
+  return Number.isFinite(value) ? Math.max(0, Math.min(99.999, Number(value.toFixed(3)))) : 0;
 }
 
 function isMissingShowScoreSchemaError(error: { code?: string; message?: string }) {

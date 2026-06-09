@@ -2024,6 +2024,17 @@ button:focus-visible {
   text-align: left;
 }
 
+.invoice-number-button > span {
+  display: grid;
+  gap: 2px;
+}
+
+.invoice-number-button small {
+  color: #687873;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .invoice-number-button:hover strong {
   text-decoration: underline;
 }
@@ -2039,15 +2050,145 @@ button:focus-visible {
   border-color: #c9ddd6;
 }
 
-.invoice-detail-totals {
+.invoice-panel-header {
+  align-items: center;
+}
+
+.invoice-panel-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.invoice-document {
+  background: #ffffff;
+  border: 1px solid #d6e3df;
+  border-radius: 8px;
   display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin-bottom: 16px;
+  gap: 18px;
+  padding: 20px;
+}
+
+.invoice-document-header {
+  align-items: start;
+  border-bottom: 2px solid #13201d;
+  display: grid;
+  gap: 18px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  padding-bottom: 18px;
+}
+
+.invoice-document-header h3 {
+  color: #13201d;
+  font-size: 24px;
+  line-height: 1.1;
+  margin: 0 0 8px;
+}
+
+.invoice-document-header span,
+.invoice-document-show span,
+.invoice-document-parties span {
+  color: #65756f;
+  display: block;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.invoice-document-kicker {
+  color: #0f766e !important;
+  font-size: 11px !important;
+  font-weight: 900;
+  line-height: 1.2 !important;
+  margin-bottom: 5px;
+  text-transform: uppercase;
+}
+
+.invoice-document-number {
+  display: grid;
+  justify-items: end;
+  text-align: right;
+}
+
+.invoice-document-number strong {
+  color: #13201d;
+  font-size: 34px;
+  line-height: 1;
+}
+
+.invoice-document-number small {
+  color: #64736d;
+  font-size: 13px;
+  font-weight: 800;
+  margin-top: 6px;
+}
+
+.invoice-document-show,
+.invoice-document-parties {
+  display: grid;
+  gap: 18px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.invoice-document-show > div,
+.invoice-document-parties > div {
+  border-bottom: 1px solid #e0e9e5;
+  display: grid;
+  gap: 4px;
+  padding-bottom: 12px;
+}
+
+.invoice-document-show strong,
+.invoice-document-parties strong {
+  color: #13201d;
+  overflow-wrap: anywhere;
+}
+
+.invoice-document-footer {
+  display: grid;
+  justify-content: end;
+}
+
+.invoice-document-totals {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  min-width: min(100%, 320px);
+}
+
+.invoice-document-totals div {
+  align-items: center;
+  display: flex;
+  gap: 18px;
+  justify-content: space-between;
+}
+
+.invoice-document-totals dt {
+  color: #65756f;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.invoice-document-totals dd {
+  color: #13201d;
+  font-weight: 900;
+  margin: 0;
+}
+
+.invoice-document-totals .invoice-document-balance {
+  border-top: 2px solid #13201d;
+  margin-top: 4px;
+  padding-top: 10px;
+}
+
+.invoice-document-balance dt,
+.invoice-document-balance dd {
+  color: #13201d;
+  font-size: 18px;
 }
 
 .invoice-detail-row {
-  grid-template-columns: 1.4fr 0.45fr 0.7fr 0.8fr;
+  grid-template-columns: 1.5fr 0.4fr 0.7fr 0.7fr 0.8fr;
 }
 
 .invoice-detail-table {
@@ -2496,14 +2637,16 @@ button:focus-visible {
     margin-top: 0;
   }
 
-  .content-grid,
-  .assistant-stepper,
-  .checkbox-grid,
-  .health-document-actions,
-  .invoice-detail-totals,
-  .metric-grid,
-  .overview-command,
-  .overview-layout,
+    .content-grid,
+    .assistant-stepper,
+    .checkbox-grid,
+    .health-document-actions,
+    .invoice-document-header,
+    .invoice-document-parties,
+    .invoice-document-show,
+    .metric-grid,
+    .overview-command,
+    .overview-layout,
   .reservation-tabs,
   .view-intro,
   .workflow-strip {
@@ -2583,6 +2726,36 @@ button:focus-visible {
 
   .panel {
     padding: 14px;
+  }
+
+  .invoice-panel-actions {
+    justify-content: stretch;
+    width: 100%;
+  }
+
+  .invoice-panel-actions .ghost-button {
+    width: 100%;
+  }
+
+  .invoice-panel-actions .icon-button {
+    align-self: flex-start;
+  }
+
+  .invoice-document {
+    padding: 14px;
+  }
+
+  .invoice-document-number {
+    justify-items: start;
+    text-align: left;
+  }
+
+  .invoice-document-footer {
+    justify-content: stretch;
+  }
+
+  .invoice-document-totals {
+    min-width: 0;
   }
 
   .panel form.stack {
