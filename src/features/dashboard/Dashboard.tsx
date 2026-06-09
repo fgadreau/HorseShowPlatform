@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
-import { extractGvlUrlFromPdf, normalizeGvlUrl } from "../../lib/gvlPdf";
+import { normalizeGvlUrl } from "../../lib/gvlUrl";
 import { getHorseCogginsValidity, getHorseVaccineValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import type { Locale, Translation } from "../../lib/i18n";
 import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
@@ -29,6 +29,7 @@ import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/sh
 import {
   assignBackNumber,
   assignNextBackNumber,
+  claimHorseBackNumber,
   createClass,
   createClassTemplate,
   createClassTemplateDivision,
@@ -112,6 +113,7 @@ export function Dashboard({
   onChangeOrganization,
   onCreateBackNumberRange,
   onAssignBackNumber,
+  onClaimHorseBackNumber,
   onAssignNextBackNumber,
   onReleaseBackNumber,
   onUpdateBackNumberStatus,
@@ -166,6 +168,7 @@ export function Dashboard({
   onChangeOrganization: (organizationId: string) => void;
   onCreateBackNumberRange: (input: Parameters<typeof createBackNumberRange>[0]) => Promise<void>;
   onAssignBackNumber: (input: Parameters<typeof assignBackNumber>[0]) => Promise<void>;
+  onClaimHorseBackNumber: (input: Parameters<typeof claimHorseBackNumber>[0]) => Promise<void>;
   onAssignNextBackNumber: (input: Parameters<typeof assignNextBackNumber>[0]) => Promise<void>;
   onReleaseBackNumber: (id: Parameters<typeof releaseBackNumber>[0]) => Promise<void>;
   onUpdateBackNumberStatus: (id: string, status: Parameters<typeof updateBackNumberStatus>[1]) => Promise<void>;
@@ -224,6 +227,7 @@ export function Dashboard({
   const horseExternalMemberships = context?.horseExternalMemberships ?? [];
   const horseHealthDocuments = context?.horseHealthDocuments ?? [];
   const horses = context?.horses ?? [];
+  const horseContacts = context?.horseContacts ?? [];
   const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
   const organizationBackNumbers = context?.organizationBackNumbers ?? [];
   const classes = context?.classes ?? [];
@@ -286,7 +290,7 @@ export function Dashboard({
     ? sortRecordsForOrganization(horses, selectedOrganizationHorseIds)
     : [];
   const selectedOrganizationHorseContacts = selectedOrganization
-    ? context?.horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(horseContact.horse_id)) ?? []
+    ? horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(horseContact.horse_id))
     : [];
   const selectedOrganizationBackNumbers = selectedOrganization
     ? organizationBackNumbers.filter((backNumber) => backNumber.organization_id === selectedOrganization.id)
@@ -315,21 +319,27 @@ export function Dashboard({
   const selectedOrganizationInvoiceLineItems = selectedOrganization
     ? invoiceLineItems.filter((item) => item.organization_id === selectedOrganization.id)
     : [];
-  const personalContacts = selectedOrganizationContacts.filter((contact) => contact.linked_user_id === context?.profile.id);
+  const personalContacts = contacts.filter((contact) => contact.linked_user_id === context?.profile.id);
   const personalContactIds = new Set(personalContacts.map((contact) => contact.id));
   const personalHorseIdsFromContacts = new Set(
-    selectedOrganizationHorseContacts
+    horseContacts
       .filter((horseContact) => personalContactIds.has(horseContact.contact_id) && (horseContact.role === "owner" || horseContact.role === "co-owner" || horseContact.role === "agent"))
       .map((horseContact) => horseContact.horse_id),
   );
-  const personalHorses = selectedOrganizationHorses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
+  const personalHorses = horses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
+  const selectedOrganizationPersonalContacts = selectedOrganization
+    ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id) || contact.organization_id === selectedOrganization.id)
+    : personalContacts;
+  const selectedOrganizationPersonalHorses = selectedOrganization
+    ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id) || horse.organization_id === selectedOrganization.id)
+    : personalHorses;
   const personalBackNumbers = selectedOrganizationBackNumbers.filter(
     (backNumber) =>
       (backNumber.assigned_horse_id ? personalHorseIds.has(backNumber.assigned_horse_id) : false) ||
       (backNumber.assigned_rider_contact_id ? personalContactIds.has(backNumber.assigned_rider_contact_id) : false),
   );
-  const personalHorseHealthDocuments = selectedOrganizationHorseHealthDocuments.filter((document) => personalHorseIds.has(document.horse_id));
+  const personalHorseHealthDocuments = horseHealthDocuments.filter((document) => personalHorseIds.has(document.horse_id));
   const personalEntries = selectedOrganizationEntries.filter(
     (entry) =>
       personalHorseIds.has(entry.horse_id) ||
@@ -626,14 +636,14 @@ export function Dashboard({
 
         {effectiveView === "my-horses" ? (
           <MyHorsesView
-            contacts={selectedOrganizationContacts}
-            contactRoles={selectedOrganizationContactRoles}
+            contacts={personalContacts}
+            contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
             canManageHealthDocuments={canManageAssociation}
             horses={personalHorses}
             horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={personalHorseHealthDocuments}
-            horseContacts={selectedOrganizationHorseContacts}
+            horseContacts={horseContacts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
@@ -650,7 +660,7 @@ export function Dashboard({
           <MyContactsView
             contacts={personalContacts}
             contactExternalMemberships={contactExternalMemberships}
-            contactRoles={selectedOrganizationContactRoles}
+            contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
@@ -664,14 +674,14 @@ export function Dashboard({
         {effectiveView === "my-entries" ? (
           <MyEntriesView
             classes={selectedOrganizationClasses}
-            contacts={personalContacts}
+            contacts={selectedOrganizationPersonalContacts}
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
             divisions={selectedOrganizationDivisions}
             entries={personalEntries}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={personalHorseHealthDocuments}
-            horses={personalHorses}
+            horses={selectedOrganizationPersonalHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -689,20 +699,21 @@ export function Dashboard({
         {effectiveView === "my-back-numbers" ? (
           <MyBackNumbersView
             backNumbers={personalBackNumbers}
-            contacts={selectedOrganizationContacts}
-            horses={personalHorses}
+            contacts={selectedOrganizationPersonalContacts}
+            horses={selectedOrganizationPersonalHorses}
             organization={selectedOrganization}
+            onClaimHorseBackNumber={onClaimHorseBackNumber}
           />
         ) : null}
 
         {effectiveView === "my-stalls" ? (
           <MyStallsView
             bookings={personalStallBookings}
-            contacts={personalContacts}
+            contacts={selectedOrganizationPersonalContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={personalHorseHealthDocuments}
-            horses={personalHorses}
+            horses={selectedOrganizationPersonalHorses}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             showDays={selectedOrganizationShowDays}
@@ -1388,6 +1399,7 @@ function birthYearFromDateValue(value: string | null | undefined) {
 
 async function resolveGvlCogginsUrl(pdfFile: File | null, fallbackUrl: string) {
   if (pdfFile) {
+    const { extractGvlUrlFromPdf } = await import("../../lib/gvlPdf");
     return extractGvlUrlFromPdf(pdfFile);
   }
 
@@ -3619,6 +3631,39 @@ function entryNumberValue(value: string) {
   return Number.isFinite(parsed) ? Math.max(1, Math.round(parsed)) : null;
 }
 
+function organizationBackNumberMode(organization: Organization | null | undefined): OrganizationBackNumber["assignment_mode"] {
+  return organization?.back_number_policy === "rider" || organization?.back_number_policy === "horse_rider_team" ? organization.back_number_policy : "horse";
+}
+
+function backNumberModeNeedsHorse(mode: OrganizationBackNumber["assignment_mode"]) {
+  return mode === "horse" || mode === "horse_rider_team";
+}
+
+function backNumberModeNeedsRider(mode: OrganizationBackNumber["assignment_mode"]) {
+  return mode === "rider" || mode === "horse_rider_team";
+}
+
+function backNumberAssignmentMatchesTarget(
+  backNumber: OrganizationBackNumber,
+  mode: OrganizationBackNumber["assignment_mode"],
+  horseId: string | null,
+  riderContactId: string | null,
+) {
+  if (backNumber.assignment_mode !== mode) {
+    return false;
+  }
+
+  if (mode === "horse") {
+    return backNumber.assigned_horse_id === horseId;
+  }
+
+  if (mode === "rider") {
+    return backNumber.assigned_rider_contact_id === riderContactId;
+  }
+
+  return backNumber.assigned_horse_id === horseId && backNumber.assigned_rider_contact_id === riderContactId;
+}
+
 function BackNumbersView({
   backNumbers,
   contacts,
@@ -3649,27 +3694,28 @@ function BackNumbersView({
   const [startNumber, setStartNumber] = useState("");
   const [endNumber, setEndNumber] = useState("");
   const [rangeNotes, setRangeNotes] = useState("");
-  const [rangeMode, setRangeMode] = useState<OrganizationBackNumber["assignment_mode"]>("horse");
-  const [assignmentMode, setAssignmentMode] = useState<OrganizationBackNumber["assignment_mode"]>("horse");
   const [horseId, setHorseId] = useState("");
   const [riderContactId, setRiderContactId] = useState("");
   const [number, setNumber] = useState("");
   const [forceTransfer, setForceTransfer] = useState(false);
   const [busy, setBusy] = useState(false);
+  const assignmentMode = organizationBackNumberMode(organization);
+  const needsHorse = backNumberModeNeedsHorse(assignmentMode);
+  const needsRider = backNumberModeNeedsRider(assignmentMode);
   const sortedBackNumbers = [...backNumbers].sort((first, second) => first.number - second.number);
   const selectedHorse = findById(horses, horseId) ?? null;
-  const selectedRiderId = assignmentMode === "horse_rider_team" ? riderContactId : null;
-  const selectedAssignment = selectedHorse
+  const selectedHorseId = needsHorse ? selectedHorse?.id ?? null : null;
+  const selectedRiderId = needsRider ? riderContactId || null : null;
+  const selectedAssignment = (needsHorse ? Boolean(selectedHorseId) : true) && (needsRider ? Boolean(selectedRiderId) : true)
     ? backNumbers.find(
         (backNumber) =>
           backNumber.status === "assigned" &&
-          backNumber.assignment_mode === assignmentMode &&
-          backNumber.assigned_horse_id === selectedHorse.id &&
-          (assignmentMode === "horse" || backNumber.assigned_rider_contact_id === selectedRiderId),
+          backNumberAssignmentMatchesTarget(backNumber, assignmentMode, selectedHorseId, selectedRiderId),
       )
     : null;
   const availableCount = backNumbers.filter((backNumber) => backNumber.status === "available").length;
   const assignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned").length;
+  const riderAssignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned" && backNumber.assignment_mode === "rider").length;
   const teamAssignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned" && backNumber.assignment_mode === "horse_rider_team").length;
 
   async function handleCreateRange(event: FormEvent<HTMLFormElement>) {
@@ -3693,7 +3739,7 @@ function BackNumbersView({
         organization_id: organization.id,
         start_number: start,
         end_number: end,
-        assignment_mode: rangeMode,
+        assignment_mode: assignmentMode,
         notes: rangeNotes,
         created_by_user_id: profileId || null,
       });
@@ -3708,7 +3754,7 @@ function BackNumbersView({
   async function handleAssign(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!organization || !selectedHorse) {
+    if (!organization || (needsHorse && !selectedHorseId) || (needsRider && !selectedRiderId)) {
       return;
     }
 
@@ -3724,8 +3770,8 @@ function BackNumbersView({
       await onAssignBackNumber({
         organization_id: organization.id,
         number: parsedNumber,
-        horse_id: selectedHorse.id,
-        rider_contact_id: assignmentMode === "horse_rider_team" ? riderContactId : null,
+        horse_id: selectedHorseId,
+        rider_contact_id: selectedRiderId,
         assignment_mode: assignmentMode,
         transfer_existing: forceTransfer,
         created_by_user_id: profileId || null,
@@ -3738,7 +3784,7 @@ function BackNumbersView({
   }
 
   async function handleAssignNext() {
-    if (!organization || !selectedHorse) {
+    if (!organization || (needsHorse && !selectedHorseId) || (needsRider && !selectedRiderId)) {
       return;
     }
 
@@ -3747,8 +3793,8 @@ function BackNumbersView({
     try {
       await onAssignNextBackNumber({
         organization_id: organization.id,
-        horse_id: selectedHorse.id,
-        rider_contact_id: assignmentMode === "horse_rider_team" ? riderContactId : null,
+        horse_id: selectedHorseId,
+        rider_contact_id: selectedRiderId,
         assignment_mode: assignmentMode,
         created_by_user_id: profileId || null,
       });
@@ -3768,22 +3814,24 @@ function BackNumbersView({
 
   const canAssign = Boolean(
     organization &&
-      selectedHorse &&
-      (assignmentMode === "horse" || riderContactId) &&
+      (!needsHorse || selectedHorseId) &&
+      (!needsRider || selectedRiderId) &&
       entryNumberValue(number),
   );
-  const canAssignNext = Boolean(organization && selectedHorse && availableCount > 0 && (assignmentMode === "horse" || riderContactId));
+  const canAssignNext = Boolean(organization && (!needsHorse || selectedHorseId) && (!needsRider || selectedRiderId) && availableCount > 0);
 
   return (
     <div className="content-grid">
       <ViewIntro
         eyebrow="Secrétariat"
         title="Dossards"
-        description="Gere le stock de dossards de l'association et assigne les numeros par cheval ou par equipe cheval+cavalier."
+        description="Gere le stock de dossards de l'association selon sa politique active."
         stats={[
           { label: "Inventaire", value: String(backNumbers.length) },
           { label: "Disponibles", value: String(availableCount) },
           { label: "Assignes", value: String(assignedCount) },
+          { label: "Politique", value: backNumberModeLabel(assignmentMode) },
+          { label: "Par cavalier", value: String(riderAssignedCount) },
           { label: "Par equipe", value: String(teamAssignedCount) },
         ]}
       />
@@ -3808,13 +3856,10 @@ function BackNumbersView({
             </label>
           </div>
           <div className="form-grid">
-            <label>
-              Mode par defaut
-              <select value={rangeMode} onChange={(event) => setRangeMode(event.target.value as OrganizationBackNumber["assignment_mode"])}>
-                <option value="horse">Cheval</option>
-                <option value="horse_rider_team">Equipe cheval+cavalier</option>
-              </select>
-            </label>
+            <div className="readiness-card">
+              <strong>Mode d'inventaire</strong>
+              <span>{backNumberModeLabel(assignmentMode)}</span>
+            </div>
             <label>
               Notes
               <input value={rangeNotes} onChange={(event) => setRangeNotes(event.target.value)} />
@@ -3831,32 +3876,27 @@ function BackNumbersView({
         <div className="panel-header">
           <div>
             <h2>Assigner un dossard</h2>
-            <p>Choisis le mode selon la regle de l'association ou du bloc.</p>
+            <p>La politique vient des reglages de l'association: {backNumberModeLabel(assignmentMode)}.</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleAssign}>
-          <label>
-            Mode d'assignation
-            <select value={assignmentMode} onChange={(event) => setAssignmentMode(event.target.value as OrganizationBackNumber["assignment_mode"])}>
-              <option value="horse">Par cheval</option>
-              <option value="horse_rider_team">Par equipe cheval+cavalier</option>
-            </select>
-          </label>
-          <label>
-            Cheval
-            <SearchSelect
-              disabled={!horses.length}
-              items={horses.map((horse) => ({
-                id: horse.id,
-                label: horse.name,
-                detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
-              }))}
-              placeholder="Rechercher un cheval"
-              value={horseId}
-              onChange={setHorseId}
-            />
-          </label>
-          {assignmentMode === "horse_rider_team" ? (
+          {needsHorse ? (
+            <label>
+              Cheval
+              <SearchSelect
+                disabled={!horses.length}
+                items={horses.map((horse) => ({
+                  id: horse.id,
+                  label: horse.name,
+                  detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
+                }))}
+                placeholder="Rechercher un cheval"
+                value={horseId}
+                onChange={setHorseId}
+              />
+            </label>
+          ) : null}
+          {needsRider ? (
             <label>
               Cavalier
               <SearchSelect
@@ -3954,22 +3994,65 @@ function MyBackNumbersView({
   contacts,
   horses,
   organization,
+  onClaimHorseBackNumber,
 }: {
   backNumbers: OrganizationBackNumber[];
   contacts: Contact[];
   horses: Horse[];
   organization: Organization | null;
+  onClaimHorseBackNumber: (input: Parameters<typeof claimHorseBackNumber>[0]) => Promise<void>;
 }) {
+  const [horseId, setHorseId] = useState("");
+  const [riderContactId, setRiderContactId] = useState("");
+  const [number, setNumber] = useState("");
+  const [busy, setBusy] = useState(false);
+  const assignmentMode = organizationBackNumberMode(organization);
+  const needsHorse = backNumberModeNeedsHorse(assignmentMode);
+  const needsRider = backNumberModeNeedsRider(assignmentMode);
   const sortedBackNumbers = [...backNumbers].sort((first, second) => first.number - second.number);
+  const selectedHorse = findById(horses, horseId) ?? null;
+  const selectedHorseId = needsHorse ? selectedHorse?.id ?? null : null;
+  const selectedRiderId = needsRider ? riderContactId || null : null;
+  const canClaim = Boolean(organization && (!needsHorse || selectedHorseId) && (!needsRider || selectedRiderId) && entryNumberValue(number));
+
+  async function handleClaim(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!organization || (needsHorse && !selectedHorseId) || (needsRider && !selectedRiderId)) {
+      return;
+    }
+
+    const parsedNumber = entryNumberValue(number);
+
+    if (!parsedNumber) {
+      return;
+    }
+
+    setBusy(true);
+
+    try {
+      await onClaimHorseBackNumber({
+        organization_id: organization.id,
+        horse_id: selectedHorseId,
+        number: parsedNumber,
+        assignment_mode: assignmentMode,
+        rider_contact_id: selectedRiderId,
+      });
+      setNumber("");
+    } finally {
+      setBusy(false);
+    }
+  }
 
   return (
     <div className="content-grid">
       <ViewIntro
         eyebrow="Mon espace"
         title="Mes dossards"
-        description="Consulte les dossards deja lies a tes chevaux ou equipes dans l'association active."
+        description="Consulte les dossards lies a tes chevaux ou cavaliers dans l'association active."
         stats={[
           { label: "Association", value: organization?.short_name || organization?.name || "-" },
+          { label: "Politique", value: backNumberModeLabel(assignmentMode) },
           { label: "Dossards", value: String(backNumbers.length) },
         ]}
       />
@@ -3977,8 +4060,69 @@ function MyBackNumbersView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
+            <h2>Ajouter un dossard</h2>
+            <p>Tu peux ajouter un dossard selon la politique de l'association active si le numéro n'est pas déjà utilisé.</p>
+          </div>
+        </div>
+        <form className="stack" onSubmit={handleClaim}>
+          <div className="form-grid">
+            <div className="readiness-card">
+              <strong>Mode</strong>
+              <span>{backNumberModeLabel(assignmentMode)}</span>
+            </div>
+          </div>
+          <div className="form-grid">
+            {needsHorse ? (
+              <label>
+                Cheval
+                <SearchSelect
+                  disabled={!horses.length}
+                  items={horses.map((horse) => ({
+                    id: horse.id,
+                    label: horse.name,
+                    detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
+                  }))}
+                  placeholder="Rechercher un cheval"
+                  value={horseId}
+                  onChange={setHorseId}
+                />
+              </label>
+            ) : null}
+          </div>
+          {needsRider ? (
+            <label>
+              Cavalier
+              <SearchSelect
+                disabled={!contacts.length}
+                items={contacts.map((contact) => ({
+                  id: contact.id,
+                  label: contactLabel(contact),
+                  detail: contact.email || contact.type,
+                }))}
+                placeholder="Rechercher un cavalier"
+                value={riderContactId}
+                onChange={setRiderContactId}
+              />
+            </label>
+          ) : null}
+          <div className="form-grid">
+            <label>
+              Numéro de dossard
+              <input min="1" step="1" type="number" value={number} onChange={(event) => setNumber(event.target.value)} />
+              <span className="input-help">Si ce numéro est déjà assigné dans cette association, l'app va le refuser.</span>
+            </label>
+          </div>
+          <button className="primary-button" disabled={busy || !canClaim} type="submit">
+            Ajouter le dossard
+          </button>
+        </form>
+      </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
             <h2>Dossards assignes</h2>
-            <p>{backNumbers.length ? "Ces numeros seront repris automatiquement dans les inscriptions admissibles." : "Aucun dossard lie a tes chevaux pour l'instant."}</p>
+            <p>{backNumbers.length ? "Ces numeros seront repris automatiquement dans les inscriptions admissibles." : "Aucun dossard lie a ton profil pour l'instant."}</p>
           </div>
         </div>
         <div className="table back-number-table">
@@ -4015,6 +4159,10 @@ function backNumberAssigneeLabel(backNumber: OrganizationBackNumber, horses: Hor
     return `${horseLabel(horse)} + ${contactLabel(rider)}`;
   }
 
+  if (backNumber.assignment_mode === "rider") {
+    return contactLabel(rider);
+  }
+
   return horseLabel(horse);
 }
 
@@ -4027,7 +4175,15 @@ function backNumberAssignmentMeta(backNumber: OrganizationBackNumber) {
 }
 
 function backNumberModeLabel(mode: OrganizationBackNumber["assignment_mode"]) {
-  return mode === "horse_rider_team" ? "Equipe cheval+cavalier" : "Cheval";
+  if (mode === "horse_rider_team") {
+    return "Equipe cheval+cavalier";
+  }
+
+  if (mode === "rider") {
+    return "Cavalier";
+  }
+
+  return "Cheval";
 }
 
 function backNumberStatusLabel(status: OrganizationBackNumber["status"]) {
@@ -4730,6 +4886,7 @@ function SettingsView({
 }) {
   const [busyRequirementId, setBusyRequirementId] = useState("");
   const [healthBusy, setHealthBusy] = useState(false);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<OrganizationBackNumber["assignment_mode"]>(organizationBackNumberMode(organization));
   const [healthRequired, setHealthRequired] = useState(organizationRequiresHealthVerification(organization));
   const [cogginsValidityMonths, setCogginsValidityMonths] = useState<6 | 12>(organizationCogginsValidityMonths(organization));
   const riderRequirementIds = new Set(
@@ -4739,6 +4896,7 @@ function SettingsView({
   );
 
   useEffect(() => {
+    setBackNumberPolicy(organizationBackNumberMode(organization));
     setHealthRequired(organizationRequiresHealthVerification(organization));
     setCogginsValidityMonths(organizationCogginsValidityMonths(organization));
   }, [organization]);
@@ -4773,6 +4931,7 @@ function SettingsView({
 
     try {
       await onUpdateOrganizationHealthSettings(organization.id, {
+        back_number_policy: backNumberPolicy,
         health_verification_required: healthRequired,
         coggins_validity_months: cogginsValidityMonths,
       });
@@ -4864,11 +5023,20 @@ function SettingsView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Statut sante des chevaux</h2>
-            <p>Regles utilisees pour bloquer les inscriptions et les reservations de stalls.</p>
+            <h2>Dossards et statut sante</h2>
+            <p>Regles utilisees pour les dossards, les inscriptions et les reservations de stalls.</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleHealthSettingsSubmit}>
+          <label>
+            Politique de dossard de l'association
+            <select disabled={!organization || healthBusy} value={backNumberPolicy} onChange={(event) => setBackNumberPolicy(event.target.value as OrganizationBackNumber["assignment_mode"])}>
+              <option value="horse">Par cheval</option>
+              <option value="rider">Par cavalier</option>
+              <option value="horse_rider_team">Par equipe cheval+cavalier</option>
+            </select>
+            <span className="input-help">Les utilisateurs ne choisissent pas ce mode: l'app applique automatiquement la politique de l'association active.</span>
+          </label>
           <label className="requirement-row">
             <input checked={healthRequired} disabled={!organization || healthBusy} type="checkbox" onChange={(event) => setHealthRequired(event.target.checked)} />
             <span>
@@ -4885,7 +5053,7 @@ function SettingsView({
             </select>
           </label>
           <button className="primary-button" disabled={!organization || healthBusy} type="submit">
-            {healthBusy ? "Enregistrement..." : "Enregistrer les regles sante"}
+            {healthBusy ? "Enregistrement..." : "Enregistrer les regles"}
           </button>
         </form>
       </section>
@@ -6715,6 +6883,7 @@ function SanctioningFields({
           Politique de dossard
           <select disabled={disabled} value={backNumberPolicy} onChange={(event) => onBackNumberPolicyChange(event.target.value as BackNumberPolicy)}>
             <option value="horse">Par cheval</option>
+            <option value="rider">Par cavalier</option>
             <option value="horse_rider_team">Par équipe cheval / cavalier</option>
             <option value="entry">Par inscription</option>
             <option value="custom">Custom</option>
@@ -6730,6 +6899,10 @@ function toggleSanctioningBodyCode(currentCodes: string[], code: string) {
 }
 
 function defaultBackNumberPolicy(codes: string[], sanctioningBodies: SanctioningBody[]): BackNumberPolicy {
+  if (codes.some((code) => sanctioningBodies.find((body) => body.code === code)?.back_number_policy === "rider")) {
+    return "rider";
+  }
+
   return codes.some((code) => sanctioningBodies.find((body) => body.code === code)?.back_number_policy === "horse_rider_team") ? "horse_rider_team" : "horse";
 }
 
@@ -6747,6 +6920,8 @@ function sanctionLabel(codes: string[] | null | undefined, sanctioningBodies: Sa
 
 function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined) {
   switch (policy) {
+    case "rider":
+      return "Dossard par cavalier";
     case "horse_rider_team":
       return "Dossard équipe cheval / cavalier";
     case "entry":

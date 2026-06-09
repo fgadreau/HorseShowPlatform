@@ -1,7 +1,6 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./features/auth/AuthScreen";
-import { Dashboard } from "./features/dashboard/Dashboard";
 import { LoadingScreen } from "./features/setup/LoadingScreen";
 import { SetupScreen } from "./features/setup/SetupScreen";
 import { isSupabaseConfigured } from "./lib/env";
@@ -14,6 +13,7 @@ import {
   createClassTemplate,
   createClassTemplateDivision,
   createBackNumberRange,
+  claimHorseBackNumber,
   createContact,
   createDivision,
   createEntry,
@@ -55,6 +55,8 @@ import {
   type AppContext,
 } from "./services/supabaseServices";
 import type { Notice, ViewKey } from "./types/ui";
+
+const Dashboard = lazy(() => import("./features/dashboard/Dashboard").then((module) => ({ default: module.Dashboard })));
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -174,6 +176,7 @@ export default function App() {
   }
 
   return (
+    <Suspense fallback={<LoadingScreen />}>
     <Dashboard
       activeView={activeView}
       context={context}
@@ -195,6 +198,11 @@ export default function App() {
       onAssignBackNumber={async (input) => {
         const assignment = await assignBackNumber(input);
         setNotice({ tone: "success", message: `Dossard ${assignment.number} assigne.` });
+        await refreshContext();
+      }}
+      onClaimHorseBackNumber={async (input) => {
+        const assignment = await claimHorseBackNumber(input);
+        setNotice({ tone: "success", message: `Dossard ${assignment.number} ajoute a ton cheval.` });
         await refreshContext();
       }}
       onAssignNextBackNumber={async (input) => {
@@ -429,5 +437,6 @@ export default function App() {
       }}
       onViewChange={setActiveView}
     />
+    </Suspense>
   );
 }

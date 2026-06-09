@@ -80,24 +80,29 @@ V1 implemente:
 - `organization_back_numbers`: inventaire des numeros physiques ou virtuels d'une association.
 - Un numero est unique dans une association.
 - Un dossard peut etre `available`, `assigned`, `reserved`, `lost` ou `retired`.
-- Une assignation peut etre faite par cheval ou par equipe `cheval + cavalier`, selon le mode de gestion de l'association ou du bloc.
+- Chaque association choisit sa politique active: dossard `par cheval`, `par cavalier` ou `par equipe cheval+cavalier`.
+- Une assignation peut etre faite par cheval, par cavalier ou par equipe `cheval + cavalier`, selon le mode de gestion de l'association.
 - Un cheval ne peut pas avoir deux dossards actifs en mode `cheval` pour la meme association.
+- Un cavalier ne peut pas avoir deux dossards actifs en mode `cavalier` pour la meme association.
 - Une meme equipe `cheval + cavalier` ne peut pas avoir deux dossards actifs en mode `equipe` pour la meme association.
 - Le secretariat doit pouvoir creer un inventaire de dossards disponibles, par exemple une plage de `100` a `299`, parce que les dossards physiques sont deja imprimes.
-- Un dossard peut exister sans cheval assigne: dossard disponible/orphelin.
+- Un dossard peut exister sans assignation: dossard disponible/orphelin.
 - L'association doit pouvoir assigner automatiquement le prochain dossard disponible ou choisir manuellement un numero.
-- Les inscriptions reprennent automatiquement le dossard deja assigne si le bloc utilise une politique `cheval` ou `equipe cheval+cavalier`.
+- L'utilisateur peut ajouter lui-meme un dossard a un cheval, un cavalier ou une equipe qui lui est accessible, tant que le numero n'est pas deja utilise ou indisponible dans l'association.
+- L'utilisateur ne choisit pas librement le mode: l'app applique la politique de dossard de l'association active.
+- Les inscriptions reprennent automatiquement le dossard deja assigne selon la politique de l'association active, sauf si le bloc force une politique `par inscription` ou `custom`.
 
 Ecrans V1:
 
 - Onglet `Dossards` cote association: inventaire, plages disponibles, assignes, orphelins, perdus/retires, historique.
-- Onglet `Mes dossards` cote utilisateur: dossards actifs visibles pour les chevaux/equipes relies au compte.
-- Dans les inscriptions: si aucun numero manuel n'est saisi, l'app tente de reprendre le dossard actif selon la politique du bloc.
+- Onglet `Mes dossards` cote utilisateur: dossards actifs visibles pour les chevaux/cavaliers/equipes relies au compte dans l'association active.
+- Dans `Mon espace`, les cavaliers et chevaux sont des fiches globales au compte; les dossards restent filtres par association active parce que chaque association peut avoir sa propre politique et son propre inventaire.
+- Dans les inscriptions: si aucun numero manuel n'est saisi, l'app tente de reprendre le dossard actif selon la politique de l'association.
 
 Etapes futures:
 
 - Le concurrent doit pouvoir choisir "laisser l'association m'assigner un dossard" directement dans l'inscription.
-- Le dossard doit pouvoir etre change par le proprietaire autorise ou l'agent autorise selon les permissions.
+- Le dossard doit pouvoir etre change plus finement par le proprietaire autorise ou l'agent autorise selon les permissions.
 - Si un dossard est deja assigne a un autre cheval et que l'utilisateur est proprietaire/agent autorise de cet autre cheval, l'app peut proposer de retirer le dossard de l'autre cheval et de l'assigner au nouveau.
 - Si l'utilisateur n'a pas ce droit sur l'autre cheval, l'app doit bloquer l'assignation et demander un autre dossard.
 - Audit futur: qui a assigne, transfere, libere ou retire le dossard.

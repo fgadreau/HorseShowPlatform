@@ -467,6 +467,7 @@ export async function createOrganization(profileId: string, input: OrganizationI
 export async function updateOrganizationHealthSettings(
   id: string,
   input: {
+    back_number_policy?: Organization["back_number_policy"];
     health_verification_required: boolean;
     coggins_validity_months: 6 | 12;
   },
@@ -541,7 +542,7 @@ export async function createContact(input: ContactInput) {
   const roles = uniqueRoles([input.type, ...(input.roles ?? [])]);
 
   if (normalizedEmail) {
-    const existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
+    const existing = await findExistingContactByEmail(normalizedEmail);
 
     if (existing) {
       const contact = await enrichExistingContact(existing, input);
@@ -581,11 +582,19 @@ export async function createContact(input: ContactInput) {
 
   if (error) {
     if (error.code === "23505" && normalizedEmail) {
-      let existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
+      const reusedContact = await reuseContactByEmail(input, normalizedEmail, roles);
+
+      if (reusedContact) {
+        await syncContactExternalMemberships(reusedContact.id, input.external_memberships);
+
+        return reusedContact;
+      }
+
+      let existing = await findExistingContactByEmail(normalizedEmail);
 
       if (!existing) {
         await claimContactsForCurrentUser();
-        existing = await findExistingContactByEmail(normalizedEmail, input.organization_id);
+        existing = await findExistingContactByEmail(normalizedEmail);
       }
 
       if (existing) {
@@ -1751,7 +1760,7 @@ export async function createBackNumberRange(input: {
 export async function assignBackNumber(input: {
   organization_id: string;
   number: number;
-  horse_id: string;
+  horse_id?: string | null;
   rider_contact_id?: string | null;
   assignment_mode: OrganizationBackNumber["assignment_mode"];
   transfer_existing?: boolean;
@@ -1760,10 +1769,15 @@ export async function assignBackNumber(input: {
 }) {
   const client = requireSupabase();
   const number = normalizeBackNumber(input.number);
-  const riderContactId = input.assignment_mode === "horse_rider_team" ? input.rider_contact_id || null : null;
+  const horseId = input.assignment_mode === "rider" ? null : input.horse_id || null;
+  const riderContactId = input.assignment_mode === "horse" ? null : input.rider_contact_id || null;
 
-  if (input.assignment_mode === "horse_rider_team" && !riderContactId) {
-    throw new Error("Un dossard par equipe doit avoir un cavalier.");
+  if ((input.assignment_mode === "horse" || input.assignment_mode === "horse_rider_team") && !horseId) {
+    throw new Error("Choisis un cheval avant d'assigner un dossard.");
+  }
+
+  if ((input.assignment_mode === "rider" || input.assignment_mode === "horse_rider_team") && !riderContactId) {
+    throw new Error("Choisis un cavalier avant d'assigner ce dossard.");
   }
 
   const { data: existing, error: selectError } = await client
@@ -1779,9 +1793,12 @@ export async function assignBackNumber(input: {
 
   const existingTargetMatches =
     existing?.status === "assigned" &&
-    existing.assigned_horse_id === input.horse_id &&
     existing.assignment_mode === input.assignment_mode &&
-    (input.assignment_mode === "horse" || existing.assigned_rider_contact_id === riderContactId);
+    backNumberTargetMatches(existing, {
+      assignment_mode: input.assignment_mode,
+      horse_id: horseId,
+      rider_contact_id: riderContactId,
+    });
 
   if (existing && existing.status !== "available" && !existingTargetMatches && !input.transfer_existing) {
     throw new Error(`Le dossard ${number} est deja ${backNumberStatusErrorLabel(existing.status)}.`);
@@ -1790,7 +1807,7 @@ export async function assignBackNumber(input: {
   await releaseExistingBackNumberAssignment({
     organization_id: input.organization_id,
     assignment_mode: input.assignment_mode,
-    horse_id: input.horse_id,
+    horse_id: horseId,
     rider_contact_id: riderContactId,
     except_back_number_id: existing?.id ?? null,
   });
@@ -1800,7 +1817,7 @@ export async function assignBackNumber(input: {
     number,
     status: "assigned" as const,
     assignment_mode: input.assignment_mode,
-    assigned_horse_id: input.horse_id,
+    assigned_horse_id: horseId,
     assigned_rider_contact_id: riderContactId,
     assigned_at: new Date().toISOString(),
     created_by_user_id: input.created_by_user_id ?? existing?.created_by_user_id ?? null,
@@ -1821,7 +1838,7 @@ export async function assignBackNumber(input: {
 
 export async function assignNextBackNumber(input: {
   organization_id: string;
-  horse_id: string;
+  horse_id?: string | null;
   rider_contact_id?: string | null;
   assignment_mode: OrganizationBackNumber["assignment_mode"];
   created_by_user_id?: string | null;
@@ -1849,6 +1866,33 @@ export async function assignNextBackNumber(input: {
     ...input,
     number: data.number,
   });
+}
+
+export async function claimHorseBackNumber(input: {
+  organization_id: string;
+  horse_id?: string | null;
+  number: number;
+  assignment_mode?: OrganizationBackNumber["assignment_mode"];
+  rider_contact_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const number = normalizeBackNumber(input.number);
+  const assignmentMode = input.assignment_mode ?? "horse";
+  const { data, error } = await client
+    .rpc("claim_horse_back_number", {
+      requested_number: number,
+      target_assignment_mode: assignmentMode,
+      target_horse_id: assignmentMode === "rider" ? null : input.horse_id ?? null,
+      target_organization_id: input.organization_id,
+      target_rider_contact_id: assignmentMode === "horse" ? null : input.rider_contact_id ?? null,
+    })
+    .single<OrganizationBackNumber>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 export async function releaseBackNumber(id: string) {
@@ -1905,7 +1949,7 @@ export async function deleteBackNumber(id: string) {
 async function releaseExistingBackNumberAssignment(input: {
   organization_id: string;
   assignment_mode: OrganizationBackNumber["assignment_mode"];
-  horse_id: string;
+  horse_id: string | null;
   rider_contact_id: string | null;
   except_back_number_id?: string | null;
 }) {
@@ -1920,10 +1964,13 @@ async function releaseExistingBackNumberAssignment(input: {
     })
     .eq("organization_id", input.organization_id)
     .eq("status", "assigned")
-    .eq("assignment_mode", input.assignment_mode)
-    .eq("assigned_horse_id", input.horse_id);
+    .eq("assignment_mode", input.assignment_mode);
 
-  if (input.assignment_mode === "horse_rider_team") {
+  if (input.assignment_mode === "horse" || input.assignment_mode === "horse_rider_team") {
+    query = query.eq("assigned_horse_id", input.horse_id);
+  }
+
+  if (input.assignment_mode === "rider" || input.assignment_mode === "horse_rider_team") {
     query = query.eq("assigned_rider_contact_id", input.rider_contact_id);
   }
 
@@ -1960,7 +2007,22 @@ async function resolveEntryBackNumber(input: EntryInput) {
     throw classError;
   }
 
-  if (classRecord.back_number_policy === "entry" || classRecord.back_number_policy === "custom") {
+  const { data: organization, error: organizationError } = await client
+    .from("organizations")
+    .select("back_number_policy")
+    .eq("id", input.organization_id)
+    .single<Pick<Organization, "back_number_policy">>();
+
+  if (organizationError && !isMissingSchemaError(organizationError, "back_number_policy")) {
+    throw organizationError;
+  }
+
+  const effectivePolicy =
+    classRecord.back_number_policy === "entry" || classRecord.back_number_policy === "custom"
+      ? classRecord.back_number_policy
+      : organization?.back_number_policy ?? classRecord.back_number_policy;
+
+  if (effectivePolicy === "entry" || effectivePolicy === "custom") {
     return null;
   }
 
@@ -1970,10 +2032,17 @@ async function resolveEntryBackNumber(input: EntryInput) {
     .select("number")
     .eq("organization_id", input.organization_id)
     .eq("status", "assigned")
-    .eq("assignment_mode", classRecord.back_number_policy)
-    .eq("assigned_horse_id", input.horse_id);
+    .eq("assignment_mode", effectivePolicy);
 
-  if (classRecord.back_number_policy === "horse_rider_team") {
+  if (effectivePolicy === "horse" || effectivePolicy === "horse_rider_team") {
+    query = query.eq("assigned_horse_id", input.horse_id);
+  }
+
+  if (effectivePolicy === "rider" || effectivePolicy === "horse_rider_team") {
+    if (!riderContactId) {
+      return null;
+    }
+
     query = query.eq("assigned_rider_contact_id", riderContactId);
   }
 
@@ -1998,9 +2067,28 @@ function normalizeBackNumber(value: number) {
   return value;
 }
 
+function backNumberTargetMatches(
+  backNumber: OrganizationBackNumber,
+  target: {
+    assignment_mode: OrganizationBackNumber["assignment_mode"];
+    horse_id: string | null;
+    rider_contact_id: string | null;
+  },
+) {
+  if (target.assignment_mode === "horse") {
+    return backNumber.assigned_horse_id === target.horse_id;
+  }
+
+  if (target.assignment_mode === "rider") {
+    return backNumber.assigned_rider_contact_id === target.rider_contact_id;
+  }
+
+  return backNumber.assigned_horse_id === target.horse_id && backNumber.assigned_rider_contact_id === target.rider_contact_id;
+}
+
 function backNumberStatusErrorLabel(status: OrganizationBackNumber["status"]) {
   if (status === "assigned") {
-    return "assigne a un autre cheval ou une autre equipe";
+    return "assigne a un autre cheval, cavalier ou equipe";
   }
 
   if (status === "reserved") {
@@ -3070,7 +3158,7 @@ function normalizeEmail(value?: string | null) {
   return value?.trim().toLowerCase() || null;
 }
 
-async function findExistingContactByEmail(normalizedEmail: string, preferredOrganizationId?: string) {
+async function findExistingContactByEmail(normalizedEmail: string) {
   const client = requireSupabase();
   const { data, error } = await client
     .from("contacts")
@@ -3085,15 +3173,35 @@ async function findExistingContactByEmail(normalizedEmail: string, preferredOrga
 
   const visibleContacts = data ?? [];
 
-  if (preferredOrganizationId) {
-    const localContact = visibleContacts.find((contact) => contact.organization_id === preferredOrganizationId);
+  return visibleContacts[0] ?? null;
+}
 
-    if (localContact) {
-      return localContact;
+async function reuseContactByEmail(input: ContactInput, normalizedEmail: string, roles: ContactRoleName[]) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .rpc("reuse_contact_by_email", {
+      target_barn_name: input.barn_name?.trim() || null,
+      target_created_by_user_id: input.created_by_user_id || null,
+      target_email: normalizedEmail,
+      target_first_name: input.first_name.trim(),
+      target_last_name: input.last_name.trim(),
+      target_linked_user_id: input.linked_user_id || null,
+      target_organization_id: input.organization_id,
+      target_phone: input.phone?.trim() || null,
+      target_roles: roles,
+      target_type: input.type,
+    })
+    .single<Contact>();
+
+  if (error) {
+    if (isMissingRpcError(error, "reuse_contact_by_email")) {
+      return null;
     }
+
+    throw error;
   }
 
-  return visibleContacts[0] ?? null;
+  return data;
 }
 
 async function enrichExistingContact(existing: Contact, input: ContactInput) {

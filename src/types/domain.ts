@@ -15,6 +15,7 @@ export type Organization = {
   timezone: string;
   currency: string;
   tax_rate: number;
+  back_number_policy: OrganizationBackNumberAssignmentMode;
   health_verification_required: boolean;
   coggins_validity_months: 6 | 12;
   subscription_plan: string;
@@ -246,8 +247,9 @@ export type HorseContact = {
   created_at: string;
 };
 
-export type BackNumberPolicy = "horse" | "horse_rider_team" | "entry" | "custom";
-export type BackNumberAssignmentMode = "horse" | "horse_rider_team";
+export type OrganizationBackNumberAssignmentMode = "horse" | "rider" | "horse_rider_team";
+export type BackNumberPolicy = OrganizationBackNumberAssignmentMode | "entry" | "custom";
+export type BackNumberAssignmentMode = OrganizationBackNumberAssignmentMode;
 export type BackNumberStatus = "available" | "assigned" | "reserved" | "lost" | "retired";
 
 export type OrganizationBackNumber = {

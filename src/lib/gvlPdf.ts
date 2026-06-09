@@ -1,4 +1,4 @@
-const GVL_CHECK_RE = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+import { normalizeGvlUrl } from "./gvlUrl";
 
 export async function extractGvlUrlFromPdf(file: File) {
   if (!file.name.toLowerCase().endsWith(".pdf") && file.type !== "application/pdf") {
@@ -47,11 +47,6 @@ export async function extractGvlUrlFromPdf(file: File) {
   }
 
   throw new Error("Aucun code QR GVL lisible trouve dans ce PDF.");
-}
-
-export function normalizeGvlUrl(value: string | null | undefined) {
-  const uuid = value?.match(GVL_CHECK_RE)?.[0].toLowerCase();
-  return uuid ? `https://gvlcertcheck.ai/check/${uuid}` : null;
 }
 
 async function loadPdfQrTools() {
