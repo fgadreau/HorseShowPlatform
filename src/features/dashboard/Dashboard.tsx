@@ -12,6 +12,7 @@ import {
   MapPin,
   Plus,
   RefreshCw,
+  Search,
   Tent,
   Trophy,
   Users,
@@ -2008,6 +2009,65 @@ function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
   return unique.map((role) => role.replace("_", " ")).join(" / ");
 }
 
+function normalizeDirectorySearch(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+}
+
+function matchesDirectorySearch(values: Array<string | null | undefined>, query: string) {
+  return values.some((value) => normalizeDirectorySearch(value ?? "").includes(query));
+}
+
+function contactMatchesDirectorySearch(contact: Contact, contactRoles: ContactRole[], query: string) {
+  return matchesDirectorySearch(
+    [
+      contactLabel(contact),
+      contactRoleSummary(contact, contactRoles),
+      contact.type,
+      contact.email,
+      contact.phone,
+      contact.barn_name,
+    ],
+    query,
+  );
+}
+
+function horseMatchesDirectorySearch(
+  horse: Horse,
+  contacts: Contact[],
+  memberships: HorseExternalMembership[],
+  externalOrganizations: ExternalOrganization[],
+  query: string,
+) {
+  const owner = findById(contacts, horse.primary_owner_contact_id);
+  const membershipValues = memberships
+    .filter((membership) => membership.horse_id === horse.id)
+    .flatMap((membership) => {
+      const externalOrganization = findById(externalOrganizations, membership.external_organization_id);
+      return [externalOrganization?.code, externalOrganization?.name, membership.reference_number, membership.status];
+    });
+
+  return matchesDirectorySearch(
+    [
+      horse.name,
+      horse.breed,
+      horse.color,
+      horse.gender,
+      horseGenderLabel(horse.gender),
+      horse.registration_number,
+      contactLabel(owner),
+      owner?.email,
+      owner?.barn_name,
+      horseExternalReferenceSummary(horse, memberships, externalOrganizations),
+      ...membershipValues,
+    ],
+    query,
+  );
+}
+
 function ShowsView({
   classes,
   divisions,
@@ -2191,6 +2251,16 @@ function PeopleView({
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+  const [contactSearch, setContactSearch] = useState("");
+  const [horseSearch, setHorseSearch] = useState("");
+  const normalizedContactSearch = normalizeDirectorySearch(contactSearch);
+  const normalizedHorseSearch = normalizeDirectorySearch(horseSearch);
+  const filteredContacts = normalizedContactSearch
+    ? contacts.filter((contact) => contactMatchesDirectorySearch(contact, contactRoles, normalizedContactSearch))
+    : [];
+  const filteredHorses = normalizedHorseSearch
+    ? horses.filter((horse) => horseMatchesDirectorySearch(horse, contacts, horseExternalMemberships, externalOrganizations, normalizedHorseSearch))
+    : [];
 
   async function handleDeleteHorse(horse: Horse) {
     if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/reservations liees?`)) {
@@ -2322,22 +2392,48 @@ function PeopleView({
         <div className="panel-header">
           <div>
             <h2>Contacts</h2>
-            <p>{contacts.length ? `${contacts.length} contact${contacts.length === 1 ? "" : "s"} ready for entries.` : "Owners, agents, riders and payers."}</p>
+            <p>{normalizedContactSearch ? `${filteredContacts.length} resultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.` : "Recherche par nom, role, courriel ou ecurie."}</p>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>Name</span>
-            <span>Roles</span>
-            <span>Email</span>
-            <span>Action</span>
+        <label className="directory-search-field">
+          <span>Rechercher un contact</span>
+          <div>
+            <Search size={16} />
+            <input placeholder="Nom, role, email, ecurie..." value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
           </div>
-          {contacts.map((contact) => (
-            <div className="table-row" key={contact.id}>
-              <strong>{contactLabel(contact)}</strong>
-              <span>{contactRoleSummary(contact, contactRoles)}</span>
-              <span>{contact.email || "No email"}</span>
-              <div className="row-actions">
+        </label>
+        <div className="horse-list directory-list">
+          {normalizedContactSearch ? (
+            <div className="horse-list-row horse-list-head">
+              <span>Contact</span>
+              <span>Roles</span>
+              <span>Courriel</span>
+              <span>Action</span>
+            </div>
+          ) : null}
+          {filteredContacts.map((contact) => (
+            <div className="horse-list-row" key={contact.id}>
+              <div className="horse-list-identity">
+                <strong>{contactLabel(contact)}</strong>
+                <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || "Contact"}</span>
+              </div>
+              <div className="horse-chip-row">
+                {contactRoleSummary(contact, contactRoles)
+                  .split(" / ")
+                  .map((role) => (
+                    <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
+                      <span>Role</span>
+                      <strong>{role}</strong>
+                    </span>
+                  ))}
+              </div>
+              <div className="horse-chip-row">
+                <span className="horse-status-chip neutral">
+                  <span>Email</span>
+                  <strong>{contact.email || "Aucun"}</strong>
+                </span>
+              </div>
+              <div className="row-actions horse-row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                   Edit
                 </button>
@@ -2347,44 +2443,78 @@ function PeopleView({
               </div>
             </div>
           ))}
-          {!contacts.length ? <EmptyState label="Create an owner or rider contact first." /> : null}
+          {!normalizedContactSearch ? <EmptyState label="Lance une recherche pour afficher les contacts de l'association." /> : null}
+          {normalizedContactSearch && !filteredContacts.length ? <EmptyState label="Aucun contact ne correspond a cette recherche." /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Horses</h2>
-            <p>{horses.length ? `${horses.length} horse${horses.length === 1 ? "" : "s"} in the organization.` : "Horses connect owners to entries."}</p>
+            <h2>Chevaux</h2>
+            <p>{normalizedHorseSearch ? `${filteredHorses.length} resultat${filteredHorses.length === 1 ? "" : "s"} sur ${horses.length} ${horses.length === 1 ? "cheval" : "chevaux"}.` : "Recherche par nom, proprietaire, sexe ou numero externe."}</p>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>Name</span>
-            <span>Owner</span>
-            <span>Gender</span>
-            <span>Action</span>
+        <label className="directory-search-field">
+          <span>Rechercher un cheval</span>
+          <div>
+            <Search size={16} />
+            <input placeholder="Nom, proprietaire, reference..." value={horseSearch} onChange={(event) => setHorseSearch(event.target.value)} />
           </div>
-          {horses.map((horse) => (
-            <div className="table-row" key={horse.id}>
-              <strong>
-                {horse.name}
-                <span className="muted-line">{horseExternalReferenceSummary(horse, horseExternalMemberships, externalOrganizations)}</span>
-                <span className="muted-line">{horseHealthSummary(horse, horseHealthDocuments, organization)}</span>
-              </strong>
-              <span>{contactLabel(findById(contacts, horse.primary_owner_contact_id))}</span>
-              <span>{horse.gender || "Unset"}</span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                  Edit
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
-                  Supprimer
-                </button>
-              </div>
+        </label>
+        <div className="horse-list directory-list">
+          {normalizedHorseSearch ? (
+            <div className="horse-list-row horse-list-head">
+              <span>Cheval</span>
+              <span>Statut</span>
+              <span>Références</span>
+              <span>Action</span>
             </div>
-          ))}
-          {!horses.length ? <EmptyState label="Create a horse after adding an owner contact." /> : null}
+          ) : null}
+          {filteredHorses.map((horse) => {
+            const healthDisplay = horseHealthDisplay(horse, horseHealthDocuments, organization);
+            const referenceChips = horseExternalReferenceChips(horse, horseExternalMemberships, externalOrganizations);
+
+            return (
+              <div className={`horse-list-row ${healthDisplay.summary.tone}`} key={horse.id}>
+                <div className="horse-list-identity">
+                  <strong>{horse.name}</strong>
+                  <span>
+                    {contactLabel(findById(contacts, horse.primary_owner_contact_id))} · {horseGenderLabel(horse.gender)}
+                  </span>
+                </div>
+                <div className="horse-list-status">
+                  <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
+                  <div className="horse-chip-row">
+                    {healthDisplay.chips.map((chip) => (
+                      <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}`}>
+                        <span>{chip.label}</span>
+                        <strong>{chip.value}</strong>
+                      </span>
+                    ))}
+                  </div>
+                </div>
+                <div className="horse-chip-row reference-chip-row">
+                  {referenceChips.map((chip) => (
+                    <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}-${chip.value}`}>
+                      <span>{chip.label}</span>
+                      <strong>{chip.value}</strong>
+                    </span>
+                  ))}
+                </div>
+                <div className="row-actions horse-row-actions">
+                  <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                    Edit
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
+                    Supprimer
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!normalizedHorseSearch ? <EmptyState label="Lance une recherche pour afficher les chevaux de l'association." /> : null}
+          {normalizedHorseSearch && !filteredHorses.length ? <EmptyState label="Aucun cheval ne correspond a cette recherche." /> : null}
         </div>
       </section>
     </div>

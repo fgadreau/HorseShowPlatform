@@ -798,6 +798,30 @@ button:focus-visible {
   font-size: 12px;
 }
 
+.directory-search-field {
+  margin-bottom: 14px;
+}
+
+.directory-search-field > div {
+  align-items: center;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.directory-search-field svg {
+  color: #5f716b;
+  justify-self: center;
+}
+
+.directory-search-field input {
+  min-width: 0;
+}
+
+.directory-list {
+  margin-top: 4px;
+}
+
 .edit-panel {
   background: #fbfffe;
   border-color: #8bd4c9;
@@ -2381,6 +2405,11 @@ button:focus-visible {
   color: #b42318;
 }
 
+.horse-summary-pill.neutral {
+  background: #eef2f0;
+  color: #52615c;
+}
+
 .horse-chip-row {
   align-items: center;
   display: flex;
@@ -2444,7 +2473,7 @@ button:focus-visible {
   color: #b42318;
 }
 
-.reference-chip-row .horse-status-chip.neutral {
+.horse-status-chip.neutral {
   background: #f7faf9;
 }
 
