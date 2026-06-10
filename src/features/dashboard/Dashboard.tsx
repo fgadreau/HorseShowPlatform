@@ -83,6 +83,7 @@ import type {
   Contact,
   ContactExternalMembership,
   ContactRole,
+  ContactRoleName,
   Division,
   EligibilityRules,
   Entry,
@@ -436,6 +437,7 @@ export function Dashboard({
 
         {effectiveView === "overview" ? (
           <OverviewView
+            locale={locale}
             openShows={openShows}
             organization={selectedOrganization}
             shows={selectedOrganizationShows}
@@ -461,6 +463,7 @@ export function Dashboard({
 
         {effectiveView === "shows" ? (
           <ShowsView
+            locale={locale}
             classes={selectedOrganizationClasses}
             divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
@@ -478,6 +481,7 @@ export function Dashboard({
 
         {effectiveView === "people" ? (
           <PeopleView
+            locale={locale}
             contacts={selectedOrganizationContacts}
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
@@ -504,6 +508,7 @@ export function Dashboard({
 
         {effectiveView === "health" ? (
           <HealthCenterView
+            locale={locale}
             canManageHealthDocuments={canManageAssociation}
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
@@ -526,6 +531,7 @@ export function Dashboard({
 
         {effectiveView === "classes" ? (
           <ClassesView
+            locale={locale}
             classes={selectedOrganizationClasses}
             classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
             classTemplates={selectedOrganizationClassTemplates}
@@ -552,6 +558,7 @@ export function Dashboard({
 
         {effectiveView === "entries" ? (
           <EntriesView
+            locale={locale}
             classes={selectedOrganizationClasses}
             contacts={selectedOrganizationContacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -577,6 +584,7 @@ export function Dashboard({
 
         {effectiveView === "back-numbers" ? (
           <BackNumbersView
+            locale={locale}
             backNumbers={selectedOrganizationBackNumbers}
             contacts={selectedOrganizationContacts}
             horseContacts={selectedOrganizationHorseContacts}
@@ -594,6 +602,7 @@ export function Dashboard({
 
         {effectiveView === "stalls" ? (
           <StallsView
+            locale={locale}
             bookings={selectedOrganizationStallBookings}
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
@@ -618,6 +627,7 @@ export function Dashboard({
 
         {effectiveView === "scoring" ? (
           <ScoringView
+            locale={locale}
             classes={selectedOrganizationClasses}
             contacts={selectedOrganizationContacts}
             divisions={selectedOrganizationDivisions}
@@ -632,6 +642,7 @@ export function Dashboard({
 
         {effectiveView === "billing" ? (
           <BillingView
+            locale={locale}
             contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
             invoices={selectedOrganizationInvoices}
@@ -644,6 +655,7 @@ export function Dashboard({
 
         {effectiveView === "my-horses" ? (
           <MyHorsesView
+            locale={locale}
             contacts={personalContacts}
             contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
@@ -666,6 +678,7 @@ export function Dashboard({
 
         {effectiveView === "my-riders" ? (
           <MyContactsView
+            locale={locale}
             contacts={personalContacts}
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={contactRoles}
@@ -681,6 +694,7 @@ export function Dashboard({
 
         {effectiveView === "my-entries" ? (
           <MyEntriesView
+            locale={locale}
             classes={selectedOrganizationClasses}
             contacts={selectedOrganizationPersonalContacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -706,6 +720,7 @@ export function Dashboard({
 
         {effectiveView === "my-back-numbers" ? (
           <MyBackNumbersView
+            locale={locale}
             backNumbers={personalBackNumbers}
             contacts={selectedOrganizationPersonalContacts}
             horses={selectedOrganizationPersonalHorses}
@@ -716,6 +731,7 @@ export function Dashboard({
 
         {effectiveView === "my-stalls" ? (
           <MyStallsView
+            locale={locale}
             bookings={personalStallBookings}
             contacts={selectedOrganizationPersonalContacts}
             contactRoles={selectedOrganizationContactRoles}
@@ -738,6 +754,7 @@ export function Dashboard({
 
         {effectiveView === "my-invoices" ? (
           <BillingView
+            locale={locale}
             contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
             invoices={personalInvoices}
@@ -750,6 +767,7 @@ export function Dashboard({
 
         {effectiveView === "settings" ? (
           <SettingsView
+            locale={locale}
             context={context}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -790,6 +808,10 @@ function NavigationSection({
       })}
     </div>
   );
+}
+
+function uiText(locale: Locale, fr: string, en: string) {
+  return locale === "en" ? en : fr;
 }
 
 function sortRecordsForOrganization<T extends { id: string }>(records: T[], organizationRecordIds: Set<string>) {
@@ -878,16 +900,16 @@ function latestHorseHealthDocument(horseId: string, documents: HorseHealthDocume
     })[0];
 }
 
-function horseHealthStatusLabel(status: HorseHealthDocument["status"]) {
-  const labels: Record<HorseHealthDocument["status"], string> = {
-    pending_review: "Revision",
-    verified: "Verifie",
-    approved: "Approuve",
-    rejected: "Refuse",
-    expired: "Expire",
+function horseHealthStatusLabel(status: HorseHealthDocument["status"], locale: Locale = "fr") {
+  const labels: Record<HorseHealthDocument["status"], { en: string; fr: string }> = {
+    pending_review: { fr: "Révision", en: "Review" },
+    verified: { fr: "Vérifié", en: "Verified" },
+    approved: { fr: "Approuvé", en: "Approved" },
+    rejected: { fr: "Refusé", en: "Rejected" },
+    expired: { fr: "Expiré", en: "Expired" },
   };
 
-  return labels[status];
+  return labels[status][locale];
 }
 
 type InlineHealthMessage = {
@@ -905,33 +927,33 @@ function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMe
   if (document.status === "verified") {
     return {
       tone: "success",
-      message: "Coggins GVL verifie. Le PDF n'a pas ete conserve parce que le lien GVL suffit.",
+      message: "Coggins GVL vérifié. Le PDF n'a pas été conservé parce que le lien GVL suffit.",
     };
   }
 
   if (document.status === "approved") {
     return {
       tone: "success",
-      message: "Document sante approuve.",
+      message: "Document santé approuvé.",
     };
   }
 
   if (document.document_url) {
     return {
       tone: "info",
-      message: "Coggins en revision manuelle. Le PDF a ete conserve dans les documents sante.",
+      message: "Coggins en révision manuelle. Le PDF a été conservé dans les documents santé.",
     };
   }
 
   return {
     tone: "info",
-    message: "Coggins en revision manuelle.",
+    message: "Coggins en révision manuelle.",
   };
 }
 
 function cogginsValidityMessage(validity: HorseCogginsValidity) {
   if (validity.status === "not_required") {
-    return "Coggins non exige par cette association.";
+    return "Coggins non exigé par cette association.";
   }
 
   if (validity.status === "valid" && validity.expiresOn) {
@@ -939,42 +961,42 @@ function cogginsValidityMessage(validity: HorseCogginsValidity) {
   }
 
   if (validity.status === "expired" && validity.expiresOn) {
-    return `Coggins expire depuis le ${formatDate(validity.expiresOn)}.`;
+    return `Coggins expiré depuis le ${formatDate(validity.expiresOn)}.`;
   }
 
   if (validity.status === "pending_review") {
-    return "Coggins en revision manuelle.";
+    return "Coggins en révision manuelle.";
   }
 
   if (validity.status === "rejected") {
-    return "Coggins refuse.";
+    return "Coggins refusé.";
   }
 
   return "Coggins manquant.";
 }
 
-function cogginsValidityTagLabel(validity: HorseCogginsValidity) {
+function cogginsValidityTagLabel(validity: HorseCogginsValidity, locale: Locale = "fr") {
   if (validity.status === "not_required") {
-    return "Non exige";
+    return uiText(locale, "Non exigé", "Not required");
   }
 
   if (validity.status === "valid" && validity.expiresOn) {
-    return `Valide jusqu'au ${formatDate(validity.expiresOn)}`;
+    return uiText(locale, `Valide jusqu'au ${formatDate(validity.expiresOn)}`, `Valid until ${formatDate(validity.expiresOn)}`);
   }
 
   if (validity.status === "expired" && validity.expiresOn) {
-    return `Expire le ${formatDate(validity.expiresOn)}`;
+    return uiText(locale, `Expiré le ${formatDate(validity.expiresOn)}`, `Expired on ${formatDate(validity.expiresOn)}`);
   }
 
   if (validity.status === "pending_review") {
-    return "En revision";
+    return uiText(locale, "En révision", "In review");
   }
 
   if (validity.status === "rejected") {
-    return "Refuse";
+    return uiText(locale, "Refusé", "Rejected");
   }
 
-  return "Manquant";
+  return uiText(locale, "Manquant", "Missing");
 }
 
 function cogginsValidityBadgeClass(validity: HorseCogginsValidity) {
@@ -995,7 +1017,7 @@ function cogginsValidityTone(validity: HorseCogginsValidity): InlineHealthMessag
 
 function vaccineValidityMessage(validity: HorseVaccineValidity) {
   if (validity.status === "not_required") {
-    return "Vaccin non exige par cette association.";
+    return "Vaccin non exigé par cette association.";
   }
 
   if (validity.status === "valid" && validity.expiresOn) {
@@ -1003,15 +1025,15 @@ function vaccineValidityMessage(validity: HorseVaccineValidity) {
   }
 
   if (validity.status === "expired" && validity.expiresOn) {
-    return `Vaccin expire depuis le ${formatDate(validity.expiresOn)}.`;
+    return `Vaccin expiré depuis le ${formatDate(validity.expiresOn)}.`;
   }
 
   if (validity.status === "pending_review") {
-    return "Vaccin en revision manuelle.";
+    return "Vaccin en révision manuelle.";
   }
 
   if (validity.status === "rejected") {
-    return "Vaccin refuse.";
+    return "Vaccin refusé.";
   }
 
   return "Vaccin manquant.";
@@ -1043,7 +1065,7 @@ function horseHealthValidityMessage(validity: HorseHealthValidity) {
   }
 
   if (validity.coggins.status === "not_required" && validity.vaccine.status === "not_required") {
-    return "Documents sante non exiges par cette association.";
+    return "Documents santé non exigés par cette association.";
   }
 
   return [cogginsValidityMessage(validity.coggins), vaccineValidityMessage(validity.vaccine)].join(" · ");
@@ -1318,7 +1340,7 @@ function buildHealthAlerts(input: {
 
 function healthAlertLabel(status: HealthGateStatus) {
   if (status === "pending_review") {
-    return "En revision";
+    return "En révision";
   }
 
   if (status === "expired") {
@@ -1332,46 +1354,46 @@ function healthAlertLabel(status: HealthGateStatus) {
   return "Bloquant";
 }
 
-function healthDocumentTypeLabel(type: HorseHealthDocument["document_type"]) {
-  const labels: Record<HorseHealthDocument["document_type"], string> = {
-    coggins_eia: "Coggins / EIA",
-    combo_vaccine: "Vaccin influenza/rhino",
-    influenza_vaccine: "Vaccin influenza",
-    other: "Autre document",
-    rhino_vaccine: "Vaccin rhino",
+function healthDocumentTypeLabel(type: HorseHealthDocument["document_type"], locale: Locale = "fr") {
+  const labels: Record<HorseHealthDocument["document_type"], { en: string; fr: string }> = {
+    coggins_eia: { fr: "Coggins / EIA", en: "Coggins / EIA" },
+    combo_vaccine: { fr: "Vaccin influenza/rhino", en: "Influenza/rhino vaccine" },
+    influenza_vaccine: { fr: "Vaccin influenza", en: "Influenza vaccine" },
+    other: { fr: "Autre document", en: "Other document" },
+    rhino_vaccine: { fr: "Vaccin rhino", en: "Rhino vaccine" },
   };
 
-  return labels[type];
+  return labels[type][locale];
 }
 
 function isVaccineHealthDocument(document: Pick<HorseHealthDocument, "document_type">) {
   return document.document_type === "combo_vaccine" || document.document_type === "influenza_vaccine" || document.document_type === "rhino_vaccine";
 }
 
-function healthVerificationSourceLabel(source: HorseHealthDocument["verification_source"]) {
-  const labels: Record<HorseHealthDocument["verification_source"], string> = {
-    gvl_api: "GVL API",
-    gvl_qr: "QR GVL",
-    gvl_url: "Lien GVL",
-    manual: "Manuel",
-    upload: "Fichier déposé",
+function healthVerificationSourceLabel(source: HorseHealthDocument["verification_source"], locale: Locale = "fr") {
+  const labels: Record<HorseHealthDocument["verification_source"], { en: string; fr: string }> = {
+    gvl_api: { fr: "API GVL", en: "GVL API" },
+    gvl_qr: { fr: "QR GVL", en: "GVL QR" },
+    gvl_url: { fr: "Lien GVL", en: "GVL link" },
+    manual: { fr: "Manuel", en: "Manual" },
+    upload: { fr: "Fichier déposé", en: "Uploaded file" },
   };
 
-  return labels[source];
+  return labels[source][locale];
 }
 
 function healthDocumentDateValue(document: HorseHealthDocument) {
   return document.test_or_administered_on ?? document.created_at.slice(0, 10);
 }
 
-function healthDocumentDateLabel(document: HorseHealthDocument) {
-  const label = document.document_type === "coggins_eia" ? "Test" : "Date";
+function healthDocumentDateLabel(document: HorseHealthDocument, locale: Locale = "fr") {
+  const label = document.document_type === "coggins_eia" ? "Test" : uiText(locale, "Date", "Date");
   return `${label}: ${formatDate(healthDocumentDateValue(document))}`;
 }
 
 function healthReviewNote(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
-  const action = status === "approved" ? "approuve" : "refuse";
-  return `${healthDocumentTypeLabel(document.document_type)} ${action} depuis le centre de validation sante.`;
+  const action = status === "approved" ? "approuvé" : "refusé";
+  return `${healthDocumentTypeLabel(document.document_type)} ${action} depuis le centre de validation santé.`;
 }
 
 function latestHorseVaccineDocument(horseId: string, documents: HorseHealthDocument[]) {
@@ -1453,7 +1475,7 @@ function ReadinessChecklist({ readiness }: { readiness: ReadinessResult | null }
   );
 }
 
-type NotificationCategory = "health" | "entries" | "back-numbers" | "billing" | "memberships" | "program";
+type NotificationCategory = "health" | "entries" | "back-numbers" | "billing" | "memberships" | "shows";
 type NotificationPriority = "critical" | "warning" | "info";
 
 type NotificationItem = {
@@ -1474,7 +1496,7 @@ const notificationCategoryFilters: Array<{ key: "all" | NotificationCategory; la
   { key: "back-numbers", label: "Dossards" },
   { key: "memberships", label: "Memberships" },
   { key: "billing", label: "Facturation" },
-  { key: "program", label: "Programme" },
+  { key: "shows", label: "Concours" },
 ];
 
 function NotificationsView({
@@ -1598,7 +1620,7 @@ function buildNotificationItems(input: {
     organization: input.organization,
     referenceShow,
     today,
-  }).filter((alert) => alert.label !== "En revision")) {
+  }).filter((alert) => alert.label !== "En révision")) {
     notifications.push({
       actionLabel: "Voir santé",
       category: "health",
@@ -1622,7 +1644,7 @@ function buildNotificationItems(input: {
       category: "back-numbers",
       detail: `${horseLabel(findById(input.horses, entry.horse_id))} - ${divisionLabel(division, input.classes)}.`,
       id: `entry-back-number-${entry.id}`,
-      meta: [show?.name, cutoffPassed ? "cutoff passé" : "avant cutoff"].filter(Boolean).join(" - "),
+      meta: [show?.name, cutoffPassed ? "fermeture passée" : "avant fermeture"].filter(Boolean).join(" - "),
       priority: cutoffPassed ? "critical" : "warning",
       title: "Dossard manquant",
       view: "back-numbers",
@@ -1670,7 +1692,7 @@ function buildNotificationItems(input: {
       category: "entries",
       detail: `${classRecord.name}: ${classEntries.length} inscription${classEntries.length === 1 ? "" : "s"} prête${classEntries.length === 1 ? "" : "s"} pour l'ordre de passage.`,
       id: `draw-ready-${classRecord.id}`,
-      meta: missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} manquant${missingBackNumberCount === 1 ? "" : "s"}` : "Cutoff passé",
+      meta: missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} manquant${missingBackNumberCount === 1 ? "" : "s"}` : "Fermeture passée",
       priority: missingBackNumberCount ? "critical" : "warning",
       title: "Ordre de passage à sortir",
       view: missingBackNumberCount ? "back-numbers" : "scoring",
@@ -1693,13 +1715,13 @@ function buildNotificationItems(input: {
     }
 
     notifications.push({
-      actionLabel: "Ouvrir show",
-      category: "program",
+      actionLabel: "Ouvrir concours",
+      category: "shows",
       detail: `${show.name}: ${incompleteItems.map((item) => item.title.toLowerCase()).join(", ")} à compléter.`,
       id: `show-readiness-${show.id}`,
       meta: `${formatDate(show.start_date)} - ${formatDate(show.end_date)}`,
       priority: show.status === "open" ? "warning" : "info",
-      title: "Show incomplet",
+      title: "Concours incomplet",
       view: "shows",
     });
   }
@@ -1796,6 +1818,7 @@ function notificationPriorityRank(priority: NotificationPriority) {
 }
 
 function OverviewView({
+  locale,
   openShows,
   organization,
   shows,
@@ -1809,6 +1832,7 @@ function OverviewView({
   unpaidBalance,
   onCreateOrganization,
 }: {
+  locale: Locale;
   openShows: number;
   organization: Organization | null;
   shows: Show[];
@@ -1849,32 +1873,39 @@ function OverviewView({
   const invoiceProgress = showInvoices.length ? Math.round((paidInvoices / showInvoices.length) * 100) : 0;
   const entryProgress = showClasses.length ? Math.min(100, Math.round((showEntries.length / showClasses.length) * 100)) : 0;
   const showLocation = upcomingShow ? [upcomingShow.venue, upcomingShow.location].filter(Boolean).join(" - ") : "";
+  const showUnitLabel = uiText(locale, "bloc", "schedule block");
   const actionItems = [
     {
       detail: upcomingShow
-        ? `${upcomingShows.length} upcoming show${upcomingShows.length === 1 ? "" : "s"} on the calendar.`
-        : "Create dates, venue and open status before inviting competitors.",
+        ? uiText(locale, `${upcomingShows.length} concours à venir au calendrier.`, `${upcomingShows.length} upcoming show${upcomingShows.length === 1 ? "" : "s"} on the calendar.`)
+        : uiText(locale, "Crée les dates, le lieu et le statut avant d'inviter les compétiteurs.", "Create dates, venue and open status before inviting competitors."),
       icon: upcomingShow ? CheckCircle2 : AlertCircle,
-      state: upcomingShow ? "Ready" : "Next",
-      title: upcomingShow ? "Calendar is started" : "Create the first show",
+      state: upcomingShow ? uiText(locale, "Prêt", "Ready") : uiText(locale, "Suivant", "Next"),
+      title: upcomingShow ? uiText(locale, "Calendrier démarré", "Calendar started") : uiText(locale, "Créer le premier concours", "Create the first show"),
     },
     {
-      detail: contacts.length && horses.length ? `${contacts.length} contacts and ${horses.length} horses available.` : "Add owners, riders and horses before entries.",
+      detail: contacts.length && horses.length
+        ? uiText(locale, `${contacts.length} contacts et ${horses.length} chevaux disponibles.`, `${contacts.length} contacts and ${horses.length} horses available.`)
+        : uiText(locale, "Ajoute les propriétaires, cavaliers et chevaux avant les inscriptions.", "Add owners, riders and horses before entries."),
       icon: contacts.length && horses.length ? CheckCircle2 : Users,
-      state: contacts.length && horses.length ? "Ready" : "Build",
-      title: "People and horses",
+      state: contacts.length && horses.length ? uiText(locale, "Prêt", "Ready") : uiText(locale, "À bâtir", "Build"),
+      title: uiText(locale, "Contacts et chevaux", "People and horses"),
     },
     {
-	      detail: showEntries.length ? `${activeEntries} active or pending entries for the next show.` : "Blocs are ready, but no entries have been started.",
+      detail: showEntries.length
+        ? uiText(locale, `${activeEntries} inscription${activeEntries === 1 ? "" : "s"} active${activeEntries === 1 ? "" : "s"} ou en attente pour le prochain concours.`, `${activeEntries} active or pending entr${activeEntries === 1 ? "y" : "ies"} for the next show.`)
+        : uiText(locale, "Les blocs sont prêts, mais aucune inscription n'est commencée.", "Schedule blocks are ready, but no entries have been started."),
       icon: showEntries.length ? CheckCircle2 : ClipboardList,
-      state: showEntries.length ? "Moving" : "Waiting",
-      title: "Entry pipeline",
+      state: showEntries.length ? uiText(locale, "En cours", "Moving") : uiText(locale, "En attente", "Waiting"),
+      title: uiText(locale, "Flux d'inscriptions", "Entry pipeline"),
     },
     {
-      detail: stallCapacity ? `${stallsBooked} of ${stallCapacity} units reserved across stalls, extras and camping.` : "Publish reservation options for stalls, bedding, hay or camping.",
+      detail: stallCapacity
+        ? uiText(locale, `${stallsBooked} de ${stallCapacity} unités réservées entre stalls, extras et camping.`, `${stallsBooked} of ${stallCapacity} units reserved across stalls, extras and camping.`)
+        : uiText(locale, "Publie les options de réservation pour stalls, ripe, foin ou camping.", "Publish reservation options for stalls, bedding, hay or camping."),
       icon: stallCapacity ? Warehouse : Tent,
-      state: stallCapacity ? `${stallUsage}%` : "Setup",
-      title: "Reservations",
+      state: stallCapacity ? `${stallUsage}%` : uiText(locale, "Setup", "Setup"),
+      title: uiText(locale, "Réservations", "Reservations"),
     },
   ];
 
@@ -1882,48 +1913,50 @@ function OverviewView({
     <div className="overview-layout">
       <section className="overview-command span-2">
         <div className="overview-command-main">
-          <p className="eyebrow">Command center</p>
-          <h2>{upcomingShow?.name ?? organization?.name ?? "Build the show office"}</h2>
+          <p className="eyebrow">{uiText(locale, "Centre de commande", "Command center")}</p>
+          <h2>{upcomingShow?.name ?? organization?.name ?? uiText(locale, "Bâtir le secrétariat du concours", "Build the show office")}</h2>
           <p>
             {upcomingShow
-              ? `${formatDate(upcomingShow.start_date)} to ${formatDate(upcomingShow.end_date)}${showLocation ? ` at ${showLocation}` : ""}.`
-              : "Create the first association and show to unlock entries, reservations, scoring and billing."}
+              ? uiText(locale, `${formatDate(upcomingShow.start_date)} au ${formatDate(upcomingShow.end_date)}${showLocation ? ` à ${showLocation}` : ""}.`, `${formatDate(upcomingShow.start_date)} to ${formatDate(upcomingShow.end_date)}${showLocation ? ` at ${showLocation}` : ""}.`)
+              : uiText(locale, "Crée la première association et le premier concours pour débloquer inscriptions, réservations, pointage et facturation.", "Create the first association and show to unlock entries, reservations, scoring and billing.")}
           </p>
           <div className="show-meta">
             <span>
               <CalendarDays size={16} />
-              {upcomingShow ? upcomingShow.status : "No show yet"}
+              {upcomingShow ? upcomingShow.status : uiText(locale, "Aucun concours", "No show yet")}
             </span>
             <span>
               <MapPin size={16} />
-              {showLocation || organization?.primary_contact_email || "Venue pending"}
+              {showLocation || organization?.primary_contact_email || uiText(locale, "Lieu à confirmer", "Venue pending")}
             </span>
             <span>
               <Trophy size={16} />
-	              {showClasses.length} bloc{showClasses.length === 1 ? "" : "s"}
+              {showClasses.length} {showUnitLabel}
+              {locale === "fr" && showClasses.length !== 1 ? "s" : ""}
+              {locale === "en" && showClasses.length !== 1 ? "s" : ""}
             </span>
           </div>
         </div>
         <div className="overview-command-aside">
           <span className={`badge ${upcomingShow?.status ?? "draft"}`}>{upcomingShow ? upcomingShow.status : "setup"}</span>
           <strong>{formatCurrency(invoiceBalance || unpaidBalance, currency)}</strong>
-          <small>{upcomingShow ? "Balance tied to next show" : "Total open balance"}</small>
+          <small>{upcomingShow ? uiText(locale, "Solde lié au prochain concours", "Balance tied to next show") : uiText(locale, "Solde ouvert total", "Total open balance")}</small>
         </div>
       </section>
 
       <section className="metric-grid span-2">
-        <Metric detail={upcomingShow ? `Next: ${formatDate(upcomingShow.start_date)}` : "No active calendar"} icon={CalendarDays} label="Open shows" value={String(openShows)} />
-        <Metric detail={`${contacts.length} people, ${horses.length} horses`} icon={Users} label="Registry" value={String(contacts.length + horses.length)} />
-        <Metric detail={`${draftEntries} draft${draftEntries === 1 ? "" : "s"} need review`} icon={ClipboardList} label="Entries" value={String(entries.length)} />
-        <Metric detail={`${stallsBooked} reserved of ${stallCapacity || 0}`} icon={Warehouse} label="Reservation usage" value={`${stallUsage}%`} />
-        <Metric detail={`${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} in scope`} icon={CircleDollarSign} label="Balance due" value={formatCurrency(unpaidBalance, currency)} />
+        <Metric detail={upcomingShow ? uiText(locale, `Prochain: ${formatDate(upcomingShow.start_date)}`, `Next: ${formatDate(upcomingShow.start_date)}`) : uiText(locale, "Aucun calendrier actif", "No active calendar")} icon={CalendarDays} label={uiText(locale, "Concours ouverts", "Open shows")} value={String(openShows)} />
+        <Metric detail={uiText(locale, `${contacts.length} contacts, ${horses.length} chevaux`, `${contacts.length} people, ${horses.length} horses`)} icon={Users} label={uiText(locale, "Répertoire", "Directory")} value={String(contacts.length + horses.length)} />
+        <Metric detail={uiText(locale, `${draftEntries} brouillon${draftEntries === 1 ? "" : "s"} à réviser`, `${draftEntries} draft${draftEntries === 1 ? "" : "s"} need review`)} icon={ClipboardList} label={uiText(locale, "Inscriptions", "Entries")} value={String(entries.length)} />
+        <Metric detail={uiText(locale, `${stallsBooked} réservées sur ${stallCapacity || 0}`, `${stallsBooked} reserved of ${stallCapacity || 0}`)} icon={Warehouse} label={uiText(locale, "Utilisation des réservations", "Reservation usage")} value={`${stallUsage}%`} />
+        <Metric detail={uiText(locale, `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} en contexte`, `${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} in scope`)} icon={CircleDollarSign} label={uiText(locale, "Solde dû", "Balance due")} value={formatCurrency(unpaidBalance, currency)} />
       </section>
 
       <section className="panel action-panel">
         <div className="panel-header">
           <div>
-            <h2>Action queue</h2>
-            <p>The next useful moves for this workspace.</p>
+            <h2>{uiText(locale, "File d'actions", "Action queue")}</h2>
+            <p>{uiText(locale, "Les prochains gestes utiles pour cet espace.", "The next useful moves for this workspace.")}</p>
           </div>
         </div>
         <div className="action-list">
@@ -1948,8 +1981,8 @@ function OverviewView({
       <section className="panel schedule-panel">
         <div className="panel-header">
           <div>
-            <h2>Upcoming shows</h2>
-            <p>{upcomingShows.length ? "The visible runway for secretaries and competitors." : "No upcoming shows yet."}</p>
+            <h2>{uiText(locale, "Concours à venir", "Upcoming shows")}</h2>
+            <p>{upcomingShows.length ? uiText(locale, "La piste visible pour les secrétaires et compétiteurs.", "The visible runway for secretaries and competitors.") : uiText(locale, "Aucun concours à venir.", "No upcoming shows yet.")}</p>
           </div>
         </div>
         <div className="timeline-list">
@@ -1957,7 +1990,7 @@ function OverviewView({
             <div className="timeline-row" key={show.id}>
               <div>
                 <strong>{show.name}</strong>
-                <span>{show.location || show.venue || "Location pending"}</span>
+                <span>{show.location || show.venue || uiText(locale, "Lieu à confirmer", "Location pending")}</span>
               </div>
               <div>
                 <span>{formatDate(show.start_date)}</span>
@@ -1965,25 +1998,25 @@ function OverviewView({
               </div>
             </div>
           ))}
-          {!upcomingShows.length ? <EmptyState label="Create a show to start the operating calendar." /> : null}
+          {!upcomingShows.length ? <EmptyState label={uiText(locale, "Crée un concours pour démarrer le calendrier d'opérations.", "Create a show to start the operating calendar.")} /> : null}
         </div>
       </section>
 
       <section className="panel capacity-panel">
         <div className="panel-header">
           <div>
-            <h2>Operational pulse</h2>
-            <p>Quick read on the next show's readiness.</p>
+            <h2>{uiText(locale, "Pouls opérationnel", "Operational pulse")}</h2>
+            <p>{uiText(locale, "Lecture rapide de la préparation du prochain concours.", "Quick read on the next show's readiness.")}</p>
           </div>
         </div>
         <div className="progress-stack">
-	          <ProgressMeter label="Entries vs blocs" value={entryProgress} detail={`${showEntries.length} entries across ${showClasses.length} blocs`} />
-          <ProgressMeter label="Reservation inventory used" value={stallUsage} detail={`${stallsBooked} booked, ${stallsAvailable} available`} />
-          <ProgressMeter label="Invoices paid" value={invoiceProgress} detail={`${paidInvoices} paid of ${showInvoices.length} invoices`} />
+          <ProgressMeter label={uiText(locale, "Inscriptions vs blocs", "Entries vs schedule blocks")} value={entryProgress} detail={uiText(locale, `${showEntries.length} inscriptions dans ${showClasses.length} blocs`, `${showEntries.length} entries across ${showClasses.length} schedule blocks`)} />
+          <ProgressMeter label={uiText(locale, "Inventaire de réservations utilisé", "Reservation inventory used")} value={stallUsage} detail={uiText(locale, `${stallsBooked} réservées, ${stallsAvailable} disponibles`, `${stallsBooked} booked, ${stallsAvailable} available`)} />
+          <ProgressMeter label={uiText(locale, "Factures payées", "Invoices paid")} value={invoiceProgress} detail={uiText(locale, `${paidInvoices} payées sur ${showInvoices.length} factures`, `${paidInvoices} paid of ${showInvoices.length} invoices`)} />
         </div>
       </section>
 
-      <OrganizationForm onCreateOrganization={onCreateOrganization} />
+      <OrganizationForm locale={locale} onCreateOrganization={onCreateOrganization} />
     </div>
   );
 }
@@ -2002,11 +2035,29 @@ function ProgressMeter({ detail, label, value }: { detail: string; label: string
   );
 }
 
-function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
+function contactRoleSummary(contact: Contact, contactRoles: ContactRole[], locale: Locale = "fr") {
   const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => role.role);
   const unique = Array.from(new Set(roles.length ? roles : [contact.type]));
 
-  return unique.map((role) => role.replace("_", " ")).join(" / ");
+  return unique.map((role) => contactRoleDisplayLabel(role, locale)).join(" / ");
+}
+
+function contactRoleDisplayLabel(role: ContactRoleName, locale: Locale) {
+  switch (role) {
+    case "owner":
+      return uiText(locale, "Propriétaire", "Owner");
+    case "agent":
+      return "Agent";
+    case "rider":
+      return uiText(locale, "Cavalier", "Rider");
+    case "payer":
+      return uiText(locale, "Payeur", "Payer");
+    case "booker":
+      return uiText(locale, "Réservataire", "Booker");
+    case "other":
+    default:
+      return uiText(locale, "Autre", "Other");
+  }
 }
 
 function normalizeDirectorySearch(value: string) {
@@ -2069,6 +2120,7 @@ function horseMatchesDirectorySearch(
 }
 
 function ShowsView({
+  locale,
   classes,
   divisions,
   entries,
@@ -2082,6 +2134,7 @@ function ShowsView({
   onUpdateShow,
   onViewChange,
 }: {
+  locale: Locale;
   classes: ClassRecord[];
   divisions: Division[];
   entries: Entry[];
@@ -2107,30 +2160,31 @@ function ShowsView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Calendrier"
-        title="Shows"
-        description="Planifie les concours, leurs dates et leur statut public avant d'ouvrir les inscriptions."
+        eyebrow={uiText(locale, "Calendrier", "Calendar")}
+        title={uiText(locale, "Concours", "Shows")}
+        description={uiText(locale, "Planifie les concours, leurs dates et leur statut public avant d'ouvrir les inscriptions.", "Plan shows, dates and public status before opening entries.")}
         stats={[
-          { label: "Shows", value: String(shows.length) },
-          { label: "Ouverts", value: String(shows.filter((show) => show.status === "open").length) },
+          { label: uiText(locale, "Concours", "Shows"), value: String(shows.length) },
+          { label: uiText(locale, "Ouverts", "Open"), value: String(shows.filter((show) => show.status === "open").length) },
         ]}
       />
 
       <section className="panel show-command-panel">
         <div className="panel-header">
           <div>
-            <h2>Créer un show</h2>
-            <p>{organization ? "Démarre un brouillon, puis complète la préparation quand tu veux." : "Create an organization first."}</p>
+            <h2>{uiText(locale, "Créer un concours", "Create a show")}</h2>
+            <p>{organization ? uiText(locale, "Démarre un brouillon, puis complète la préparation quand tu veux.", "Start a draft, then finish readiness when you are ready.") : uiText(locale, "Crée une association d'abord.", "Create an organization first.")}</p>
           </div>
         </div>
         <button className="primary-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
           <Plus size={18} />
-          Créer un show
+          {uiText(locale, "Créer un concours", "Create show")}
         </button>
       </section>
 
       {editingShow ? (
         <ShowEditForm
+          locale={locale}
           show={editingShow}
           onCancel={() => setEditingShow(null)}
           onUpdateShow={async (id, input) => {
@@ -2143,15 +2197,15 @@ function ShowsView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Shows</h2>
-            <p>{shows.length ? `${shows.length} show${shows.length === 1 ? "" : "s"} in this organization.` : "No shows yet."}</p>
+            <h2>{uiText(locale, "Concours", "Shows")}</h2>
+            <p>{shows.length ? uiText(locale, `${shows.length} concours dans cette association.`, `${shows.length} show${shows.length === 1 ? "" : "s"} in this organization.`) : uiText(locale, "Aucun concours pour l'instant.", "No shows yet.")}</p>
           </div>
         </div>
         <div className="table shows-table">
           <div className="table-row table-head">
-            <span>Name</span>
+            <span>{uiText(locale, "Nom", "Name")}</span>
             <span>Dates</span>
-            <span>Status</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Action</span>
           </div>
           {shows.map((show) => (
@@ -2166,20 +2220,21 @@ function ShowsView({
               </div>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => openAssistant(show)}>
-                  {show.status === "draft" ? "Continuer" : "Checklist"}
+                  {show.status === "draft" ? uiText(locale, "Continuer", "Continue") : uiText(locale, "Checklist", "Checklist")}
                 </button>
                 <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
               </div>
             </div>
           ))}
-          {!shows.length ? <EmptyState label="Create the first show for this organization." /> : null}
+          {!shows.length ? <EmptyState label={uiText(locale, "Crée le premier concours de cette association.", "Create the first show for this organization.")} /> : null}
         </div>
       </section>
 
       {assistantOpen ? (
         <ShowAssistant
+          locale={locale}
           classes={classes}
           divisions={divisions}
           entries={entries}
@@ -2203,6 +2258,7 @@ function ShowsView({
 }
 
 function PeopleView({
+  locale,
   contacts,
   contactExternalMemberships,
   contactRoles,
@@ -2225,6 +2281,7 @@ function PeopleView({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
 }: {
+  locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
@@ -2289,37 +2346,38 @@ function PeopleView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Répertoire"
-        title="Répertoire"
-        description="Centralise les propriétaires, cavaliers, payeurs et chevaux qui serviront aux inscriptions."
+        eyebrow={uiText(locale, "Répertoire", "Directory")}
+        title={uiText(locale, "Répertoire", "Directory")}
+        description={uiText(locale, "Centralise les propriétaires, cavaliers, payeurs et chevaux qui serviront aux inscriptions.", "Centralize owners, riders, payers and horses used for entries.")}
         stats={[
-          { label: "Contacts", value: String(contacts.length) },
-          { label: "Chevaux", value: String(horses.length) },
+          { label: uiText(locale, "Contacts", "Contacts"), value: String(contacts.length) },
+          { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
         ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>Ajouter au répertoire</h2>
-            <p>Ouvre le bon formulaire sans quitter la recherche de contacts et chevaux.</p>
+            <h2>{uiText(locale, "Ajouter au répertoire", "Add to directory")}</h2>
+            <p>{uiText(locale, "Ouvre le bon formulaire sans quitter la recherche de contacts et chevaux.", "Open the right form without leaving contact and horse search.")}</p>
           </div>
           <div className="row-actions">
             <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingContact(true)}>
               <Plus size={18} />
-              Contact
+              {uiText(locale, "Contact", "Contact")}
             </button>
             <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
               <Plus size={18} />
-              Cheval
+              {uiText(locale, "Cheval", "Horse")}
             </button>
           </div>
         </div>
       </section>
 
       {creatingContact ? (
-        <ModalDialog description={organization ? organization.name : "Crée une association d'abord."} eyebrow="Répertoire" title="Nouveau contact" onClose={() => setCreatingContact(false)}>
+        <ModalDialog description={organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first.")} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Nouveau contact", "New contact")} onClose={() => setCreatingContact(false)}>
           <ContactForm
+            locale={locale}
             externalOrganizations={externalOrganizations}
             membershipRequirements={membershipRequirements}
             organization={organization}
@@ -2330,8 +2388,9 @@ function PeopleView({
       ) : null}
 
       {creatingHorse ? (
-        <ModalDialog description={contacts.length ? "Connecte le cheval à un propriétaire." : "Crée un contact propriétaire directement dans ce formulaire au besoin."} eyebrow="Répertoire" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
+        <ModalDialog description={contacts.length ? uiText(locale, "Connecte le cheval à un propriétaire.", "Connect the horse to an owner.") : uiText(locale, "Crée un contact propriétaire directement dans ce formulaire au besoin.", "Create an owner contact directly in this form if needed.")} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>
           <HorseForm
+            locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={createdByUserId}
@@ -2347,8 +2406,9 @@ function PeopleView({
       ) : null}
 
       {editingContact ? (
-        <ModalDialog description={contactLabel(editingContact)} eyebrow="Répertoire" title="Modifier le contact" onClose={() => setEditingContact(null)}>
+        <ModalDialog description={contactLabel(editingContact)} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Modifier le contact", "Edit contact")} onClose={() => setEditingContact(null)}>
           <ContactEditForm
+            locale={locale}
             contact={editingContact}
             contactExternalMemberships={contactExternalMemberships}
             externalOrganizations={externalOrganizations}
@@ -2363,8 +2423,9 @@ function PeopleView({
       ) : null}
 
       {editingHorse ? (
-        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Répertoire" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
+        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Modifier le cheval", "Edit horse")} onClose={() => setEditingHorse(null)}>
           <HorseEditForm
+            locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
             canManageHealthDocuments={canManageHealthDocuments}
@@ -2391,23 +2452,23 @@ function PeopleView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Contacts</h2>
-            <p>{normalizedContactSearch ? `${filteredContacts.length} résultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.` : "Recherche par nom, rôle, courriel ou écurie."}</p>
+            <h2>{uiText(locale, "Contacts", "Contacts")}</h2>
+            <p>{normalizedContactSearch ? uiText(locale, `${filteredContacts.length} résultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`, `${filteredContacts.length} result${filteredContacts.length === 1 ? "" : "s"} across ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`) : uiText(locale, "Recherche par nom, rôle, courriel ou écurie.", "Search by name, role, email or barn.")}</p>
           </div>
         </div>
         <label className="directory-search-field">
-          <span>Rechercher un contact</span>
+          <span>{uiText(locale, "Rechercher un contact", "Search contacts")}</span>
           <div>
             <Search size={16} />
-            <input placeholder="Nom, rôle, courriel, écurie..." value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
+            <input placeholder={uiText(locale, "Nom, rôle, courriel, écurie...", "Name, role, email, barn...")} value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
           </div>
         </label>
         <div className="horse-list directory-list">
           {normalizedContactSearch ? (
             <div className="horse-list-row horse-list-head">
-              <span>Contact</span>
-              <span>Rôles</span>
-              <span>Courriel</span>
+              <span>{uiText(locale, "Contact", "Contact")}</span>
+              <span>{uiText(locale, "Rôles", "Roles")}</span>
+              <span>{uiText(locale, "Courriel", "Email")}</span>
               <span>Action</span>
             </div>
           ) : null}
@@ -2415,59 +2476,59 @@ function PeopleView({
             <div className="horse-list-row" key={contact.id}>
               <div className="horse-list-identity">
                 <strong>{contactLabel(contact)}</strong>
-                <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || "Contact"}</span>
+                <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || uiText(locale, "Contact", "Contact")}</span>
               </div>
               <div className="horse-chip-row">
                 {contactRoleSummary(contact, contactRoles)
                   .split(" / ")
                   .map((role) => (
                     <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
-                      <span>Rôle</span>
+                      <span>{uiText(locale, "Rôle", "Role")}</span>
                       <strong>{role}</strong>
                     </span>
                   ))}
               </div>
               <div className="horse-chip-row">
                 <span className="horse-status-chip neutral">
-                  <span>Courriel</span>
-                  <strong>{contact.email || "Aucun"}</strong>
+                  <span>{uiText(locale, "Courriel", "Email")}</span>
+                  <strong>{contact.email || uiText(locale, "Aucun", "None")}</strong>
                 </span>
               </div>
               <div className="row-actions horse-row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                  Modifier
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-          {!normalizedContactSearch ? <EmptyState label="Lance une recherche pour afficher les contacts de l'association." /> : null}
-          {normalizedContactSearch && !filteredContacts.length ? <EmptyState label="Aucun contact ne correspond à cette recherche." /> : null}
+          {!normalizedContactSearch ? <EmptyState label={uiText(locale, "Lance une recherche pour afficher les contacts de l'association.", "Search to display association contacts.")} /> : null}
+          {normalizedContactSearch && !filteredContacts.length ? <EmptyState label={uiText(locale, "Aucun contact ne correspond à cette recherche.", "No contact matches this search.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Chevaux</h2>
-            <p>{normalizedHorseSearch ? `${filteredHorses.length} résultat${filteredHorses.length === 1 ? "" : "s"} sur ${horses.length} ${horses.length === 1 ? "cheval" : "chevaux"}.` : "Recherche par nom, propriétaire, sexe ou numéro externe."}</p>
+            <h2>{uiText(locale, "Chevaux", "Horses")}</h2>
+            <p>{normalizedHorseSearch ? uiText(locale, `${filteredHorses.length} résultat${filteredHorses.length === 1 ? "" : "s"} sur ${horses.length} ${horses.length === 1 ? "cheval" : "chevaux"}.`, `${filteredHorses.length} result${filteredHorses.length === 1 ? "" : "s"} across ${horses.length} horse${horses.length === 1 ? "" : "s"}.`) : uiText(locale, "Recherche par nom, propriétaire, sexe ou numéro externe.", "Search by name, owner, sex or external number.")}</p>
           </div>
         </div>
         <label className="directory-search-field">
-          <span>Rechercher un cheval</span>
+          <span>{uiText(locale, "Rechercher un cheval", "Search horses")}</span>
           <div>
             <Search size={16} />
-            <input placeholder="Nom, propriétaire, référence..." value={horseSearch} onChange={(event) => setHorseSearch(event.target.value)} />
+            <input placeholder={uiText(locale, "Nom, propriétaire, référence...", "Name, owner, reference...")} value={horseSearch} onChange={(event) => setHorseSearch(event.target.value)} />
           </div>
         </label>
         <div className="horse-list directory-list">
           {normalizedHorseSearch ? (
             <div className="horse-list-row horse-list-head">
-              <span>Cheval</span>
-              <span>Statut</span>
-              <span>Références</span>
+              <span>{uiText(locale, "Cheval", "Horse")}</span>
+              <span>{uiText(locale, "Statut", "Status")}</span>
+              <span>{uiText(locale, "Références", "References")}</span>
               <span>Action</span>
             </div>
           ) : null}
@@ -2504,17 +2565,17 @@ function PeopleView({
                 </div>
                 <div className="row-actions horse-row-actions">
                   <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                    Modifier
+                    {uiText(locale, "Modifier", "Edit")}
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
-                    Supprimer
+                    {uiText(locale, "Supprimer", "Delete")}
                   </button>
                 </div>
               </div>
             );
           })}
-          {!normalizedHorseSearch ? <EmptyState label="Lance une recherche pour afficher les chevaux de l'association." /> : null}
-          {normalizedHorseSearch && !filteredHorses.length ? <EmptyState label="Aucun cheval ne correspond à cette recherche." /> : null}
+          {!normalizedHorseSearch ? <EmptyState label={uiText(locale, "Lance une recherche pour afficher les chevaux de l'association.", "Search to display association horses.")} /> : null}
+          {normalizedHorseSearch && !filteredHorses.length ? <EmptyState label={uiText(locale, "Aucun cheval ne correspond à cette recherche.", "No horse matches this search.")} /> : null}
         </div>
       </section>
     </div>
@@ -2522,6 +2583,7 @@ function PeopleView({
 }
 
 function HealthCenterView({
+  locale,
   canManageHealthDocuments,
   contacts,
   contactRoles,
@@ -2540,6 +2602,7 @@ function HealthCenterView({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
 }: {
+  locale: Locale;
   canManageHealthDocuments: boolean;
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -2631,20 +2694,20 @@ function HealthCenterView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Santé"
-        title="Centre de validation"
-        description="Traite les documents en revision et surveille les echeances avant les reservations et inscriptions."
+        eyebrow={uiText(locale, "Santé", "Health")}
+        title={uiText(locale, "Centre de validation", "Validation center")}
+        description={uiText(locale, "Traite les documents en révision et surveille les échéances avant les réservations et inscriptions.", "Review health documents and monitor deadlines before reservations and entries.")}
         stats={[
-          { label: "À valider", value: String(pendingDocuments.length) },
-          { label: "Alertes", value: String(healthAlerts.length) },
-          { label: "Chevaux", value: String(horses.length) },
+          { label: uiText(locale, "À valider", "To review"), value: String(pendingDocuments.length) },
+          { label: uiText(locale, "Alertes", "Alerts"), value: String(healthAlerts.length) },
+          { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric detail="Documents en attente d'un gestionnaire." label="À valider" value={String(pendingDocuments.length)} />
-        <Metric detail={referenceShow ? `Reference: ${referenceShow.name}` : "Aucun show actif."} label="Échéances" value={String(healthAlerts.length)} />
-        <Metric detail={organizationRequiresHealthVerification(organization) ? "Coggins et vaccin obligatoires." : "Verification désactivée."} label="Règle santé" value={organizationCogginsValidityMonths(organization) + " mois"} />
+        <Metric detail={uiText(locale, "Documents en attente d'un gestionnaire.", "Documents waiting for a manager review.")} label={uiText(locale, "À valider", "To review")} value={String(pendingDocuments.length)} />
+        <Metric detail={referenceShow ? `${uiText(locale, "Référence", "Reference")}: ${referenceShow.name}` : uiText(locale, "Aucun concours actif.", "No active show.")} label={uiText(locale, "Échéances", "Deadlines")} value={String(healthAlerts.length)} />
+        <Metric detail={organizationRequiresHealthVerification(organization) ? uiText(locale, "Coggins et vaccin obligatoires.", "Coggins and vaccine required.") : uiText(locale, "Vérification désactivée.", "Verification disabled.")} label={uiText(locale, "Règle santé", "Health rule")} value={`${organizationCogginsValidityMonths(organization)} ${uiText(locale, "mois", "months")}`} />
       </section>
 
       {currentEditingHorse ? (
@@ -2652,15 +2715,16 @@ function HealthCenterView({
           <section aria-labelledby="health-horse-edit-title" aria-modal="true" className="assistant-modal health-horse-modal" role="dialog">
             <div className="assistant-modal-header">
               <div>
-                <p className="eyebrow">Santé</p>
-                <h2 id="health-horse-edit-title">Modifier le cheval</h2>
-                <p>Corrige la fiche, puis relance la validation GVL au besoin.</p>
+                <p className="eyebrow">{uiText(locale, "Santé", "Health")}</p>
+                <h2 id="health-horse-edit-title">{uiText(locale, "Modifier le cheval", "Edit horse")}</h2>
+                <p>{uiText(locale, "Corrige la fiche, puis relance la validation GVL au besoin.", "Correct the record, then rerun GVL validation if needed.")}</p>
               </div>
-              <button className="icon-button" type="button" aria-label="Fermer l'edition du cheval" onClick={() => setEditingHorse(null)}>
+              <button className="icon-button" type="button" aria-label={uiText(locale, "Fermer l'édition du cheval", "Close horse editor")} onClick={() => setEditingHorse(null)}>
                 <X size={18} />
               </button>
             </div>
             <HorseEditForm
+              locale={locale}
               canManageHealthDocuments={canManageHealthDocuments}
               contacts={contacts}
               contactRoles={contactRoles}
@@ -2688,14 +2752,14 @@ function HealthCenterView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Documents à valider</h2>
-            <p>{pendingDocuments.length ? `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} en attente.` : "Aucun document en revision manuelle."}</p>
+            <h2>{uiText(locale, "Documents à valider", "Documents to review")}</h2>
+            <p>{pendingDocuments.length ? uiText(locale, `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} en attente.`, `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} pending.`) : uiText(locale, "Aucun document en révision manuelle.", "No documents in manual review.")}</p>
           </div>
         </div>
         <div className="table health-review-table">
           <div className="table-row table-head">
             <span>Document</span>
-            <span>Cheval</span>
+            <span>{uiText(locale, "Cheval", "Horse")}</span>
             <span>Source</span>
             <span>Action</span>
           </div>
@@ -2708,16 +2772,16 @@ function HealthCenterView({
 
             return (
               <div className="table-row" key={document.id}>
-                <div>
-                  <strong>{healthDocumentTypeLabel(document.document_type)}</strong>
+              <div>
+                  <strong>{healthDocumentTypeLabel(document.document_type, locale)}</strong>
                   <span className="muted-line">
-                    {healthDocumentDateLabel(document)}
+                    {healthDocumentDateLabel(document, locale)}
                     {document.result ? ` - ${document.result}` : ""}
                   </span>
                   {document.review_notes ? <span className="muted-line">{document.review_notes}</span> : null}
                   {needsReviewDate ? (
                     <label className="compact-label">
-                      Date vaccin validée
+                      {uiText(locale, "Date vaccin validée", "Validated vaccine date")}
                       <input
                         type="date"
                         value={reviewDate}
@@ -2742,14 +2806,14 @@ function HealthCenterView({
                   ) : null}
                 </div>
                 <div>
-                  <span className={`badge ${document.status}`}>{horseHealthStatusLabel(document.status)}</span>
-                  <span className="muted-line">{healthVerificationSourceLabel(document.verification_source)}</span>
+                  <span className={`badge ${document.status}`}>{horseHealthStatusLabel(document.status, locale)}</span>
+                  <span className="muted-line">{healthVerificationSourceLabel(document.verification_source, locale)}</span>
                   {document.warnings.length ? <span className="muted-line">{document.warnings.join(", ")}</span> : null}
                 </div>
                 <div className="row-actions">
                   {horse ? (
                     <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                      Edit horse
+                      {uiText(locale, "Modifier le cheval", "Edit horse")}
                     </button>
                   ) : null}
                   {document.source_url ? (
@@ -2763,32 +2827,32 @@ function HealthCenterView({
                     </button>
                   ) : null}
                   <button className="text-button" disabled={busy || (needsReviewDate && !reviewDate)} type="button" onClick={() => void handleReview(document, "approved")}>
-                    Approuver
+                    {uiText(locale, "Approuver", "Approve")}
                   </button>
                   <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void handleReview(document, "rejected")}>
-                    Refuser
+                    {uiText(locale, "Refuser", "Reject")}
                   </button>
-                  {fileErrorDocumentId === document.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[document.id] || "acces refuse."}</span> : null}
+                  {fileErrorDocumentId === document.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[document.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
                 </div>
               </div>
             );
           })}
-          {!pendingDocuments.length ? <EmptyState label="Aucun document santé en attente de validation." /> : null}
+          {!pendingDocuments.length ? <EmptyState label={uiText(locale, "Aucun document santé en attente de validation.", "No health documents awaiting review.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Échéances santé</h2>
-            <p>{referenceShow ? `Calculées avec la date d'arrivée du show ${referenceShow.name}.` : "Crée un show pour calculer les échéances par date d'arrivée."}</p>
+            <h2>{uiText(locale, "Échéances santé", "Health deadlines")}</h2>
+            <p>{referenceShow ? uiText(locale, `Calculées avec la date d'arrivée du concours ${referenceShow.name}.`, `Calculated from the arrival date for ${referenceShow.name}.`) : uiText(locale, "Crée un concours pour calculer les échéances par date d'arrivée.", "Create a show to calculate deadlines from arrival dates.")}</p>
           </div>
         </div>
         <div className="table health-alert-table">
           <div className="table-row table-head">
-            <span>Cheval</span>
-            <span>Statut</span>
-            <span>Référence</span>
+            <span>{uiText(locale, "Cheval", "Horse")}</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
+            <span>{uiText(locale, "Référence", "Reference")}</span>
             <span>Action</span>
           </div>
           {healthAlerts.map((alert) => (
@@ -2804,12 +2868,12 @@ function HealthCenterView({
               <span>{alert.referenceLabel}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingHorse(alert.horse)}>
-                  Edit horse
+                  {uiText(locale, "Modifier le cheval", "Edit horse")}
                 </button>
               </div>
             </div>
           ))}
-          {!healthAlerts.length ? <EmptyState label="Aucune échéance santé à surveiller pour l'instant." /> : null}
+          {!healthAlerts.length ? <EmptyState label={uiText(locale, "Aucune échéance santé à surveiller pour l'instant.", "No health deadlines to watch right now.")} /> : null}
         </div>
       </section>
     </div>
@@ -2817,6 +2881,7 @@ function HealthCenterView({
 }
 
 function ClassesView({
+  locale,
   classes,
   classTemplateDivisions,
   classTemplates,
@@ -2839,6 +2904,7 @@ function ClassesView({
   onUpdateClassTemplateDivision,
   onUpdateDivision,
 }: {
+  locale: Locale;
   classes: ClassRecord[];
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
@@ -2887,7 +2953,7 @@ function ClassesView({
   }
 
   async function handleDeleteClassTemplateDivision(division: ClassTemplateDivision) {
-    if (!window.confirm(`Supprimer la classe de bloc preset "${division.name}"? Les classes deja creees depuis ce bloc preset resteront dans leurs blocs.`)) {
+    if (!window.confirm(`Supprimer la classe de bloc preset "${division.name}"? Les classes déjà créées depuis ce bloc preset resteront dans leurs blocs.`)) {
       return;
     }
 
@@ -2937,51 +3003,52 @@ function ClassesView({
 
   return (
     <div className="content-grid">
-	      <ViewIntro
-	        eyebrow="Programme"
-	        title="Blocs et classes"
-	        description="Structure le programme sportif: slates techniques, blocs, classes, frais et statuts d'ouverture."
-	        stats={[
-	          { label: "Blocs", value: String(classes.length) },
-	          { label: "Classes", value: String(divisions.length) },
-	          { label: "Presets", value: String(classTemplates.length) },
-	        ]}
+      <ViewIntro
+        eyebrow={uiText(locale, "Horaire", "Schedule")}
+        title={uiText(locale, "Blocs et classes", "Schedule blocks and classes")}
+        description={uiText(locale, "Structure l'horaire sportif: blocs, classes, frais et statuts d'ouverture.", "Structure the show schedule: schedule blocks, classes, fees and entry status.")}
+        stats={[
+          { label: uiText(locale, "Blocs", "Blocks"), value: String(classes.length) },
+          { label: uiText(locale, "Classes", "Classes"), value: String(divisions.length) },
+          { label: "Presets", value: String(classTemplates.length) },
+        ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
-	          <div>
-	            <h2>Ajouter au programme</h2>
-	            <p>Crée un bloc depuis un bloc preset, un bloc custom ou une classe sans quitter le programme.</p>
-	          </div>
+          <div>
+            <h2>{uiText(locale, "Ajouter à l'horaire", "Add to schedule")}</h2>
+            <p>{uiText(locale, "Crée un bloc depuis un bloc preset, un bloc libre ou une classe sans quitter l'horaire.", "Create a block from a preset, a custom block or a class without leaving the schedule.")}</p>
+          </div>
           <div className="row-actions">
             <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingClassTemplate(true)}>
               <Plus size={18} />
-              Bloc preset
+              {uiText(locale, "Bloc preset", "Block preset")}
             </button>
-	            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
-	              <Plus size={18} />
-	              Classe de bloc preset
-	            </button>
-	            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
-	              <Plus size={18} />
-	              Bloc preset
-	            </button>
-	            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
-	              <Plus size={18} />
-	              Bloc libre
-	            </button>
-	            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
-	              <Plus size={18} />
-	              Classe
-	            </button>
+            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
+              <Plus size={18} />
+              {uiText(locale, "Classe de bloc preset", "Preset block class")}
+            </button>
+            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
+              <Plus size={18} />
+              {uiText(locale, "Bloc preset", "Preset block")}
+            </button>
+            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
+              <Plus size={18} />
+              {uiText(locale, "Bloc libre", "Custom block")}
+            </button>
+            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
+              <Plus size={18} />
+              {uiText(locale, "Classe", "Class")}
+            </button>
           </div>
         </div>
       </section>
 
       {creatingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description="Catalogue réutilisable de l'association." eyebrow="Programme" title="Nouveau bloc preset" onClose={() => setCreatingClassTemplate(false)}>
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc preset", "New block preset")} onClose={() => setCreatingClassTemplate(false)}>
           <ClassTemplateForm
+            locale={locale}
             organization={organization}
             sanctioningBodies={sanctioningBodies}
             onCreateClassTemplate={onCreateClassTemplate}
@@ -2991,8 +3058,9 @@ function ClassesView({
       ) : null}
 
       {creatingClassTemplateDivision ? (
-	        <ModalDialog className="class-program-modal" description="Classe régulière rattachée à un bloc preset." eyebrow="Programme" title="Classe de bloc preset" onClose={() => setCreatingClassTemplateDivision(false)}>
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Classe régulière rattachée à un bloc preset.", "Reusable class attached to a block preset.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Classe de bloc preset", "Preset block class")} onClose={() => setCreatingClassTemplateDivision(false)}>
           <ClassTemplateDivisionForm
+            locale={locale}
             classTemplates={classTemplates}
             organization={organization}
             sanctioningBodies={sanctioningBodies}
@@ -3003,8 +3071,9 @@ function ClassesView({
       ) : null}
 
       {creatingClass ? (
-	        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? "Choisis un bloc preset ou passe en bloc libre au besoin." : "Crée un bloc hors catalogue."} eyebrow="Programme" title={creatingClass === "preset" ? "Nouveau bloc depuis bloc preset" : "Nouveau bloc libre"} onClose={() => setCreatingClass(null)}>
+        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? uiText(locale, "Choisis un bloc preset ou passe en bloc libre au besoin.", "Choose a block preset or switch to custom if needed.") : uiText(locale, "Crée un bloc hors catalogue.", "Create a block outside the catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={creatingClass === "preset" ? uiText(locale, "Nouveau bloc depuis bloc preset", "New block from preset") : uiText(locale, "Nouveau bloc libre", "New custom block")} onClose={() => setCreatingClass(null)}>
           <ClassForm
+            locale={locale}
             classes={classes}
             classTemplateDivisions={classTemplateDivisions}
             classTemplates={classTemplates}
@@ -3021,14 +3090,15 @@ function ClassesView({
       ) : null}
 
       {creatingDivision ? (
-	        <ModalDialog className="class-program-modal" description="Ajoute une classe d'inscription sous un bloc existant." eyebrow="Programme" title="Nouvelle classe" onClose={() => setCreatingDivision(false)}>
-          <DivisionForm classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(false)} />
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute une classe d'inscription sous un bloc existant.", "Add an entry class under an existing block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvelle classe", "New class")} onClose={() => setCreatingDivision(false)}>
+          <DivisionForm locale={locale} classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(false)} />
         </ModalDialog>
       ) : null}
 
       {editingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow="Programme" title="Modifier le bloc preset" onClose={() => setEditingClassTemplate(null)}>
+        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le bloc preset", "Edit block preset")} onClose={() => setEditingClassTemplate(null)}>
           <ClassTemplateEditForm
+            locale={locale}
             classTemplate={editingClassTemplate}
             sanctioningBodies={sanctioningBodies}
             onCancel={() => setEditingClassTemplate(null)}
@@ -3041,8 +3111,9 @@ function ClassesView({
       ) : null}
 
       {editingClassTemplateDivision ? (
-	        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow="Programme" title="Modifier la classe de bloc preset" onClose={() => setEditingClassTemplateDivision(null)}>
+        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier la classe de bloc preset", "Edit preset block class")} onClose={() => setEditingClassTemplateDivision(null)}>
           <ClassTemplateDivisionEditForm
+            locale={locale}
             classTemplates={classTemplates}
             classTemplateDivision={editingClassTemplateDivision}
             sanctioningBodies={sanctioningBodies}
@@ -3056,8 +3127,9 @@ function ClassesView({
       ) : null}
 
       {editingClass ? (
-	        <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow="Programme" title="Modifier le bloc" onClose={() => setEditingClass(null)}>
+        <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le bloc", "Edit block")} onClose={() => setEditingClass(null)}>
           <ClassEditForm
+            locale={locale}
             classes={classes}
             classRecord={editingClass}
             sanctioningBodies={sanctioningBodies}
@@ -3071,8 +3143,9 @@ function ClassesView({
       ) : null}
 
       {editingDivision ? (
-	        <ModalDialog className="class-program-modal" description={editingDivision.name} eyebrow="Programme" title="Modifier la classe" onClose={() => setEditingDivision(null)}>
+        <ModalDialog className="class-program-modal" description={editingDivision.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier la classe", "Edit class")} onClose={() => setEditingDivision(null)}>
           <DivisionEditForm
+            locale={locale}
             classes={classes}
             division={editingDivision}
             sanctioningBodies={sanctioningBodies}
@@ -3087,17 +3160,17 @@ function ClassesView({
 
       <section className="panel span-2">
         <div className="panel-header">
-	          <div>
-	            <h2>Blocs presets</h2>
-	            <p>{classTemplates.length ? `${classTemplates.length} bloc${classTemplates.length === 1 ? "" : "s"} preset configuré${classTemplates.length === 1 ? "" : "s"}.` : "Le catalogue de blocs récurrents de l'association."}</p>
+          <div>
+            <h2>{uiText(locale, "Blocs presets", "Block presets")}</h2>
+            <p>{classTemplates.length ? uiText(locale, `${classTemplates.length} bloc${classTemplates.length === 1 ? "" : "s"} preset configuré${classTemplates.length === 1 ? "" : "s"}.`, `${classTemplates.length} block preset${classTemplates.length === 1 ? "" : "s"} configured.`) : uiText(locale, "Le catalogue de blocs récurrents de l'association.", "The association catalog of reusable schedule blocks.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Bloc preset</span>
-            <span>Sanctions</span>
-            <span>Dossard</span>
-	            <span>Classes</span>
+            <span>{uiText(locale, "Bloc preset", "Block preset")}</span>
+            <span>{uiText(locale, "Sanctions", "Sanctioning")}</span>
+            <span>{uiText(locale, "Dossard", "Back number")}</span>
+            <span>{uiText(locale, "Classes", "Classes")}</span>
           </div>
           {classTemplates.map((template) => {
             const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
@@ -3112,17 +3185,17 @@ function ClassesView({
                       template.default_pattern ? `Pattern ${template.default_pattern}` : null,
                     ]
                       .filter(Boolean)
-                      .join(" - ") || template.code || "Bloc preset"}
+                      .join(" - ") || template.code || uiText(locale, "Bloc preset", "Block preset")}
                   </span>
                   <button className="text-button inline-action" type="button" onClick={() => setEditingClassTemplate(template)}>
-                    Edit
+                    {uiText(locale, "Modifier", "Edit")}
                   </button>
                   <button className="text-button danger-text inline-action" type="button" onClick={() => handleDeleteClassTemplate(template)}>
-                    Supprimer
+                    {uiText(locale, "Supprimer", "Delete")}
                   </button>
                 </div>
-                <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies)}</span>
-                <span>{backNumberPolicyLabel(template.back_number_policy)}</span>
+                <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale)}</span>
+                <span>{backNumberPolicyLabel(template.back_number_policy, locale)}</span>
                 <span>
                   {templateDivisions.length
                     ? templateDivisions
@@ -3130,37 +3203,37 @@ function ClassesView({
                           [
                             division.code ? `#${division.code}` : null,
                             division.name,
-                            isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "type NRHA à préciser" : null,
+                            isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "type NRHA à préciser", "NRHA type required") : null,
                             division.default_entry_fee == null ? null : `insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
                             division.default_judge_fee == null ? null : `juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
-                            payoutTemplateDivisionSummary(division),
+                            payoutTemplateDivisionSummary(division, locale),
                           ]
                             .filter(Boolean)
                             .join(" "),
                         )
                         .join(", ")
-	                    : "Aucune classe"}
+                    : uiText(locale, "Aucune classe", "No classes")}
                 </span>
               </div>
             );
           })}
-          {!classTemplates.length ? <EmptyState label="Crée le premier bloc preset de cette association." /> : null}
+          {!classTemplates.length ? <EmptyState label={uiText(locale, "Crée le premier bloc preset de cette association.", "Create the first block preset for this association.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-	            <h2>Classes de blocs presets</h2>
-	            <p>{classTemplateDivisions.length ? `${classTemplateDivisions.length} classe${classTemplateDivisions.length === 1 ? "" : "s"} de bloc preset.` : "Ajoute les classes régulières sous un bloc preset."}</p>
+            <h2>{uiText(locale, "Classes de blocs presets", "Preset block classes")}</h2>
+            <p>{classTemplateDivisions.length ? uiText(locale, `${classTemplateDivisions.length} classe${classTemplateDivisions.length === 1 ? "" : "s"} de bloc preset.`, `${classTemplateDivisions.length} preset block class${classTemplateDivisions.length === 1 ? "" : "es"}.`) : uiText(locale, "Ajoute les classes régulières sous un bloc preset.", "Add reusable classes under a block preset.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-	            <span>Classe</span>
-            <span>Bloc preset</span>
-            <span>Frais</span>
-            <span>Action</span>
+            <span>{uiText(locale, "Classe", "Class")}</span>
+            <span>{uiText(locale, "Bloc preset", "Block preset")}</span>
+            <span>{uiText(locale, "Frais", "Fees")}</span>
+            <span>{uiText(locale, "Action", "Action")}</span>
           </div>
           {classTemplateDivisions.map((division) => (
             <div className="table-row" key={division.id}>
@@ -3168,50 +3241,50 @@ function ClassesView({
                 <strong>{division.name}</strong>
                 <span className="muted-line">
                   {[
-                    division.code ? `#${division.code}` : "Sans code",
-                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "Type NRHA à préciser" : null,
+                    division.code ? `#${division.code}` : uiText(locale, "Sans code", "No code"),
+                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
                   ]
                     .filter(Boolean)
                     .join(" - ")}
                 </span>
               </div>
-              <span>{findById(classTemplates, division.class_template_id)?.name ?? "Bloc preset inconnu"}</span>
+              <span>{findById(classTemplates, division.class_template_id)?.name ?? uiText(locale, "Bloc preset inconnu", "Unknown block preset")}</span>
               <span>
                 {[
-	                  division.default_entry_fee == null ? null : `Insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
-	                  division.default_judge_fee == null ? null : `Juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
-	                  payoutTemplateDivisionSummary(division),
-	                ]
-	                  .filter(Boolean)
-                  .join(" - ") || "Aucun frais"}
+                  division.default_entry_fee == null ? null : `${uiText(locale, "Insc.", "Entry")} ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
+                  division.default_judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+                  payoutTemplateDivisionSummary(division, locale),
+                ]
+                  .filter(Boolean)
+                  .join(" - ") || uiText(locale, "Aucun frais", "No fees")}
               </span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplateDivision(division)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-	          {!classTemplateDivisions.length ? <EmptyState label="Aucune classe de bloc preset pour l'instant." /> : null}
+          {!classTemplateDivisions.length ? <EmptyState label={uiText(locale, "Aucune classe de bloc preset pour l'instant.", "No preset block classes yet.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-	            <h2>Blocs</h2>
-	            <p>{classes.length ? `${classes.length} bloc${classes.length === 1 ? "" : "s"} configuré${classes.length === 1 ? "" : "s"}.` : "Les blocs regroupent les classes qui partagent un ordre de passage."}</p>
+            <h2>{uiText(locale, "Blocs", "Schedule blocks")}</h2>
+            <p>{classes.length ? uiText(locale, `${classes.length} bloc${classes.length === 1 ? "" : "s"} configuré${classes.length === 1 ? "" : "s"}.`, `${classes.length} schedule block${classes.length === 1 ? "" : "s"} configured.`) : uiText(locale, "Les blocs regroupent les classes qui partagent un ordre de passage.", "Schedule blocks group classes that share one draw order.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-	            <span>Bloc</span>
-            <span>Show</span>
-            <span>Programme</span>
-            <span>Action</span>
+            <span>{uiText(locale, "Bloc", "Block")}</span>
+            <span>{uiText(locale, "Concours", "Show")}</span>
+            <span>{uiText(locale, "Horaire", "Schedule")}</span>
+            <span>{uiText(locale, "Action", "Action")}</span>
           </div>
           {classes.map((classRecord) => {
             const classDivisions = divisions.filter((division) => division.class_id === classRecord.id);
@@ -3220,24 +3293,24 @@ function ClassesView({
                 <div>
                   <strong>{classRecord.name}</strong>
                   <span className="muted-line">
-	                    {classDivisions.length ? `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}` : "Aucune classe"}
+                    {classDivisions.length ? uiText(locale, `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}`, `${classDivisions.length} class${classDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes")}
                     {classRecord.entry_fee == null ? "" : ` - ${formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}`}
                   </span>
                 </div>
                 <div>
                   <span>{showLabel(findById(shows, classRecord.show_id))}</span>
                   <span className="muted-line">
-                    {classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : "Aucune journée"}
+                    {classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : uiText(locale, "Aucune journée", "No day")}
                   </span>
                 </div>
                 <div>
-                  <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies)}</span>
+                  <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies, locale)}</span>
                   <span className="muted-line">
                     {[
                       classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
                       classRecord.nrha_slate_number ? `Slate / show technique ${classRecord.nrha_slate_number}` : null,
-                      concurrentClassLabel(classRecord, classes),
-                      backNumberPolicyLabel(classRecord.back_number_policy),
+                      concurrentClassLabel(classRecord, classes, locale),
+                      backNumberPolicyLabel(classRecord.back_number_policy, locale),
                       classEntriesCloseLabel(classRecord),
                     ]
                       .filter(Boolean)
@@ -3246,32 +3319,32 @@ function ClassesView({
                 </div>
                 <div className="row-actions">
                   <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
-                    Edit
+                    {uiText(locale, "Modifier", "Edit")}
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
-                    Supprimer
+                    {uiText(locale, "Supprimer", "Delete")}
                   </button>
                 </div>
               </div>
             );
           })}
-	          {!classes.length ? <EmptyState label="Crée le premier bloc du show." /> : null}
+          {!classes.length ? <EmptyState label={uiText(locale, "Crée le premier bloc du concours.", "Create the first schedule block for the show.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-	            <h2>Classes</h2>
-	            <p>{divisions.length ? `${divisions.length} classe${divisions.length === 1 ? "" : "s"} configurée${divisions.length === 1 ? "" : "s"}.` : "Les classes sont rattachées aux blocs."}</p>
+            <h2>{uiText(locale, "Classes", "Classes")}</h2>
+            <p>{divisions.length ? uiText(locale, `${divisions.length} classe${divisions.length === 1 ? "" : "s"} configurée${divisions.length === 1 ? "" : "s"}.`, `${divisions.length} class${divisions.length === 1 ? "" : "es"} configured.`) : uiText(locale, "Les classes sont rattachées aux blocs.", "Classes are attached to schedule blocks.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-	            <span>Classe</span>
-	            <span>Bloc</span>
-            <span>Sanctions</span>
-            <span>Action</span>
+            <span>{uiText(locale, "Classe", "Class")}</span>
+            <span>{uiText(locale, "Bloc", "Block")}</span>
+            <span>{uiText(locale, "Sanctions", "Sanctioning")}</span>
+            <span>{uiText(locale, "Action", "Action")}</span>
           </div>
           {divisions.map((division) => (
             <div className="table-row" key={division.id}>
@@ -3280,28 +3353,28 @@ function ClassesView({
                 <span className="muted-line">
                   {[
                     division.code ? `#${division.code}` : null,
-                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || "Type NRHA à préciser" : null,
-	                    division.entry_fee == null ? "Frais classe" : `Inscription ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
-	                    division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
-	                    payoutDivisionSummary(division),
-	                  ]
+                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
+                    division.entry_fee == null ? uiText(locale, "Frais classe", "Class fee") : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
+                    division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                    payoutDivisionSummary(division, locale),
+                    ]
                     .filter(Boolean)
                     .join(" - ")}
                 </span>
               </div>
-	              <span>{findById(classes, division.class_id)?.name ?? "Bloc inconnu"}</span>
-              <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies)}</span>
+              <span>{findById(classes, division.class_id)?.name ?? uiText(locale, "Bloc inconnu", "Unknown block")}</span>
+              <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies, locale)}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteDivision(division)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-	          {!divisions.length ? <EmptyState label="Crée une classe après avoir créé un bloc." /> : null}
+          {!divisions.length ? <EmptyState label={uiText(locale, "Crée une classe après avoir créé un bloc.", "Create a class after creating a schedule block.")} /> : null}
         </div>
       </section>
     </div>
@@ -3309,6 +3382,7 @@ function ClassesView({
 }
 
 function EntriesView({
+  locale,
   classes,
   contacts,
   contactExternalMemberships,
@@ -3330,6 +3404,7 @@ function EntriesView({
   onUpdateEntry,
   onVerifyGvlCogginsDocument,
 }: {
+  locale: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
@@ -3369,31 +3444,32 @@ function EntriesView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Inscriptions"
-        title="Gestion des inscriptions"
-        description="Cree et ajuste les brouillons avant checkout, facturation ou preparation du scoring."
+        eyebrow={uiText(locale, "Inscriptions", "Entries")}
+        title={uiText(locale, "Gestion des inscriptions", "Entry management")}
+        description={uiText(locale, "Crée et ajuste les brouillons avant paiement, facturation ou préparation du pointage.", "Create and adjust drafts before checkout, billing or scoring preparation.")}
         stats={[
-          { label: "Inscriptions", value: String(entries.length) },
-          { label: "Brouillons", value: String(entries.filter((entry) => entry.status === "draft").length) },
+          { label: uiText(locale, "Inscriptions", "Entries"), value: String(entries.length) },
+          { label: uiText(locale, "Brouillons", "Drafts"), value: String(entries.filter((entry) => entry.status === "draft").length) },
         ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>Nouvelle inscription</h2>
-            <p>Ouvre le formulaire et complete les contacts ou chevaux manquants sans changer de page.</p>
+            <h2>{uiText(locale, "Nouvelle inscription", "New entry")}</h2>
+            <p>{uiText(locale, "Ouvre le formulaire et complète les contacts ou chevaux manquants sans changer de page.", "Open the form and complete missing contacts or horses without leaving the page.")}</p>
           </div>
           <button className="primary-button" disabled={!organization || !shows.length || !divisions.length} type="button" onClick={() => setCreatingEntry(true)}>
             <Plus size={18} />
-            Inscription
+            {uiText(locale, "Inscription", "Entry")}
           </button>
         </div>
       </section>
 
       {creatingEntry ? (
-        <ModalDialog className="entry-form-modal" description="Brouillon maintenant, checkout plus tard." eyebrow="Inscriptions" title="Nouvelle inscription" onClose={() => setCreatingEntry(false)}>
+        <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>
           <EntryForm
+            locale={locale}
             classes={classes}
             contacts={contacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -3418,8 +3494,9 @@ function EntriesView({
       ) : null}
 
       {editingEntry ? (
-        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow="Inscriptions" title="Modifier l'inscription" onClose={() => setEditingEntry(null)}>
+        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Modifier l'inscription", "Edit entry")} onClose={() => setEditingEntry(null)}>
           <EntryEditForm
+            locale={locale}
             classes={classes}
             contacts={contacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -3447,36 +3524,36 @@ function EntriesView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Entries</h2>
-            <p>{entries.length ? `${entries.length} entr${entries.length === 1 ? "y" : "ies"} created.` : "Draft entries appear here before checkout."}</p>
+            <h2>{uiText(locale, "Inscriptions", "Entries")}</h2>
+            <p>{entries.length ? uiText(locale, `${entries.length} inscription${entries.length === 1 ? "" : "s"} créée${entries.length === 1 ? "" : "s"}.`, `${entries.length} entr${entries.length === 1 ? "y" : "ies"} created.`) : uiText(locale, "Les brouillons d'inscription apparaissent ici avant paiement.", "Draft entries appear here before checkout.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Horse</span>
-	            <span>Classe</span>
-            <span>Owner</span>
+            <span>{uiText(locale, "Cheval", "Horse")}</span>
+            <span>{uiText(locale, "Classe", "Class")}</span>
+            <span>{uiText(locale, "Propriétaire", "Owner")}</span>
             <span>Action</span>
           </div>
           {entries.map((entry) => (
             <div className="table-row" key={entry.id}>
               <div>
                 <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
-                <span className="muted-line">Dossard: {entry.entry_number ?? "a assigner"}</span>
+                <span className="muted-line">{uiText(locale, "Dossard", "Back number")}: {entry.entry_number ?? uiText(locale, "à assigner", "to assign")}</span>
               </div>
               <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-	          {!entries.length ? <EmptyState label="Crée un brouillon après avoir ajouté les contacts, chevaux, blocs et classes." /> : null}
+          {!entries.length ? <EmptyState label={uiText(locale, "Crée un brouillon après avoir ajouté les contacts, chevaux, blocs et classes.", "Create a draft after adding contacts, horses, schedule blocks and classes.")} /> : null}
         </div>
       </section>
     </div>
@@ -3484,6 +3561,7 @@ function EntriesView({
 }
 
 function ScoringView({
+  locale,
   classes,
   contacts,
   divisions,
@@ -3494,6 +3572,7 @@ function ScoringView({
   shows,
   onPrepareShowScoreClass,
 }: {
+  locale: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   divisions: Division[];
@@ -3538,26 +3617,26 @@ function ScoringView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Scoring"
-        title="Preparation ShowScore"
-	        description="Prepare les blocs, runs, chevaux et cavaliers qui doivent etre envoyes vers le scoring."
+        eyebrow={uiText(locale, "Pointage", "Scoring")}
+        title={uiText(locale, "Préparation ShowScore", "ShowScore preparation")}
+        description={uiText(locale, "Prépare les blocs, passages, chevaux et cavaliers qui doivent être envoyés vers le pointage.", "Prepare schedule blocks, runs, horses and riders that need to be sent to scoring.")}
         stats={[
-	          { label: "Blocs", value: String(visibleClasses.length) },
+          { label: uiText(locale, "Blocs", "Blocks"), value: String(visibleClasses.length) },
           { label: "Runs", value: String(totalRuns) },
         ]}
       />
 
       <section className="metric-grid span-2">
-	        <Metric label="Scoring blocs" value={String(visibleClasses.length)} />
-        <Metric label="Runs from entries" value={String(totalRuns)} />
-        <Metric label="Prepared setups" value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
+        <Metric label={uiText(locale, "Blocs de pointage", "Scoring blocks")} value={String(visibleClasses.length)} />
+        <Metric label={uiText(locale, "Runs depuis les inscriptions", "Runs from entries")} value={String(totalRuns)} />
+        <Metric label={uiText(locale, "Préparations prêtes", "Prepared setups")} value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
             <h2>ShowScore bridge</h2>
-	            <p>Prepare scoring setup runs from HSP entries while keeping associations, blocs, horses and riders aligned.</p>
+            <p>{uiText(locale, "Prépare les runs de pointage depuis les inscriptions HSP en gardant associations, blocs, chevaux et cavaliers alignés.", "Prepare scoring setup runs from HSP entries while keeping associations, blocks, horses and riders aligned.")}</p>
           </div>
           <select value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
             {shows.map((show) => (
@@ -3569,8 +3648,8 @@ function ScoringView({
         </div>
         <div className="table scoring-table">
           <div className="table-row table-head">
-	            <span>Bloc</span>
-            <span>Schedule</span>
+            <span>Bloc</span>
+            <span>{uiText(locale, "Horaire", "Schedule")}</span>
             <span>Runs</span>
             <span>ShowScore</span>
           </div>
@@ -3585,10 +3664,10 @@ function ScoringView({
             const show = findById(shows, classRecord.show_id);
             const preparedRunCount = setup?.runs.length ?? 0;
             const entriesClosed = classEntriesAreClosed(classRecord);
-            const status = !entriesClosed ? "Inscriptions ouvertes" : setup?.finalized ? "Finalized" : setup ? "Ordre sorti" : runs.length ? "Pret a sortir" : "No entries";
+            const status = !entriesClosed ? uiText(locale, "Inscriptions ouvertes", "Entries open") : setup?.finalized ? uiText(locale, "Finalisé", "Finalized") : setup ? uiText(locale, "Ordre sorti", "Draw created") : runs.length ? uiText(locale, "Prêt à sortir", "Ready to draw") : uiText(locale, "Aucune inscription", "No entries");
             const statusClass = !entriesClosed ? "warning" : setup?.finalized ? "closed" : setup ? "info" : runs.length ? "open" : "draft";
             const canPrepare = entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
-            const prepareLabel = !entriesClosed ? "Sortie apres cutoff" : busyClassId === classRecord.id ? "Preparation" : setup ? "Rafraichir ordre" : "Sortir ordre";
+            const prepareLabel = !entriesClosed ? uiText(locale, "Sortie après cutoff", "Draw after cutoff") : busyClassId === classRecord.id ? uiText(locale, "Préparation", "Preparing") : setup ? uiText(locale, "Rafraîchir ordre", "Refresh draw") : uiText(locale, "Sortir ordre", "Create draw");
 
             const drawRuns = setup?.runs.length ? normalizeShowScoreRuns(setup.runs) : runs;
             const drawIsExpanded = expandedDrawClassIds.includes(classRecord.id);
@@ -3602,16 +3681,16 @@ function ScoringView({
                 <div className="table-row">
                   <div>
                     <strong>{classRecord.name}</strong>
-                    <span className="muted-line">{classRecord.code || "No code"}</span>
+                    <span className="muted-line">{classRecord.code || uiText(locale, "Sans code", "No code")}</span>
                   </div>
                   <div>
                     <span>{showLabel(show)}</span>
-                    <span className="muted-line">{day ? `${day.day_name || "Day"} - ${formatDate(day.day_date)}` : "No day assigned"}</span>
+                    <span className="muted-line">{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
                     <span className="muted-line">{classEntriesCloseLabel(classRecord)}</span>
                   </div>
                   <div>
                     <strong>{runs.length}</strong>
-                    <span className="muted-line">{preparedRunCount ? `${preparedRunCount} saved` : "Not saved yet"}</span>
+                    <span className="muted-line">{preparedRunCount ? uiText(locale, `${preparedRunCount} sauvegardé${preparedRunCount === 1 ? "" : "s"}`, `${preparedRunCount} saved`) : uiText(locale, "Pas encore sauvegardé", "Not saved yet")}</span>
                   </div>
                   <div className="row-actions">
                     <span className={`badge ${statusClass}`}>{status}</span>
@@ -3619,28 +3698,28 @@ function ScoringView({
                       {prepareLabel}
                     </button>
                     <button className="text-button" disabled={!drawRuns.length} type="button" onClick={() => toggleDraw(classRecord.id)}>
-                      {drawIsExpanded ? "Masquer ordre" : "Voir ordre"}
+                      {drawIsExpanded ? uiText(locale, "Masquer ordre", "Hide draw") : uiText(locale, "Voir ordre", "View draw")}
                     </button>
                   </div>
                 </div>
                 {drawIsExpanded ? (
                   <div className="draw-detail-panel">
                     <div className="draw-detail-summary">
-                      <span>{drawRuns.length} passages</span>
-                      <span>{lateRunCount} late</span>
-                      <span>{regularRunCount} reguliers</span>
-                      <span>Dernier draw {lastRegularDraw || "-"}</span>
-                      <span>{missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} a assigner` : "Dossards complets"}</span>
+                      <span>{drawRuns.length} {uiText(locale, "passages", "runs")}</span>
+                      <span>{lateRunCount} {uiText(locale, "tardifs", "late")}</span>
+                      <span>{regularRunCount} {uiText(locale, "réguliers", "regular")}</span>
+                      <span>{uiText(locale, "Dernier draw", "Last draw")} {lastRegularDraw || "-"}</span>
+                      <span>{missingBackNumberCount ? uiText(locale, `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} à assigner`, `${missingBackNumberCount} back number${missingBackNumberCount === 1 ? "" : "s"} to assign`) : uiText(locale, "Dossards complets", "Back numbers complete")}</span>
                     </div>
                     <div className="draw-list">
                       <div className="draw-list-row draw-list-head">
                         <span>Draw</span>
                         <span>Dossard</span>
-                        <span>Cavalier</span>
-                        <span>Cheval</span>
-                        <span>Propriétaire</span>
-	                        <span>Classes inscrites</span>
-                        <span>Statut</span>
+                        <span>{uiText(locale, "Cavalier", "Rider")}</span>
+                        <span>{uiText(locale, "Cheval", "Horse")}</span>
+                        <span>{uiText(locale, "Propriétaire", "Owner")}</span>
+                        <span>{uiText(locale, "Classes inscrites", "Entered classes")}</span>
+                        <span>{uiText(locale, "Statut", "Status")}</span>
                       </div>
                       {drawRuns.map((run) => (
                         <div className="draw-list-row" key={`${run.entryId}-${run.draw}`}>
@@ -3651,7 +3730,7 @@ function ScoringView({
                           <span>{run.owner || "-"}</span>
                           <span>{formatRunDivisionNames(run, divisions, classes)}</span>
                           <span className={`badge ${run.isLate || run.drawGroup === "late" ? "warning" : "info"}`}>
-                            {run.isLate || run.drawGroup === "late" ? "Late" : "Regular"}
+                            {run.isLate || run.drawGroup === "late" ? uiText(locale, "Tardif", "Late") : uiText(locale, "Régulier", "Regular")}
                           </span>
                         </div>
                       ))}
@@ -3661,7 +3740,7 @@ function ScoringView({
               </div>
             );
           })}
-	          {!visibleClasses.length ? <EmptyState label="Crée des blocs avant de préparer ShowScore." /> : null}
+          {!visibleClasses.length ? <EmptyState label={uiText(locale, "Crée des blocs avant de préparer ShowScore.", "Create schedule blocks before preparing ShowScore.")} /> : null}
         </div>
       </section>
     </div>
@@ -3807,6 +3886,7 @@ function backNumberAssignmentMatchesTarget(
 }
 
 function BackNumbersView({
+  locale,
   backNumbers,
   contacts,
   horseContacts,
@@ -3820,6 +3900,7 @@ function BackNumbersView({
   onReleaseBackNumber,
   onUpdateBackNumberStatus,
 }: {
+  locale: Locale;
   backNumbers: OrganizationBackNumber[];
   contacts: Contact[];
   horseContacts: HorseContact[];
@@ -3947,7 +4028,7 @@ function BackNumbersView({
   }
 
   async function handleDeleteBackNumber(backNumber: OrganizationBackNumber) {
-    if (!window.confirm(`Supprimer le dossard ${backNumber.number}?`)) {
+    if (!window.confirm(uiText(locale, `Supprimer le dossard ${backNumber.number}?`, `Delete back number ${backNumber.number}?`))) {
       return;
     }
 
@@ -3965,42 +4046,42 @@ function BackNumbersView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Secrétariat"
-        title="Dossards"
-        description="Gere le stock de dossards de l'association selon sa politique active."
+        eyebrow={uiText(locale, "Secrétariat", "Office")}
+        title={uiText(locale, "Dossards", "Back numbers")}
+        description={uiText(locale, "Gère le stock de dossards de l'association selon sa politique active.", "Manage the association's back-number inventory based on its active policy.")}
         stats={[
-          { label: "Inventaire", value: String(backNumbers.length) },
-          { label: "Disponibles", value: String(availableCount) },
-          { label: "Assignes", value: String(assignedCount) },
-          { label: "Politique", value: backNumberModeLabel(assignmentMode) },
-          { label: "Par cavalier", value: String(riderAssignedCount) },
-          { label: "Par equipe", value: String(teamAssignedCount) },
+          { label: uiText(locale, "Inventaire", "Inventory"), value: String(backNumbers.length) },
+          { label: uiText(locale, "Disponibles", "Available"), value: String(availableCount) },
+          { label: uiText(locale, "Assignés", "Assigned"), value: String(assignedCount) },
+          { label: uiText(locale, "Politique", "Policy"), value: backNumberModeLabel(assignmentMode, locale) },
+          { label: uiText(locale, "Par cavalier", "By rider"), value: String(riderAssignedCount) },
+          { label: uiText(locale, "Par équipe", "By team"), value: String(teamAssignedCount) },
         ]}
       />
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Ajouter un inventaire</h2>
-            <p>Ajoute une plage de dossards physiques ou virtuels sans ecraser les numeros existants.</p>
+            <h2>{uiText(locale, "Ajouter un inventaire", "Add inventory")}</h2>
+            <p>{uiText(locale, "Ajoute une plage de dossards physiques ou virtuels sans écraser les numéros existants.", "Add a range of physical or virtual back numbers without overwriting existing numbers.")}</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleCreateRange}>
           <div className="form-grid">
             <label>
-              Premier dossard
+              {uiText(locale, "Premier dossard", "First back number")}
               <input min="1" required step="1" type="number" value={startNumber} onChange={(event) => setStartNumber(event.target.value)} />
             </label>
             <label>
-              Dernier dossard
+              {uiText(locale, "Dernier dossard", "Last back number")}
               <input min="1" step="1" type="number" value={endNumber} onChange={(event) => setEndNumber(event.target.value)} />
-              <span className="input-help">Laisse vide pour ajouter un seul numero.</span>
+              <span className="input-help">{uiText(locale, "Laisse vide pour ajouter un seul numéro.", "Leave blank to add one number.")}</span>
             </label>
           </div>
           <div className="form-grid">
             <div className="readiness-card">
-              <strong>Mode d'inventaire</strong>
-              <span>{backNumberModeLabel(assignmentMode)}</span>
+              <strong>{uiText(locale, "Mode d'inventaire", "Inventory mode")}</strong>
+              <span>{backNumberModeLabel(assignmentMode, locale)}</span>
             </div>
             <label>
               Notes
@@ -4009,7 +4090,7 @@ function BackNumbersView({
           </div>
           <button className="primary-button" disabled={busy || !organization} type="submit">
             <Plus size={18} />
-            Ajouter les dossards
+            {uiText(locale, "Ajouter les dossards", "Add back numbers")}
           </button>
         </form>
       </section>
@@ -4017,14 +4098,14 @@ function BackNumbersView({
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Assigner un dossard</h2>
-            <p>La politique vient des reglages de l'association: {backNumberModeLabel(assignmentMode)}.</p>
+            <h2>{uiText(locale, "Assigner un dossard", "Assign a back number")}</h2>
+            <p>{uiText(locale, "La politique vient des réglages de l'association", "The policy comes from association settings")}: {backNumberModeLabel(assignmentMode, locale)}.</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleAssign}>
           {needsHorse ? (
             <label>
-              Cheval
+              {uiText(locale, "Cheval", "Horse")}
               <SearchSelect
                 disabled={!horses.length}
                 items={horses.map((horse) => ({
@@ -4032,7 +4113,7 @@ function BackNumbersView({
                   label: horse.name,
                   detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
                 }))}
-                placeholder="Rechercher un cheval"
+                placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
                 value={horseId}
                 onChange={setHorseId}
               />
@@ -4040,7 +4121,7 @@ function BackNumbersView({
           ) : null}
           {needsRider ? (
             <label>
-              Cavalier
+              {uiText(locale, "Cavalier", "Rider")}
               <SearchSelect
                 disabled={!contacts.length}
                 items={contacts.map((contact) => ({
@@ -4048,7 +4129,7 @@ function BackNumbersView({
                   label: contactLabel(contact),
                   detail: contactBackNumberDetail(contact, selectedHorse, horseContacts),
                 }))}
-                placeholder="Rechercher un cavalier"
+                placeholder={uiText(locale, "Rechercher un cavalier", "Search rider")}
                 value={riderContactId}
                 onChange={setRiderContactId}
               />
@@ -4056,21 +4137,21 @@ function BackNumbersView({
           ) : null}
           <div className="form-grid">
             <label>
-              Numero exact
+              {uiText(locale, "Numéro exact", "Exact number")}
               <input min="1" step="1" type="number" value={number} onChange={(event) => setNumber(event.target.value)} />
-              <span className="input-help">{selectedAssignment ? `Dossard actuel: ${selectedAssignment.number}.` : "Le numero peut deja etre dans l'inventaire ou etre cree a l'assignation."}</span>
+              <span className="input-help">{selectedAssignment ? uiText(locale, `Dossard actuel: ${selectedAssignment.number}.`, `Current back number: ${selectedAssignment.number}.`) : uiText(locale, "Le numéro peut déjà être dans l'inventaire ou être créé à l'assignation.", "The number can already be in inventory or be created on assignment.")}</span>
             </label>
             <label className="checkbox-card">
               <input checked={forceTransfer} type="checkbox" onChange={(event) => setForceTransfer(event.target.checked)} />
-              Transferer si le dossard est deja attribue
+              {uiText(locale, "Transférer si le dossard est déjà attribué", "Transfer if the back number is already assigned")}
             </label>
           </div>
           <div className="row-actions">
             <button className="primary-button" disabled={busy || !canAssign} type="submit">
-              Assigner le numero
+              {uiText(locale, "Assigner le numéro", "Assign number")}
             </button>
             <button className="ghost-button" disabled={busy || !canAssignNext} type="button" onClick={() => void handleAssignNext()}>
-              Assigner le prochain disponible
+              {uiText(locale, "Assigner le prochain disponible", "Assign next available")}
             </button>
           </div>
         </form>
@@ -4079,52 +4160,52 @@ function BackNumbersView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Registre des dossards</h2>
-            <p>{backNumbers.length ? `${backNumbers.length} dossard${backNumbers.length === 1 ? "" : "s"} dans l'association.` : "Ajoute une plage pour commencer."}</p>
+            <h2>{uiText(locale, "Registre des dossards", "Back-number register")}</h2>
+            <p>{backNumbers.length ? uiText(locale, `${backNumbers.length} dossard${backNumbers.length === 1 ? "" : "s"} dans l'association.`, `${backNumbers.length} back number${backNumbers.length === 1 ? "" : "s"} in the association.`) : uiText(locale, "Ajoute une plage pour commencer.", "Add a range to get started.")}</p>
           </div>
         </div>
         <div className="table back-number-table">
           <div className="table-row table-head">
             <span>Dossard</span>
-            <span>Assignation</span>
-            <span>Statut</span>
+            <span>{uiText(locale, "Assignation", "Assignment")}</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Action</span>
           </div>
           {sortedBackNumbers.map((backNumber) => (
             <div className="table-row" key={backNumber.id}>
               <div>
                 <strong>#{backNumber.number}</strong>
-                <span className="muted-line">{backNumberModeLabel(backNumber.assignment_mode)}</span>
+                <span className="muted-line">{backNumberModeLabel(backNumber.assignment_mode, locale)}</span>
               </div>
               <div>
-                <strong>{backNumberAssigneeLabel(backNumber, horses, contacts)}</strong>
-                <span className="muted-line">{backNumber.notes || backNumberAssignmentMeta(backNumber)}</span>
+                <strong>{backNumberAssigneeLabel(backNumber, horses, contacts, locale)}</strong>
+                <span className="muted-line">{backNumber.notes || backNumberAssignmentMeta(backNumber, locale)}</span>
               </div>
               <div>
                 {backNumber.status === "assigned" ? (
-                  <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status)}</span>
+                  <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status, locale)}</span>
                 ) : (
                   <select value={backNumber.status} onChange={(event) => void onUpdateBackNumberStatus(backNumber.id, event.target.value as Parameters<typeof updateBackNumberStatus>[1])}>
-                    <option value="available">Disponible</option>
-                    <option value="reserved">Reserve</option>
-                    <option value="lost">Perdu</option>
-                    <option value="retired">Retire</option>
+                    <option value="available">{uiText(locale, "Disponible", "Available")}</option>
+                    <option value="reserved">{uiText(locale, "Réservé", "Reserved")}</option>
+                    <option value="lost">{uiText(locale, "Perdu", "Lost")}</option>
+                    <option value="retired">{uiText(locale, "Retiré", "Retired")}</option>
                   </select>
                 )}
               </div>
               <div className="row-actions">
                 {backNumber.status === "assigned" ? (
                   <button className="text-button" type="button" onClick={() => void onReleaseBackNumber(backNumber.id)}>
-                    Liberer
+                    {uiText(locale, "Libérer", "Release")}
                   </button>
                 ) : null}
                 <button className="text-button danger-text" type="button" onClick={() => void handleDeleteBackNumber(backNumber)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-          {!backNumbers.length ? <EmptyState label="Aucun dossard dans l'inventaire." /> : null}
+          {!backNumbers.length ? <EmptyState label={uiText(locale, "Aucun dossard dans l'inventaire.", "No back numbers in inventory.")} /> : null}
         </div>
       </section>
     </div>
@@ -4132,12 +4213,14 @@ function BackNumbersView({
 }
 
 function MyBackNumbersView({
+  locale,
   backNumbers,
   contacts,
   horses,
   organization,
   onClaimHorseBackNumber,
 }: {
+  locale: Locale;
   backNumbers: OrganizationBackNumber[];
   contacts: Contact[];
   horses: Horse[];
@@ -4189,12 +4272,12 @@ function MyBackNumbersView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Mon espace"
-        title="Mes dossards"
-        description="Consulte les dossards lies a tes chevaux ou cavaliers dans l'association active."
+        eyebrow={uiText(locale, "Mon espace", "My space")}
+        title={uiText(locale, "Mes dossards", "My back numbers")}
+        description={uiText(locale, "Consulte les dossards liés à tes chevaux ou cavaliers dans l'association active.", "Review back numbers linked to your horses or riders in the active association.")}
         stats={[
           { label: "Association", value: organization?.short_name || organization?.name || "-" },
-          { label: "Politique", value: backNumberModeLabel(assignmentMode) },
+          { label: uiText(locale, "Politique", "Policy"), value: backNumberModeLabel(assignmentMode, locale) },
           { label: "Dossards", value: String(backNumbers.length) },
         ]}
       />
@@ -4202,21 +4285,21 @@ function MyBackNumbersView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Ajouter un dossard</h2>
-            <p>Tu peux ajouter un dossard selon la politique de l'association active si le numéro n'est pas déjà utilisé.</p>
+            <h2>{uiText(locale, "Ajouter un dossard", "Add back number")}</h2>
+            <p>{uiText(locale, "Tu peux ajouter un dossard selon la politique de l'association active si le numéro n'est pas déjà utilisé.", "You can add a back number under the active association policy if the number is not already used.")}</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleClaim}>
           <div className="form-grid">
             <div className="readiness-card">
               <strong>Mode</strong>
-              <span>{backNumberModeLabel(assignmentMode)}</span>
+              <span>{backNumberModeLabel(assignmentMode, locale)}</span>
             </div>
           </div>
           <div className="form-grid">
             {needsHorse ? (
               <label>
-                Cheval
+                {uiText(locale, "Cheval", "Horse")}
                 <SearchSelect
                   disabled={!horses.length}
                   items={horses.map((horse) => ({
@@ -4224,7 +4307,7 @@ function MyBackNumbersView({
                     label: horse.name,
                     detail: contactLabel(findById(contacts, horse.primary_owner_contact_id)),
                   }))}
-                  placeholder="Rechercher un cheval"
+                  placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
                   value={horseId}
                   onChange={setHorseId}
                 />
@@ -4233,7 +4316,7 @@ function MyBackNumbersView({
           </div>
           {needsRider ? (
             <label>
-              Cavalier
+              {uiText(locale, "Cavalier", "Rider")}
               <SearchSelect
                 disabled={!contacts.length}
                 items={contacts.map((contact) => ({
@@ -4241,7 +4324,7 @@ function MyBackNumbersView({
                   label: contactLabel(contact),
                   detail: contact.email || contact.type,
                 }))}
-                placeholder="Rechercher un cavalier"
+                placeholder={uiText(locale, "Rechercher un cavalier", "Search rider")}
                 value={riderContactId}
                 onChange={setRiderContactId}
               />
@@ -4249,13 +4332,13 @@ function MyBackNumbersView({
           ) : null}
           <div className="form-grid">
             <label>
-              Numéro de dossard
+              {uiText(locale, "Numéro de dossard", "Back number")}
               <input min="1" step="1" type="number" value={number} onChange={(event) => setNumber(event.target.value)} />
-              <span className="input-help">Si ce numéro est déjà assigné dans cette association, l'app va le refuser.</span>
+              <span className="input-help">{uiText(locale, "Si ce numéro est déjà assigné dans cette association, l'app va le refuser.", "If this number is already assigned in this association, the app will reject it.")}</span>
             </label>
           </div>
           <button className="primary-button" disabled={busy || !canClaim} type="submit">
-            Ajouter le dossard
+            {uiText(locale, "Ajouter le dossard", "Add back number")}
           </button>
         </form>
       </section>
@@ -4263,38 +4346,38 @@ function MyBackNumbersView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Dossards assignes</h2>
-            <p>{backNumbers.length ? "Ces numeros seront repris automatiquement dans les inscriptions admissibles." : "Aucun dossard lie a ton profil pour l'instant."}</p>
+            <h2>{uiText(locale, "Dossards assignés", "Assigned back numbers")}</h2>
+            <p>{backNumbers.length ? uiText(locale, "Ces numéros seront repris automatiquement dans les inscriptions admissibles.", "These numbers will be reused automatically in eligible entries.") : uiText(locale, "Aucun dossard lié à ton profil pour l'instant.", "No back number linked to your profile yet.")}</p>
           </div>
         </div>
         <div className="table back-number-table">
           <div className="table-row table-head">
             <span>Dossard</span>
-            <span>Assignation</span>
+            <span>{uiText(locale, "Assignation", "Assignment")}</span>
             <span>Mode</span>
-            <span>Statut</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
           </div>
           {sortedBackNumbers.map((backNumber) => (
             <div className="table-row" key={backNumber.id}>
               <strong>#{backNumber.number}</strong>
-              <span>{backNumberAssigneeLabel(backNumber, horses, contacts)}</span>
-              <span>{backNumberModeLabel(backNumber.assignment_mode)}</span>
-              <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status)}</span>
+              <span>{backNumberAssigneeLabel(backNumber, horses, contacts, locale)}</span>
+              <span>{backNumberModeLabel(backNumber.assignment_mode, locale)}</span>
+              <span className={`badge ${backNumberStatusBadgeClass(backNumber.status)}`}>{backNumberStatusLabel(backNumber.status, locale)}</span>
             </div>
           ))}
-          {!backNumbers.length ? <EmptyState label="Le secretariat pourra assigner un dossard lorsque necessaire." /> : null}
+          {!backNumbers.length ? <EmptyState label={uiText(locale, "Le secrétariat pourra assigner un dossard lorsque nécessaire.", "The office can assign a back number when needed.")} /> : null}
         </div>
       </section>
     </div>
   );
 }
 
-function backNumberAssigneeLabel(backNumber: OrganizationBackNumber, horses: Horse[], contacts: Contact[]) {
+function backNumberAssigneeLabel(backNumber: OrganizationBackNumber, horses: Horse[], contacts: Contact[], locale: Locale = "fr") {
   const horse = backNumber.assigned_horse_id ? findById(horses, backNumber.assigned_horse_id) : undefined;
   const rider = backNumber.assigned_rider_contact_id ? findById(contacts, backNumber.assigned_rider_contact_id) : undefined;
 
   if (backNumber.status !== "assigned") {
-    return "Non assigne";
+    return uiText(locale, "Non assigné", "Unassigned");
   }
 
   if (backNumber.assignment_mode === "horse_rider_team") {
@@ -4308,44 +4391,44 @@ function backNumberAssigneeLabel(backNumber: OrganizationBackNumber, horses: Hor
   return horseLabel(horse);
 }
 
-function backNumberAssignmentMeta(backNumber: OrganizationBackNumber) {
+function backNumberAssignmentMeta(backNumber: OrganizationBackNumber, locale: Locale = "fr") {
   if (backNumber.status === "assigned" && backNumber.assigned_at) {
-    return `Assigne le ${formatDate(backNumber.assigned_at.slice(0, 10))}`;
+    return uiText(locale, `Assigné le ${formatDate(backNumber.assigned_at.slice(0, 10))}`, `Assigned on ${formatDate(backNumber.assigned_at.slice(0, 10))}`);
   }
 
-  return "Inventaire association";
+  return uiText(locale, "Inventaire association", "Association inventory");
 }
 
-function backNumberModeLabel(mode: OrganizationBackNumber["assignment_mode"]) {
+function backNumberModeLabel(mode: OrganizationBackNumber["assignment_mode"], locale: Locale = "fr") {
   if (mode === "horse_rider_team") {
-    return "Equipe cheval+cavalier";
+    return uiText(locale, "Équipe cheval+cavalier", "Horse+rider team");
   }
 
   if (mode === "rider") {
-    return "Cavalier";
+    return uiText(locale, "Cavalier", "Rider");
   }
 
-  return "Cheval";
+  return uiText(locale, "Cheval", "Horse");
 }
 
-function backNumberStatusLabel(status: OrganizationBackNumber["status"]) {
+function backNumberStatusLabel(status: OrganizationBackNumber["status"], locale: Locale = "fr") {
   if (status === "available") {
-    return "Disponible";
+    return uiText(locale, "Disponible", "Available");
   }
 
   if (status === "assigned") {
-    return "Assigne";
+    return uiText(locale, "Assigné", "Assigned");
   }
 
   if (status === "reserved") {
-    return "Reserve";
+    return uiText(locale, "Réservé", "Reserved");
   }
 
   if (status === "lost") {
-    return "Perdu";
+    return uiText(locale, "Perdu", "Lost");
   }
 
-  return "Retire";
+  return uiText(locale, "Retiré", "Retired");
 }
 
 function backNumberStatusBadgeClass(status: OrganizationBackNumber["status"]) {
@@ -4370,6 +4453,7 @@ function contactBackNumberDetail(contact: Contact, selectedHorse: Horse | null, 
 }
 
 function MyHorsesView({
+  locale,
   contacts,
   contactRoles,
   canManageHealthDocuments,
@@ -4388,6 +4472,7 @@ function MyHorsesView({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
 }: {
+  locale: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
   canManageHealthDocuments: boolean;
@@ -4410,7 +4495,7 @@ function MyHorsesView({
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
 
   async function handleDeleteHorse(horse: Horse) {
-    if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/reservations liees?`)) {
+    if (!window.confirm(uiText(locale, `Supprimer ${horse.name} et les inscriptions/réservations liées?`, `Delete ${horse.name} and linked entries/reservations?`))) {
       return;
     }
 
@@ -4423,11 +4508,11 @@ function MyHorsesView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Mon espace"
-        title="Mes chevaux"
-        description="Gere les chevaux lies a ton profil avant de les inscrire a un show."
+        eyebrow={uiText(locale, "Mon espace", "My space")}
+        title={uiText(locale, "Mes chevaux", "My horses")}
+        description={uiText(locale, "Gère les chevaux liés à ton profil avant de les inscrire à un concours.", "Manage horses linked to your profile before entering them in a show.")}
         stats={[
-          { label: "Chevaux", value: String(horses.length) },
+          { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
           { label: "Contacts", value: String(contacts.length) },
         ]}
       />
@@ -4435,19 +4520,20 @@ function MyHorsesView({
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>Ajouter un cheval</h2>
-            <p>Ajoute ses infos, ses contacts et ses documents santé sans sortir de cette page.</p>
+            <h2>{uiText(locale, "Ajouter un cheval", "Add horse")}</h2>
+            <p>{uiText(locale, "Ajoute ses infos, ses contacts et ses documents santé sans sortir de cette page.", "Add details, contacts and health documents without leaving this page.")}</p>
           </div>
           <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
             <Plus size={18} />
-            Cheval
+            {uiText(locale, "Cheval", "Horse")}
           </button>
         </div>
       </section>
 
       {creatingHorse ? (
-        <ModalDialog description="Ajoute le cheval a ton profil et complete les documents requis." eyebrow="Mon espace" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
+        <ModalDialog description={uiText(locale, "Ajoute le cheval à ton profil et complète les documents requis.", "Add the horse to your profile and complete required documents.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>
           <HorseForm
+            locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
@@ -4463,8 +4549,9 @@ function MyHorsesView({
       ) : null}
 
       {editingHorse ? (
-        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Mon espace" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
+        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Modifier le cheval", "Edit horse")} onClose={() => setEditingHorse(null)}>
           <HorseEditForm
+            locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
             canManageHealthDocuments={canManageHealthDocuments}
@@ -4491,15 +4578,15 @@ function MyHorsesView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Mes chevaux</h2>
-            <p>Chevaux liés à mon profil utilisateur.</p>
+            <h2>{uiText(locale, "Mes chevaux", "My horses")}</h2>
+            <p>{uiText(locale, "Chevaux liés à mon profil utilisateur.", "Horses linked to my user profile.")}</p>
           </div>
         </div>
         <div className="horse-list">
           <div className="horse-list-row horse-list-head">
-            <span>Cheval</span>
-            <span>Statut</span>
-            <span>Références</span>
+            <span>{uiText(locale, "Cheval", "Horse")}</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
+            <span>{uiText(locale, "Références", "References")}</span>
             <span>Action</span>
           </div>
           {horses.map((horse) => {
@@ -4535,16 +4622,16 @@ function MyHorsesView({
                 </div>
                 <div className="row-actions horse-row-actions">
                   <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                    Edit
+                    {uiText(locale, "Modifier", "Edit")}
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
-                    Supprimer
+                    {uiText(locale, "Supprimer", "Delete")}
                   </button>
                 </div>
               </div>
             );
           })}
-          {!horses.length ? <EmptyState label="Aucun cheval lié à ton profil pour l'instant." /> : null}
+          {!horses.length ? <EmptyState label={uiText(locale, "Aucun cheval lié à ton profil pour l'instant.", "No horse linked to your profile yet.")} /> : null}
         </div>
       </section>
     </div>
@@ -4552,6 +4639,7 @@ function MyHorsesView({
 }
 
 function MyContactsView({
+  locale,
   contacts,
   contactExternalMemberships,
   contactRoles,
@@ -4563,6 +4651,7 @@ function MyContactsView({
   onDeleteContact,
   onUpdateContact,
 }: {
+  locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
   contactRoles: ContactRole[];
@@ -4582,7 +4671,7 @@ function MyContactsView({
   async function handleDeleteContact(contact: Contact) {
     const label = contactLabel(contact);
 
-    if (!window.confirm(`Supprimer ${label}? Si ce contact est utilise comme cavalier dans une inscription de test, il sera detache de l'inscription.`)) {
+    if (!window.confirm(uiText(locale, `Supprimer ${label}? Si ce contact est utilisé comme cavalier dans une inscription de test, il sera détaché de l'inscription.`, `Delete ${label}? If this contact is used as a rider in a test entry, it will be detached from the entry.`))) {
       return;
     }
 
@@ -4595,20 +4684,20 @@ function MyContactsView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Mon espace"
-        title="Mes cavaliers et contacts"
-        description="Gere les propriétaires, cavaliers et payeurs liés à ton compte."
+        eyebrow={uiText(locale, "Mon espace", "My space")}
+        title={uiText(locale, "Mes cavaliers et contacts", "My riders and contacts")}
+        description={uiText(locale, "Gère les propriétaires, cavaliers et payeurs liés à ton compte.", "Manage owners, riders and payers linked to your account.")}
         stats={[
           { label: "Contacts", value: String(contacts.length) },
-          { label: "Cavaliers", value: String(contacts.filter((contact) => contact.type === "rider").length) },
+          { label: uiText(locale, "Cavaliers", "Riders"), value: String(contacts.filter((contact) => contact.type === "rider").length) },
         ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>{contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}</h2>
-            <p>{contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}</p>
+            <h2>{contacts.length ? uiText(locale, "Ajouter un cavalier / contact", "Add rider / contact") : uiText(locale, "Créer mon premier contact", "Create my first contact")}</h2>
+            <p>{contacts.length ? uiText(locale, "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte.", "Add as many riders or contacts as needed under this account.") : uiText(locale, "Crée d'abord le contact principal du compte.", "Create the account's primary contact first.")}</p>
           </div>
           <button className="primary-button" disabled={!canCreateLinkedContact} type="button" onClick={() => setCreatingContact(true)}>
             <Plus size={18} />
@@ -4618,8 +4707,9 @@ function MyContactsView({
       </section>
 
       {creatingContact && canCreateLinkedContact ? (
-        <ModalDialog eyebrow="Mon espace" title={contacts.length ? "Nouveau cavalier / contact" : "Premier contact"} onClose={() => setCreatingContact(false)}>
+        <ModalDialog eyebrow={uiText(locale, "Mon espace", "My space")} title={contacts.length ? uiText(locale, "Nouveau cavalier / contact", "New rider / contact") : uiText(locale, "Premier contact", "First contact")} onClose={() => setCreatingContact(false)}>
           <ContactForm
+            locale={locale}
             key={defaultContactType}
             createdByUserId={profileId}
             defaultType={defaultContactType}
@@ -4627,8 +4717,8 @@ function MyContactsView({
             externalOrganizations={externalOrganizations}
             membershipRequirements={membershipRequirements}
             organization={organization}
-            title={contacts.length ? "Ajouter un cavalier / contact" : "Créer mon premier contact"}
-            description={contacts.length ? "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte." : "Crée d'abord le contact principal du compte."}
+            title={contacts.length ? uiText(locale, "Ajouter un cavalier / contact", "Add rider / contact") : uiText(locale, "Créer mon premier contact", "Create my first contact")}
+            description={contacts.length ? uiText(locale, "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte.", "Add as many riders or contacts as needed under this account.") : uiText(locale, "Crée d'abord le contact principal du compte.", "Create the account's primary contact first.")}
             onCreateContact={onCreateContact}
             onCreated={() => setCreatingContact(false)}
           />
@@ -4636,8 +4726,9 @@ function MyContactsView({
       ) : null}
 
       {editingContact ? (
-        <ModalDialog description={contactLabel(editingContact)} eyebrow="Mon espace" title="Modifier le contact" onClose={() => setEditingContact(null)}>
+        <ModalDialog description={contactLabel(editingContact)} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Modifier le contact", "Edit contact")} onClose={() => setEditingContact(null)}>
           <ContactEditForm
+            locale={locale}
             contact={editingContact}
             contactExternalMemberships={contactExternalMemberships}
             externalOrganizations={externalOrganizations}
@@ -4654,33 +4745,33 @@ function MyContactsView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Mes cavaliers</h2>
-            <p>Contacts liés à mon compte.</p>
+            <h2>{uiText(locale, "Mes cavaliers", "My riders")}</h2>
+            <p>{uiText(locale, "Contacts liés à mon compte.", "Contacts linked to my account.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Nom</span>
-            <span>Roles</span>
-            <span>Email</span>
+            <span>{uiText(locale, "Nom", "Name")}</span>
+            <span>{uiText(locale, "Rôles", "Roles")}</span>
+            <span>{uiText(locale, "Courriel", "Email")}</span>
             <span>Action</span>
           </div>
           {contacts.map((contact) => (
             <div className="table-row" key={contact.id}>
               <strong>{contactLabel(contact)}</strong>
-              <span>{contactRoleSummary(contact, contactRoles)}</span>
-              <span>{contact.email || "No email"}</span>
+              <span>{contactRoleSummary(contact, contactRoles, locale)}</span>
+              <span>{contact.email || uiText(locale, "Aucun courriel", "No email")}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-          {!contacts.length ? <EmptyState label="Crée ton premier contact pour commencer." /> : null}
+          {!contacts.length ? <EmptyState label={uiText(locale, "Crée ton premier contact pour commencer.", "Create your first contact to get started.")} /> : null}
         </div>
       </section>
     </div>
@@ -4688,6 +4779,7 @@ function MyContactsView({
 }
 
 function MyEntriesView({
+  locale,
   classes,
   contacts,
   contactExternalMemberships,
@@ -4709,6 +4801,7 @@ function MyEntriesView({
   onUpdateEntry,
   onVerifyGvlCogginsDocument,
 }: {
+  locale: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
@@ -4735,7 +4828,7 @@ function MyEntriesView({
 
   async function handleDeleteEntry(entry: Entry) {
     const horseName = horseLabel(findById(horses, entry.horse_id));
-    if (!window.confirm(`Supprimer l'inscription de ${horseName}?`)) {
+    if (!window.confirm(uiText(locale, `Supprimer l'inscription de ${horseName}?`, `Delete ${horseName}'s entry?`))) {
       return;
     }
 
@@ -4748,31 +4841,32 @@ function MyEntriesView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Mon espace"
-        title="Mes inscriptions"
-        description="Consulte et modifie les inscriptions rattachees a tes chevaux ou contacts."
+        eyebrow={uiText(locale, "Mon espace", "My space")}
+        title={uiText(locale, "Mes inscriptions", "My entries")}
+        description={uiText(locale, "Consulte et modifie les inscriptions rattachées à tes chevaux ou contacts.", "Review and edit entries linked to your horses or contacts.")}
         stats={[
-          { label: "Inscriptions", value: String(entries.length) },
-          { label: "Chevaux", value: String(horses.length) },
+          { label: uiText(locale, "Inscriptions", "Entries"), value: String(entries.length) },
+          { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
         ]}
       />
 
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>Nouvelle inscription</h2>
-            <p>Inscris un cheval et complete les infos manquantes sans quitter la page.</p>
+            <h2>{uiText(locale, "Nouvelle inscription", "New entry")}</h2>
+            <p>{uiText(locale, "Inscris un cheval et complète les infos manquantes sans quitter la page.", "Enter a horse and complete missing information without leaving the page.")}</p>
           </div>
           <button className="primary-button" disabled={!organization || !shows.length || !divisions.length} type="button" onClick={() => setCreatingEntry(true)}>
             <Plus size={18} />
-            Inscription
+            {uiText(locale, "Inscription", "Entry")}
           </button>
         </div>
       </section>
 
       {creatingEntry ? (
-        <ModalDialog className="entry-form-modal" description="Brouillon maintenant, checkout plus tard." eyebrow="Mon espace" title="Nouvelle inscription" onClose={() => setCreatingEntry(false)}>
+        <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>
           <EntryForm
+            locale={locale}
             classes={classes}
             contacts={contacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -4797,8 +4891,9 @@ function MyEntriesView({
       ) : null}
 
       {editingEntry ? (
-        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow="Mon espace" title="Modifier l'inscription" onClose={() => setEditingEntry(null)}>
+        <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Modifier l'inscription", "Edit entry")} onClose={() => setEditingEntry(null)}>
           <EntryEditForm
+            locale={locale}
             classes={classes}
             contacts={contacts}
             contactExternalMemberships={contactExternalMemberships}
@@ -4826,15 +4921,15 @@ function MyEntriesView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Mes inscriptions</h2>
-            <p>Inscriptions liées à mes chevaux ou contacts.</p>
+            <h2>{uiText(locale, "Mes inscriptions", "My entries")}</h2>
+            <p>{uiText(locale, "Inscriptions liées à mes chevaux ou contacts.", "Entries linked to my horses or contacts.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Cheval</span>
-	            <span>Classe</span>
-            <span>Statut</span>
+            <span>{uiText(locale, "Cheval", "Horse")}</span>
+            <span>{uiText(locale, "Classe", "Class")}</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Action</span>
           </div>
           {entries.map((entry) => (
@@ -4844,22 +4939,22 @@ function MyEntriesView({
                 <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
                 {entry.is_late ? (
                   <span className="muted-line">
-                    Late +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}
+                    {uiText(locale, "Retard", "Late")} +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}
                   </span>
                 ) : null}
               </div>
               <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
-                  Edit
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           ))}
-          {!entries.length ? <EmptyState label="Aucune inscription liée à ton profil pour l'instant." /> : null}
+          {!entries.length ? <EmptyState label={uiText(locale, "Aucune inscription liée à ton profil pour l'instant.", "No entries linked to your profile yet.")} /> : null}
         </div>
       </section>
     </div>
@@ -4867,6 +4962,7 @@ function MyEntriesView({
 }
 
 function BillingView({
+  locale,
   contacts,
   currency,
   invoices,
@@ -4875,6 +4971,7 @@ function BillingView({
   shows,
   unpaidBalance,
 }: {
+  locale: Locale;
   contacts: AppContext["contacts"];
   currency: string;
   invoices: AppContext["invoices"];
@@ -4892,23 +4989,24 @@ function BillingView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Facturation"
-        title="Factures"
-        description="Suis les factures, soldes ouverts et lignes creees par les inscriptions ou reservations."
+        eyebrow={uiText(locale, "Facturation", "Billing")}
+        title={uiText(locale, "Factures", "Invoices")}
+        description={uiText(locale, "Suis les factures, soldes ouverts et lignes créées par les inscriptions ou réservations.", "Track invoices, open balances and lines created by entries or reservations.")}
         stats={[
-          { label: "Factures", value: String(invoices.length) },
-          { label: "Solde", value: formatCurrency(unpaidBalance, currency) },
+          { label: uiText(locale, "Factures", "Invoices"), value: String(invoices.length) },
+          { label: uiText(locale, "Solde", "Balance"), value: formatCurrency(unpaidBalance, currency) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric label="Factures" value={String(invoices.length)} />
-        <Metric label="Solde ouvert" value={formatCurrency(unpaidBalance, currency)} />
-        <Metric label="Payees" value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
+        <Metric label={uiText(locale, "Factures", "Invoices")} value={String(invoices.length)} />
+        <Metric label={uiText(locale, "Solde ouvert", "Open balance")} value={formatCurrency(unpaidBalance, currency)} />
+        <Metric label={uiText(locale, "Payées", "Paid")} value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
       </section>
 
       {selectedInvoice ? (
         <InvoiceDetailPanel
+          locale={locale}
           currency={currency}
           invoice={selectedInvoice}
           lineItems={selectedInvoiceLineItems}
@@ -4922,16 +5020,16 @@ function BillingView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Factures recentes</h2>
-            <p>Brouillons, factures envoyees, paiements partiels et factures payees.</p>
+            <h2>{uiText(locale, "Factures récentes", "Recent invoices")}</h2>
+            <p>{uiText(locale, "Brouillons, factures envoyées, paiements partiels et factures payées.", "Drafts, sent invoices, partial payments and paid invoices.")}</p>
           </div>
         </div>
         <div className="table">
           <div className="table-row table-head">
-            <span>Facture</span>
-            <span>Statut</span>
+            <span>{uiText(locale, "Facture", "Invoice")}</span>
+            <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Total</span>
-            <span>Balance</span>
+            <span>{uiText(locale, "Solde", "Balance")}</span>
           </div>
           {invoices.map((invoice) => {
             const invoiceLineItems = lineItems.filter((item) => item.invoice_id === invoice.id);
@@ -4947,7 +5045,7 @@ function BillingView({
                       <small>{showLabel(invoiceShow)}</small>
                     </span>
                   </button>
-                  <span className={`badge ${invoice.status}`}>{invoiceStatusLabel(invoice.status)}</span>
+                  <span className={`badge ${invoice.status}`}>{invoiceStatusLabel(invoice.status, locale)}</span>
                   <span>{formatCurrency(invoice.total_amount, currency)}</span>
                   <span>
                     <strong>{formatCurrency(invoice.balance_due, currency)}</strong>
@@ -4958,7 +5056,7 @@ function BillingView({
                   <div className="table-row invoice-line-row" key={item.id}>
                     <div>
                       <strong>{item.description}</strong>
-                      <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
+                      <span className="muted-line">{invoiceItemTypeLabel(item.item_type, locale)}</span>
                     </div>
                     <span>{invoiceQuantityLabel(item.quantity)} x</span>
                     <span>{formatCurrency(item.unit_price, currency)}</span>
@@ -4968,7 +5066,7 @@ function BillingView({
               </div>
             );
           })}
-          {!invoices.length ? <EmptyState label="Aucune facture pour l'instant. Les inscriptions et reservations creeront maintenant des brouillons de facture." /> : null}
+          {!invoices.length ? <EmptyState label={uiText(locale, "Aucune facture pour l'instant. Les inscriptions et réservations créeront maintenant des brouillons de facture.", "No invoices yet. Entries and reservations will now create draft invoices.")} /> : null}
         </div>
       </section>
     </div>
@@ -4976,6 +5074,7 @@ function BillingView({
 }
 
 function InvoiceDetailPanel({
+  locale,
   currency,
   invoice,
   lineItems,
@@ -4984,6 +5083,7 @@ function InvoiceDetailPanel({
   show,
   onClose,
 }: {
+  locale: Locale;
   currency: string;
   invoice: AppContext["invoices"][number];
   lineItems: AppContext["invoiceLineItems"];
@@ -4992,28 +5092,28 @@ function InvoiceDetailPanel({
   show: Show | undefined;
   onClose: () => void;
 }) {
-  const invoiceDocument = buildInvoiceDocumentData({ currency, invoice, lineItems, organization, payerContact, show });
+  const invoiceDocument = buildInvoiceDocumentData({ currency, invoice, lineItems, locale, organization, payerContact, show });
 
   return (
     <section className="panel span-2 invoice-detail-panel">
       <div className="panel-header invoice-panel-header">
         <div>
-          <p className="eyebrow">Version numérique</p>
-          <h2>Facture #{invoiceDocument.invoiceNumber}</h2>
+          <p className="eyebrow">{uiText(locale, "Version numérique", "Digital version")}</p>
+          <h2>{uiText(locale, "Facture", "Invoice")} #{invoiceDocument.invoiceNumber}</h2>
           <p>{invoiceDocument.organizationName} · {invoiceDocument.showName}</p>
         </div>
         <div className="invoice-panel-actions">
-          <button className="ghost-button" type="button" onClick={() => exportInvoicePdf(invoiceDocument)}>
+          <button className="ghost-button" type="button" onClick={() => exportInvoicePdf(invoiceDocument, locale)}>
             <Download size={16} />
-            Exporter PDF
+            {uiText(locale, "Exporter PDF", "Export PDF")}
           </button>
-          <button className="icon-button" type="button" aria-label="Fermer la facture" onClick={onClose}>
+          <button className="icon-button" type="button" aria-label={uiText(locale, "Fermer la facture", "Close invoice")} onClick={onClose}>
             <X size={18} />
           </button>
         </div>
       </div>
 
-      <article className="invoice-document" aria-label={`Facture ${invoiceDocument.invoiceNumber}`}>
+      <article className="invoice-document" aria-label={`${uiText(locale, "Facture", "Invoice")} ${invoiceDocument.invoiceNumber}`}>
         <header className="invoice-document-header">
           <div>
             <span className="invoice-document-kicker">Association</span>
@@ -5023,7 +5123,7 @@ function InvoiceDetailPanel({
             ))}
           </div>
           <div className="invoice-document-number">
-            <span>Facture</span>
+            <span>{uiText(locale, "Facture", "Invoice")}</span>
             <strong>#{invoiceDocument.invoiceNumber}</strong>
             <small>{invoiceDocument.statusLabel}</small>
           </div>
@@ -5031,28 +5131,28 @@ function InvoiceDetailPanel({
 
         <section className="invoice-document-show">
           <div>
-            <span className="invoice-document-kicker">Show</span>
+            <span className="invoice-document-kicker">{uiText(locale, "Concours", "Show")}</span>
             <strong>{invoiceDocument.showName}</strong>
             <span>{invoiceDocument.showDates}</span>
             {invoiceDocument.showLocation ? <span>{invoiceDocument.showLocation}</span> : null}
           </div>
           <div>
             <span className="invoice-document-kicker">Dates</span>
-            <strong>Émise le {invoiceDocument.issueDate}</strong>
-            <span>{invoiceDocument.dueDate ? `Échéance ${invoiceDocument.dueDate}` : "Aucune échéance définie"}</span>
+            <strong>{uiText(locale, "Émise le", "Issued on")} {invoiceDocument.issueDate}</strong>
+            <span>{invoiceDocument.dueDate ? `${uiText(locale, "Échéance", "Due")} ${invoiceDocument.dueDate}` : uiText(locale, "Aucune échéance définie", "No due date set")}</span>
           </div>
         </section>
 
         <section className="invoice-document-parties">
           <div>
-            <span className="invoice-document-kicker">Facturé à</span>
+            <span className="invoice-document-kicker">{uiText(locale, "Facturé à", "Bill to")}</span>
             <strong>{invoiceDocument.payerName}</strong>
             {invoiceDocument.payerContactLines.map((line) => (
               <span key={line}>{line}</span>
             ))}
           </div>
           <div>
-            <span className="invoice-document-kicker">Informations de facturation</span>
+            <span className="invoice-document-kicker">{uiText(locale, "Informations de facturation", "Billing information")}</span>
             {invoiceDocument.organizationAddressLines.map((line) => (
               <span key={line}>{line}</span>
             ))}
@@ -5065,8 +5165,8 @@ function InvoiceDetailPanel({
         <div className="table invoice-detail-table">
           <div className="table-row table-head invoice-detail-row">
             <span>Description</span>
-            <span>Qté</span>
-            <span>Prix</span>
+            <span>{uiText(locale, "Qté", "Qty")}</span>
+            <span>{uiText(locale, "Prix", "Price")}</span>
             <span>Taxes</span>
             <span>Total</span>
           </div>
@@ -5074,7 +5174,7 @@ function InvoiceDetailPanel({
             <div className="table-row invoice-detail-row" key={item.id}>
               <div>
                 <strong>{item.description}</strong>
-                <span className="muted-line">{invoiceItemTypeLabel(item.item_type)}</span>
+                <span className="muted-line">{invoiceItemTypeLabel(item.item_type, locale)}</span>
               </div>
               <span>{invoiceQuantityLabel(item.quantity)}</span>
               <span>{formatCurrency(item.unit_price, currency)}</span>
@@ -5082,13 +5182,13 @@ function InvoiceDetailPanel({
               <span>{formatCurrency(Number(item.total_price) + Number(item.tax_amount), currency)}</span>
             </div>
           ))}
-          {!lineItems.length ? <EmptyState label="Aucune ligne sur cette facture." /> : null}
+          {!lineItems.length ? <EmptyState label={uiText(locale, "Aucune ligne sur cette facture.", "No lines on this invoice.")} /> : null}
         </div>
 
         <footer className="invoice-document-footer">
           <dl className="invoice-document-totals">
             <div>
-              <dt>Sous-total</dt>
+              <dt>{uiText(locale, "Sous-total", "Subtotal")}</dt>
               <dd>{invoiceDocument.subtotal}</dd>
             </div>
             <div>
@@ -5100,7 +5200,7 @@ function InvoiceDetailPanel({
               <dd>{invoiceDocument.totalAmount}</dd>
             </div>
             <div className="invoice-document-balance">
-              <dt>Balance</dt>
+              <dt>{uiText(locale, "Solde", "Balance")}</dt>
               <dd>{invoiceDocument.balanceDue}</dd>
             </div>
           </dl>
@@ -5146,6 +5246,7 @@ function buildInvoiceDocumentData({
   currency,
   invoice,
   lineItems,
+  locale,
   organization,
   payerContact,
   show,
@@ -5153,6 +5254,7 @@ function buildInvoiceDocumentData({
   currency: string;
   invoice: Invoice;
   lineItems: InvoiceLineItem[];
+  locale: Locale;
   organization: Organization | null;
   payerContact: Contact | undefined;
   show: Show | undefined;
@@ -5172,19 +5274,19 @@ function buildInvoiceDocumentData({
       subtotal: formatCurrency(item.total_price, currency),
       tax: formatCurrency(item.tax_amount, currency),
       total: formatCurrency(Number(item.total_price) + Number(item.tax_amount), currency),
-      typeLabel: invoiceItemTypeLabel(item.item_type),
+      typeLabel: invoiceItemTypeLabel(item.item_type, locale),
       unitPrice: formatCurrency(item.unit_price, currency),
     })),
-    organizationAddressLines: organizationAddressLines(organization),
+    organizationAddressLines: organizationAddressLines(organization, locale),
     organizationContactLines: compactLines([organization?.billing_email, organization?.billing_phone]),
     organizationName,
-    organizationTaxLines: organizationTaxLines(organization),
+    organizationTaxLines: organizationTaxLines(organization, locale),
     payerContactLines: compactLines([payerContact?.email, payerContact?.phone]),
     payerName: contactLabel(payerContact),
-    showDates: showDateRange(show),
+    showDates: showDateRange(show, locale),
     showLocation: showLocationLine(show),
     showName: showLabel(show),
-    statusLabel: invoiceStatusLabel(invoice.status),
+    statusLabel: invoiceStatusLabel(invoice.status, locale),
     subtotal: formatCurrency(invoice.subtotal, currency),
     taxAmount: formatCurrency(invoice.tax_amount, currency),
     taxLabel: taxRate > 0 ? `${taxName} (${invoiceQuantityLabel(taxRate)}%)` : taxName,
@@ -5192,7 +5294,7 @@ function buildInvoiceDocumentData({
   };
 }
 
-function exportInvoicePdf(invoiceDocument: InvoiceDocumentData) {
+function exportInvoicePdf(invoiceDocument: InvoiceDocumentData, locale: Locale) {
   const printWindow = window.open("", "_blank", "width=900,height=1200");
 
   if (!printWindow) {
@@ -5202,12 +5304,12 @@ function exportInvoicePdf(invoiceDocument: InvoiceDocumentData) {
 
   printWindow.opener = null;
   printWindow.document.open();
-  printWindow.document.write(renderInvoicePrintHtml(invoiceDocument));
+  printWindow.document.write(renderInvoicePrintHtml(invoiceDocument, locale));
   printWindow.document.close();
   printWindow.focus();
 }
 
-function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
+function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData, locale: Locale) {
   const lines = invoiceDocument.lineItems.length
     ? invoiceDocument.lineItems
         .map(
@@ -5225,13 +5327,13 @@ function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
           `,
         )
         .join("")
-    : `<tr><td colspan="5">Aucune ligne sur cette facture.</td></tr>`;
+    : `<tr><td colspan="5">${escapeHtml(uiText(locale, "Aucune ligne sur cette facture.", "No lines on this invoice."))}</td></tr>`;
 
   return `<!doctype html>
-    <html lang="fr">
+    <html lang="${locale}">
       <head>
         <meta charset="utf-8" />
-        <title>Facture ${escapeHtml(invoiceDocument.invoiceNumber)}</title>
+        <title>${escapeHtml(uiText(locale, "Facture", "Invoice"))} ${escapeHtml(invoiceDocument.invoiceNumber)}</title>
         <style>
           @page { margin: 18mm; size: letter; }
           * { box-sizing: border-box; }
@@ -5343,30 +5445,30 @@ function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
               ${invoiceDocument.organizationContactLines.map((line) => `<p class="muted">${escapeHtml(line)}</p>`).join("")}
             </div>
             <div class="number">
-              <span class="kicker">Facture</span>
+              <span class="kicker">${escapeHtml(uiText(locale, "Facture", "Invoice"))}</span>
               <strong>#${escapeHtml(invoiceDocument.invoiceNumber)}</strong>
               <p class="muted">${escapeHtml(invoiceDocument.statusLabel)}</p>
             </div>
           </header>
           <section class="grid">
             <div class="block">
-              <span class="kicker">Show</span>
+              <span class="kicker">${escapeHtml(uiText(locale, "Concours", "Show"))}</span>
               <h2>${escapeHtml(invoiceDocument.showName)}</h2>
               <p>${escapeHtml(invoiceDocument.showDates)}</p>
               ${invoiceDocument.showLocation ? `<p class="muted">${escapeHtml(invoiceDocument.showLocation)}</p>` : ""}
             </div>
             <div class="block">
               <span class="kicker">Dates</span>
-              <strong>Émise le ${escapeHtml(invoiceDocument.issueDate)}</strong>
-              <p>${escapeHtml(invoiceDocument.dueDate ? `Échéance ${invoiceDocument.dueDate}` : "Aucune échéance définie")}</p>
+              <strong>${escapeHtml(uiText(locale, "Émise le", "Issued on"))} ${escapeHtml(invoiceDocument.issueDate)}</strong>
+              <p>${escapeHtml(invoiceDocument.dueDate ? `${uiText(locale, "Échéance", "Due")} ${invoiceDocument.dueDate}` : uiText(locale, "Aucune échéance définie", "No due date set"))}</p>
             </div>
             <div class="block">
-              <span class="kicker">Facturé à</span>
+              <span class="kicker">${escapeHtml(uiText(locale, "Facturé à", "Bill to"))}</span>
               <strong>${escapeHtml(invoiceDocument.payerName)}</strong>
               ${invoiceDocument.payerContactLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
             </div>
             <div class="block">
-              <span class="kicker">Informations de facturation</span>
+              <span class="kicker">${escapeHtml(uiText(locale, "Informations de facturation", "Billing information"))}</span>
               ${invoiceDocument.organizationAddressLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
               ${invoiceDocument.organizationTaxLines.map((line) => `<p>${escapeHtml(line)}</p>`).join("")}
             </div>
@@ -5375,8 +5477,8 @@ function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
             <thead>
               <tr>
                 <th>Description</th>
-                <th>Qté</th>
-                <th>Prix</th>
+                <th>${escapeHtml(uiText(locale, "Qté", "Qty"))}</th>
+                <th>${escapeHtml(uiText(locale, "Prix", "Price"))}</th>
                 <th>Taxes</th>
                 <th>Total</th>
               </tr>
@@ -5384,10 +5486,10 @@ function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData) {
             <tbody>${lines}</tbody>
           </table>
           <section class="totals">
-            <div><span>Sous-total</span><strong>${escapeHtml(invoiceDocument.subtotal)}</strong></div>
+            <div><span>${escapeHtml(uiText(locale, "Sous-total", "Subtotal"))}</span><strong>${escapeHtml(invoiceDocument.subtotal)}</strong></div>
             <div><span>${escapeHtml(invoiceDocument.taxLabel)}</span><strong>${escapeHtml(invoiceDocument.taxAmount)}</strong></div>
             <div><span>Total</span><strong>${escapeHtml(invoiceDocument.totalAmount)}</strong></div>
-            <div class="balance"><span>Balance</span><strong>${escapeHtml(invoiceDocument.balanceDue)}</strong></div>
+            <div class="balance"><span>${escapeHtml(uiText(locale, "Solde", "Balance"))}</span><strong>${escapeHtml(invoiceDocument.balanceDue)}</strong></div>
           </section>
         </main>
         <script>
@@ -5401,22 +5503,22 @@ function organizationInvoiceName(organization: Organization | null) {
   return trimmedText(organization?.billing_name) ?? organization?.name ?? "Association";
 }
 
-function organizationAddressLines(organization: Organization | null) {
+function organizationAddressLines(organization: Organization | null, locale: Locale = "fr") {
   const cityLine = compactInline([organization?.city, organization?.state, organization?.zip_code], " ");
   const lines = compactLines([organization?.address, organization?.address_line2, cityLine, organization?.country]);
-  return lines.length ? lines : ["Adresse à compléter dans les réglages"];
+  return lines.length ? lines : [uiText(locale, "Adresse à compléter dans les réglages", "Address to complete in settings")];
 }
 
-function organizationTaxLines(organization: Organization | null) {
+function organizationTaxLines(organization: Organization | null, locale: Locale = "fr") {
   return compactLines([
-    organization?.tax_number ? `${trimmedText(organization.tax_name) ?? "No de taxe"}: ${organization.tax_number}` : null,
-    organization?.secondary_tax_number ? `${trimmedText(organization.secondary_tax_name) ?? "No de taxe"}: ${organization.secondary_tax_number}` : null,
+    organization?.tax_number ? `${trimmedText(organization.tax_name) ?? uiText(locale, "No de taxe", "Tax number")}: ${organization.tax_number}` : null,
+    organization?.secondary_tax_number ? `${trimmedText(organization.secondary_tax_name) ?? uiText(locale, "No de taxe", "Tax number")}: ${organization.secondary_tax_number}` : null,
   ]);
 }
 
-function showDateRange(show: Show | undefined) {
+function showDateRange(show: Show | undefined, locale: Locale = "fr") {
   if (!show) {
-    return "Show non associé";
+    return uiText(locale, "Concours non associé", "No linked show");
   }
 
   if (show.start_date === show.end_date) {
@@ -5436,22 +5538,22 @@ function showLocationLine(show: Show | undefined) {
   return compactInline([location, cityLine], " - ");
 }
 
-function invoiceStatusLabel(status: Invoice["status"]) {
+function invoiceStatusLabel(status: Invoice["status"], locale: Locale = "fr") {
   switch (status) {
     case "draft":
-      return "Brouillon";
+      return uiText(locale, "Brouillon", "Draft");
     case "sent":
-      return "Envoyée";
+      return uiText(locale, "Envoyée", "Sent");
     case "viewed":
-      return "Consultée";
+      return uiText(locale, "Consultée", "Viewed");
     case "partially_paid":
-      return "Partiellement payée";
+      return uiText(locale, "Partiellement payée", "Partially paid");
     case "paid":
-      return "Payée";
+      return uiText(locale, "Payée", "Paid");
     case "overdue":
-      return "En retard";
+      return uiText(locale, "En retard", "Overdue");
     case "void":
-      return "Annulée";
+      return uiText(locale, "Annulée", "Void");
     default:
       return status;
   }
@@ -5570,6 +5672,7 @@ function taxRateNumber(value: string) {
 }
 
 function SettingsView({
+  locale = "fr",
   context,
   externalOrganizations,
   membershipRequirements,
@@ -5577,6 +5680,7 @@ function SettingsView({
   onSetExternalMembershipRequirement,
   onUpdateOrganizationHealthSettings,
 }: {
+  locale?: Locale;
   context: AppContext | null;
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
@@ -5714,26 +5818,26 @@ function SettingsView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Parametres"
-        title="Profil et association"
-        description="Verifie le profil connecte, le role, la devise, la taxe et le plan de l'association."
+        eyebrow={uiText(locale, "Paramètres", "Settings")}
+        title={uiText(locale, "Profil et association", "Profile and association")}
+        description={uiText(locale, "Vérifie le profil connecté, le rôle, la devise, les taxes et les règles de l'association.", "Review the signed-in profile, role, currency, taxes and association rules.")}
       />
 
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Profile</h2>
-            <p>{context?.profile ? `${context.profile.first_name ?? ""} ${context.profile.last_name ?? ""}`.trim() || "Signed in user" : "Loading"}</p>
+            <h2>{uiText(locale, "Profil", "Profile")}</h2>
+            <p>{context?.profile ? `${context.profile.first_name ?? ""} ${context.profile.last_name ?? ""}`.trim() || uiText(locale, "Utilisateur connecté", "Signed-in user") : uiText(locale, "Chargement", "Loading")}</p>
           </div>
         </div>
         <dl className="detail-list">
           <div>
-            <dt>Role type</dt>
-            <dd>{context?.profile.type_user ?? "Unset"}</dd>
+            <dt>{uiText(locale, "Type de rôle", "Role type")}</dt>
+            <dd>{context?.profile.type_user ?? uiText(locale, "Non défini", "Unset")}</dd>
           </div>
           <div>
-            <dt>Profile ID</dt>
-            <dd>{context?.profile.id ?? "Pending"}</dd>
+            <dt>{uiText(locale, "ID du profil", "Profile ID")}</dt>
+            <dd>{context?.profile.id ?? uiText(locale, "En attente", "Pending")}</dd>
           </div>
         </dl>
       </section>
@@ -5741,66 +5845,66 @@ function SettingsView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Informations de facturation</h2>
-            <p>{organization?.slug ?? "Aucune association selectionnee"}</p>
+            <h2>{uiText(locale, "Informations de facturation", "Billing information")}</h2>
+            <p>{organization?.slug ?? uiText(locale, "Aucune association sélectionnée", "No association selected")}</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleBillingSettingsSubmit}>
           <div className="form-grid">
             <label>
-              Nom de l'association
+              {uiText(locale, "Nom de l'association", "Association name")}
               <input disabled={!organization || billingBusy} value={billingForm.name} onChange={(event) => handleBillingFieldChange("name", event.target.value)} />
             </label>
             <label>
-              Abréviation
+              {uiText(locale, "Abréviation", "Short name")}
               <input disabled={!organization || billingBusy} value={billingForm.shortName} onChange={(event) => handleBillingFieldChange("shortName", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Contact principal
+              {uiText(locale, "Contact principal", "Primary contact")}
               <input disabled={!organization || billingBusy} value={billingForm.primaryContactName} onChange={(event) => handleBillingFieldChange("primaryContactName", event.target.value)} />
             </label>
             <label>
-              Email principal
+              {uiText(locale, "Courriel principal", "Primary email")}
               <input disabled={!organization || billingBusy} type="email" value={billingForm.primaryContactEmail} onChange={(event) => handleBillingFieldChange("primaryContactEmail", event.target.value)} />
             </label>
             <label>
-              Téléphone principal
+              {uiText(locale, "Téléphone principal", "Primary phone")}
               <input disabled={!organization || billingBusy} value={billingForm.primaryContactPhone} onChange={(event) => handleBillingFieldChange("primaryContactPhone", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Nom légal sur facture
+              {uiText(locale, "Nom légal sur facture", "Legal billing name")}
               <input disabled={!organization || billingBusy} value={billingForm.billingName} onChange={(event) => handleBillingFieldChange("billingName", event.target.value)} />
             </label>
             <label>
-              Email de facturation
+              {uiText(locale, "Courriel de facturation", "Billing email")}
               <input disabled={!organization || billingBusy} type="email" value={billingForm.billingEmail} onChange={(event) => handleBillingFieldChange("billingEmail", event.target.value)} />
             </label>
             <label>
-              Téléphone de facturation
+              {uiText(locale, "Téléphone de facturation", "Billing phone")}
               <input disabled={!organization || billingBusy} value={billingForm.billingPhone} onChange={(event) => handleBillingFieldChange("billingPhone", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Adresse
+              {uiText(locale, "Adresse", "Address")}
               <input disabled={!organization || billingBusy} value={billingForm.address} onChange={(event) => handleBillingFieldChange("address", event.target.value)} />
             </label>
             <label>
-              Appartement, bureau ou suite
+              {uiText(locale, "Appartement, bureau ou suite", "Apartment, office or suite")}
               <input disabled={!organization || billingBusy} value={billingForm.addressLine2} onChange={(event) => handleBillingFieldChange("addressLine2", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Ville
+              {uiText(locale, "Ville", "City")}
               <input disabled={!organization || billingBusy} value={billingForm.city} onChange={(event) => handleBillingFieldChange("city", event.target.value)} />
             </label>
             <label>
-              Pays
+              {uiText(locale, "Pays", "Country")}
               <select disabled={!organization || billingBusy} value={billingForm.country} onChange={(event) => handleBillingFieldChange("country", event.target.value)}>
                 {countryOptions.map((country) => (
                   <option key={country.value} value={country.value}>
@@ -5810,7 +5914,7 @@ function SettingsView({
               </select>
             </label>
             <label>
-              {isCanadaBillingAddress ? "Province" : "État / région"}
+              {isCanadaBillingAddress ? uiText(locale, "Province", "Province") : uiText(locale, "État / région", "State / region")}
               {isCanadaBillingAddress ? (
                 <select disabled={!organization || billingBusy} value={billingForm.state} onChange={(event) => handleBillingFieldChange("state", event.target.value)}>
                   {canadianProvinceOptions.map((province) => (
@@ -5824,13 +5928,13 @@ function SettingsView({
               )}
             </label>
             <label>
-              Code postal
+              {uiText(locale, "Code postal", "Postal code")}
               <input disabled={!organization || billingBusy} value={billingForm.zipCode} onChange={(event) => handleBillingFieldChange("zipCode", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Devise
+              {uiText(locale, "Devise", "Currency")}
               <select disabled={!organization || billingBusy} value={billingForm.currency} onChange={(event) => handleBillingFieldChange("currency", event.target.value)}>
                 {currencyOptions.map((currency) => (
                   <option key={currency.value} value={currency.value}>
@@ -5840,7 +5944,7 @@ function SettingsView({
               </select>
             </label>
             <label>
-              Taxe de vente
+              {uiText(locale, "Taxe de vente", "Sales tax")}
               <select disabled={!organization || billingBusy} value={selectedTaxPresetId} onChange={(event) => handleTaxPresetChange(event.target.value)}>
                 {availableTaxPresets.map((preset) => (
                   <option key={preset.id} value={preset.id}>
@@ -5848,33 +5952,33 @@ function SettingsView({
                   </option>
                 ))}
               </select>
-              <span className="input-help">Le taux reste modifiable pour les exemptions, exceptions ou taxes locales.</span>
+              <span className="input-help">{uiText(locale, "Le taux reste modifiable pour les exemptions, exceptions ou taxes locales.", "The rate remains editable for exemptions, exceptions or local taxes.")}</span>
             </label>
             <label>
-              Taux de taxe effectif (%)
+              {uiText(locale, "Taux de taxe effectif (%)", "Effective tax rate (%)")}
               <input disabled={!organization || billingBusy} min="0" step="0.001" type="number" value={billingForm.taxRate} onChange={(event) => handleBillingFieldChange("taxRate", event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Libellé taxe principale
+              {uiText(locale, "Libellé de taxe principale", "Primary tax label")}
               <input disabled={!organization || billingBusy} value={billingForm.taxName} onChange={(event) => handleBillingFieldChange("taxName", event.target.value)} />
             </label>
             <label>
-              No taxe principale
+              {uiText(locale, "No de taxe principale", "Primary tax number")}
               <input disabled={!organization || billingBusy} value={billingForm.taxNumber} onChange={(event) => handleBillingFieldChange("taxNumber", event.target.value)} />
             </label>
             <label>
-              Libellé taxe secondaire
+              {uiText(locale, "Libellé de taxe secondaire", "Secondary tax label")}
               <input disabled={!organization || billingBusy} placeholder="TVQ, PST, RST..." value={billingForm.secondaryTaxName} onChange={(event) => handleBillingFieldChange("secondaryTaxName", event.target.value)} />
             </label>
             <label>
-              No taxe secondaire
+              {uiText(locale, "No de taxe secondaire", "Secondary tax number")}
               <input disabled={!organization || billingBusy} value={billingForm.secondaryTaxNumber} onChange={(event) => handleBillingFieldChange("secondaryTaxNumber", event.target.value)} />
             </label>
           </div>
           <button className="primary-button" disabled={!organization || billingBusy || !billingForm.name.trim()} type="submit">
-            {billingBusy ? "Enregistrement..." : "Enregistrer les infos de facturation"}
+            {billingBusy ? uiText(locale, "Enregistrement...", "Saving...") : uiText(locale, "Enregistrer les infos de facturation", "Save billing information")}
           </button>
         </form>
       </section>
@@ -5882,8 +5986,8 @@ function SettingsView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Numéros externes obligatoires</h2>
-            <p>Exigences appliquées aux fiches cavalier de cette association.</p>
+            <h2>{uiText(locale, "Numéros externes obligatoires", "Required external numbers")}</h2>
+            <p>{uiText(locale, "Exigences appliquées aux fiches de cavalier de cette association.", "Requirements applied to rider records for this association.")}</p>
           </div>
         </div>
         <div className="requirement-list">
@@ -5901,48 +6005,48 @@ function SettingsView({
                   <strong>{externalOrganization.code}</strong>
                   {externalOrganization.name}
                 </span>
-                <small>{externalOrganization.verification_enabled ? "Validation externe prête" : "Validation manuelle"}</small>
+                <small>{externalOrganization.verification_enabled ? uiText(locale, "Validation externe prête", "External validation ready") : uiText(locale, "Validation manuelle", "Manual validation")}</small>
               </label>
             );
           })}
-          {!externalOrganizations.length ? <EmptyState label="Aucune organisation externe configuree." /> : null}
+          {!externalOrganizations.length ? <EmptyState label={uiText(locale, "Aucune organisation externe configurée.", "No external organization configured.")} /> : null}
         </div>
       </section>
 
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>Dossards et statut sante</h2>
-            <p>Regles utilisees pour les dossards, les inscriptions et les reservations de stalls.</p>
+            <h2>{uiText(locale, "Dossards et statut santé", "Back numbers and health status")}</h2>
+            <p>{uiText(locale, "Règles utilisées pour les dossards, les inscriptions et les réservations de stalls.", "Rules used for back numbers, entries and stall reservations.")}</p>
           </div>
         </div>
         <form className="stack" onSubmit={handleHealthSettingsSubmit}>
           <label>
-            Politique de dossard de l'association
+            {uiText(locale, "Politique de dossard de l'association", "Association back number policy")}
             <select disabled={!organization || healthBusy} value={backNumberPolicy} onChange={(event) => setBackNumberPolicy(event.target.value as OrganizationBackNumber["assignment_mode"])}>
-              <option value="horse">Par cheval</option>
-              <option value="rider">Par cavalier</option>
-              <option value="horse_rider_team">Par equipe cheval+cavalier</option>
+              <option value="horse">{uiText(locale, "Par cheval", "By horse")}</option>
+              <option value="rider">{uiText(locale, "Par cavalier", "By rider")}</option>
+              <option value="horse_rider_team">{uiText(locale, "Par équipe cheval+cavalier", "By horse+rider team")}</option>
             </select>
-            <span className="input-help">Les utilisateurs ne choisissent pas ce mode: l'app applique automatiquement la politique de l'association active.</span>
+            <span className="input-help">{uiText(locale, "Les utilisateurs ne choisissent pas ce mode: l'app applique automatiquement la politique de l'association active.", "Users do not choose this mode: the app automatically applies the active association policy.")}</span>
           </label>
           <label className="requirement-row">
             <input checked={healthRequired} disabled={!organization || healthBusy} type="checkbox" onChange={(event) => setHealthRequired(event.target.checked)} />
             <span>
-              <strong>Exiger les documents sante valides</strong>
-              Bloque les entries et stalls rattaches a un cheval si le Coggins ou le vaccin influenza/rhino ne couvre pas la date du show.
+              <strong>{uiText(locale, "Exiger les documents santé valides", "Require valid health documents")}</strong>
+              {uiText(locale, "Bloque les inscriptions et les stalls rattachés à un cheval si le Coggins ou le vaccin influenza/rhino ne couvre pas la date du concours.", "Blocks entries and stalls linked to a horse if the Coggins or influenza/rhino vaccine does not cover the show date.")}
             </span>
-            <small>{healthRequired ? "Validation obligatoire" : "Validation non exigee"}</small>
+            <small>{healthRequired ? uiText(locale, "Validation obligatoire", "Validation required") : uiText(locale, "Validation non exigée", "Validation not required")}</small>
           </label>
           <label>
-            Duree de validite des documents sante
+            {uiText(locale, "Durée de validité des documents santé", "Health document validity period")}
             <select disabled={!organization || healthBusy || !healthRequired} value={cogginsValidityMonths} onChange={(event) => setCogginsValidityMonths(Number(event.target.value) === 6 ? 6 : 12)}>
               <option value={6}>6 mois</option>
               <option value={12}>12 mois</option>
             </select>
           </label>
           <button className="primary-button" disabled={!organization || healthBusy} type="submit">
-            {healthBusy ? "Enregistrement..." : "Enregistrer les regles"}
+            {healthBusy ? uiText(locale, "Enregistrement...", "Saving...") : uiText(locale, "Enregistrer les règles", "Save rules")}
           </button>
         </form>
       </section>
@@ -5950,7 +6054,7 @@ function SettingsView({
   );
 }
 
-function OrganizationForm({ onCreateOrganization }: { onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void> }) {
+function OrganizationForm({ locale = "fr", onCreateOrganization }: { locale?: Locale; onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void> }) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
@@ -5980,13 +6084,13 @@ function OrganizationForm({ onCreateOrganization }: { onCreateOrganization: (inp
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New organization</h2>
-          <p>Tenant root for shows, contacts, entries and billing.</p>
+          <h2>{uiText(locale, "Nouvelle association", "New organization")}</h2>
+          <p>{uiText(locale, "Point de départ pour les concours, contacts, inscriptions et facturation.", "Root workspace for shows, contacts, entries and billing.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Name
+          {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <label>
@@ -5994,12 +6098,12 @@ function OrganizationForm({ onCreateOrganization }: { onCreateOrganization: (inp
           <input placeholder={slugify(name) || "spring-circuit"} value={slug} onChange={(event) => setSlug(event.target.value)} />
         </label>
         <label>
-          Contact email
+          {uiText(locale, "Courriel de contact", "Contact email")}
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>
         <button className="primary-button" disabled={busy} type="submit">
           <Plus size={18} />
-          Create organization
+          {uiText(locale, "Créer l'association", "Create organization")}
         </button>
       </form>
     </section>
@@ -6018,6 +6122,7 @@ type ShowReadinessItem = {
 };
 
 function ShowAssistant({
+  locale = "fr",
   classes,
   divisions,
   entries,
@@ -6032,6 +6137,7 @@ function ShowAssistant({
   onUpdateShow,
   onViewChange,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   divisions: Division[];
   entries: Entry[];
@@ -6086,6 +6192,7 @@ function ShowAssistant({
 
   const readinessItems = activeShow
     ? buildShowReadinessItems(activeShow, {
+        locale,
         classes,
         divisions,
         entries,
@@ -6199,11 +6306,11 @@ function ShowAssistant({
       <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" role="dialog">
         <div className="assistant-modal-header">
           <div>
-            <p className="eyebrow">Assistant</p>
-            <h2 id="show-assistant-title">{activeShow ? activeShow.name : "Nouveau show"}</h2>
-            <p>{activeShow ? `${formatDate(activeShow.start_date)} - ${formatDate(activeShow.end_date)}` : organization?.name ?? "Create an organization first."}</p>
+            <p className="eyebrow">{uiText(locale, "Assistant", "Assistant")}</p>
+            <h2 id="show-assistant-title">{activeShow ? activeShow.name : uiText(locale, "Nouveau concours", "New show")}</h2>
+            <p>{activeShow ? `${formatDate(activeShow.start_date)} - ${formatDate(activeShow.end_date)}` : organization?.name ?? uiText(locale, "Crée une association d'abord.", "Create an organization first.")}</p>
           </div>
-          <button className="icon-button" title="Fermer" type="button" onClick={onClose}>
+          <button className="icon-button" title={uiText(locale, "Fermer", "Close")} type="button" onClick={onClose}>
             <X size={18} />
           </button>
         </div>
@@ -6211,22 +6318,22 @@ function ShowAssistant({
         <div className="assistant-stepper">
           <button className={step === "essentials" ? "active" : ""} type="button" onClick={() => setStep("essentials")}>
             <CalendarDays size={16} />
-            Essentiel
+            {uiText(locale, "Essentiel", "Essentials")}
           </button>
           <button className={step === "payments" ? "active" : ""} disabled={!activeShow} type="button" onClick={() => setStep("payments")}>
             <CircleDollarSign size={16} />
-            Paiements
+            {uiText(locale, "Paiements", "Payments")}
           </button>
           <button className={step === "readiness" ? "active" : ""} disabled={!activeShow} type="button" onClick={() => setStep("readiness")}>
             <ClipboardList size={16} />
-            Checklist
+            {uiText(locale, "Checklist", "Checklist")}
           </button>
         </div>
 
         {activeShow ? (
           <div className="assistant-save-state">
             <CheckCircle2 size={16} />
-            <span>Brouillon sauvegardé</span>
+            <span>{uiText(locale, "Brouillon sauvegardé", "Draft saved")}</span>
           </div>
         ) : null}
 
@@ -6234,7 +6341,7 @@ function ShowAssistant({
           <form className="stack assistant-form" onSubmit={handleEssentialsSubmit}>
             <div className="form-grid">
               <label>
-                Name
+                {uiText(locale, "Nom", "Name")}
                 <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
               </label>
               <label>
@@ -6244,25 +6351,25 @@ function ShowAssistant({
             </div>
             <div className="form-grid">
               <label>
-                Start
+                {uiText(locale, "Début", "Start")}
                 <input disabled={!organization} required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
               </label>
               <label>
-                End
+                {uiText(locale, "Fin", "End")}
                 <input disabled={!organization} min={startDate} required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
               </label>
             </div>
             <label>
-              Location
+              {uiText(locale, "Lieu", "Location")}
               <input disabled={!organization} value={location} onChange={(event) => setLocation(event.target.value)} />
             </label>
             <div className="form-actions">
               <button className="primary-button" disabled={busy || !organization} type="submit">
                 <CheckCircle2 size={18} />
-                {activeShow ? "Sauvegarder" : "Créer le brouillon"}
+                {activeShow ? uiText(locale, "Sauvegarder", "Save") : uiText(locale, "Créer le brouillon", "Create draft")}
               </button>
               <button className="ghost-button" type="button" onClick={onClose}>
-                Fermer
+                {uiText(locale, "Fermer", "Close")}
               </button>
             </div>
           </form>
@@ -6271,77 +6378,77 @@ function ShowAssistant({
         {step === "payments" ? (
           <form className="stack assistant-form" onSubmit={handlePaymentsSubmit}>
             <div className="field-group">
-              <span className="contact-picker-label">Paiements du show</span>
+              <span className="contact-picker-label">{uiText(locale, "Paiements du concours", "Show payments")}</span>
               <div className="form-grid">
                 <label>
-                  Réservations
+                  {uiText(locale, "Réservations", "Reservations")}
                   <select value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
-                    <option value="pay_at_booking">Paiement à la réservation</option>
-                    <option value="manual">Gestion manuelle</option>
+                    <option value="pay_at_booking">{uiText(locale, "Paiement à la réservation", "Pay at booking")}</option>
+                    <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
                   </select>
                 </label>
                 <label>
-                  Inscriptions
+                  {uiText(locale, "Inscriptions", "Entries")}
                   <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
-                    <option value="card_on_file_preauth">Carte + préautorisation</option>
-                    <option value="manual">Gestion manuelle</option>
+                    <option value="card_on_file_preauth">{uiText(locale, "Carte + préautorisation", "Card on file + preauthorization")}</option>
+                    <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
                   </select>
                 </label>
               </div>
               <div className="form-grid">
                 <label>
-                  Préautorisation
+                  {uiText(locale, "Préautorisation", "Preauthorization")}
                   <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
-                    <option value="show_start">Première journée du show</option>
-                    <option value="manual">Manuelle</option>
+                    <option value="show_start">{uiText(locale, "Première journée du concours", "First show day")}</option>
+                    <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
                   </select>
                 </label>
                 <label>
-                  Heure
+                  {uiText(locale, "Heure", "Time")}
                   <input disabled={entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
                 </label>
               </div>
               <div className="form-grid">
                 <label>
-                  Échéance
+                  {uiText(locale, "Échéance", "Due date")}
                   <select disabled={entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
-                    <option value="show_end">Dernière journée du show</option>
-                    <option value="manual">Manuelle</option>
+                    <option value="show_end">{uiText(locale, "Dernière journée du concours", "Last show day")}</option>
+                    <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
                   </select>
                 </label>
                 <label>
-                  Heure limite
+                  {uiText(locale, "Heure limite", "Due time")}
                   <input disabled={entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
                 </label>
               </div>
               <div className="form-grid">
                 <label>
-                  Montant préautorisé
+                  {uiText(locale, "Montant préautorisé", "Preauthorized amount")}
                   <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
-                    <option value="entry_balance">Solde des inscriptions</option>
-                    <option value="entry_balance_with_margin">Solde + marge</option>
+                    <option value="entry_balance">{uiText(locale, "Solde des inscriptions", "Entry balance")}</option>
+                    <option value="entry_balance_with_margin">{uiText(locale, "Solde + marge", "Balance + margin")}</option>
                   </select>
                 </label>
                 <label>
-                  Marge %
+                  {uiText(locale, "Marge %", "Margin %")}
                   <input disabled={entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
                 </label>
               </div>
               <label className="check-row">
                 <input checked={entryAutoCaptureEnabled} disabled={entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
-                <span>Capture automatique à l'échéance</span>
+                <span>{uiText(locale, "Capture automatique à l'échéance", "Auto-capture at due date")}</span>
               </label>
             </div>
             <div className="form-actions">
               <button className="primary-button" disabled={busy || !activeShow} type="submit">
                 <CheckCircle2 size={18} />
-                Sauvegarder
+                {uiText(locale, "Sauvegarder", "Save")}
               </button>
               <button className="ghost-button" type="button" onClick={() => setStep("essentials")}>
-                Retour
+                {uiText(locale, "Retour", "Back")}
               </button>
               <button className="ghost-button" type="button" onClick={onClose}>
-                Fermer
+                {uiText(locale, "Fermer", "Close")}
               </button>
             </div>
           </form>
@@ -6351,8 +6458,8 @@ function ShowAssistant({
           <div className="assistant-readiness">
             <div className="readiness-summary">
               <div>
-                <strong>{readinessDone}/{readinessItems.length} prêts</strong>
-                <span>Préparation du show</span>
+                <strong>{readinessDone}/{readinessItems.length} {uiText(locale, "prêts", "ready")}</strong>
+                <span>{uiText(locale, "Préparation du concours", "Show readiness")}</span>
               </div>
               <div className="progress-track">
                 <span style={{ width: `${readinessPercent}%` }} />
@@ -6368,7 +6475,7 @@ function ShowAssistant({
                   </div>
                   {item.view ? (
                     <button className="text-button" type="button" onClick={() => onViewChange(item.view as ViewKey)}>
-                      {item.actionLabel ?? "Ouvrir"}
+                      {item.actionLabel ?? uiText(locale, "Ouvrir", "Open")}
                     </button>
                   ) : null}
                 </div>
@@ -6377,13 +6484,13 @@ function ShowAssistant({
             <div className="form-actions">
               <button className="primary-button" disabled={busy || activeShow.status === "open"} type="button" onClick={handleOpenShow}>
                 <CheckCircle2 size={18} />
-                {activeShow.status === "open" ? "Show ouvert" : "Ouvrir les inscriptions"}
+                {activeShow.status === "open" ? uiText(locale, "Concours ouvert", "Show open") : uiText(locale, "Ouvrir les inscriptions", "Open entries")}
               </button>
               <button className="ghost-button" type="button" onClick={() => setStep("payments")}>
-                Paiements
+                {uiText(locale, "Paiements", "Payments")}
               </button>
               <button className="ghost-button" type="button" onClick={onClose}>
-                Fermer
+                {uiText(locale, "Fermer", "Close")}
               </button>
             </div>
           </div>
@@ -6396,6 +6503,7 @@ function ShowAssistant({
 function buildShowReadinessItems(
   show: Show,
   context: {
+    locale?: Locale;
     classes: ClassRecord[];
     divisions: Division[];
     entries: Entry[];
@@ -6405,6 +6513,7 @@ function buildShowReadinessItems(
     stallOptions: StallOption[];
   },
 ): ShowReadinessItem[] {
+  const locale = context.locale ?? "fr";
   const showDays = context.showDays.filter((day) => day.show_id === show.id);
   const showClasses = context.classes.filter((classRecord) => classRecord.show_id === show.id);
   const showDivisions = context.divisions.filter((division) => division.show_id === show.id);
@@ -6417,74 +6526,76 @@ function buildShowReadinessItems(
   return [
     {
       key: "days",
-      title: "Journées",
-      detail: showDays.length ? `${showDays.length} journée${showDays.length === 1 ? "" : "s"} générée${showDays.length === 1 ? "" : "s"}.` : "Les journées apparaîtront depuis les dates du show.",
+      title: uiText(locale, "Journées", "Show days"),
+      detail: showDays.length ? uiText(locale, `${showDays.length} journée${showDays.length === 1 ? "" : "s"} générée${showDays.length === 1 ? "" : "s"}.`, `${showDays.length} day${showDays.length === 1 ? "" : "s"} generated.`) : uiText(locale, "Les journées apparaîtront depuis les dates du concours.", "Days will be generated from show dates."),
       done: showDays.length > 0,
       view: "shows",
-      actionLabel: "Vérifier",
+      actionLabel: uiText(locale, "Vérifier", "Review"),
     },
-	    {
-	      key: "classes",
-	      title: "Blocs",
-	      detail: showClasses.length ? `${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} au programme.` : "Aucun bloc créé.",
-	      done: showClasses.length > 0,
-	      view: "classes",
-	      actionLabel: showClasses.length ? "Ajuster" : "Ajouter",
-	    },
-	    {
-	      key: "divisions",
-	      title: "Classes",
-	      detail: showDivisions.length ? `${showDivisions.length} classe${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.` : "Aucune classe disponible.",
-	      done: showDivisions.length > 0,
-	      view: "classes",
-	      actionLabel: showDivisions.length ? "Ajuster" : "Ajouter",
+    {
+      key: "classes",
+      title: uiText(locale, "Blocs", "Schedule blocks"),
+      detail: showClasses.length ? uiText(locale, `${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} à l'horaire.`, `${showClasses.length} schedule block${showClasses.length === 1 ? "" : "s"} in the schedule.`) : uiText(locale, "Aucun bloc créé.", "No schedule blocks created."),
+      done: showClasses.length > 0,
+      view: "classes",
+      actionLabel: showClasses.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
+    },
+    {
+      key: "divisions",
+      title: uiText(locale, "Classes", "Classes"),
+      detail: showDivisions.length ? uiText(locale, `${showDivisions.length} classe${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.`, `${showDivisions.length} class${showDivisions.length === 1 ? "" : "es"} available.`) : uiText(locale, "Aucune classe disponible.", "No classes available."),
+      done: showDivisions.length > 0,
+      view: "classes",
+      actionLabel: showDivisions.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
     },
     {
       key: "stalls",
-      title: "Stalls et extras",
-      detail: showStallOptions.length ? `${showStallOptions.length} produit${showStallOptions.length === 1 ? "" : "s"} réservable${showStallOptions.length === 1 ? "" : "s"}.` : "Aucun produit de réservation.",
+      title: uiText(locale, "Stalls et extras", "Stalls and extras"),
+      detail: showStallOptions.length ? uiText(locale, `${showStallOptions.length} produit${showStallOptions.length === 1 ? "" : "s"} réservable${showStallOptions.length === 1 ? "" : "s"}.`, `${showStallOptions.length} reservable item${showStallOptions.length === 1 ? "" : "s"}.`) : uiText(locale, "Aucun produit de réservation.", "No reservation products."),
       done: showStallOptions.length > 0,
       view: "stalls",
-      actionLabel: showStallOptions.length ? "Ajuster" : "Configurer",
+      actionLabel: showStallOptions.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Configurer", "Configure"),
     },
     {
       key: "entries",
-      title: "Inscriptions",
-      detail: showEntries.length ? `${showEntries.length} inscription${showEntries.length === 1 ? "" : "s"} créée${showEntries.length === 1 ? "" : "s"}.` : "Les inscriptions arriveront ici.",
+      title: uiText(locale, "Inscriptions", "Entries"),
+      detail: showEntries.length ? uiText(locale, `${showEntries.length} inscription${showEntries.length === 1 ? "" : "s"} créée${showEntries.length === 1 ? "" : "s"}.`, `${showEntries.length} entr${showEntries.length === 1 ? "y" : "ies"} created.`) : uiText(locale, "Les inscriptions arriveront ici.", "Entries will appear here."),
       done: showEntries.length > 0,
       view: "entries",
-      actionLabel: "Ouvrir",
+      actionLabel: uiText(locale, "Ouvrir", "Open"),
     },
-	    {
-	      key: "scoring",
-	      title: "Scoring",
-	      detail: showClasses.length ? `${preparedClasses}/${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} préparé${showClasses.length === 1 ? "" : "s"}.` : "Crée des blocs avant le scoring.",
+    {
+      key: "scoring",
+      title: uiText(locale, "Pointage", "Scoring"),
+      detail: showClasses.length ? uiText(locale, `${preparedClasses}/${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} préparé${showClasses.length === 1 ? "" : "s"}.`, `${preparedClasses}/${showClasses.length} schedule block${showClasses.length === 1 ? "" : "s"} prepared.`) : uiText(locale, "Crée des blocs avant le pointage.", "Create schedule blocks before scoring."),
       done: showClasses.length > 0 && preparedClasses === showClasses.length,
       view: "scoring",
-      actionLabel: "Préparer",
+      actionLabel: uiText(locale, "Préparer", "Prepare"),
     },
     {
       key: "billing",
-      title: "Facturation",
-      detail: showInvoices.length ? `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} liée${showInvoices.length === 1 ? "" : "s"} au show.` : "Aucune facture liée au show.",
+      title: uiText(locale, "Facturation", "Billing"),
+      detail: showInvoices.length ? uiText(locale, `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} liée${showInvoices.length === 1 ? "" : "s"} au concours.`, `${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} linked to the show.`) : uiText(locale, "Aucune facture liée au concours.", "No invoices linked to the show."),
       done: showInvoices.length > 0,
       view: "billing",
-      actionLabel: "Voir",
+      actionLabel: uiText(locale, "Voir", "View"),
     },
     {
       key: "publication",
       title: "Publication",
-      detail: show.status === "open" ? "Les inscriptions sont ouvertes." : "Le show est encore en brouillon.",
+      detail: show.status === "open" ? uiText(locale, "Les inscriptions sont ouvertes.", "Entries are open.") : uiText(locale, "Le concours est encore en brouillon.", "The show is still in draft."),
       done: show.status === "open",
     },
   ];
 }
 
 function ShowEditForm({
+  locale = "fr",
   show,
   onCancel,
   onUpdateShow,
 }: {
+  locale?: Locale;
   show: Show;
   onCancel: () => void;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
@@ -6537,13 +6648,13 @@ function ShowEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit show</h2>
+          <h2>{uiText(locale, "Modifier le concours", "Edit show")}</h2>
           <p>{show.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Name
+          {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <label>
@@ -6552,98 +6663,99 @@ function ShowEditForm({
         </label>
         <div className="form-grid">
           <label>
-            Start
+          {uiText(locale, "Début", "Start")}
             <input required type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} />
           </label>
           <label>
-            End
+          {uiText(locale, "Fin", "End")}
             <input required type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Status
+            {uiText(locale, "Statut", "Status")}
             <select value={status} onChange={(event) => setStatus(event.target.value as Show["status"])}>
-              <option value="draft">Draft</option>
-              <option value="open">Open</option>
-              <option value="closed">Closed</option>
-              <option value="archived">Archived</option>
+              <option value="draft">{uiText(locale, "Brouillon", "Draft")}</option>
+              <option value="open">{uiText(locale, "Ouvert", "Open")}</option>
+              <option value="closed">{uiText(locale, "Fermé", "Closed")}</option>
+              <option value="archived">{uiText(locale, "Archivé", "Archived")}</option>
             </select>
           </label>
           <label>
-            Location
+            {uiText(locale, "Lieu", "Location")}
             <input value={location} onChange={(event) => setLocation(event.target.value)} />
           </label>
         </div>
         <div className="field-group">
-          <span className="contact-picker-label">Paiements du show</span>
+          <span className="contact-picker-label">{uiText(locale, "Paiements du concours", "Show payments")}</span>
           <div className="form-grid">
             <label>
-              Réservations
+              {uiText(locale, "Réservations", "Reservations")}
               <select value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
-                <option value="pay_at_booking">Paiement à la réservation</option>
-                <option value="manual">Gestion manuelle</option>
+                <option value="pay_at_booking">{uiText(locale, "Paiement à la réservation", "Pay at booking")}</option>
+                <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
               </select>
             </label>
             <label>
-              Inscriptions
+              {uiText(locale, "Inscriptions", "Entries")}
               <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
-                <option value="card_on_file_preauth">Carte + préautorisation</option>
-                <option value="manual">Gestion manuelle</option>
+                <option value="card_on_file_preauth">{uiText(locale, "Carte + préautorisation", "Card on file + preauthorization")}</option>
+                <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
               </select>
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Préautorisation
+              {uiText(locale, "Préautorisation", "Preauthorization")}
               <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
-                <option value="show_start">Première journée du show</option>
-                <option value="manual">Manuelle</option>
+                <option value="show_start">{uiText(locale, "Première journée du concours", "First show day")}</option>
+                <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
               </select>
             </label>
             <label>
-              Heure
+              {uiText(locale, "Heure", "Time")}
               <input disabled={entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Échéance
+              {uiText(locale, "Échéance", "Due date")}
               <select disabled={entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
-                <option value="show_end">Dernière journée du show</option>
-                <option value="manual">Manuelle</option>
+                <option value="show_end">{uiText(locale, "Dernière journée du concours", "Last show day")}</option>
+                <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
               </select>
             </label>
             <label>
-              Heure limite
+              {uiText(locale, "Heure limite", "Due time")}
               <input disabled={entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
-              Montant préautorisé
+              {uiText(locale, "Montant préautorisé", "Preauthorized amount")}
               <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
-                <option value="entry_balance">Solde des inscriptions</option>
-                <option value="entry_balance_with_margin">Solde + marge</option>
+                <option value="entry_balance">{uiText(locale, "Solde des inscriptions", "Entry balance")}</option>
+                <option value="entry_balance_with_margin">{uiText(locale, "Solde + marge", "Balance + margin")}</option>
               </select>
             </label>
             <label>
-              Marge %
+              {uiText(locale, "Marge %", "Margin %")}
               <input disabled={entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
             </label>
           </div>
           <label className="check-row">
             <input checked={entryAutoCaptureEnabled} disabled={entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
-            <span>Capture automatique à l'échéance</span>
+            <span>{uiText(locale, "Capture automatique à l'échéance", "Auto-capture at due date")}</span>
           </label>
         </div>
-        <FormActions busy={busy} onCancel={onCancel} />
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function ContactForm({
+  locale = "fr",
   createdByUserId,
   defaultType = "owner",
   description,
@@ -6651,10 +6763,11 @@ function ContactForm({
   linkedUserId,
   membershipRequirements = [],
   organization,
-  title = "New contact",
+  title,
   onCreateContact,
   onCreated,
 }: {
+  locale?: Locale;
   createdByUserId?: string;
   defaultType?: Contact["type"];
   description?: string;
@@ -6723,50 +6836,50 @@ function ContactForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>{title}</h2>
-          <p>{description ?? (organization ? organization.name : "Create an organization first.")}</p>
+          <h2>{title ?? uiText(locale, "Nouveau contact", "New contact")}</h2>
+          <p>{description ?? (organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first."))}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           Type
           <select disabled={!organization} value={type} onChange={(event) => setType(event.target.value as Contact["type"])}>
-            <option value="owner">Owner</option>
+            <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
             <option value="agent">Agent</option>
-            <option value="rider">Rider</option>
-            <option value="payer">Payer</option>
-            <option value="other">Other</option>
+            <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
+            <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
+            <option value="other">{uiText(locale, "Autre", "Other")}</option>
           </select>
         </label>
         <div className="form-grid">
           <label>
-            First name
+            {uiText(locale, "Prénom", "First name")}
             <input disabled={!organization} required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
           </label>
           <label>
-            Last name
+            {uiText(locale, "Nom", "Last name")}
             <input disabled={!organization} required value={lastName} onChange={(event) => setLastName(event.target.value)} />
           </label>
         </div>
         <label>
-          Email
+          {uiText(locale, "Courriel", "Email")}
           <input disabled={!organization} type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>
         <div className="form-grid">
           <label>
-            Phone
+            {uiText(locale, "Téléphone", "Phone")}
             <input disabled={!organization} value={phone} onChange={(event) => setPhone(event.target.value)} />
           </label>
           <label>
-            Barn
+            {uiText(locale, "Écurie", "Barn")}
             <input disabled={!organization} value={barnName} onChange={(event) => setBarnName(event.target.value)} />
           </label>
         </div>
         {externalMembershipFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
-              <strong>Numéros de membre externes</strong>
-              <span>Les champs obligatoires dépendent de l'association active.</span>
+              <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
+              <span>{uiText(locale, "Les champs obligatoires dépendent de l'association active.", "Required fields depend on the active association.")}</span>
             </div>
             {externalMembershipFields.map((field) => (
               <label key={field.organization.id}>
@@ -6788,7 +6901,7 @@ function ContactForm({
         ) : null}
         <button className="primary-button" disabled={busy || !organization || missingRequiredMembership} type="submit">
           <Plus size={18} />
-          Create contact
+          {uiText(locale, "Créer le contact", "Create contact")}
         </button>
       </form>
     </section>
@@ -6796,6 +6909,7 @@ function ContactForm({
 }
 
 function HorseForm({
+  locale = "fr",
   contacts,
   contactRoles,
   createdByUserId,
@@ -6807,6 +6921,7 @@ function HorseForm({
   onVerifyGvlCogginsDocument,
   onCreated,
 }: {
+  locale?: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId?: string;
@@ -6900,7 +7015,7 @@ function HorseForm({
           } else {
             setHealthMessage({
               tone: "error",
-              message: `Cheval cree, mais Coggins GVL non valide: ${errorMessage(error)}`,
+              message: uiText(locale, `Cheval créé, mais Coggins GVL non valide: ${errorMessage(error)}`, `Horse created, but GVL Coggins is not valid: ${errorMessage(error)}`),
             });
           }
         }
@@ -6946,7 +7061,7 @@ function HorseForm({
       if (!sourceUrl) {
         setHealthMessage({
           tone: "error",
-          message: "Ajoute un PDF Coggins GVL ou colle un lien GVL avant de valider.",
+          message: uiText(locale, "Ajoute un PDF Coggins GVL ou colle un lien GVL avant de valider.", "Add a GVL Coggins PDF or paste a GVL link before validating."),
         });
         return;
       }
@@ -6955,7 +7070,7 @@ function HorseForm({
       setGvlCogginsUrl(sourceUrl);
       setHealthMessage({
         tone: "success",
-        message: "Lien GVL pret. Il sera valide et enregistre quand tu creeras le cheval.",
+        message: uiText(locale, "Lien GVL prêt. Il sera validé et enregistré quand tu créeras le cheval.", "GVL link ready. It will be validated and saved when you create the horse."),
       });
     } catch (error) {
       setPreparedGvlUrl("");
@@ -6972,13 +7087,13 @@ function HorseForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New horse</h2>
-          <p>{contacts.length ? "Connect a horse to an owner." : "Create an owner contact from this form."}</p>
+          <h2>{uiText(locale, "Nouveau cheval", "New horse")}</h2>
+          <p>{contacts.length ? uiText(locale, "Connecte le cheval à un propriétaire.", "Connect a horse to an owner.") : uiText(locale, "Crée un contact propriétaire depuis ce formulaire.", "Create an owner contact from this form.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Horse name
+          {uiText(locale, "Nom du cheval", "Horse name")}
           <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <ContactPicker
@@ -6986,7 +7101,8 @@ function HorseForm({
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
           disabled={!organization}
-          label="Owner"
+          label={uiText(locale, "Propriétaire", "Owner")}
+          locale={locale}
           organization={organization}
           role="owner"
           value={selectedOwnerId}
@@ -7000,6 +7116,7 @@ function HorseForm({
           createdByUserId={createdByUserId}
           disabled={!organization}
           label="Agent"
+          locale={locale}
           organization={organization}
           role="agent"
           value={selectedAgentId}
@@ -7008,13 +7125,13 @@ function HorseForm({
         />
         <div className="form-grid">
           <label>
-            Breed
+            {uiText(locale, "Race", "Breed")}
             <input disabled={!organization} value={breed} onChange={(event) => setBreed(event.target.value)} />
           </label>
           <label>
-            Gender
+            {uiText(locale, "Sexe", "Sex")}
             <select disabled={!organization} value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
-              <option value="">Unset</option>
+              <option value="">{uiText(locale, "Non défini", "Unset")}</option>
               <option value="M">M</option>
               <option value="F">F</option>
               <option value="G">G</option>
@@ -7022,17 +7139,17 @@ function HorseForm({
           </label>
         </div>
         <label>
-          Date de naissance
+          {uiText(locale, "Date de naissance", "Date of birth")}
           <input disabled={!organization} type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
         </label>
         <label>
-          Registration
+          {uiText(locale, "Enregistrement", "Registration")}
           <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
         <div className="external-membership-fields health-document-fields">
           <div className="inline-form-header">
-            <strong>Documents santé initiaux</strong>
-            <span>Ajoute le Coggins GVL et le certificat vaccin pendant la création du cheval.</span>
+            <strong>{uiText(locale, "Documents santé initiaux", "Initial health documents")}</strong>
+            <span>{uiText(locale, "Ajoute le Coggins GVL et le certificat de vaccin pendant la création du cheval.", "Add the GVL Coggins and vaccine certificate while creating the horse.")}</span>
           </div>
           <label>
             PDF Coggins GVL
@@ -7040,25 +7157,25 @@ function HorseForm({
             {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
           </label>
           <label>
-            Lien GVL en secours
+            {uiText(locale, "Lien GVL en secours", "Backup GVL link")}
             <input disabled={!organization} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
           </label>
           <div className="row-actions">
             <button className="primary-button" disabled={busy || !organization || (!cogginsPdfFile && !gvlCogginsUrl.trim())} type="button" onClick={handlePrepareCogginsUrl}>
               <CheckCircle2 size={18} />
-              Valider le lien GVL
+              {uiText(locale, "Valider le lien GVL", "Validate GVL link")}
             </button>
-            {preparedGvlUrl ? <span className="muted-line">Lien détecté: {preparedGvlUrl}</span> : null}
+            {preparedGvlUrl ? <span className="muted-line">{uiText(locale, "Lien détecté", "Detected link")}: {preparedGvlUrl}</span> : null}
           </div>
           <InlineHealthMessage value={healthMessage} />
           <div className="health-document-actions">
             <label>
-              Certificat vaccin influenza/rhino
+              {uiText(locale, "Certificat vaccin influenza/rhino", "Influenza/rhino vaccine certificate")}
               <input accept="application/pdf,image/*" disabled={!organization} type="file" onChange={(event) => setVaccineCertificateFile(event.target.files?.[0] ?? null)} />
               {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
             </label>
             <label>
-              Date du vaccin
+              {uiText(locale, "Date du vaccin", "Vaccine date")}
               <input disabled={!organization} type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
             </label>
           </div>
@@ -7066,8 +7183,8 @@ function HorseForm({
         {externalReferenceFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
-              <strong>Références externes du cheval</strong>
-              <span>Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.</span>
+              <strong>{uiText(locale, "Références externes du cheval", "External horse references")}</strong>
+              <span>{uiText(locale, "Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.", "Example: NRHA competition license. These references can be validated through an external integration later.")}</span>
             </div>
             {externalReferenceFields.map((externalOrganization) => (
               <label key={externalOrganization.id}>
@@ -7088,7 +7205,7 @@ function HorseForm({
         ) : null}
         <button className="primary-button" disabled={busy || !organization || !selectedOwnerId} type="submit">
           <Plus size={18} />
-          Create horse
+          {uiText(locale, "Créer le cheval", "Create horse")}
         </button>
       </form>
     </section>
@@ -7096,6 +7213,7 @@ function HorseForm({
 }
 
 function ContactEditForm({
+  locale = "fr",
   contact,
   contactExternalMemberships,
   externalOrganizations = [],
@@ -7103,6 +7221,7 @@ function ContactEditForm({
   onCancel,
   onUpdateContact,
 }: {
+  locale?: Locale;
   contact: Contact;
   contactExternalMemberships?: ContactExternalMembership[];
   externalOrganizations?: ExternalOrganization[];
@@ -7153,7 +7272,7 @@ function ContactEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit contact</h2>
+          <h2>{uiText(locale, "Modifier le contact", "Edit contact")}</h2>
           <p>{contactLabel(contact)}</p>
         </div>
       </div>
@@ -7161,42 +7280,42 @@ function ContactEditForm({
         <label>
           Type
           <select value={type} onChange={(event) => setType(event.target.value as Contact["type"])}>
-            <option value="owner">Owner</option>
+            <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
             <option value="agent">Agent</option>
-            <option value="rider">Rider</option>
-            <option value="payer">Payer</option>
-            <option value="other">Other</option>
+            <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
+            <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
+            <option value="other">{uiText(locale, "Autre", "Other")}</option>
           </select>
         </label>
         <div className="form-grid">
           <label>
-            First name
+            {uiText(locale, "Prénom", "First name")}
             <input required value={firstName} onChange={(event) => setFirstName(event.target.value)} />
           </label>
           <label>
-            Last name
+            {uiText(locale, "Nom", "Last name")}
             <input required value={lastName} onChange={(event) => setLastName(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Email
+            {uiText(locale, "Courriel", "Email")}
             <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
           </label>
           <label>
-            Phone
+            {uiText(locale, "Téléphone", "Phone")}
             <input value={phone} onChange={(event) => setPhone(event.target.value)} />
           </label>
         </div>
         <label>
-          Barn
+          {uiText(locale, "Écurie", "Barn")}
           <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
         </label>
         {externalMembershipFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
-              <strong>Numéros de membre externes</strong>
-              <span>Ces informations pourront être vérifiées par intégration externe plus tard.</span>
+              <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
+              <span>{uiText(locale, "Ces informations pourront être vérifiées par intégration externe plus tard.", "This information can be verified through an external integration later.")}</span>
             </div>
             {externalMembershipFields.map((field) => (
               <label key={field.organization.id}>
@@ -7215,13 +7334,14 @@ function ContactEditForm({
             ))}
           </div>
         ) : null}
-        <FormActions busy={busy} disabled={missingRequiredMembership} onCancel={onCancel} />
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} disabled={missingRequiredMembership} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function HorseEditForm({
+  locale = "fr",
   contacts,
   contactRoles,
   canManageHealthDocuments,
@@ -7239,6 +7359,7 @@ function HorseEditForm({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
 }: {
+  locale?: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
   canManageHealthDocuments: boolean;
@@ -7425,7 +7546,7 @@ function HorseEditForm({
     if (status === "approved" && !vaccineReviewDate) {
       setHealthMessage({
         tone: "error",
-        message: "Entre la date du vaccin vue sur le certificat avant d'approuver.",
+        message: uiText(locale, "Entre la date du vaccin vue sur le certificat avant d'approuver.", "Enter the vaccine date shown on the certificate before approving."),
       });
       return;
     }
@@ -7448,13 +7569,13 @@ function HorseEditForm({
         reviewed_by_user_id: createdByUserId,
         review_notes:
           status === "approved"
-            ? `${label} approuve manuellement par un gestionnaire de l'association.`
-            : `${label} refuse manuellement par un gestionnaire de l'association.`,
+            ? `${label} approuvé manuellement par un gestionnaire de l'association.`
+            : `${label} refusé manuellement par un gestionnaire de l'association.`,
         test_or_administered_on: testOrAdministeredOn,
       });
       setHealthMessage({
         tone: status === "approved" ? "success" : "info",
-        message: status === "approved" ? `${label} approuve.` : `${label} refuse.`,
+        message: status === "approved" ? `${label} approuvé.` : `${label} refusé.`,
       });
     } finally {
       setHealthBusy(false);
@@ -7516,20 +7637,21 @@ function HorseEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit horse</h2>
+          <h2>{uiText(locale, "Modifier le cheval", "Edit horse")}</h2>
           <p>{horse.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Horse name
+          {uiText(locale, "Nom du cheval", "Horse name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <ContactPicker
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
-          label="Owner"
+          label={uiText(locale, "Propriétaire", "Owner")}
+          locale={locale}
           organization={organization}
           role="owner"
           value={ownerContactId}
@@ -7542,6 +7664,7 @@ function HorseEditForm({
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
           label="Agent"
+          locale={locale}
           organization={organization}
           role="agent"
           value={selectedAgentId}
@@ -7550,13 +7673,13 @@ function HorseEditForm({
         />
         <div className="form-grid">
           <label>
-            Breed
+            {uiText(locale, "Race", "Breed")}
             <input value={breed} onChange={(event) => setBreed(event.target.value)} />
           </label>
           <label>
-            Gender
+            {uiText(locale, "Sexe", "Sex")}
             <select value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
-              <option value="">Unset</option>
+              <option value="">{uiText(locale, "Non défini", "Unset")}</option>
               <option value="M">M</option>
               <option value="F">F</option>
               <option value="G">G</option>
@@ -7564,42 +7687,42 @@ function HorseEditForm({
           </label>
         </div>
         <label>
-          Date de naissance
+          {uiText(locale, "Date de naissance", "Date of birth")}
           <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
         </label>
         <label>
-          Registration
+          {uiText(locale, "Enregistrement", "Registration")}
           <input value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
         </label>
         <div className="external-membership-fields health-document-fields">
           <div className="inline-form-header">
             <strong>Coggins / EIA GVL</strong>
-            <span>Validation automatique du resultat GVL.</span>
+            <span>{uiText(locale, "Validation automatique du résultat GVL.", "Automatic GVL result validation.")}</span>
           </div>
           {latestCoggins ? (
             <div className="health-document-summary">
               <div className="health-document-title">
-                <span className={`badge ${latestCoggins.status}`}>{horseHealthStatusLabel(latestCoggins.status)}</span>
-                <span className={`badge ${cogginsValidityBadgeClass(cogginsValidity)}`}>{cogginsValidityTagLabel(cogginsValidity)}</span>
-                <strong>{latestCoggins.certificate_number ?? "Certificat GVL"}</strong>
+                <span className={`badge ${latestCoggins.status}`}>{horseHealthStatusLabel(latestCoggins.status, locale)}</span>
+                <span className={`badge ${cogginsValidityBadgeClass(cogginsValidity)}`}>{cogginsValidityTagLabel(cogginsValidity, locale)}</span>
+                <strong>{latestCoggins.certificate_number ?? uiText(locale, "Certificat GVL", "GVL certificate")}</strong>
               </div>
               <span className="muted-line">
-                {latestCoggins.test_or_administered_on ? `Test: ${formatDate(latestCoggins.test_or_administered_on)}` : "Date de test inconnue"}
+                {latestCoggins.test_or_administered_on ? `Test: ${formatDate(latestCoggins.test_or_administered_on)}` : uiText(locale, "Date de test inconnue", "Unknown test date")}
                 {latestCoggins.result ? ` - ${latestCoggins.result}` : ""}
               </span>
               {latestCoggins.horse_name ? (
                 <span className="muted-line">
                   GVL: {latestCoggins.horse_name}
-                  {latestCoggins.horse_date_of_birth ? ` - ne(e) ${formatDate(latestCoggins.horse_date_of_birth)}` : ""}
+                  {latestCoggins.horse_date_of_birth ? ` - ${uiText(locale, "né(e)", "born")} ${formatDate(latestCoggins.horse_date_of_birth)}` : ""}
                 </span>
               ) : null}
-              {latestCoggins.document_url ? <span className="muted-line">PDF Coggins conserve pour revision.</span> : null}
+              {latestCoggins.document_url ? <span className="muted-line">{uiText(locale, "PDF Coggins conservé pour révision.", "Coggins PDF stored for review.")}</span> : null}
               {latestCoggins.source_url ? (
                 <a className="text-button inline-action" href={latestCoggins.source_url} rel="noreferrer" target="_blank">
-                  Ouvrir le lien GVL
+                  {uiText(locale, "Ouvrir le lien GVL", "Open GVL link")}
                 </a>
               ) : null}
-              {latestCoggins.warnings.length ? <span className="muted-line">Revision: {latestCoggins.warnings.join(", ")}</span> : null}
+              {latestCoggins.warnings.length ? <span className="muted-line">{uiText(locale, "Révision", "Review")}: {latestCoggins.warnings.join(", ")}</span> : null}
               <div className="row-actions health-review-actions">
                 {latestCoggins.document_url ? (
                   <button className="text-button" disabled={fileBusyDocumentId === latestCoggins.id} type="button" onClick={() => void handleOpenStoredDocument(latestCoggins)}>
@@ -7608,24 +7731,24 @@ function HorseEditForm({
                 ) : null}
                 {latestCoggins.source_url ? (
                   <button className="text-button" disabled={healthBusy} type="button" onClick={() => void handleReverifyLatestGvlCoggins()}>
-                    Revérifier GVL
+                    {uiText(locale, "Revérifier GVL", "Reverify GVL")}
                   </button>
                 ) : null}
                 {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
                   <>
                   <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("approved")}>
-                    Approuver
+                    {uiText(locale, "Approuver", "Approve")}
                   </button>
                   <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("rejected")}>
-                    Refuser
+                    {uiText(locale, "Refuser", "Reject")}
                   </button>
                   </>
                 ) : null}
               </div>
-              {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[latestCoggins.id] || "acces refuse."}</span> : null}
+              {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[latestCoggins.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
             </div>
           ) : (
-            <span className="muted-line">Aucun Coggins GVL valide.</span>
+            <span className="muted-line">{uiText(locale, "Aucun Coggins GVL valide.", "No valid GVL Coggins.")}</span>
           )}
           <div className="health-document-actions">
             <label>
@@ -7634,32 +7757,32 @@ function HorseEditForm({
               {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
             </label>
             <label>
-              Lien GVL en secours
+              {uiText(locale, "Lien GVL en secours", "Fallback GVL link")}
               <input placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
             </label>
             <button className="primary-button" disabled={healthBusy || !organization || (!gvlCogginsUrl.trim() && !cogginsPdfFile)} type="button" onClick={handleVerifyGvlCoggins}>
               <CheckCircle2 size={18} />
-              {healthBusy ? "Validation..." : "Valider GVL"}
+              {healthBusy ? uiText(locale, "Validation...", "Validating...") : uiText(locale, "Valider GVL", "Validate GVL")}
             </button>
           </div>
           <InlineHealthMessage value={healthMessage} />
           <div className="inline-form-header">
-            <strong>Vaccin influenza/rhino</strong>
-            <span>Depot du certificat pour revision manuelle.</span>
+            <strong>{uiText(locale, "Vaccin influenza/rhino", "Influenza/rhino vaccine")}</strong>
+            <span>{uiText(locale, "Dépôt du certificat pour révision manuelle.", "Upload the certificate for manual review.")}</span>
           </div>
           {latestVaccine ? (
             <div className="health-document-summary">
               <div className="health-document-title">
-                <span className={`badge ${latestVaccine.status}`}>{horseHealthStatusLabel(latestVaccine.status)}</span>
-                <strong>Certificat vaccin</strong>
+                <span className={`badge ${latestVaccine.status}`}>{horseHealthStatusLabel(latestVaccine.status, locale)}</span>
+                <strong>{uiText(locale, "Certificat vaccin", "Vaccine certificate")}</strong>
               </div>
               <span className="muted-line">
-                {latestVaccine.test_or_administered_on ? `Vaccin: ${formatDate(latestVaccine.test_or_administered_on)}` : "Date du vaccin inconnue"}
-                {latestVaccine.document_url ? " - fichier depose" : ""}
+                {latestVaccine.test_or_administered_on ? `${uiText(locale, "Vaccin", "Vaccine")}: ${formatDate(latestVaccine.test_or_administered_on)}` : uiText(locale, "Date du vaccin inconnue", "Unknown vaccine date")}
+                {latestVaccine.document_url ? uiText(locale, " - fichier déposé", " - file uploaded") : ""}
               </span>
               {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
                 <label className="compact-label">
-                  Date vaccin validée
+                  {uiText(locale, "Date vaccin validée", "Validated vaccine date")}
                   <input type="date" value={vaccineReviewDate} onChange={(event) => setVaccineReviewDate(event.target.value)} />
                 </label>
               ) : null}
@@ -7672,18 +7795,18 @@ function HorseEditForm({
               {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
                   <>
                   <button className="text-button" disabled={healthBusy || !vaccineReviewDate} type="button" onClick={() => handleReviewVaccine("approved")}>
-                    Approuver
+                    {uiText(locale, "Approuver", "Approve")}
                   </button>
                   <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("rejected")}>
-                    Refuser
+                    {uiText(locale, "Refuser", "Reject")}
                   </button>
                   </>
               ) : null}
               </div>
-              {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">Impossible d'ouvrir le fichier: {fileErrorMessageByDocumentId[latestVaccine.id] || "acces refuse."}</span> : null}
+              {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[latestVaccine.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
             </div>
           ) : (
-            <span className="muted-line">Aucun certificat vaccin depose.</span>
+            <span className="muted-line">{uiText(locale, "Aucun certificat vaccin déposé.", "No vaccine certificate uploaded.")}</span>
           )}
           <div className="health-document-actions">
             <label>
@@ -7692,20 +7815,20 @@ function HorseEditForm({
               {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
             </label>
             <label>
-              Date du vaccin
+              {uiText(locale, "Date du vaccin", "Vaccine date")}
               <input type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
             </label>
             <button className="primary-button" disabled={healthBusy || !organization || !vaccineCertificateFile} type="button" onClick={handleUploadVaccineCertificate}>
               <FileText size={18} />
-              Ajouter vaccin
+              {uiText(locale, "Ajouter vaccin", "Add vaccine")}
             </button>
           </div>
         </div>
         {externalReferenceFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
-              <strong>Références externes du cheval</strong>
-              <span>Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.</span>
+              <strong>{uiText(locale, "Références externes du cheval", "External horse references")}</strong>
+              <span>{uiText(locale, "Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.", "Example: NRHA competition license. These references can be validated through an external integration later.")}</span>
             </div>
             {externalReferenceFields.map((externalOrganization) => (
               <label key={externalOrganization.id}>
@@ -7723,22 +7846,24 @@ function HorseEditForm({
             ))}
           </div>
         ) : null}
-        <FormActions busy={busy || !ownerContactId} onCancel={onCancel} />
+        <FormActions busy={busy || !ownerContactId} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function SanctioningFields({
+  locale = "fr",
   backNumberPolicy,
   disabled = false,
   hideBackNumberPolicy = false,
-  label = "Sanctions",
+  label,
   sanctioningBodies,
   sanctioningBodyCodes,
   onBackNumberPolicyChange,
   onSanctioningBodyCodesChange,
 }: {
+  locale?: Locale;
   backNumberPolicy: BackNumberPolicy;
   disabled?: boolean;
   hideBackNumberPolicy?: boolean;
@@ -7748,10 +7873,12 @@ function SanctioningFields({
   onBackNumberPolicyChange: (policy: BackNumberPolicy) => void;
   onSanctioningBodyCodesChange: (codes: string[]) => void;
 }) {
+  const fieldLabel = label ?? uiText(locale, "Sanctions", "Sanctioning");
+
   return (
     <div className="stack compact-stack">
       <div className="field-group">
-        <span className="contact-picker-label">{label}</span>
+        <span className="contact-picker-label">{fieldLabel}</span>
         <div className="checkbox-grid">
           {sanctioningBodies.map((body) => (
             <label className="check-row" key={body.code}>
@@ -7764,18 +7891,18 @@ function SanctioningFields({
               <span>{body.name}</span>
             </label>
           ))}
-          {!sanctioningBodies.length ? <span className="muted-line">No sanctioning bodies configured.</span> : null}
+          {!sanctioningBodies.length ? <span className="muted-line">{uiText(locale, "Aucun organisme de sanction configuré.", "No sanctioning bodies configured.")}</span> : null}
         </div>
       </div>
       {hideBackNumberPolicy ? null : (
         <label>
-          Politique de dossard
+          {uiText(locale, "Politique de dossard", "Back number policy")}
           <select disabled={disabled} value={backNumberPolicy} onChange={(event) => onBackNumberPolicyChange(event.target.value as BackNumberPolicy)}>
-            <option value="horse">Par cheval</option>
-            <option value="rider">Par cavalier</option>
-            <option value="horse_rider_team">Par équipe cheval / cavalier</option>
-            <option value="entry">Par inscription</option>
-            <option value="custom">Custom</option>
+            <option value="horse">{uiText(locale, "Par cheval", "By horse")}</option>
+            <option value="rider">{uiText(locale, "Par cavalier", "By rider")}</option>
+            <option value="horse_rider_team">{uiText(locale, "Par équipe cheval / cavalier", "By horse / rider team")}</option>
+            <option value="entry">{uiText(locale, "Par inscription", "By entry")}</option>
+            <option value="custom">{uiText(locale, "Personnalisée", "Custom")}</option>
           </select>
         </label>
       )}
@@ -7799,27 +7926,27 @@ function isNrhaSanctioned(codes: string[] | null | undefined) {
   return Boolean(codes?.includes("NRHA"));
 }
 
-function sanctionLabel(codes: string[] | null | undefined, sanctioningBodies: SanctioningBody[]) {
+function sanctionLabel(codes: string[] | null | undefined, sanctioningBodies: SanctioningBody[], locale: Locale = "fr") {
   if (!codes?.length) {
-    return "No sanction";
+    return uiText(locale, "Aucune sanction", "No sanction");
   }
 
   return codes.map((code) => sanctioningBodies.find((body) => body.code === code)?.name ?? code).join(", ");
 }
 
-function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined) {
+function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined, locale: Locale = "fr") {
   switch (policy) {
     case "rider":
-      return "Dossard par cavalier";
+      return uiText(locale, "Dossard par cavalier", "Back number by rider");
     case "horse_rider_team":
-      return "Dossard équipe cheval / cavalier";
+      return uiText(locale, "Dossard par équipe cheval / cavalier", "Back number by horse / rider team");
     case "entry":
-      return "Dossard par inscription";
+      return uiText(locale, "Dossard par inscription", "Back number by entry");
     case "custom":
-      return "Dossard custom";
+      return uiText(locale, "Dossard personnalisé", "Custom back number");
     case "horse":
     default:
-      return "Dossard par cheval";
+      return uiText(locale, "Dossard par cheval", "Back number by horse");
   }
 }
 
@@ -7839,43 +7966,45 @@ const nrhaClassTypes = [
   { label: "Category 13 - Earnings/status limitations", value: "category_13_earnings_status_limited" },
 ];
 
-const payoutScheduleOptions: Array<{ description: string; label: string; value: PayoutScheduleType }> = [
-  {
-    description: "Classe sans bourse. Les frais ne generent pas de payout aux concurrents.",
-    label: "Aucun payout",
-    value: "none",
-  },
-  {
-    description: "Standard NRHA pour la majorite des classes ancillary. Payout plus concentre selon les brackets officiels.",
-    label: "NRHA Schedule A",
-    value: "nrha_schedule_a",
-  },
-  {
-    description: "NRHA Category 1 avec 2,000$ ou plus en added money. Utilise le schedule officiel B.",
-    label: "NRHA Schedule B",
-    value: "nrha_schedule_b",
-  },
-  {
-    description: "Moins de places payees, montants plus eleves aux premieres positions.",
-    label: "Payout maison concentre",
-    value: "house_concentrated",
-  },
-  {
-    description: "Plus de places payees, montants plus petits par place pour encourager la participation.",
-    label: "Payout maison reparti",
-    value: "house_distributed",
-  },
-  {
-    description: "Tableau maison a definir par l'association avec ses propres tranches et pourcentages.",
-    label: "Payout maison custom",
-    value: "house_custom",
-  },
-  {
-    description: "La portion admissible retourne aux concurrents selon le tableau choisi, avec retainage a 0% ou configure clairement.",
-    label: "Jackpot 100%",
-    value: "jackpot_100",
-  },
-];
+function payoutScheduleOptions(locale: Locale = "fr"): Array<{ description: string; label: string; value: PayoutScheduleType }> {
+  return [
+    {
+      description: uiText(locale, "Classe sans bourse. Les frais ne génèrent pas de paiement aux concurrents.", "Class without purse. Fees do not generate competitor payouts."),
+      label: uiText(locale, "Aucun paiement", "No payout"),
+      value: "none",
+    },
+    {
+      description: uiText(locale, "Standard NRHA pour la majorité des classes ancillary. Paiements plus concentrés selon les tableaux officiels.", "NRHA standard for most ancillary classes. More concentrated payouts based on official schedules."),
+      label: "NRHA Schedule A",
+      value: "nrha_schedule_a",
+    },
+    {
+      description: uiText(locale, "NRHA Category 1 avec 2 000 $ ou plus en added money. Utilise le Schedule B officiel.", "NRHA Category 1 with $2,000 or more in added money. Uses the official Schedule B."),
+      label: "NRHA Schedule B",
+      value: "nrha_schedule_b",
+    },
+    {
+      description: uiText(locale, "Moins de places payées, montants plus élevés aux premières positions.", "Fewer paid places, higher amounts for the top positions."),
+      label: uiText(locale, "Paiement maison concentré", "House concentrated payout"),
+      value: "house_concentrated",
+    },
+    {
+      description: uiText(locale, "Plus de places payées, montants plus petits par place pour encourager la participation.", "More paid places, smaller amounts per place to encourage participation."),
+      label: uiText(locale, "Paiement maison réparti", "House distributed payout"),
+      value: "house_distributed",
+    },
+    {
+      description: uiText(locale, "Tableau maison à définir par l'association avec ses propres tranches et pourcentages.", "House table defined by the association with its own brackets and percentages."),
+      label: uiText(locale, "Paiement maison personnalisé", "Custom house payout"),
+      value: "house_custom",
+    },
+    {
+      description: uiText(locale, "La portion admissible retourne aux concurrents selon le tableau choisi, avec retenue à 0 % ou configurée clairement.", "The eligible portion returns to competitors based on the selected table, with retainage at 0% or clearly configured."),
+      label: "Jackpot 100%",
+      value: "jackpot_100",
+    },
+  ];
+}
 
 type PayoutRuleBracket = {
   max_entries?: number | string | null;
@@ -7888,12 +8017,13 @@ type PayoutRules = {
   [key: string]: unknown;
 };
 
-function payoutScheduleOption(value: PayoutScheduleType | null | undefined) {
-  return payoutScheduleOptions.find((option) => option.value === value) ?? payoutScheduleOptions[0];
+function payoutScheduleOption(value: PayoutScheduleType | null | undefined, locale: Locale = "fr") {
+  const options = payoutScheduleOptions(locale);
+  return options.find((option) => option.value === value) ?? options[0];
 }
 
-function payoutScheduleLabel(value: PayoutScheduleType | null | undefined) {
-  return payoutScheduleOption(value).label;
+function payoutScheduleLabel(value: PayoutScheduleType | null | undefined, locale: Locale = "fr") {
+  return payoutScheduleOption(value, locale).label;
 }
 
 function payoutScheduleUsesCustomTable(value: PayoutScheduleType) {
@@ -8122,10 +8252,12 @@ function findNrhaApprovedClass(code: string | null | undefined) {
 }
 
 function NrhaApprovedClassSelect({
+  locale = "fr",
   disabled = false,
   value,
   onChange,
 }: {
+  locale?: Locale;
   disabled?: boolean;
   value: string;
   onChange: (code: string) => void;
@@ -8138,13 +8270,13 @@ function NrhaApprovedClassSelect({
     }));
 
     if (value && !findNrhaApprovedClass(value)) {
-      return [{ id: value, label: value, detail: "Code NRHA hors liste" }, ...approvedClassItems];
+      return [{ id: value, label: value, detail: uiText(locale, "Code NRHA hors liste", "NRHA code outside list") }, ...approvedClassItems];
     }
 
     return approvedClassItems;
-  }, [value]);
+  }, [locale, value]);
 
-  return <SearchSelect allowEmpty disabled={disabled} items={items} maxVisibleItems={items.length} placeholder="Rechercher par numéro ou nom" value={value} onChange={onChange} />;
+  return <SearchSelect allowEmpty disabled={disabled} items={items} maxVisibleItems={items.length} placeholder={uiText(locale, "Rechercher par numéro ou nom", "Search by number or name")} value={value} onChange={onChange} />;
 }
 
 function applyNrhaApprovedClassChoice(
@@ -8175,6 +8307,7 @@ function applyNrhaApprovedClassChoice(
 }
 
 function PayoutSettingsFields({
+  locale = "fr",
   addedMoney,
   currency = "CAD",
   disabled = false,
@@ -8193,6 +8326,7 @@ function PayoutSettingsFields({
   onSanctioningFeePercentChange,
   onTrophyOrPlaqueFeeChange,
 }: {
+  locale?: Locale;
   addedMoney: string;
   currency?: string;
   disabled?: boolean;
@@ -8211,7 +8345,8 @@ function PayoutSettingsFields({
   onSanctioningFeePercentChange: (value: string) => void;
   onTrophyOrPlaqueFeeChange: (value: string) => void;
 }) {
-  const selectedPayout = payoutScheduleOption(payoutScheduleType);
+  const payoutOptions = payoutScheduleOptions(locale);
+  const selectedPayout = payoutScheduleOption(payoutScheduleType, locale);
   const [previewEntryCount, setPreviewEntryCount] = useState("10");
   const customRows = payoutRuleRows(payoutRules);
   const preview = payoutPreview({
@@ -8259,11 +8394,11 @@ function PayoutSettingsFields({
 
   return (
     <fieldset className="stack nested-fieldset">
-      <legend>Bourses / payout</legend>
+      <legend>{uiText(locale, "Bourses et paiements", "Purses and payouts")}</legend>
       <label>
-        Type de payout
+        {uiText(locale, "Type de paiement", "Payout type")}
         <select disabled={disabled} value={payoutScheduleType} onChange={(event) => handlePayoutScheduleTypeChange(event.target.value as PayoutScheduleType)}>
-          {payoutScheduleOptions.map((option) => (
+          {payoutOptions.map((option) => (
             <option key={option.value} value={option.value}>
               {option.label}
             </option>
@@ -8273,39 +8408,39 @@ function PayoutSettingsFields({
       </label>
       <div className="form-grid">
         <label>
-          Added money
+          {uiText(locale, "Added money", "Added money")}
           <input disabled={disabled} min="0" step="0.01" type="number" value={addedMoney} onChange={(event) => onAddedMoneyChange(event.target.value)} />
         </label>
         <label>
-          Trophée / plaque
+          {uiText(locale, "Trophée / plaque", "Trophy / plaque")}
           <input disabled={disabled} min="0" step="0.01" type="number" value={trophyOrPlaqueFee} onChange={(event) => onTrophyOrPlaqueFeeChange(event.target.value)} />
         </label>
       </div>
       <div className="form-grid">
         <label>
-          Retainage override %
+          {uiText(locale, "Retenue personnalisée (%)", "Retainage override (%)")}
           <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={retainagePercent} onChange={(event) => onRetainagePercentChange(event.target.value)} />
-          <span className="input-help">Vide = utilise le réglage du show ou de l'association.</span>
+          <span className="input-help">{uiText(locale, "Vide = utilise le réglage du concours ou de l'association.", "Blank = uses the show or association setting.")}</span>
         </label>
         <label>
-          Frais organisme %
+          {uiText(locale, "Frais d'organisme (%)", "Sanctioning body fee (%)")}
           <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={sanctioningFeePercent} onChange={(event) => onSanctioningFeePercentChange(event.target.value)} />
-          <span className="input-help">Ex.: NRHA 5%. Vide = aucun frais défini ici.</span>
+          <span className="input-help">{uiText(locale, "Ex.: NRHA 5 %. Vide = aucun frais défini ici.", "Example: NRHA 5%. Blank = no fee defined here.")}</span>
         </label>
       </div>
       {payoutScheduleUsesCustomTable(payoutScheduleType) ? (
         <div className="payout-editor">
           <div className="payout-editor-header">
-            <span className="contact-picker-label">Tableau maison</span>
+            <span className="contact-picker-label">{uiText(locale, "Tableau maison", "House table")}</span>
             <button className="text-button" disabled={disabled} type="button" onClick={() => handleLoadPreset()}>
-              Charger modèle
+              {uiText(locale, "Charger un modèle", "Load preset")}
             </button>
           </div>
           <div className="payout-rule-table">
             <div className="payout-rule-row payout-rule-head">
               <span>Min</span>
               <span>Max</span>
-              <span>Places %</span>
+              <span>{uiText(locale, "Places %", "Places %")}</span>
               <span>Total</span>
               <span />
             </div>
@@ -8318,12 +8453,12 @@ function PayoutSettingsFields({
                   <input disabled={disabled} min="1" placeholder="+" type="number" value={String(row.max_entries ?? "")} onChange={(event) => handleRowChange(index, "max_entries", event.target.value)} />
                   <input
                     disabled={disabled}
-                    placeholder="Ex.: 50, 30, 20"
+                    placeholder={uiText(locale, "Ex.: 50, 30, 20", "Example: 50, 30, 20")}
                     value={Array.isArray(row.percentages) ? row.percentages.join(", ") : String(row.percentages ?? "")}
                     onChange={(event) => handleRowChange(index, "percentages", event.target.value)}
                   />
                   <span className={Math.abs(total - 100) < 0.01 ? "payout-total-ok" : "payout-total-warning"}>{total ? `${total}%` : "-"}</span>
-                  <button aria-label="Supprimer la tranche" className="text-button danger" disabled={disabled || customRows.length <= 1} type="button" onClick={() => handleRemoveRow(index)}>
+                  <button aria-label={uiText(locale, "Supprimer la tranche", "Remove bracket")} className="text-button danger" disabled={disabled || customRows.length <= 1} type="button" onClick={() => handleRemoveRow(index)}>
                     X
                   </button>
                 </div>
@@ -8332,17 +8467,17 @@ function PayoutSettingsFields({
           </div>
           <button className="ghost-button" disabled={disabled} type="button" onClick={handleAddRow}>
             <Plus size={16} />
-            Ajouter tranche
+            {uiText(locale, "Ajouter une tranche", "Add bracket")}
           </button>
           <label>
-            Aperçu avec
+            {uiText(locale, "Aperçu avec", "Preview with")}
             <input disabled={disabled} min="1" step="1" type="number" value={previewEntryCount} onChange={(event) => setPreviewEntryCount(event.target.value)} />
           </label>
           <div className="payout-preview">
-            <span>Entrées: {preview.entryCount}</span>
-            <span>Gross: {formatCurrency(preview.grossEntryFees, currency)}</span>
-            <span>Bourse: {formatCurrency(preview.purse, currency)}</span>
-            <span>Places payées: {preview.paidPlaces || "aucune"}</span>
+            <span>{uiText(locale, "Inscriptions", "Entries")}: {preview.entryCount}</span>
+            <span>{uiText(locale, "Brut", "Gross")}: {formatCurrency(preview.grossEntryFees, currency)}</span>
+            <span>{uiText(locale, "Bourse", "Purse")}: {formatCurrency(preview.purse, currency)}</span>
+            <span>{uiText(locale, "Places payées", "Paid places")}: {preview.paidPlaces || uiText(locale, "aucune", "none")}</span>
             {preview.payouts.length ? (
               <ol>
                 {preview.payouts.map((payout) => (
@@ -8352,13 +8487,13 @@ function PayoutSettingsFields({
                 ))}
               </ol>
             ) : (
-              <span className="input-help">Aucune tranche ne correspond au nombre d'entrées choisi.</span>
+              <span className="input-help">{uiText(locale, "Aucune tranche ne correspond au nombre d'inscriptions choisi.", "No bracket matches the selected number of entries.")}</span>
             )}
           </div>
         </div>
       ) : null}
       <label>
-        Notes de payout
+        {uiText(locale, "Notes de paiement", "Payout notes")}
         <textarea disabled={disabled} rows={2} value={payoutNotes} onChange={(event) => onPayoutNotesChange(event.target.value)} />
       </label>
     </fieldset>
@@ -8369,12 +8504,12 @@ function payoutAmountSummary(value: number | null | undefined, label: string) {
   return value ? `${label} ${formatCurrency(value, "CAD")}` : "";
 }
 
-function payoutDivisionSummary(division: Pick<Division, "added_money" | "payout_schedule_type" | "retainage_percent" | "trophy_or_plaque_fee">) {
+function payoutDivisionSummary(division: Pick<Division, "added_money" | "payout_schedule_type" | "retainage_percent" | "trophy_or_plaque_fee">, locale: Locale = "fr") {
   return [
-    payoutScheduleLabel(division.payout_schedule_type),
-    payoutAmountSummary(division.added_money, "Added"),
-    payoutAmountSummary(division.trophy_or_plaque_fee, "Trophée"),
-    division.retainage_percent == null ? null : `Retainage ${division.retainage_percent}%`,
+    payoutScheduleLabel(division.payout_schedule_type, locale),
+    payoutAmountSummary(division.added_money, uiText(locale, "Ajouté", "Added")),
+    payoutAmountSummary(division.trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
+    division.retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${division.retainage_percent}%`,
   ]
     .filter(Boolean)
     .join(" - ");
@@ -8382,12 +8517,13 @@ function payoutDivisionSummary(division: Pick<Division, "added_money" | "payout_
 
 function payoutTemplateDivisionSummary(
   division: Pick<ClassTemplateDivision, "default_added_money" | "default_payout_schedule_type" | "default_retainage_percent" | "default_trophy_or_plaque_fee">,
+  locale: Locale = "fr",
 ) {
   return [
-    payoutScheduleLabel(division.default_payout_schedule_type),
-    payoutAmountSummary(division.default_added_money, "Added"),
-    payoutAmountSummary(division.default_trophy_or_plaque_fee, "Trophée"),
-    division.default_retainage_percent == null ? null : `Retainage ${division.default_retainage_percent}%`,
+    payoutScheduleLabel(division.default_payout_schedule_type, locale),
+    payoutAmountSummary(division.default_added_money, uiText(locale, "Ajouté", "Added")),
+    payoutAmountSummary(division.default_trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
+    division.default_retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${division.default_retainage_percent}%`,
   ]
     .filter(Boolean)
     .join(" - ");
@@ -8409,16 +8545,16 @@ function concurrentGroupLabelFromRules(rules: EligibilityRules | null | undefine
   return typeof rules?.concurrent_group_label === "string" ? rules.concurrent_group_label : "";
 }
 
-function concurrentClassLabel(classRecord: ClassRecord, classes: ClassRecord[]) {
+function concurrentClassLabel(classRecord: ClassRecord, classes: ClassRecord[], locale: Locale = "fr") {
   const concurrentClassId = concurrentClassIdFromRules(classRecord.eligibility_rules);
   const linkedClass = findById(classes, concurrentClassId);
 
-	  if (linkedClass) {
-	    return `Bloc concurrent avec ${linkedClass.name}`;
-	  }
+  if (linkedClass) {
+    return uiText(locale, `Bloc concurrent avec ${linkedClass.name}`, `Concurrent with ${linkedClass.name}`);
+  }
 
-	  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
-	  return groupLabel ? `Bloc concurrent: ${groupLabel}` : "";
+  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
+  return groupLabel ? uiText(locale, `Bloc concurrent: ${groupLabel}`, `Concurrent block: ${groupLabel}`) : "";
 }
 
 function classProgramRules(
@@ -8489,7 +8625,7 @@ function classEntriesCloseLabel(classRecord: ClassRecord) {
     return "Fermeture invalide";
   }
 
-  const lateLabel = classRecord.late_entries_allowed ? `late +${classRecord.late_entry_fee_percent ?? 50}%` : "late refusées";
+  const lateLabel = classRecord.late_entries_allowed ? `tardives +${classRecord.late_entry_fee_percent ?? 50}%` : "tardives refusées";
 
   return `Fermeture ${closeDate.toLocaleString("fr-CA", {
     day: "2-digit",
@@ -8595,7 +8731,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: false,
       message: {
         tone: "error",
-	        message: "Ce cheval est deja inscrit dans ce bloc.",
+        message: "Ce cheval est déjà inscrit dans ce bloc.",
       },
     };
   }
@@ -8613,7 +8749,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: false,
       message: {
         tone: "error",
-	        message: "Ce cavalier a deja trois inscriptions dans cette classe.",
+        message: "Ce cavalier a déjà trois inscriptions dans cette classe.",
       },
     };
   }
@@ -8623,7 +8759,7 @@ function buildEntryProgramLimitReadiness({
       canProceed: true,
       message: {
         tone: "info",
-	        message: "Ce sera la 3e inscription de ce cavalier dans cette classe.",
+        message: "Ce sera la 3e inscription de ce cavalier dans cette classe.",
       },
     };
   }
@@ -8645,12 +8781,12 @@ function showDayLabel(day: ShowDay) {
   return `${day.day_name || `Day ${day.day_number ?? ""}`.trim()} - ${formatDate(day.day_date)}`;
 }
 
-function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"]) {
+function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"], locale: Locale = "fr") {
   switch (type) {
     case "entry":
-      return "Inscription";
+      return uiText(locale, "Inscription", "Entry");
     case "judge_fee":
-      return "Frais de juge";
+      return uiText(locale, "Frais de juge", "Judge fee");
     case "stall":
       return "Stall";
     case "extra":
@@ -8658,14 +8794,14 @@ function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"]) {
     case "membership":
       return "Membership";
     case "fee":
-      return "Frais";
+      return uiText(locale, "Frais", "Fee");
     case "discount":
-      return "Rabais";
+      return uiText(locale, "Rabais", "Discount");
     case "tax":
-      return "Taxe";
+      return uiText(locale, "Taxe", "Tax");
     case "manual":
     default:
-      return "Manuel";
+      return uiText(locale, "Manuel", "Manual");
   }
 }
 
@@ -8688,11 +8824,13 @@ function eligibilityNotesFromRules(rules: EligibilityRules | null | undefined) {
 }
 
 function ClassTemplateForm({
+  locale = "fr",
   organization,
   sanctioningBodies,
   onCreateClassTemplate,
   onCreated,
 }: {
+  locale?: Locale;
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
@@ -8758,13 +8896,13 @@ function ClassTemplateForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>Nouveau bloc preset</h2>
-          <p>Catalogue régulier de l'association.</p>
+          <h2>{uiText(locale, "Nouveau bloc preset", "New block preset")}</h2>
+          <p>{uiText(locale, "Catalogue régulier de l'association.", "Reusable association catalog.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Nom du bloc
+          {uiText(locale, "Nom du bloc", "Block name")}
           <input disabled={!organization} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -8773,13 +8911,13 @@ function ClassTemplateForm({
             <input disabled={!organization} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Catégorie du bloc
+            {uiText(locale, "Catégorie du bloc", "Block category")}
             <input disabled={!organization} value={category} onChange={(event) => setCategory(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-	            Libellé horaire
+            {uiText(locale, "Libellé d'horaire", "Schedule label")}
             <input disabled={!organization} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -8788,20 +8926,21 @@ function ClassTemplateForm({
           </label>
         </div>
         <label>
-          Frais par défaut
+          {uiText(locale, "Frais par défaut", "Default fee")}
           <input disabled={!organization} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={backNumberPolicy}
           disabled={!organization}
-          label="Sanctions par défaut du bloc"
+          label={uiText(locale, "Sanctions par défaut du bloc", "Default block sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea disabled={!organization} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <label>
@@ -8810,7 +8949,7 @@ function ClassTemplateForm({
         </label>
         <button className="primary-button" disabled={busy || !organization} type="submit">
           <Plus size={18} />
-          Créer le bloc preset
+          {uiText(locale, "Créer le bloc preset", "Create block preset")}
         </button>
       </form>
     </section>
@@ -8818,12 +8957,14 @@ function ClassTemplateForm({
 }
 
 function ClassTemplateDivisionForm({
+  locale = "fr",
   classTemplates,
   organization,
   sanctioningBodies,
   onCreateClassTemplateDivision,
   onCreated,
 }: {
+  locale?: Locale;
   classTemplates: ClassTemplate[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
@@ -8918,26 +9059,27 @@ function ClassTemplateDivisionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-	          <h2>Classe de bloc preset</h2>
-	          <p>{selectedTemplate ? selectedTemplate.name : "Crée un bloc preset d'abord."}</p>
+          <h2>{uiText(locale, "Classe de bloc preset", "Preset block class")}</h2>
+          <p>{selectedTemplate ? selectedTemplate.name : uiText(locale, "Crée un bloc preset d'abord.", "Create a block preset first.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Bloc preset
+          {uiText(locale, "Bloc preset", "Block preset")}
           <SearchSelect
             disabled={!organization || !classTemplates.length}
-            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
-            placeholder="Rechercher un bloc preset"
+            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale) }))}
+            placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
             value={selectedTemplate?.id ?? ""}
             onChange={setTemplateId}
           />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
           disabled={!organization || !classTemplates.length}
           hideBackNumberPolicy
-	          label="Sanctions de la classe"
+          label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={selectedSanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
@@ -8945,13 +9087,13 @@ function ClassTemplateDivisionForm({
         />
         <div className="form-grid">
           <label>
-	            Nom de classe
+            {uiText(locale, "Nom de classe", "Class name")}
             <input disabled={!organization || !classTemplates.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? uiText(locale, "Classe NRHA", "NRHA class") : "Code"}
             {divisionIsNrha ? (
-              <NrhaApprovedClassSelect disabled={!organization || !classTemplates.length} value={code} onChange={handleNrhaApprovedClassChange} />
+              <NrhaApprovedClassSelect locale={locale} disabled={!organization || !classTemplates.length} value={code} onChange={handleNrhaApprovedClassChange} />
             ) : (
               <input disabled={!organization || !classTemplates.length} value={code} onChange={(event) => setCode(event.target.value)} />
             )}
@@ -8959,15 +9101,16 @@ function ClassTemplateDivisionForm({
         </div>
         <div className="form-grid">
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
           <label>
-            Frais de juge
+            {uiText(locale, "Frais de juge", "Judge fee")}
             <input disabled={!organization || !classTemplates.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
         <PayoutSettingsFields
+          locale={locale}
           addedMoney={addedMoney}
           currency={organization?.currency ?? "CAD"}
           disabled={!organization || !classTemplates.length}
@@ -8988,9 +9131,9 @@ function ClassTemplateDivisionForm({
         />
         {divisionIsNrha ? (
           <label>
-	            Type de classe NRHA
+            {uiText(locale, "Type de classe NRHA", "NRHA class type")}
             <select disabled={!organization || !classTemplates.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
-              <option value="">À préciser</option>
+              <option value="">{uiText(locale, "À préciser", "To be specified")}</option>
               {nrhaClassTypes.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
@@ -9000,12 +9143,12 @@ function ClassTemplateDivisionForm({
           </label>
         ) : null}
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea disabled={!organization || !classTemplates.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <button className="primary-button" disabled={busy || !organization || !classTemplates.length} type="submit">
           <Plus size={18} />
-	          Créer la classe de bloc preset
+          {uiText(locale, "Créer la classe de bloc preset", "Create preset block class")}
         </button>
       </form>
     </section>
@@ -9013,11 +9156,13 @@ function ClassTemplateDivisionForm({
 }
 
 function ClassTemplateEditForm({
+  locale = "fr",
   classTemplate,
   sanctioningBodies,
   onCancel,
   onUpdateClassTemplate,
 }: {
+  locale?: Locale;
   classTemplate: ClassTemplate;
   sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
@@ -9068,13 +9213,13 @@ function ClassTemplateEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>Modifier le bloc preset</h2>
+          <h2>{uiText(locale, "Modifier le bloc preset", "Edit block preset")}</h2>
           <p>{classTemplate.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Nom du bloc
+          {uiText(locale, "Nom du bloc", "Block name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -9083,13 +9228,13 @@ function ClassTemplateEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Catégorie du bloc
+            {uiText(locale, "Catégorie du bloc", "Block category")}
             <input value={category} onChange={(event) => setCategory(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-	            Libellé horaire
+            {uiText(locale, "Libellé d'horaire", "Schedule label")}
             <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -9098,19 +9243,20 @@ function ClassTemplateEditForm({
           </label>
         </div>
         <label>
-          Frais par défaut
+          {uiText(locale, "Frais par défaut", "Default fee")}
           <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={backNumberPolicy}
-          label="Sanctions par défaut du bloc"
+          label={uiText(locale, "Sanctions par défaut du bloc", "Default block sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <label>
@@ -9119,21 +9265,23 @@ function ClassTemplateEditForm({
         </label>
         <label className="check-row">
           <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
-          <span>Bloc preset actif</span>
+          <span>{uiText(locale, "Bloc preset actif", "Active block preset")}</span>
         </label>
-        <FormActions busy={busy} onCancel={onCancel} />
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function ClassTemplateDivisionEditForm({
+  locale = "fr",
   classTemplates,
   classTemplateDivision,
   sanctioningBodies,
   onCancel,
   onUpdateClassTemplateDivision,
 }: {
+  locale?: Locale;
   classTemplates: ClassTemplate[];
   classTemplateDivision: ClassTemplateDivision;
   sanctioningBodies: SanctioningBody[];
@@ -9212,24 +9360,25 @@ function ClassTemplateDivisionEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-	          <h2>Modifier la classe de bloc preset</h2>
+          <h2>{uiText(locale, "Modifier la classe de bloc preset", "Edit preset block class")}</h2>
           <p>{classTemplateDivision.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Bloc preset
+          {uiText(locale, "Bloc preset", "Block preset")}
           <SearchSelect
-            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies) }))}
-            placeholder="Rechercher un bloc preset"
+            items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale) }))}
+            placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
             value={templateId}
             onChange={setTemplateId}
           />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={selectedTemplate?.back_number_policy ?? "horse"}
           hideBackNumberPolicy
-	          label="Sanctions de la classe"
+          label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
@@ -9237,25 +9386,26 @@ function ClassTemplateDivisionEditForm({
         />
         <div className="form-grid">
           <label>
-	            Nom de classe
+            {uiText(locale, "Nom de classe", "Class name")}
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            {divisionIsNrha ? "Classe NRHA" : "Code"}
-            {divisionIsNrha ? <NrhaApprovedClassSelect value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
+            {divisionIsNrha ? uiText(locale, "Classe NRHA", "NRHA class") : "Code"}
+            {divisionIsNrha ? <NrhaApprovedClassSelect locale={locale} value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
           <label>
-            Frais de juge
+            {uiText(locale, "Frais de juge", "Judge fee")}
             <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
         <PayoutSettingsFields
+          locale={locale}
           addedMoney={addedMoney}
           entryFee={entryFee}
           payoutNotes={payoutNotes}
@@ -9274,9 +9424,9 @@ function ClassTemplateDivisionEditForm({
         />
         {divisionIsNrha ? (
           <label>
-	            Type de classe NRHA
+            {uiText(locale, "Type de classe NRHA", "NRHA class type")}
             <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
-              <option value="">À préciser</option>
+              <option value="">{uiText(locale, "À préciser", "To be specified")}</option>
               {nrhaClassTypes.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
@@ -9286,16 +9436,17 @@ function ClassTemplateDivisionEditForm({
           </label>
         ) : null}
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
-        <FormActions busy={busy || !selectedTemplate} onCancel={onCancel} />
+        <FormActions busy={busy || !selectedTemplate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function ClassForm({
+  locale = "fr",
   classes,
   classTemplateDivisions,
   classTemplates,
@@ -9308,6 +9459,7 @@ function ClassForm({
   onCreateDivision,
   onCreated,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
@@ -9464,22 +9616,22 @@ function ClassForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-	          <h2>Nouveau bloc</h2>
-	          <p>{shows.length ? "Crée des blocs pour un show." : "Crée un show d'abord."}</p>
+          <h2>{uiText(locale, "Nouveau bloc", "New block")}</h2>
+          <p>{shows.length ? uiText(locale, "Crée des blocs pour un concours.", "Create schedule blocks for a show.") : uiText(locale, "Crée un concours d'abord.", "Create a show first.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <div className="segmented-control">
           <button className={creationMode === "preset" ? "active" : ""} disabled={!organization || !activeClassTemplates.length} type="button" onClick={() => handleCreationModeChange("preset")}>
-            Depuis bloc preset
+            {uiText(locale, "Depuis un bloc preset", "From block preset")}
           </button>
           <button className={creationMode === "custom" ? "active" : ""} disabled={!organization} type="button" onClick={() => handleCreationModeChange("custom")}>
-	            Bloc libre
+            {uiText(locale, "Bloc libre", "Custom block")}
           </button>
         </div>
         <div className="form-grid">
           <label>
-            Show
+            {uiText(locale, "Concours", "Show")}
             <select disabled={!organization || !shows.length} value={selectedShowId} onChange={(event) => handleShowChange(event.target.value)}>
               {shows.map((show) => (
                 <option key={show.id} value={show.id}>
@@ -9489,9 +9641,9 @@ function ClassForm({
             </select>
           </label>
           <label>
-            Journée
+            {uiText(locale, "Journée", "Day")}
             <select disabled={!organization || !selectedShowDays.length} value={selectedShowDayId} onChange={(event) => setShowDayId(event.target.value)}>
-              {!selectedShowDays.length ? <option value="">Aucune journée</option> : null}
+              {!selectedShowDays.length ? <option value="">{uiText(locale, "Aucune journée", "No day")}</option> : null}
               {selectedShowDays.map((day) => (
                 <option key={day.id} value={day.id}>
                   {showDayLabel(day)}
@@ -9502,7 +9654,7 @@ function ClassForm({
         </div>
         {creationMode === "preset" ? (
           <label>
-            Bloc preset
+            {uiText(locale, "Bloc preset", "Block preset")}
             <SearchSelect
               allowEmpty
               disabled={!organization || !activeClassTemplates.length}
@@ -9513,22 +9665,22 @@ function ClassForm({
                   id: template.id,
                   label: template.name,
                   detail: [
-                    template.default_pattern ? `Pattern ${template.default_pattern}` : null,
-	                    `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`,
-                    sanctionLabel(template.sanctioning_body_codes, sanctioningBodies),
+                    template.default_pattern ? `${uiText(locale, "Patron", "Pattern")} ${template.default_pattern}` : null,
+                    uiText(locale, `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`, `${templateDivisions.length} class${templateDivisions.length === 1 ? "" : "es"}`),
+                    sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale),
                   ]
                     .filter(Boolean)
                     .join(" - "),
                 };
               })}
-              placeholder="Rechercher un bloc preset"
+              placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
               value={templateId}
               onChange={handleTemplateChange}
             />
           </label>
         ) : null}
         <label>
-	          Nom du bloc
+          {uiText(locale, "Nom du bloc", "Block name")}
           <input disabled={!organization || !shows.length} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -9537,13 +9689,13 @@ function ClassForm({
             <input disabled={!organization || !shows.length} value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input disabled={!organization || !shows.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-	            Libellé horaire
+            {uiText(locale, "Libellé d'horaire", "Schedule label")}
             <input disabled={!organization || !shows.length} value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -9552,39 +9704,40 @@ function ClassForm({
           </label>
         </div>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={backNumberPolicy}
           disabled={!organization || !shows.length}
-          label="Sanctions du bloc (optionnel)"
+          label={uiText(locale, "Sanctions du bloc (optionnel)", "Block sanctioning (optional)")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
         <label>
-          Slate / show technique
+          {uiText(locale, "Slate / concours technique", "Slate / technical show")}
           <input disabled={!organization || !shows.length} placeholder="Ex.: Slate 1, Slate 2, NRHA A" value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
         </label>
         <fieldset className="stack nested-fieldset">
-          <legend>Inscriptions</legend>
+          <legend>{uiText(locale, "Inscriptions", "Entries")}</legend>
           <div className="form-grid">
             <label>
-              Fermeture des inscriptions
+              {uiText(locale, "Fermeture des inscriptions", "Entries close at")}
               <input disabled={!organization || !shows.length} type="datetime-local" value={effectiveEntriesCloseAt} onChange={(event) => setEntriesCloseAt(event.target.value)} />
-	              <span className="input-help">Par défaut: veille du bloc à 18h.</span>
+              <span className="input-help">{uiText(locale, "Par défaut: veille du bloc à 18 h.", "Default: day before the block at 6 p.m.")}</span>
             </label>
             <label>
-              Pénalité late %
+              {uiText(locale, "Pénalité d'inscription tardive (%)", "Late entry penalty (%)")}
               <input disabled={!organization || !shows.length || !lateEntriesAllowed} min="0" step="0.01" type="number" value={lateEntryFeePercent} onChange={(event) => setLateEntryFeePercent(event.target.value)} />
-              <span className="input-help">Ex.: 50 = 50% du frais d'inscription.</span>
+              <span className="input-help">{uiText(locale, "Ex.: 50 = 50 % du frais d'inscription.", "Example: 50 = 50% of the entry fee.")}</span>
             </label>
           </div>
           <label className="checkbox-row">
             <input checked={lateEntriesAllowed} disabled={!organization || !shows.length} type="checkbox" onChange={(event) => setLateEntriesAllowed(event.target.checked)} />
-            <span>Accepter les inscriptions tardives après la fermeture</span>
+            <span>{uiText(locale, "Accepter les inscriptions tardives après la fermeture", "Allow late entries after closing")}</span>
           </label>
         </fieldset>
         <label>
-	          Court en même temps qu'un autre bloc
+          {uiText(locale, "Court en même temps qu'un autre bloc", "Runs at the same time as another block")}
           <SearchSelect
             allowEmpty
             disabled={!organization || !concurrentClassChoices.length}
@@ -9592,24 +9745,24 @@ function ClassForm({
               id: classRecord.id,
               label: classRecord.name,
               detail: [
-	                classRecord.block_label || "Libellé horaire absent",
+                classRecord.block_label || uiText(locale, "Libellé d'horaire absent", "Missing schedule label"),
                 classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : null,
               ]
                 .filter(Boolean)
                 .join(" - "),
             }))}
-	            placeholder="Rechercher un bloc concurrent"
+            placeholder={uiText(locale, "Rechercher un bloc concurrent", "Search concurrent block")}
             value={concurrentClassId}
             onChange={setConcurrentClassId}
           />
         </label>
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea disabled={!organization || !shows.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <button className="primary-button" disabled={busy || !organization || !shows.length} type="submit">
           <Plus size={18} />
-	          {selectedTemplate ? `Créer bloc + ${selectedTemplateDivisions.length} classes` : "Créer le bloc"}
+          {selectedTemplate ? uiText(locale, `Créer le bloc + ${selectedTemplateDivisions.length} classes`, `Create block + ${selectedTemplateDivisions.length} classes`) : uiText(locale, "Créer le bloc", "Create block")}
         </button>
       </form>
     </section>
@@ -9617,6 +9770,7 @@ function ClassForm({
 }
 
 function DivisionForm({
+  locale = "fr",
   classes,
   organization,
   sanctioningBodies,
@@ -9624,6 +9778,7 @@ function DivisionForm({
   onCreateDivision,
   onCreated,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
@@ -9719,26 +9874,27 @@ function DivisionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-	          <h2>Nouvelle classe</h2>
-	          <p>{selectedShow ? selectedShow.name : "Crée un bloc d'abord."}</p>
+          <h2>{uiText(locale, "Nouvelle classe", "New class")}</h2>
+          <p>{selectedShow ? selectedShow.name : uiText(locale, "Crée un bloc d'abord.", "Create a block first.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-	          Bloc
+          {uiText(locale, "Bloc", "Block")}
           <SearchSelect
             disabled={!organization || !classes.length}
             items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: showLabel(findById(shows, classRecord.show_id)) }))}
-	            placeholder="Rechercher un bloc"
+            placeholder={uiText(locale, "Rechercher un bloc", "Search block")}
             value={selectedClass?.id ?? ""}
             onChange={setClassId}
           />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           disabled={!organization || !classes.length}
           hideBackNumberPolicy
-	          label="Sanctions de la classe"
+          label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
@@ -9746,13 +9902,13 @@ function DivisionForm({
         />
         <div className="form-grid">
           <label>
-	            Nom de classe
+            {uiText(locale, "Nom de classe", "Class name")}
             <input disabled={!organization || !classes.length} required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            {divisionIsNrha ? "Classe NRHA" : "Code"}
+            {divisionIsNrha ? uiText(locale, "Classe NRHA", "NRHA class") : "Code"}
             {divisionIsNrha ? (
-              <NrhaApprovedClassSelect disabled={!organization || !classes.length} value={code} onChange={handleNrhaApprovedClassChange} />
+              <NrhaApprovedClassSelect locale={locale} disabled={!organization || !classes.length} value={code} onChange={handleNrhaApprovedClassChange} />
             ) : (
               <input disabled={!organization || !classes.length} value={code} onChange={(event) => setCode(event.target.value)} />
             )}
@@ -9760,15 +9916,16 @@ function DivisionForm({
         </div>
         <div className="form-grid">
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
           <label>
-            Frais de juge
+            {uiText(locale, "Frais de juge", "Judge fee")}
             <input disabled={!organization || !classes.length} min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
         <PayoutSettingsFields
+          locale={locale}
           addedMoney={addedMoney}
           currency={organization?.currency ?? "CAD"}
           disabled={!organization || !classes.length}
@@ -9789,9 +9946,9 @@ function DivisionForm({
         />
         {divisionIsNrha ? (
           <label>
-	            Type de classe NRHA
+            {uiText(locale, "Type de classe NRHA", "NRHA class type")}
             <select disabled={!organization || !classes.length} value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
-              <option value="">À préciser</option>
+              <option value="">{uiText(locale, "À préciser", "To be specified")}</option>
               {nrhaClassTypes.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
@@ -9801,12 +9958,12 @@ function DivisionForm({
           </label>
         ) : null}
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea disabled={!organization || !classes.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <button className="primary-button" disabled={busy || !organization || !classes.length} type="submit">
           <Plus size={18} />
-	          Créer la classe
+          {uiText(locale, "Créer la classe", "Create class")}
         </button>
       </form>
     </section>
@@ -9814,12 +9971,14 @@ function DivisionForm({
 }
 
 function ClassEditForm({
+  locale = "fr",
   classes,
   classRecord,
   sanctioningBodies,
   onCancel,
   onUpdateClass,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   classRecord: ClassRecord;
   sanctioningBodies: SanctioningBody[];
@@ -9880,13 +10039,13 @@ function ClassEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Modifier le bloc</h2>
+          <h2>{uiText(locale, "Modifier le bloc", "Edit block")}</h2>
           <p>{classRecord.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-          <label>
-	          Nom du bloc
+        <label>
+          {uiText(locale, "Nom du bloc", "Block name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
@@ -9895,13 +10054,13 @@ function ClassEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Libellé horaire
+            {uiText(locale, "Libellé d'horaire", "Schedule label")}
             <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
           </label>
           <label>
@@ -9910,77 +10069,80 @@ function ClassEditForm({
           </label>
         </div>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={backNumberPolicy}
-          label="Sanctions du bloc (optionnel)"
+          label={uiText(locale, "Sanctions du bloc (optionnel)", "Block sanctioning (optional)")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={setBackNumberPolicy}
           onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
         />
         <label>
-          Slate / show technique
+          {uiText(locale, "Slate / concours technique", "Slate / technical show")}
           <input placeholder="Ex.: Slate 1, Slate 2, NRHA A" value={nrhaSlateNumber} onChange={(event) => setNrhaSlateNumber(event.target.value)} />
         </label>
         <fieldset className="stack nested-fieldset">
-          <legend>Inscriptions</legend>
+          <legend>{uiText(locale, "Inscriptions", "Entries")}</legend>
           <div className="form-grid">
             <label>
-              Fermeture des inscriptions
+              {uiText(locale, "Fermeture des inscriptions", "Entries close at")}
               <input type="datetime-local" value={entriesCloseAt} onChange={(event) => setEntriesCloseAt(event.target.value)} />
-              <span className="input-help">L'ordre de passage peut etre sorti manuellement apres cette heure.</span>
+              <span className="input-help">{uiText(locale, "L'ordre de passage peut être sorti manuellement après cette heure.", "The draw can be generated manually after this time.")}</span>
             </label>
             <label>
-              Penalite late %
+              {uiText(locale, "Pénalité d'inscription tardive (%)", "Late entry penalty (%)")}
               <input disabled={!lateEntriesAllowed} min="0" step="0.01" type="number" value={lateEntryFeePercent} onChange={(event) => setLateEntryFeePercent(event.target.value)} />
-              <span className="input-help">Ex.: 50 = 50% du frais d'inscription.</span>
+              <span className="input-help">{uiText(locale, "Ex.: 50 = 50 % du frais d'inscription.", "Example: 50 = 50% of the entry fee.")}</span>
             </label>
           </div>
           <label className="checkbox-row">
             <input checked={lateEntriesAllowed} type="checkbox" onChange={(event) => setLateEntriesAllowed(event.target.checked)} />
-            <span>Accepter les inscriptions tardives apres la fermeture</span>
+            <span>{uiText(locale, "Accepter les inscriptions tardives après la fermeture", "Allow late entries after closing")}</span>
           </label>
         </fieldset>
         <label>
-	          Court en même temps qu'un autre bloc
+          {uiText(locale, "Court en même temps qu'un autre bloc", "Runs at the same time as another block")}
           <SearchSelect
             allowEmpty
             disabled={!concurrentClassChoices.length}
             items={concurrentClassChoices.map((candidate) => ({
               id: candidate.id,
               label: candidate.name,
-	              detail: candidate.block_label || "Libellé horaire absent",
+              detail: candidate.block_label || uiText(locale, "Libellé d'horaire absent", "Missing schedule label"),
             }))}
-	            placeholder="Rechercher un bloc concurrent"
+            placeholder={uiText(locale, "Rechercher un bloc concurrent", "Search concurrent block")}
             value={concurrentClassId}
             onChange={setConcurrentClassId}
           />
         </label>
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
         <label>
-          Status
+          {uiText(locale, "Statut", "Status")}
           <select value={status} onChange={(event) => setStatus(event.target.value as ClassRecord["status"])}>
-            <option value="open">Open</option>
-            <option value="closed">Closed</option>
-            <option value="running">Running</option>
-            <option value="finished">Finished</option>
+            <option value="open">{uiText(locale, "Ouvert", "Open")}</option>
+            <option value="closed">{uiText(locale, "Fermé", "Closed")}</option>
+            <option value="running">{uiText(locale, "En cours", "Running")}</option>
+            <option value="finished">{uiText(locale, "Terminé", "Finished")}</option>
           </select>
         </label>
-        <FormActions busy={busy} onCancel={onCancel} />
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function DivisionEditForm({
+  locale = "fr",
   classes,
   division,
   sanctioningBodies,
   onCancel,
   onUpdateDivision,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   division: Division;
   sanctioningBodies: SanctioningBody[];
@@ -10058,24 +10220,25 @@ function DivisionEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-	          <h2>Modifier la classe</h2>
+          <h2>{uiText(locale, "Modifier la classe", "Edit class")}</h2>
           <p>{division.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-	          Bloc
+          {uiText(locale, "Bloc", "Block")}
           <SearchSelect
             items={classes.map((classRecord) => ({ id: classRecord.id, label: classRecord.name, detail: classRecord.code ?? "" }))}
-	            placeholder="Rechercher un bloc"
+            placeholder={uiText(locale, "Rechercher un bloc", "Search block")}
             value={classId}
             onChange={setClassId}
           />
         </label>
         <SanctioningFields
+          locale={locale}
           backNumberPolicy={selectedClass?.back_number_policy ?? "horse"}
           hideBackNumberPolicy
-	          label="Sanctions de la classe"
+          label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
           sanctioningBodies={sanctioningBodies}
           sanctioningBodyCodes={sanctioningBodyCodes}
           onBackNumberPolicyChange={() => undefined}
@@ -10083,25 +10246,26 @@ function DivisionEditForm({
         />
         <div className="form-grid">
           <label>
-	            Nom de classe
+            {uiText(locale, "Nom de classe", "Class name")}
             <input required value={name} onChange={(event) => setName(event.target.value)} />
           </label>
           <label>
-            {divisionIsNrha ? "Classe NRHA" : "Code"}
-            {divisionIsNrha ? <NrhaApprovedClassSelect value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
+            {divisionIsNrha ? uiText(locale, "Classe NRHA", "NRHA class") : "Code"}
+            {divisionIsNrha ? <NrhaApprovedClassSelect locale={locale} value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Frais d'inscription
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
           <label>
-            Frais de juge
+            {uiText(locale, "Frais de juge", "Judge fee")}
             <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
           </label>
         </div>
         <PayoutSettingsFields
+          locale={locale}
           addedMoney={addedMoney}
           entryFee={entryFee}
           payoutNotes={payoutNotes}
@@ -10120,9 +10284,9 @@ function DivisionEditForm({
         />
         {divisionIsNrha ? (
           <label>
-	            Type de classe NRHA
+            {uiText(locale, "Type de classe NRHA", "NRHA class type")}
             <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
-              <option value="">À préciser</option>
+              <option value="">{uiText(locale, "À préciser", "To be specified")}</option>
               {nrhaClassTypes.map((type) => (
                 <option key={type.value} value={type.value}>
                   {type.label}
@@ -10132,16 +10296,17 @@ function DivisionEditForm({
           </label>
         ) : null}
         <label>
-          Critères d'éligibilité
+          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
-        <FormActions busy={busy || !selectedClass} onCancel={onCancel} />
+        <FormActions busy={busy || !selectedClass} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function EntryForm({
+  locale = "fr",
   classes,
   contacts,
   contactExternalMemberships,
@@ -10162,6 +10327,7 @@ function EntryForm({
   onVerifyGvlCogginsDocument,
   onCreated,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
@@ -10250,14 +10416,14 @@ function EntryForm({
       entryProgramLimitReadiness.canProceed,
   );
   const entryHeaderMessage = canCreate
-    ? "Draft now, checkout later."
+    ? uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")
     : selectedHorse
       ? entryReadiness.canProceed
         ? entryDeadlineReadiness.canProceed
-	          ? entryProgramLimitReadiness.message?.message ?? "Choisis une classe et un payeur."
-	          : entryDeadlineReadiness.message?.message ?? "Choisis une classe et un payeur."
+          ? entryProgramLimitReadiness.message?.message ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
+          : entryDeadlineReadiness.message?.message ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
         : entryReadiness.message
-	      : "Ajoute un show, un cheval et une classe d'abord.";
+      : uiText(locale, "Ajoute un concours, un cheval et une classe d'abord.", "Add a show, horse and class first.");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -10294,13 +10460,13 @@ function EntryForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>New draft entry</h2>
+          <h2>{uiText(locale, "Nouvelle inscription brouillon", "New draft entry")}</h2>
           <p>{entryHeaderMessage}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Show
+          {uiText(locale, "Concours", "Show")}
           <select disabled={!shows.length} value={selectedShowId} onChange={(event) => setShowId(event.target.value)}>
             {shows.map((show) => (
               <option key={show.id} value={show.id}>
@@ -10310,7 +10476,7 @@ function EntryForm({
           </select>
         </label>
         <div className="inline-picker-field">
-          <span className="contact-picker-label">Horse</span>
+          <span className="contact-picker-label">{uiText(locale, "Cheval", "Horse")}</span>
           <div className="contact-picker-row">
             <SearchSelect
               disabled={!visibleHorses.length}
@@ -10328,18 +10494,19 @@ function EntryForm({
                   detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
                 };
               })}
-              placeholder="Search horse"
+              placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
               value={selectedHorse?.id ?? ""}
               onChange={setHorseId}
             />
             <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
-              + Cheval
+              {uiText(locale, "+ Cheval", "+ Horse")}
             </button>
           </div>
         </div>
         {creatingHorse ? (
-          <ModalDialog className="horse-form-modal" description="Le cheval sera selectionne dans l'inscription apres sa creation." eyebrow="Inscriptions" title="Ajouter un cheval" onClose={() => setCreatingHorse(false)}>
+          <ModalDialog className="horse-form-modal" description={uiText(locale, "Le cheval sera sélectionné dans l'inscription après sa création.", "The horse will be selected in the entry after it is created.")} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Ajouter un cheval", "Add horse")} onClose={() => setCreatingHorse(false)}>
             <HorseForm
+              locale={locale}
               contacts={contacts}
               contactRoles={contactRoles}
               createdByUserId={profileId}
@@ -10362,13 +10529,13 @@ function EntryForm({
             selectedHealthValidity
               ? {
                   tone: horseHealthValidityTone(selectedHealthValidity),
-                  message: `${horseHealthValidityMessage(selectedHealthValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                  message: `${horseHealthValidityMessage(selectedHealthValidity)} ${uiText(locale, "Référence", "Reference")}: ${selectedShow ? formatDate(selectedShow.start_date) : uiText(locale, "concours", "show")}.`,
                 }
               : null
           }
         />
         <label>
-	          Classe
+          {uiText(locale, "Classe", "Class")}
           <SearchSelect
             disabled={!availableDivisions.length}
             items={availableDivisions.map((division) => {
@@ -10379,14 +10546,14 @@ function EntryForm({
                 id: division.id,
                 label: divisionLabel(division, classes),
                 detail: [
-                  effectiveEntryFee == null ? null : `Inscription ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
-                  division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                  effectiveEntryFee == null ? null : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
+                  division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
                 ]
                   .filter(Boolean)
                   .join(" - "),
               };
             })}
-	            placeholder="Rechercher une classe"
+            placeholder={uiText(locale, "Rechercher une classe", "Search class")}
             value={selectedDivision?.id ?? ""}
             onChange={setDivisionId}
           />
@@ -10395,9 +10562,9 @@ function EntryForm({
         <InlineHealthMessage value={selectedDivision ? entryProgramLimitReadiness.message : null} />
         <div className="form-grid">
           <label>
-            Numéro de dossard
+            {uiText(locale, "Numéro de dossard", "Back number")}
             <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
-            <span className="input-help">Peut etre ajoute plus tard dans l'edit si le dossard n'est pas encore assigne.</span>
+            <span className="input-help">{uiText(locale, "Peut être ajouté plus tard si le dossard n'est pas encore assigné.", "Can be added later if the back number is not assigned yet.")}</span>
           </label>
         </div>
         <div className="form-grid">
@@ -10407,7 +10574,8 @@ function EntryForm({
             contactRoles={contactRoles}
             createdByUserId={profileId}
             disabled={!organization}
-            label="Rider"
+            label={uiText(locale, "Cavalier", "Rider")}
+            locale={locale}
             organization={organization}
             role="rider"
             value={riderContactId}
@@ -10419,7 +10587,8 @@ function EntryForm({
             contactRoles={contactRoles}
             createdByUserId={profileId}
             disabled={!organization}
-            label="Payer"
+            label={uiText(locale, "Payeur", "Payer")}
+            locale={locale}
             organization={organization}
             role="payer"
             value={selectedPayerId}
@@ -10430,7 +10599,7 @@ function EntryForm({
         <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
-          Create draft entry
+          {uiText(locale, "Créer le brouillon", "Create draft entry")}
         </button>
       </form>
     </section>
@@ -10438,6 +10607,7 @@ function EntryForm({
 }
 
 function EntryEditForm({
+  locale = "fr",
   classes,
   contacts,
   contactExternalMemberships,
@@ -10456,6 +10626,7 @@ function EntryEditForm({
   onCreateContact,
   onUpdateEntry,
 }: {
+  locale?: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
@@ -10555,13 +10726,13 @@ function EntryEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Edit entry</h2>
+          <h2>{uiText(locale, "Modifier l'inscription", "Edit entry")}</h2>
           <p>{entryReadiness.canProceed ? entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse) : entryReadiness.message}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Horse
+          {uiText(locale, "Cheval", "Horse")}
           <SearchSelect
             items={horses.map((horse) => {
               const validity = getHorseHealthValidity({
@@ -10577,7 +10748,7 @@ function EntryEditForm({
                 detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
               };
             })}
-            placeholder="Search horse"
+            placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
             value={horseId}
             onChange={setHorseId}
           />
@@ -10587,13 +10758,13 @@ function EntryEditForm({
             selectedHealthValidity
               ? {
                   tone: horseHealthValidityTone(selectedHealthValidity),
-                  message: `${horseHealthValidityMessage(selectedHealthValidity)} Reference: ${selectedShow ? formatDate(selectedShow.start_date) : "show"}.`,
+                  message: `${horseHealthValidityMessage(selectedHealthValidity)} ${uiText(locale, "Référence", "Reference")}: ${selectedShow ? formatDate(selectedShow.start_date) : uiText(locale, "concours", "show")}.`,
                 }
               : null
           }
         />
         <label>
-	          Classe
+          {uiText(locale, "Classe", "Class")}
           <SearchSelect
             items={divisions.map((division) => {
               const classRecord = findById(classes, division.class_id);
@@ -10603,14 +10774,14 @@ function EntryEditForm({
                 id: division.id,
                 label: divisionLabel(division, classes),
                 detail: [
-                  effectiveEntryFee == null ? null : `Inscription ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
-                  division.judge_fee == null ? null : `Juge ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                  effectiveEntryFee == null ? null : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
+                  division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
                 ]
                   .filter(Boolean)
                   .join(" - "),
               };
             })}
-	            placeholder="Rechercher une classe"
+            placeholder={uiText(locale, "Rechercher une classe", "Search class")}
             value={divisionId}
             onChange={setDivisionId}
           />
@@ -10622,7 +10793,8 @@ function EntryEditForm({
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
-            label="Rider"
+            label={uiText(locale, "Cavalier", "Rider")}
+            locale={locale}
             organization={organization}
             role="rider"
             value={riderContactId}
@@ -10633,7 +10805,8 @@ function EntryEditForm({
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
-            label="Payer"
+            label={uiText(locale, "Payeur", "Payer")}
+            locale={locale}
             organization={organization}
             role="payer"
             value={payerContactId}
@@ -10644,27 +10817,27 @@ function EntryEditForm({
         <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
         <div className="form-grid">
           <label>
-            Status
+            {uiText(locale, "Statut", "Status")}
             <select value={status} onChange={(event) => setStatus(event.target.value as Entry["status"])}>
-              <option value="draft">Draft</option>
-              <option value="pending_checkout">Pending checkout</option>
-              <option value="active">Active</option>
-              <option value="scratched_pending_refund">Scratch pending refund</option>
-              <option value="scratched">Scratched</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
+              <option value="draft">{uiText(locale, "Brouillon", "Draft")}</option>
+              <option value="pending_checkout">{uiText(locale, "Paiement en attente", "Pending checkout")}</option>
+              <option value="active">{uiText(locale, "Active", "Active")}</option>
+              <option value="scratched_pending_refund">{uiText(locale, "Scratch avec remboursement en attente", "Scratch pending refund")}</option>
+              <option value="scratched">{uiText(locale, "Scratch", "Scratched")}</option>
+              <option value="completed">{uiText(locale, "Terminée", "Completed")}</option>
+              <option value="cancelled">{uiText(locale, "Annulée", "Cancelled")}</option>
             </select>
           </label>
           <label>
-            Numéro de dossard
+            {uiText(locale, "Numéro de dossard", "Back number")}
             <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
           </label>
           <label>
-            Base fee
+            {uiText(locale, "Frais de base", "Base fee")}
             <input min="0" step="0.01" type="number" value={baseFee} onChange={(event) => setBaseFee(event.target.value)} />
           </label>
         </div>
-        <FormActions busy={busy || !canUpdate} onCancel={onCancel} />
+        <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );

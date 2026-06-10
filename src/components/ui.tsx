@@ -6,6 +6,10 @@ import { contactLabel, findById, itemSearchLabel } from "../lib/display";
 import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization } from "../types/domain";
 import type { Notice } from "../types/ui";
 
+function uiText(locale: Locale, fr: string, en: string) {
+  return locale === "en" ? en : fr;
+}
+
 export function LanguageToggle({ locale, onLocaleChange }: { locale: Locale; onLocaleChange: (locale: Locale) => void }) {
   return (
     <div className="language-toggle" aria-label="Language">
@@ -69,7 +73,9 @@ export function ModalDialog({
 
 export function SearchSelect({
   allowEmpty = false,
+  clearLabel = "Clear selection",
   disabled = false,
+  emptyLabel = "No matches",
   items,
   maxVisibleItems = 30,
   placeholder,
@@ -77,7 +83,9 @@ export function SearchSelect({
   onChange,
 }: {
   allowEmpty?: boolean;
+  clearLabel?: string;
   disabled?: boolean;
+  emptyLabel?: string;
   items: Array<{ id: string; label: string; detail?: string }>;
   maxVisibleItems?: number;
   placeholder: string;
@@ -187,7 +195,7 @@ export function SearchSelect({
           }}
         />
         {allowEmpty && selectedItem ? (
-          <button aria-label="Clear selection" className="search-select-clear" title="Clear selection" type="button" onMouseDown={(event) => event.preventDefault()} onClick={handleClear}>
+          <button aria-label={clearLabel} className="search-select-clear" title={clearLabel} type="button" onMouseDown={(event) => event.preventDefault()} onClick={handleClear}>
             <X size={14} />
           </button>
         ) : null}
@@ -212,7 +220,7 @@ export function SearchSelect({
               </button>
             ))
           ) : (
-            <span className="search-select-empty">No matches</span>
+            <span className="search-select-empty">{emptyLabel}</span>
           )}
         </div>
       ) : null}
@@ -228,6 +236,7 @@ export function ContactPicker({
   disabled = false,
   label,
   linkedUserId,
+  locale = "fr",
   organization,
   placeholder,
   role,
@@ -242,6 +251,7 @@ export function ContactPicker({
   disabled?: boolean;
   label: string;
   linkedUserId?: string;
+  locale?: Locale;
   organization: Organization | null;
   placeholder?: string;
   role: ContactRoleName;
@@ -265,7 +275,7 @@ export function ContactPicker({
 
     return [createdContact, ...contacts];
   }, [contacts, createdContact]);
-  const roleLabel = contactRoleLabel(role);
+  const roleLabel = contactRoleLabel(role, locale);
 
   async function handleCreate() {
     if (!organization || !firstName.trim() || !lastName.trim()) {
@@ -297,7 +307,7 @@ export function ContactPicker({
       setBarnName("");
       setCreating(false);
     } catch (error) {
-      setErrorMessage(contactCreateErrorMessage(error));
+      setErrorMessage(contactCreateErrorMessage(error, locale));
     } finally {
       setBusy(false);
     }
@@ -314,9 +324,11 @@ export function ContactPicker({
             items={visibleContacts.map((contact) => ({
               id: contact.id,
               label: contactLabel(contact),
-              detail: contactPickerDetail(contact, contactRoles, organization),
+              detail: contactPickerDetail(contact, contactRoles, organization, locale),
             }))}
-            placeholder={placeholder ?? `Search ${roleLabel.toLowerCase()}`}
+            clearLabel={uiText(locale, "Effacer la sélection", "Clear selection")}
+            emptyLabel={uiText(locale, "Aucun résultat", "No matches")}
+            placeholder={placeholder ?? uiText(locale, `Rechercher ${roleLabel.toLowerCase()}`, `Search ${roleLabel.toLowerCase()}`)}
             value={value}
             onChange={onChange}
           />
@@ -337,9 +349,9 @@ export function ContactPicker({
       {creating ? (
         <ModalDialog
           className="contact-create-modal"
-          description={`This contact will receive the ${roleLabel.toLowerCase()} role automatically.`}
+          description={uiText(locale, `Ce contact sera lié comme ${roleLabel.toLowerCase()}.`, `This contact will receive the ${roleLabel.toLowerCase()} role automatically.`)}
           eyebrow="Contact"
-          title={`New ${roleLabel.toLowerCase()}`}
+          title={uiText(locale, `Nouveau contact ${roleLabel.toLowerCase()}`, `New ${roleLabel.toLowerCase()}`)}
           onClose={() => {
             if (!busy) {
               setCreating(false);
@@ -350,7 +362,7 @@ export function ContactPicker({
           <div className="contact-create-inline">
             <div className="form-grid">
               <label>
-                First name
+                {uiText(locale, "Prénom", "First name")}
                 <input
                   required
                   value={firstName}
@@ -361,7 +373,7 @@ export function ContactPicker({
                 />
               </label>
               <label>
-                Last name
+                {uiText(locale, "Nom", "Last name")}
                 <input
                   required
                   value={lastName}
@@ -374,7 +386,7 @@ export function ContactPicker({
             </div>
             <div className="form-grid">
               <label>
-                Email
+                {uiText(locale, "Courriel", "Email")}
                 <input
                   type="email"
                   value={email}
@@ -385,7 +397,7 @@ export function ContactPicker({
                 />
               </label>
               <label>
-                Phone
+                {uiText(locale, "Téléphone", "Phone")}
                 <input
                   value={phone}
                   onChange={(event) => {
@@ -396,7 +408,7 @@ export function ContactPicker({
               </label>
             </div>
             <label>
-              Barn
+              {uiText(locale, "Écurie", "Barn")}
               <input
                 value={barnName}
                 onChange={(event) => {
@@ -407,7 +419,7 @@ export function ContactPicker({
             </label>
             {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
             <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
-              {busy ? "Creating..." : "Create and select"}
+              {busy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer et sélectionner", "Create and select")}
             </button>
           </div>
         </ModalDialog>
@@ -416,42 +428,42 @@ export function ContactPicker({
   );
 }
 
-function contactCreateErrorMessage(error: unknown) {
+function contactCreateErrorMessage(error: unknown, locale: Locale) {
   const maybeError = error as { code?: string; message?: string };
   const message = maybeError.message ?? "";
 
   if (maybeError.code === "23505" || message.toLowerCase().includes("duplicate key")) {
-    return "Un contact avec ces informations existe deja. Cherche-le dans la liste et selectionne-le.";
+    return uiText(locale, "Un contact avec ces informations existe déjà. Cherche-le dans la liste et sélectionne-le.", "A contact with this information already exists. Search for it in the list and select it.");
   }
 
-  return message || "Impossible de creer le contact pour l'instant.";
+  return message || uiText(locale, "Impossible de créer le contact pour l'instant.", "Unable to create the contact right now.");
 }
 
-function contactRoleSummary(contact: Contact, contactRoles: ContactRole[]) {
-  const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => contactRoleLabel(role.role));
+function contactRoleSummary(contact: Contact, contactRoles: ContactRole[], locale: Locale = "fr") {
+  const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => contactRoleLabel(role.role, locale));
 
-  return roles.length ? Array.from(new Set(roles)).join(" / ") : contactRoleLabel(contact.type);
+  return roles.length ? Array.from(new Set(roles)).join(" / ") : contactRoleLabel(contact.type, locale);
 }
 
-function contactPickerDetail(contact: Contact, contactRoles: ContactRole[], organization: Organization | null) {
-  const scope = organization && contact.organization_id !== organization.id ? "Ailleurs dans l'app" : "Association active";
-  return `${contactRoleSummary(contact, contactRoles)} - ${scope}`;
+function contactPickerDetail(contact: Contact, contactRoles: ContactRole[], organization: Organization | null, locale: Locale) {
+  const scope = organization && contact.organization_id !== organization.id ? uiText(locale, "Ailleurs dans l'app", "Elsewhere in the app") : uiText(locale, "Association active", "Active organization");
+  return `${contactRoleSummary(contact, contactRoles, locale)} - ${scope}`;
 }
 
-function contactRoleLabel(role: ContactRoleName) {
+function contactRoleLabel(role: ContactRoleName, locale: Locale = "fr") {
   switch (role) {
     case "owner":
-      return "Owner";
+      return uiText(locale, "Propriétaire", "Owner");
     case "agent":
       return "Agent";
     case "rider":
-      return "Rider";
+      return uiText(locale, "Cavalier", "Rider");
     case "payer":
-      return "Payer";
+      return uiText(locale, "Payeur", "Payer");
     case "booker":
-      return "Booker";
+      return uiText(locale, "Réservataire", "Booker");
     case "other":
-      return "Other";
+      return uiText(locale, "Autre", "Other");
     default:
       return "Contact";
   }
@@ -461,14 +473,26 @@ function contactTypeForRole(role: ContactRoleName): Contact["type"] {
   return role === "booker" ? "payer" : role;
 }
 
-export function FormActions({ busy, disabled = false, onCancel }: { busy: boolean; disabled?: boolean; onCancel: () => void }) {
+export function FormActions({
+  busy,
+  cancelLabel = "Cancel",
+  disabled = false,
+  saveLabel = "Save changes",
+  onCancel,
+}: {
+  busy: boolean;
+  cancelLabel?: string;
+  disabled?: boolean;
+  saveLabel?: string;
+  onCancel: () => void;
+}) {
   return (
     <div className="form-actions">
       <button className="primary-button" disabled={busy || disabled} type="submit">
-        Save changes
+        {saveLabel}
       </button>
       <button className="ghost-button" disabled={busy} type="button" onClick={onCancel}>
-        Cancel
+        {cancelLabel}
       </button>
     </div>
   );

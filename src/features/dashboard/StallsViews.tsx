@@ -5,6 +5,7 @@ import { ClipboardList, Plus, Warehouse } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, Metric, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { getHorseCogginsValidity, getHorseVaccineValidity, organizationRequiresHealthVerification, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
+import type { Locale } from "../../lib/i18n";
 import {
   createContact,
   createStallBooking,
@@ -16,22 +17,32 @@ import {
 } from "../../services/supabaseServices";
 import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
 
+function uiText(locale: Locale, fr: string, en: string) {
+  return locale === "en" ? en : fr;
+}
+
 const stallPresets = [
-  { key: "stall", label: "Stall", name: "Stall", category: "stall" },
-  { key: "tack-stall", label: "Tack stall", name: "Tack stall", category: "stall" },
-  { key: "shavings", label: "Ripe / shavings", name: "Ripe / shavings", category: "extra" },
-  { key: "hay", label: "Foin / hay", name: "Foin / hay", category: "extra" },
-  { key: "camping", label: "Camping", name: "Camping", category: "camping" },
-  { key: "custom", label: "Custom", name: "", category: "extra" },
+  { key: "stall", labelEn: "Stall", labelFr: "Stall", name: "Stall", category: "stall" },
+  { key: "tack-stall", labelEn: "Tack stall", labelFr: "Tack stall", name: "Tack stall", category: "stall" },
+  { key: "shavings", labelEn: "Shavings", labelFr: "Ripe", name: "Ripe / shavings", category: "extra" },
+  { key: "hay", labelEn: "Hay", labelFr: "Foin", name: "Foin / hay", category: "extra" },
+  { key: "camping", labelEn: "Camping", labelFr: "Camping", name: "Camping", category: "camping" },
+  { key: "custom", labelEn: "Custom", labelFr: "Personnalisé", name: "", category: "extra" },
 ] as const;
+
+function stallPresetLabel(preset: (typeof stallPresets)[number], locale: Locale) {
+  return locale === "en" ? preset.labelEn : preset.labelFr;
+}
 
 const bookingStatuses: StallBooking["status"][] = ["requested", "reserved", "active", "cancelled", "completed"];
 const requiredReservationContactRoles: ContactRoleName[] = ["booker"];
-const reservationContactRoleChoices: Array<{ detail: string; label: string; role: ContactRoleName }> = [
-  { detail: "Personne qui fait la demande.", label: "Booker", role: "booker" },
-  { detail: "Personne liee a la facture.", label: "Payer", role: "payer" },
-  { detail: "Role ajoute au contact, sans changer le proprietaire du cheval.", label: "Owner", role: "owner" },
-];
+function reservationContactRoleChoices(locale: Locale): Array<{ detail: string; label: string; role: ContactRoleName }> {
+  return [
+    { detail: uiText(locale, "Personne qui fait la demande.", "Person making the request."), label: "Booker", role: "booker" },
+    { detail: uiText(locale, "Personne liée à la facture.", "Person linked to the invoice."), label: uiText(locale, "Payeur", "Payer"), role: "payer" },
+    { detail: uiText(locale, "Rôle ajouté au contact, sans changer le propriétaire du cheval.", "Role added to the contact without changing the horse owner."), label: uiText(locale, "Propriétaire", "Owner"), role: "owner" },
+  ];
+}
 type ReservationPeriodMode = "full_show" | "daily";
 type TackBillingMode = "split_horses" | "single_contact";
 
@@ -45,6 +56,7 @@ type StallHorseHealthValidity = {
 };
 
 export function StallsView({
+  locale,
   bookings,
   contacts,
   contactRoles,
@@ -65,6 +77,7 @@ export function StallsView({
   onUpdateStallBooking,
   onUpdateStallOption,
 }: {
+  locale: Locale;
   bookings: StallBooking[];
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -96,28 +109,28 @@ export function StallsView({
   const associationTabs: Array<ReservationTabItem<AssociationReservationTab>> = [
     {
       count: bookings.length,
-      detail: "Demandes, reservations et statuts.",
+      detail: uiText(locale, "Demandes, réservations et statuts.", "Requests, reservations and statuses."),
       icon: ClipboardList,
       key: "reservations",
-      label: "Reservations",
+      label: uiText(locale, "Réservations", "Reservations"),
     },
     {
-      detail: "Ajouter une demande pour un compétiteur.",
+      detail: uiText(locale, "Ajouter une demande pour un compétiteur.", "Add a request for a competitor."),
       icon: Plus,
       key: "new-reservation",
-      label: "Nouvelle reservation",
+      label: uiText(locale, "Nouvelle réservation", "New reservation"),
     },
     {
       count: stallOptions.length,
-      detail: "Stalls, camping et extras disponibles.",
+      detail: uiText(locale, "Stalls, camping et extras disponibles.", "Stalls, camping and extras available."),
       icon: Warehouse,
       key: "options",
-      label: "Options reservables",
+      label: uiText(locale, "Options réservables", "Reservable options"),
     },
   ];
 
   async function handleDeleteBooking(booking: StallBooking) {
-    if (!window.confirm("Supprimer cette reservation et la ligne de facture liee?")) {
+    if (!window.confirm(uiText(locale, "Supprimer cette réservation et la ligne de facture liée?", "Delete this reservation and the linked invoice line?"))) {
       return;
     }
 
@@ -130,22 +143,23 @@ export function StallsView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Reservations"
-        title="Reservations et options reservables"
-        description="Gere les demandes de stalls, camping et extras, puis garde l'inventaire disponible a jour."
+        eyebrow={uiText(locale, "Réservations", "Reservations")}
+        title={uiText(locale, "Réservations et options réservables", "Reservations and reservable options")}
+        description={uiText(locale, "Gère les demandes de stalls, camping et extras, puis garde l'inventaire disponible à jour.", "Manage stall, camping and extra requests while keeping available inventory current.")}
         stats={[
-          { label: "Reservations", value: String(bookings.length) },
+          { label: uiText(locale, "Réservations", "Reservations"), value: String(bookings.length) },
           { label: "Options", value: String(stallOptions.length) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric label="Options reservables" value={String(stallOptions.length)} />
-        <Metric label="Unites reservees" value={String(reservedQuantity)} />
-        <Metric label="Facturable" value={formatCurrency(billableTotal, currency)} />
+        <Metric label={uiText(locale, "Options réservables", "Reservable options")} value={String(stallOptions.length)} />
+        <Metric label={uiText(locale, "Unités réservées", "Reserved units")} value={String(reservedQuantity)} />
+        <Metric label={uiText(locale, "Facturable", "Billable")} value={formatCurrency(billableTotal, currency)} />
       </section>
 
       <ReservationTabs
+        locale={locale}
         activeTab={activeTab}
         items={associationTabs}
         onChange={(tab) => {
@@ -159,8 +173,9 @@ export function StallsView({
       {activeTab === "reservations" ? (
         <>
           {editingBooking ? (
-            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow="Reservations" title="Modifier la reservation" onClose={() => setEditingBooking(null)}>
+            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow={uiText(locale, "Réservations", "Reservations")} title={uiText(locale, "Modifier la réservation", "Edit reservation")} onClose={() => setEditingBooking(null)}>
               <StallBookingEditForm
+                locale={locale}
                 booking={editingBooking}
                 contacts={contacts}
                 contactRoles={contactRoles}
@@ -183,13 +198,14 @@ export function StallsView({
             </ModalDialog>
           ) : null}
 
-          <StallBookingsTable bookings={bookings} contacts={contacts} currency={currency} horses={horses} invoiceLineItems={invoiceLineItems} invoices={invoices} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
+          <StallBookingsTable locale={locale} bookings={bookings} contacts={contacts} currency={currency} horses={horses} invoiceLineItems={invoiceLineItems} invoices={invoices} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
         </>
       ) : null}
 
       {activeTab === "new-reservation" ? (
-        <ModalDialog className="reservation-form-modal" description="Creer une demande sans quitter la gestion des reservations." eyebrow="Reservations" title="Nouvelle reservation" onClose={() => setActiveTab("reservations")}>
+        <ModalDialog className="reservation-form-modal" description={uiText(locale, "Créer une demande sans quitter la gestion des réservations.", "Create a request without leaving reservation management.")} eyebrow={uiText(locale, "Réservations", "Reservations")} title={uiText(locale, "Nouvelle réservation", "New reservation")} onClose={() => setActiveTab("reservations")}>
           <StallBookingForm
+            locale={locale}
             bookings={bookings}
             contacts={contacts}
             contactRoles={contactRoles}
@@ -203,7 +219,7 @@ export function StallsView({
             showDays={showDays}
             shows={shows}
             stallOptions={stallOptions}
-            title="Nouvelle reservation"
+            title={uiText(locale, "Nouvelle réservation", "New reservation")}
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onCreated={() => setActiveTab("reservations")}
@@ -216,8 +232,8 @@ export function StallsView({
           <section className="panel span-2 form-launch-panel">
             <div className="panel-header">
               <div>
-                <h2>Options reservables</h2>
-                <p>Ajoute un produit de reservation sans quitter la liste d'inventaire.</p>
+                <h2>{uiText(locale, "Options réservables", "Reservable options")}</h2>
+                <p>{uiText(locale, "Ajoute un produit de réservation sans quitter la liste d'inventaire.", "Add a reservation product without leaving the inventory list.")}</p>
               </div>
               <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingOption(true)}>
                 <Plus size={18} />
@@ -227,8 +243,9 @@ export function StallsView({
           </section>
 
           {creatingOption ? (
-            <ModalDialog className="reservation-form-modal" description="Stall, tack, ripe, foin, camping ou extra." eyebrow="Reservations" title="Nouvelle option" onClose={() => setCreatingOption(false)}>
+            <ModalDialog className="reservation-form-modal" description={uiText(locale, "Stall, tack, ripe, foin, camping ou extra.", "Stall, tack stall, shavings, hay, camping or extra.")} eyebrow={uiText(locale, "Réservations", "Reservations")} title={uiText(locale, "Nouvelle option", "New option")} onClose={() => setCreatingOption(false)}>
               <StallOptionForm
+                locale={locale}
                 organization={organization}
                 showDays={showDays}
                 shows={shows}
@@ -239,8 +256,9 @@ export function StallsView({
           ) : null}
 
           {editingOption ? (
-            <ModalDialog className="reservation-form-modal" description={editingOption.name} eyebrow="Reservations" title="Modifier l'option" onClose={() => setEditingOption(null)}>
+            <ModalDialog className="reservation-form-modal" description={editingOption.name} eyebrow={uiText(locale, "Réservations", "Reservations")} title={uiText(locale, "Modifier l'option", "Edit option")} onClose={() => setEditingOption(null)}>
               <StallOptionEditForm
+                locale={locale}
                 currency={currency}
                 option={editingOption}
                 showDays={showDays}
@@ -254,7 +272,7 @@ export function StallsView({
             </ModalDialog>
           ) : null}
 
-          <StallOptionsTable currency={currency} options={stallOptions} shows={shows} onEdit={setEditingOption} />
+          <StallOptionsTable locale={locale} currency={currency} options={stallOptions} shows={shows} onEdit={setEditingOption} />
         </>
       ) : null}
     </div>
@@ -262,6 +280,7 @@ export function StallsView({
 }
 
 export function MyStallsView({
+  locale,
   bookings,
   contacts,
   contactRoles,
@@ -280,6 +299,7 @@ export function MyStallsView({
   onDeleteStallBooking,
   onUpdateStallBooking,
 }: {
+  locale: Locale;
   bookings: StallBooking[];
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -305,28 +325,28 @@ export function MyStallsView({
   const personalTabs: Array<ReservationTabItem<PersonalReservationTab>> = [
     {
       count: bookings.length,
-      detail: "Mes demandes et reservations actives.",
+      detail: uiText(locale, "Mes demandes et réservations actives.", "My active requests and reservations."),
       icon: ClipboardList,
       key: "my-reservations",
-      label: "Mes reservations",
+      label: uiText(locale, "Mes réservations", "My reservations"),
     },
     {
-      detail: "Demander un stall, camping ou extra.",
+      detail: uiText(locale, "Demander un stall, camping ou extra.", "Request a stall, camping or extra."),
       icon: Plus,
       key: "new-reservation",
-      label: "Nouvelle reservation",
+      label: uiText(locale, "Nouvelle réservation", "New reservation"),
     },
     {
       count: availableOptions.length,
-      detail: "Ce qui peut etre reserve.",
+      detail: uiText(locale, "Ce qui peut être réservé.", "What can be reserved."),
       icon: Warehouse,
       key: "available-options",
-      label: "Options disponibles",
+      label: uiText(locale, "Options disponibles", "Available options"),
     },
   ];
 
   async function handleDeleteBooking(booking: StallBooking) {
-    if (!window.confirm("Supprimer cette reservation et la ligne de facture liee?")) {
+    if (!window.confirm(uiText(locale, "Supprimer cette réservation et la ligne de facture liée?", "Delete this reservation and the linked invoice line?"))) {
       return;
     }
 
@@ -339,22 +359,23 @@ export function MyStallsView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Mon espace"
-        title="Mes reservations"
-        description="Reserve les options disponibles pour tes chevaux et suis les demandes liees a ton compte."
+        eyebrow={uiText(locale, "Mon espace", "My space")}
+        title={uiText(locale, "Mes réservations", "My reservations")}
+        description={uiText(locale, "Réserve les options disponibles pour tes chevaux et suis les demandes liées à ton compte.", "Reserve available options for your horses and track requests linked to your account.")}
         stats={[
-          { label: "Reservations", value: String(bookings.length) },
-          { label: "Disponibles", value: String(availableOptions.length) },
+          { label: uiText(locale, "Réservations", "Reservations"), value: String(bookings.length) },
+          { label: uiText(locale, "Disponibles", "Available"), value: String(availableOptions.length) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric label="Reservations" value={String(bookings.length)} />
-        <Metric label="Options disponibles" value={String(availableOptions.length)} />
-        <Metric label="Facturable" value={formatCurrency(billableTotal, currency)} />
+        <Metric label={uiText(locale, "Réservations", "Reservations")} value={String(bookings.length)} />
+        <Metric label={uiText(locale, "Options disponibles", "Available options")} value={String(availableOptions.length)} />
+        <Metric label={uiText(locale, "Facturable", "Billable")} value={formatCurrency(billableTotal, currency)} />
       </section>
 
       <ReservationTabs
+        locale={locale}
         activeTab={activeTab}
         items={personalTabs}
         onChange={(tab) => {
@@ -366,8 +387,9 @@ export function MyStallsView({
       {activeTab === "my-reservations" ? (
         <>
           {editingBooking ? (
-            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow="Mon espace" title="Modifier la reservation" onClose={() => setEditingBooking(null)}>
+            <ModalDialog className="reservation-form-modal" description={horseLabel(findById(horses, editingBooking.horse_id))} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Modifier la réservation", "Edit reservation")} onClose={() => setEditingBooking(null)}>
               <StallBookingEditForm
+                locale={locale}
                 booking={editingBooking}
                 contacts={contacts}
                 contactRoles={contactRoles}
@@ -391,6 +413,7 @@ export function MyStallsView({
           ) : null}
 
           <StallBookingsTable
+            locale={locale}
             bookings={bookings}
             contacts={contacts}
             currency={currency}
@@ -398,7 +421,7 @@ export function MyStallsView({
             invoiceLineItems={invoiceLineItems}
             invoices={invoices}
             options={stallOptions}
-            title="Mes reservations"
+            title={uiText(locale, "Mes réservations", "My reservations")}
             onDelete={handleDeleteBooking}
             onEdit={setEditingBooking}
           />
@@ -406,8 +429,9 @@ export function MyStallsView({
       ) : null}
 
       {activeTab === "new-reservation" ? (
-        <ModalDialog className="reservation-form-modal" description="Demande un stall, camping ou extra sans quitter tes reservations." eyebrow="Mon espace" title="Nouvelle reservation" onClose={() => setActiveTab("my-reservations")}>
+        <ModalDialog className="reservation-form-modal" description={uiText(locale, "Demande un stall, camping ou extra sans quitter tes réservations.", "Request a stall, camping or extra without leaving your reservations.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouvelle réservation", "New reservation")} onClose={() => setActiveTab("my-reservations")}>
           <StallBookingForm
+            locale={locale}
             allowStatusEdit={false}
             bookings={bookings}
             contacts={contacts}
@@ -422,7 +446,7 @@ export function MyStallsView({
             showDays={showDays}
             shows={shows}
             stallOptions={stallOptions}
-            title="Nouvelle reservation"
+            title={uiText(locale, "Nouvelle réservation", "New reservation")}
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onCreated={() => setActiveTab("my-reservations")}
@@ -430,7 +454,7 @@ export function MyStallsView({
         </ModalDialog>
       ) : null}
 
-      {activeTab === "available-options" ? <StallOptionsTable currency={currency} options={availableOptions} shows={shows} /> : null}
+      {activeTab === "available-options" ? <StallOptionsTable locale={locale} currency={currency} options={availableOptions} shows={shows} /> : null}
     </div>
   );
 }
@@ -444,16 +468,18 @@ type ReservationTabItem<T extends string> = {
 };
 
 function ReservationTabs<T extends string>({
+  locale,
   activeTab,
   items,
   onChange,
 }: {
+  locale: Locale;
   activeTab: T;
   items: Array<ReservationTabItem<T>>;
   onChange: (tab: T) => void;
 }) {
   return (
-    <section className="reservation-tabs span-2" aria-label="Reservation sections">
+    <section className="reservation-tabs span-2" aria-label={uiText(locale, "Sections de réservation", "Reservation sections")}>
       {items.map((item) => {
         const Icon = item.icon;
         return (
@@ -474,31 +500,33 @@ function ReservationTabs<T extends string>({
 }
 
 function StallOptionsTable({
+  locale,
   currency,
   options,
   shows,
   onEdit,
 }: {
+  locale: Locale;
   currency: string;
   options: StallOption[];
   shows: Show[];
   onEdit?: (option: StallOption) => void;
 }) {
-  const title = onEdit ? "Options reservables" : "Options disponibles";
+  const title = onEdit ? uiText(locale, "Options réservables", "Reservable options") : uiText(locale, "Options disponibles", "Available options");
 
   return (
     <section className="panel span-2">
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{options.length ? `${options.length} option${options.length === 1 ? "" : "s"} available for reservations.` : "Create stalls, tack stalls, bedding, hay or camping."}</p>
+          <p>{options.length ? uiText(locale, `${options.length} option${options.length === 1 ? "" : "s"} disponible${options.length === 1 ? "" : "s"} pour les réservations.`, `${options.length} option${options.length === 1 ? "" : "s"} available for reservations.`) : uiText(locale, "Crée des stalls, tack stalls, ripe, foin ou camping.", "Create stalls, tack stalls, bedding, hay or camping.")}</p>
         </div>
       </div>
       <div className={`table stalls-table ${onEdit ? "" : "read-only-table"}`}>
         <div className="table-row table-head">
           <span>Option</span>
-          <span>Show</span>
-          <span>Availability</span>
+          <span>{uiText(locale, "Concours", "Show")}</span>
+          <span>{uiText(locale, "Disponibilité", "Availability")}</span>
           {onEdit ? <span>Action</span> : null}
         </div>
         {options.map((option) => (
@@ -506,7 +534,7 @@ function StallOptionsTable({
             <div>
               <strong>{option.name}</strong>
               <span className="muted-line">
-                {categoryLabel(option.category)} / {formatCurrency(option.price, currency)} / {stallOptionAssignmentLabel(option)}
+                {categoryLabel(option.category, locale)} / {formatCurrency(option.price, currency)} / {stallOptionAssignmentLabel(option, locale)}
               </span>
             </div>
             <span>{showLabel(findById(shows, option.show_id))}</span>
@@ -515,18 +543,19 @@ function StallOptionsTable({
             </span>
             {onEdit ? (
               <button className="text-button" type="button" onClick={() => onEdit(option)}>
-                Modifier
+                {uiText(locale, "Modifier", "Edit")}
               </button>
             ) : null}
           </div>
         ))}
-        {!options.length ? <EmptyState label="Add the first reservable option." /> : null}
+        {!options.length ? <EmptyState label={uiText(locale, "Ajoute la première option réservable.", "Add the first reservable option.")} /> : null}
       </div>
     </section>
   );
 }
 
 function StallBookingsTable({
+  locale,
   bookings,
   contacts,
   currency,
@@ -538,6 +567,7 @@ function StallBookingsTable({
   onDelete,
   onEdit,
 }: {
+  locale: Locale;
   bookings: StallBooking[];
   contacts: Contact[];
   currency: string;
@@ -554,24 +584,24 @@ function StallBookingsTable({
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{bookings.length ? `${bookings.length} reservation${bookings.length === 1 ? "" : "s"} linked to billing drafts.` : "Reservations will create draft invoice lines."}</p>
+          <p>{bookings.length ? uiText(locale, `${bookings.length} réservation${bookings.length === 1 ? "" : "s"} liée${bookings.length === 1 ? "" : "s"} aux brouillons de facture.`, `${bookings.length} reservation${bookings.length === 1 ? "" : "s"} linked to billing drafts.`) : uiText(locale, "Les réservations créeront des lignes de facture brouillon.", "Reservations will create draft invoice lines.")}</p>
         </div>
       </div>
       <div className="table stalls-table">
         <div className="table-row table-head">
-          <span>Reservation</span>
+          <span>{uiText(locale, "Réservation", "Reservation")}</span>
           <span>Booker</span>
-          <span>Statuts</span>
+          <span>{uiText(locale, "Statuts", "Statuses")}</span>
           <span>Action</span>
         </div>
         {bookings.map((booking) => {
           const option = findById(options, booking.stall_option_id);
           const invoice = invoiceForBooking(booking, invoices, invoiceLineItems);
-          const invoiceState = reservationInvoiceState(invoice, currency);
+          const invoiceState = reservationInvoiceState(invoice, currency, locale);
           return (
             <div className="table-row" key={booking.id}>
               <div>
-                <strong>{option?.name ?? "Unknown option"}</strong>
+                <strong>{option?.name ?? uiText(locale, "Option inconnue", "Unknown option")}</strong>
                 <span className="muted-line">
                   {booking.quantity} x {formatCurrency(booking.unit_price ?? option?.price ?? 0, currency)} = {formatCurrency(booking.total_price ?? 0, currency)}
                   {booking.horse_id ? ` / ${horseLabel(findById(horses, booking.horse_id))}` : ""}
@@ -579,34 +609,36 @@ function StallBookingsTable({
               </div>
               <span>{contactLabel(findById(contacts, booking.booker_contact_id))}</span>
               <div className="reservation-status-stack">
-                <span className={`badge ${booking.status}`}>{bookingStatusLabel(booking.status)}</span>
+                <span className={`badge ${booking.status}`}>{bookingStatusLabel(booking.status, locale)}</span>
                 <span className={`badge ${invoiceState.badgeClass}`}>{invoiceState.confirmationLabel}</span>
                 <small>{invoiceState.detail}</small>
               </div>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => onEdit(booking)}>
-                  Modifier
+                  {uiText(locale, "Modifier", "Edit")}
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => onDelete(booking)}>
-                  Supprimer
+                  {uiText(locale, "Supprimer", "Delete")}
                 </button>
               </div>
             </div>
           );
         })}
-        {!bookings.length ? <EmptyState label="No reservations yet." /> : null}
+        {!bookings.length ? <EmptyState label={uiText(locale, "Aucune réservation pour l'instant.", "No reservations yet.")} /> : null}
       </div>
     </section>
   );
 }
 
 function StallOptionForm({
+  locale,
   organization,
   showDays,
   shows,
   onCreateStallOption,
   onCreated,
 }: {
+  locale: Locale;
   organization: Organization | null;
   showDays: ShowDay[];
   shows: Show[];
@@ -700,13 +732,13 @@ function StallOptionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>Nouvelle option reservable</h2>
-          <p>{shows.length ? "Creer l'inventaire reservable: stall, tack, ripe, foin ou camping." : "Create a show first."}</p>
+          <h2>{uiText(locale, "Nouvelle option réservable", "New reservable option")}</h2>
+          <p>{shows.length ? uiText(locale, "Crée l'inventaire réservable: stall, tack, ripe, foin ou camping.", "Create reservable inventory: stall, tack stall, shavings, hay or camping.") : uiText(locale, "Crée un concours d'abord.", "Create a show first.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Show
+          {uiText(locale, "Concours", "Show")}
           <select
             disabled={!organization || !shows.length}
             value={selectedShowId}
@@ -728,18 +760,18 @@ function StallOptionForm({
           <select disabled={!canCreate} value={presetKey} onChange={(event) => handlePresetChange(event.target.value)}>
             {stallPresets.map((preset) => (
               <option key={preset.key} value={preset.key}>
-                {preset.label}
+                {stallPresetLabel(preset, locale)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          Name
+          {uiText(locale, "Nom", "Name")}
           <input disabled={!canCreate} required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
           <label>
-            Category
+            {uiText(locale, "Catégorie", "Category")}
             <select disabled={!canCreate} value={category} onChange={(event) => setCategory(event.target.value as NonNullable<StallOption["category"]>)}>
               <option value="stall">Stall</option>
               <option value="camping">Camping</option>
@@ -748,17 +780,17 @@ function StallOptionForm({
             </select>
           </label>
           <label>
-            Price
+            {uiText(locale, "Prix", "Price")}
             <input disabled={!canCreate} min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Total quantity
+            {uiText(locale, "Quantité totale", "Total quantity")}
             <input disabled={!canCreate} min="0" required step="1" type="number" value={totalQuantity} onChange={(event) => setTotalQuantity(event.target.value)} />
           </label>
           <label>
-            Available now
+            {uiText(locale, "Disponible maintenant", "Available now")}
             <input disabled={!canCreate} min="0" step="1" type="number" value={availableQuantity} onChange={(event) => setAvailableQuantity(event.target.value)} />
           </label>
         </div>
@@ -766,22 +798,22 @@ function StallOptionForm({
           <div className="form-section">
             <div className="form-section-header">
               <strong>Assignation</strong>
-              <span>{requiresHorseAssignment ? "Chaque reservation sera liee a un cheval." : "Reservation non attitree a un cheval."}</span>
+              <span>{requiresHorseAssignment ? uiText(locale, "Chaque réservation sera liée à un cheval.", "Each reservation will be linked to a horse.") : uiText(locale, "Réservation non attitrée à un cheval.", "Reservation not assigned to a horse.")}</span>
             </div>
             <div className="segmented-control">
               <button className={requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(true)}>
-                Par cheval
+                {uiText(locale, "Par cheval", "Per horse")}
               </button>
               <button className={!requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(false)}>
-                Non attitree
+                {uiText(locale, "Non attitrée", "Unassigned")}
               </button>
             </div>
             {!requiresHorseAssignment ? (
               <label>
-                Limite optionnelle
+                {uiText(locale, "Limite optionnelle", "Optional limit")}
                 <input
                   min="0"
-                  placeholder="1 tack stall par X stalls chevaux"
+                  placeholder={uiText(locale, "1 tack stall par X stalls chevaux", "1 tack stall per X horse stalls")}
                   step="1"
                   type="number"
                   value={limitPerHorseStalls}
@@ -793,22 +825,22 @@ function StallOptionForm({
         ) : null}
         <div className="form-section">
           <div className="form-section-header">
-            <strong>Periode offerte</strong>
-            <span>{usesDailyReservations ? "Les compétiteurs choisiront les journees." : "Reservation pour tout le show, sans choix de journee."}</span>
+            <strong>{uiText(locale, "Période offerte", "Offered period")}</strong>
+            <span>{usesDailyReservations ? uiText(locale, "Les compétiteurs choisiront les journées.", "Competitors will choose days.") : uiText(locale, "Réservation pour tout le concours, sans choix de journée.", "Full-show reservation, with no day selection.")}</span>
           </div>
           <div className="segmented-control">
             <button className={reservationPeriodMode === "full_show" ? "active" : ""} type="button" onClick={() => setReservationPeriodMode("full_show")}>
-              Show complet
+              {uiText(locale, "Concours complet", "Full show")}
             </button>
             <button className={reservationPeriodMode === "daily" ? "active" : ""} disabled={!dayOptions.length} type="button" onClick={() => setReservationPeriodMode("daily")}>
-              A la journee
+              {uiText(locale, "À la journée", "Daily")}
             </button>
           </div>
           {usesDailyReservations ? (
             <>
               <div className="form-grid">
                 <label>
-                  Jour debut
+                  {uiText(locale, "Jour début", "Start day")}
                   <select disabled={!canCreate || !dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
                     {dayOptions.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -818,7 +850,7 @@ function StallOptionForm({
                   </select>
                 </label>
                 <label>
-                  Jour fin
+                  {uiText(locale, "Jour fin", "End day")}
                   <select disabled={!canCreate || !dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
                     {dayOptions.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -829,7 +861,7 @@ function StallOptionForm({
                 </label>
               </div>
               <label>
-                Duree jours
+                {uiText(locale, "Durée jours", "Duration days")}
                 <input disabled={!canCreate} min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
               </label>
             </>
@@ -847,7 +879,7 @@ function StallOptionForm({
         </label>
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
-          Creer option
+          {uiText(locale, "Créer l'option", "Create option")}
         </button>
       </form>
     </section>
@@ -855,6 +887,7 @@ function StallOptionForm({
 }
 
 function StallOptionEditForm({
+  locale,
   currency,
   option,
   showDays,
@@ -862,6 +895,7 @@ function StallOptionEditForm({
   onCancel,
   onUpdateStallOption,
 }: {
+  locale: Locale;
   currency: string;
   option: StallOption;
   showDays: ShowDay[];
@@ -919,7 +953,7 @@ function StallOptionEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Modifier option</h2>
+          <h2>{uiText(locale, "Modifier l'option", "Edit option")}</h2>
           <p>
             {showLabel(show)} / {formatCurrency(option.price, currency)}
           </p>
@@ -927,12 +961,12 @@ function StallOptionEditForm({
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          Name
+          {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
         </label>
         <div className="form-grid">
           <label>
-            Category
+            {uiText(locale, "Catégorie", "Category")}
             <select value={category} onChange={(event) => setCategory(event.target.value as NonNullable<StallOption["category"]>)}>
               <option value="stall">Stall</option>
               <option value="camping">Camping</option>
@@ -941,17 +975,17 @@ function StallOptionEditForm({
             </select>
           </label>
           <label>
-            Price
+            {uiText(locale, "Prix", "Price")}
             <input min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
           </label>
         </div>
         <div className="form-grid">
           <label>
-            Total quantity
+            {uiText(locale, "Quantité totale", "Total quantity")}
             <input min="0" required step="1" type="number" value={totalQuantity} onChange={(event) => setTotalQuantity(event.target.value)} />
           </label>
           <label>
-            Available now
+            {uiText(locale, "Disponible maintenant", "Available now")}
             <input min="0" required step="1" type="number" value={availableQuantity} onChange={(event) => setAvailableQuantity(event.target.value)} />
           </label>
         </div>
@@ -959,22 +993,22 @@ function StallOptionEditForm({
           <div className="form-section">
             <div className="form-section-header">
               <strong>Assignation</strong>
-              <span>{requiresHorseAssignment ? "Chaque reservation sera liee a un cheval." : "Reservation non attitree a un cheval."}</span>
+              <span>{requiresHorseAssignment ? uiText(locale, "Chaque réservation sera liée à un cheval.", "Each reservation will be linked to a horse.") : uiText(locale, "Réservation non attitrée à un cheval.", "Reservation not assigned to a horse.")}</span>
             </div>
             <div className="segmented-control">
               <button className={requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(true)}>
-                Par cheval
+                {uiText(locale, "Par cheval", "Per horse")}
               </button>
               <button className={!requiresHorseAssignment ? "active" : ""} type="button" onClick={() => setRequiresHorseAssignment(false)}>
-                Non attitree
+                {uiText(locale, "Non attitrée", "Unassigned")}
               </button>
             </div>
             {!requiresHorseAssignment ? (
               <label>
-                Limite optionnelle
+                {uiText(locale, "Limite optionnelle", "Optional limit")}
                 <input
                   min="0"
-                  placeholder="1 tack stall par X stalls chevaux"
+                  placeholder={uiText(locale, "1 tack stall par X stalls chevaux", "1 tack stall per X horse stalls")}
                   step="1"
                   type="number"
                   value={limitPerHorseStalls}
@@ -986,22 +1020,22 @@ function StallOptionEditForm({
         ) : null}
         <div className="form-section">
           <div className="form-section-header">
-            <strong>Periode offerte</strong>
-            <span>{usesDailyReservations ? "Reservation a la journee." : "Reservation pour tout le show."}</span>
+            <strong>{uiText(locale, "Période offerte", "Offered period")}</strong>
+            <span>{usesDailyReservations ? uiText(locale, "Réservation à la journée.", "Daily reservation.") : uiText(locale, "Réservation pour tout le concours.", "Full-show reservation.")}</span>
           </div>
           <div className="segmented-control">
             <button className={reservationPeriodMode === "full_show" ? "active" : ""} type="button" onClick={() => setReservationPeriodMode("full_show")}>
-              Show complet
+              {uiText(locale, "Concours complet", "Full show")}
             </button>
             <button className={reservationPeriodMode === "daily" ? "active" : ""} disabled={!dayOptions.length} type="button" onClick={() => setReservationPeriodMode("daily")}>
-              A la journee
+              {uiText(locale, "À la journée", "Daily")}
             </button>
           </div>
           {usesDailyReservations ? (
             <>
               <div className="form-grid">
                 <label>
-                  Jour debut
+                  {uiText(locale, "Jour début", "Start day")}
                   <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
                     {dayOptions.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -1011,7 +1045,7 @@ function StallOptionEditForm({
                   </select>
                 </label>
                 <label>
-                  Jour fin
+                  {uiText(locale, "Jour fin", "End day")}
                   <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
                     {dayOptions.map((day) => (
                       <option key={day.id} value={day.id}>
@@ -1022,7 +1056,7 @@ function StallOptionEditForm({
                 </label>
               </div>
               <label>
-                Duree jours
+                {uiText(locale, "Durée jours", "Duration days")}
                 <input min="0" step="1" type="number" value={durationDays} onChange={(event) => setDurationDays(event.target.value)} />
               </label>
             </>
@@ -1038,13 +1072,14 @@ function StallOptionEditForm({
           Description
           <input value={description} onChange={(event) => setDescription(event.target.value)} />
         </label>
-        <FormActions busy={busy} onCancel={onCancel} />
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
 }
 
 function StallBookingForm({
+  locale,
   allowStatusEdit = true,
   bookings,
   contacts,
@@ -1064,6 +1099,7 @@ function StallBookingForm({
   onCreateStallBooking,
   onCreated,
 }: {
+  locale: Locale;
   allowStatusEdit?: boolean;
   bookings: StallBooking[];
   contacts: Contact[];
@@ -1210,7 +1246,7 @@ function StallBookingForm({
     payerContactIds: reservationPayerContactIds,
     selectedShowId,
   });
-  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, shows });
+  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, locale, shows });
   const hasReservationItems = hasHorseStallRequest || hasTackRequest || hasCampingRequest;
   const hasSelectedReservableProduct = Boolean(selectedStallOption || selectedTackOption || selectedCampingOption);
   const stallAvailabilityTooLow = Boolean(selectedStallOption && stallCount > selectedStallOption.available_quantity);
@@ -1249,9 +1285,10 @@ function StallBookingForm({
   const availabilityLabel = selectedStallOption
     ? `${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"}`
     : stallChoices.length
-      ? `${stallChoices.length} produit${stallChoices.length === 1 ? "" : "s"} stall pour ce show.`
-      : "Aucun produit stall pour ce show.";
+      ? `${stallChoices.length} produit${stallChoices.length === 1 ? "" : "s"} stall pour ce concours.`
+      : uiText(locale, "Aucun produit stall pour ce concours.", "No stall product for this show.");
   const formMessage = reservationCreateMessage({
+    locale,
     canCreate,
     allowedTackQuantity,
     beddingAvailabilityTooLow,
@@ -1575,22 +1612,23 @@ function StallBookingForm({
         <div className="form-section">
           <div className="form-section-header">
             <strong>1. Contact</strong>
-            <span>Un seul contact responsable pour la demande.</span>
+            <span>{uiText(locale, "Un seul contact responsable pour la demande.", "One responsible contact for the request.")}</span>
           </div>
           <ContactPicker
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
             disabled={!organization}
-            label="Contact responsable"
+            label={uiText(locale, "Contact responsable", "Responsible contact")}
+            locale={locale}
             organization={organization}
             role="booker"
             value={responsibleContactId}
             onChange={setResponsibleContactId}
             onCreateContact={onCreateContact}
           />
-          <div className="contact-role-grid" aria-label="Roles du contact">
-            {reservationContactRoleChoices.map((choice) => (
+          <div className="contact-role-grid" aria-label={uiText(locale, "Rôles du contact", "Contact roles")}>
+            {reservationContactRoleChoices(locale).map((choice) => (
               <label className="contact-role-option" key={choice.role}>
                 <input checked={selectedContactRoles.includes(choice.role)} type="checkbox" onChange={() => toggleContactRole(choice.role)} />
                 <span>
@@ -1608,7 +1646,7 @@ function StallBookingForm({
             <span>{availabilityLabel}</span>
           </div>
           <label>
-            Show
+            {uiText(locale, "Concours", "Show")}
             <select
               disabled={!shows.length}
               value={selectedShowId}
@@ -1640,7 +1678,7 @@ function StallBookingForm({
             </select>
           </label>
           <label>
-            Produit stall
+            {uiText(locale, "Produit stall", "Stall product")}
             <select
               disabled={!stallChoices.length}
               required
@@ -1651,30 +1689,30 @@ function StallBookingForm({
                 setEndDayId("");
               }}
             >
-              <option value="">Choisir le type de stall</option>
+              <option value="">{uiText(locale, "Choisir le type de stall", "Choose stall type")}</option>
               {stallChoices.map((option) => (
                 <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
-                  {reservationOptionSelectLabel(option, currency)}
+                  {reservationOptionSelectLabel(option, currency, locale)}
                 </option>
               ))}
             </select>
           </label>
-          <ReservationProductSummary currency={currency} option={selectedStallOption} quantityNumber={Math.max(stallCount, 1)} quantityTooHigh={stallAvailabilityTooLow} totalPrice={stallTotal} />
+          <ReservationProductSummary locale={locale} currency={currency} option={selectedStallOption} quantityNumber={Math.max(stallCount, 1)} quantityTooHigh={stallAvailabilityTooLow} totalPrice={stallTotal} />
         </div>
 
         <div className="form-section">
           <div className="form-section-header">
-            <strong>3. Chevaux</strong>
+            <strong>3. {uiText(locale, "Chevaux", "Horses")}</strong>
             <span>
               {selectedHorses.length
-                ? `${selectedHorses.length} stall${selectedHorses.length === 1 ? "" : "s"} a reserver.`
+                ? uiText(locale, `${selectedHorses.length} stall${selectedHorses.length === 1 ? "" : "s"} à réserver.`, `${selectedHorses.length} stall${selectedHorses.length === 1 ? "" : "s"} to reserve.`)
                 : availableHorseCount
-                  ? `${availableHorseCount} cheval${availableHorseCount === 1 ? "" : "x"} disponible${availableHorseCount === 1 ? "" : "s"} pour ce show.`
-                  : "Tous les chevaux ont deja un stall pour ce show."}
+                  ? uiText(locale, `${availableHorseCount} cheval${availableHorseCount === 1 ? "" : "x"} disponible${availableHorseCount === 1 ? "" : "s"} pour ce concours.`, `${availableHorseCount} horse${availableHorseCount === 1 ? "" : "s"} available for this show.`)
+                  : uiText(locale, "Tous les chevaux ont déjà un stall pour ce concours.", "All horses already have a stall for this show.")}
             </span>
           </div>
-          {!horses.length ? <EmptyState label="Ajoute d'abord les chevaux avant de reserver des stalls." /> : null}
-          {horses.length && !availableHorseCount ? <EmptyState label="Tous les chevaux ont deja un stall pour ce show." /> : null}
+          {!horses.length ? <EmptyState label={uiText(locale, "Ajoute d'abord les chevaux avant de réserver des stalls.", "Add horses before reserving stalls.")} /> : null}
+          {horses.length && !availableHorseCount ? <EmptyState label={uiText(locale, "Tous les chevaux ont déjà un stall pour ce concours.", "All horses already have a stall for this show.")} /> : null}
           <div className="horse-reservation-list">
             {horses.map((horse) => {
               const reservedBooking = reservedHorseBookingById.get(horse.id);
@@ -1692,12 +1730,12 @@ function StallBookingForm({
                     <span>
                       <strong>
                         {horse.name}
-                        {alreadyReserved ? <em className="horse-reservation-status">Deja reserve</em> : null}
+                        {alreadyReserved ? <em className="horse-reservation-status">{uiText(locale, "Déjà réservé", "Already reserved")}</em> : null}
                         {healthUnavailable ? <em className="horse-reservation-status">{stallHealthValidityTagLabel(healthValidity)}</em> : null}
                       </strong>
                       <small>
                         {alreadyReserved
-                          ? `Stall deja reserve: ${reservedOption?.name ?? "Stall"}`
+                          ? uiText(locale, `Stall déjà réservé: ${reservedOption?.name ?? "Stall"}`, `Stall already reserved: ${reservedOption?.name ?? "Stall"}`)
                           : `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallHealthValidityMessage(healthValidity)}`}
                       </small>
                     </span>
@@ -1706,10 +1744,10 @@ function StallBookingForm({
                     <>
                       <div className="horse-billing-grid">
                         <label>
-                          Facturer a
+                          {uiText(locale, "Facturer à", "Bill to")}
                           <SearchSelect
                             items={contactItems}
-                            placeholder="Contact a facturer"
+                            placeholder={uiText(locale, "Contact à facturer", "Billing contact")}
                             value={horsePayerContactIds[horse.id] || horse.primary_owner_contact_id}
                             onChange={(contactId) => setHorsePayerContactIds((current) => ({ ...current, [horse.id]: contactId }))}
                           />
@@ -1718,7 +1756,7 @@ function StallBookingForm({
                       <div className="horse-addons">
                         <label>
                           <input checked={beddingSelected} disabled={!beddingChoices.length} type="checkbox" onChange={() => toggleBedding(horse.id)} />
-                          Ajouter de la ripe
+                          {uiText(locale, "Ajouter de la ripe", "Add shavings")}
                         </label>
                         {beddingSelected ? (
                           <input
@@ -1739,12 +1777,12 @@ function StallBookingForm({
           </div>
           {beddingHorseIds.length ? (
             <label>
-              Produit ripe
+              {uiText(locale, "Produit ripe", "Shavings product")}
               <select disabled={!beddingChoices.length} required value={selectedBeddingOption?.id ?? ""} onChange={(event) => setBeddingOptionId(event.target.value)}>
-                <option value="">Choisir la ripe</option>
+                <option value="">{uiText(locale, "Choisir la ripe", "Choose shavings")}</option>
                 {beddingChoices.map((option) => (
                   <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
-                    {reservationOptionSelectLabel(option, currency)}
+                    {reservationOptionSelectLabel(option, currency, locale)}
                   </option>
                 ))}
               </select>
@@ -1756,11 +1794,11 @@ function StallBookingForm({
           <div className="form-section">
             <div className="form-section-header">
               <strong>4. Tack stalls</strong>
-              <span>{selectedTackOption?.limit_per_horse_stalls ? `Limite: 1 tack stall par ${selectedTackOption.limit_per_horse_stalls} stall${selectedTackOption.limit_per_horse_stalls === 1 ? "" : "s"} chevaux.` : "Optionnel, non attitre a un cheval."}</span>
+              <span>{selectedTackOption?.limit_per_horse_stalls ? uiText(locale, `Limite: 1 tack stall par ${selectedTackOption.limit_per_horse_stalls} stall${selectedTackOption.limit_per_horse_stalls === 1 ? "" : "s"} chevaux.`, `Limit: 1 tack stall per ${selectedTackOption.limit_per_horse_stalls} horse stall${selectedTackOption.limit_per_horse_stalls === 1 ? "" : "s"}.`) : uiText(locale, "Optionnel, non attitré à un cheval.", "Optional, not assigned to a horse.")}</span>
             </div>
             <div className="form-grid">
               <label>
-                Produit tack
+                {uiText(locale, "Produit tack", "Tack product")}
                 <select
                   value={tackOptionId}
                   onChange={(event) => {
@@ -1768,34 +1806,34 @@ function StallBookingForm({
                     setTackQuantity(event.target.value ? "1" : "0");
                   }}
                 >
-                  <option value="">Aucun tack stall</option>
+                  <option value="">{uiText(locale, "Aucun tack stall", "No tack stall")}</option>
                   {tackChoices.map((option) => (
                     <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
-                      {reservationOptionSelectLabel(option, currency)}
+                      {reservationOptionSelectLabel(option, currency, locale)}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                Quantite
+                {uiText(locale, "Quantité", "Quantity")}
                 <input disabled={!selectedTackOption} max={tackQuantityMax} min="0" step="1" type="number" value={tackQuantity} onChange={(event) => setTackQuantity(event.target.value)} />
               </label>
             </div>
             {selectedTackOption ? (
-              <ReservationProductSummary availableQuantity={tackQuantityMax} currency={currency} option={selectedTackOption} quantityNumber={Math.max(tackQuantityNumber, 0)} quantityTooHigh={tackAvailabilityTooLow || tackLimitTooHigh} totalPrice={tackTotal} />
+              <ReservationProductSummary locale={locale} availableQuantity={tackQuantityMax} currency={currency} option={selectedTackOption} quantityNumber={Math.max(tackQuantityNumber, 0)} quantityTooHigh={tackAvailabilityTooLow || tackLimitTooHigh} totalPrice={tackTotal} />
             ) : null}
             {selectedTackOption ? (
               <div className="form-section nested-section">
                 <div className="form-section-header">
                   <strong>Facturation tack</strong>
-                  <span>{tackBillingMode === "split_horses" ? "Divise le tack et le foin entre les chevaux selectionnes." : "Facture le tack et le foin a un seul contact."}</span>
+                  <span>{tackBillingMode === "split_horses" ? uiText(locale, "Divise le tack et le foin entre les chevaux sélectionnés.", "Split tack and hay between selected horses.") : uiText(locale, "Facture le tack et le foin à un seul contact.", "Bill tack and hay to one contact.")}</span>
                 </div>
                 <div className="segmented-control">
                   <button className={tackBillingMode === "split_horses" ? "active" : ""} disabled={!selectedHorses.length} type="button" onClick={() => setTackBillingMode("split_horses")}>
-                    Split chevaux
+                    {uiText(locale, "Split chevaux", "Split horses")}
                   </button>
                   <button className={tackBillingMode === "single_contact" ? "active" : ""} type="button" onClick={() => setTackBillingMode("single_contact")}>
-                    Un contact
+                    {uiText(locale, "Un contact", "One contact")}
                   </button>
                 </div>
                 {tackBillingMode === "single_contact" ? (
@@ -1804,7 +1842,8 @@ function StallBookingForm({
                     contactRoles={contactRoles}
                     createdByUserId={profileId}
                     disabled={!organization}
-                    label="Facturer tack a"
+                    label={uiText(locale, "Facturer tack à", "Bill tack to")}
+                    locale={locale}
                     organization={organization}
                     role="payer"
                     value={selectedTackPayerContactId}
@@ -1820,7 +1859,7 @@ function StallBookingForm({
                         </span>
                       ))
                     ) : (
-                      <span>Choisir les chevaux a inclure dans le split.</span>
+                      <span>{uiText(locale, "Choisir les chevaux à inclure dans le split.", "Choose horses to include in the split.")}</span>
                     )}
                   </div>
                 )}
@@ -1830,7 +1869,7 @@ function StallBookingForm({
               <>
                 <div className="form-grid">
                   <label>
-                    Foin pour tack stall
+                    {uiText(locale, "Foin pour tack stall", "Hay for tack stall")}
                     <select
                       value={hayOptionId}
                       onChange={(event) => {
@@ -1838,20 +1877,20 @@ function StallBookingForm({
                         setHayQuantity(event.target.value ? "1" : "0");
                       }}
                     >
-                      <option value="">Aucun foin</option>
+                      <option value="">{uiText(locale, "Aucun foin", "No hay")}</option>
                       {hayChoices.map((option) => (
                         <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
-                          {reservationOptionSelectLabel(option, currency)}
+                          {reservationOptionSelectLabel(option, currency, locale)}
                         </option>
                       ))}
                     </select>
                   </label>
                   <label>
-                    Quantite foin
+                    {uiText(locale, "Quantité foin", "Hay quantity")}
                     <input disabled={!selectedHayOption} max={selectedHayOption?.available_quantity} min="0" step="1" type="number" value={hayQuantity} onChange={(event) => setHayQuantity(event.target.value)} />
                   </label>
                 </div>
-                {selectedHayOption ? <ReservationProductSummary currency={currency} option={selectedHayOption} quantityNumber={Math.max(hayTotalQuantity, 0)} quantityTooHigh={hayAvailabilityTooLow} totalPrice={hayTotal} /> : null}
+                {selectedHayOption ? <ReservationProductSummary locale={locale} currency={currency} option={selectedHayOption} quantityNumber={Math.max(hayTotalQuantity, 0)} quantityTooHigh={hayAvailabilityTooLow} totalPrice={hayTotal} /> : null}
               </>
             ) : null}
           </div>
@@ -1861,11 +1900,11 @@ function StallBookingForm({
           <div className="form-section">
             <div className="form-section-header">
               <strong>{campingSectionNumber}. Camping</strong>
-              <span>{selectedCampingOption ? `${selectedCampingOption.available_quantity} disponible${selectedCampingOption.available_quantity === 1 ? "" : "s"}.` : "Optionnel, non attitre a un cheval."}</span>
+              <span>{selectedCampingOption ? uiText(locale, `${selectedCampingOption.available_quantity} disponible${selectedCampingOption.available_quantity === 1 ? "" : "s"}.`, `${selectedCampingOption.available_quantity} available.`) : uiText(locale, "Optionnel, non attitré à un cheval.", "Optional, not assigned to a horse.")}</span>
             </div>
             <div className="form-grid">
               <label>
-                Produit camping
+                {uiText(locale, "Produit camping", "Camping product")}
                 <select
                   value={campingOptionId}
                   onChange={(event) => {
@@ -1873,21 +1912,21 @@ function StallBookingForm({
                     setCampingQuantity(event.target.value ? "1" : "0");
                   }}
                 >
-                  <option value="">Aucun camping</option>
+                  <option value="">{uiText(locale, "Aucun camping", "No camping")}</option>
                   {campingChoices.map((option) => (
                     <option disabled={option.available_quantity <= 0} key={option.id} value={option.id}>
-                      {reservationOptionSelectLabel(option, currency)}
+                      {reservationOptionSelectLabel(option, currency, locale)}
                     </option>
                   ))}
                 </select>
               </label>
               <label>
-                Quantite
+                {uiText(locale, "Quantité", "Quantity")}
                 <input disabled={!selectedCampingOption} max={selectedCampingOption?.available_quantity} min="0" step="1" type="number" value={campingQuantity} onChange={(event) => setCampingQuantity(event.target.value)} />
               </label>
             </div>
             {selectedCampingOption ? (
-              <ReservationProductSummary currency={currency} option={selectedCampingOption} quantityNumber={Math.max(campingQuantityNumber, 0)} quantityTooHigh={campingAvailabilityTooLow} totalPrice={campingTotal} />
+              <ReservationProductSummary locale={locale} currency={currency} option={selectedCampingOption} quantityNumber={Math.max(campingQuantityNumber, 0)} quantityTooHigh={campingAvailabilityTooLow} totalPrice={campingTotal} />
             ) : null}
             {selectedCampingOption && campingQuantityNumber > 0 ? (
               <div className="camping-assignment-list">
@@ -1903,7 +1942,8 @@ function StallBookingForm({
                         contactRoles={contactRoles}
                         createdByUserId={profileId}
                         disabled={!organization}
-                        label="Facturer a"
+                        label={uiText(locale, "Facturer à", "Bill to")}
+                        locale={locale}
                         organization={organization}
                         role="payer"
                         value={assignedContactId}
@@ -1920,32 +1960,32 @@ function StallBookingForm({
 
         <div className="form-section">
           <div className="form-section-header">
-            <strong>{datesSectionNumber}. Dates et facture</strong>
-            <span>{canCreate ? `Total: ${formatCurrency(totalPrice, currency)}` : reservationUsesDailyReservations ? "Choisir les journees requises." : "Completer les informations requises."}</span>
+            <strong>{datesSectionNumber}. {uiText(locale, "Dates et facture", "Dates and invoice")}</strong>
+            <span>{canCreate ? `Total: ${formatCurrency(totalPrice, currency)}` : reservationUsesDailyReservations ? uiText(locale, "Choisir les journées requises.", "Choose required days.") : uiText(locale, "Compléter les informations requises.", "Complete required information.")}</span>
           </div>
           <div className="form-grid">
             {allowStatusEdit ? (
               <label>
-                Statut
+                {uiText(locale, "Statut", "Status")}
                 <select disabled={!hasSelectedReservableProduct} value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
                   {bookingStatuses.map((candidate) => (
                     <option key={candidate} value={candidate}>
-                      {candidate}
+                      {bookingStatusLabel(candidate, locale)}
                     </option>
                   ))}
                 </select>
               </label>
             ) : (
               <label>
-                Statut
-                <input disabled value={defaultStatus} />
+                {uiText(locale, "Statut", "Status")}
+                <input disabled value={bookingStatusLabel(defaultStatus, locale)} />
               </label>
             )}
           </div>
           {reservationUsesDailyReservations ? (
             <div className="form-grid">
               <label>
-                Jour debut
+                {uiText(locale, "Jour début", "Start day")}
                 <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
                   {dayOptions.map((day) => (
                     <option key={day.id} value={day.id}>
@@ -1955,7 +1995,7 @@ function StallBookingForm({
                 </select>
               </label>
               <label>
-                Jour fin
+                {uiText(locale, "Jour fin", "End day")}
                 <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
                   {dayOptions.map((day) => (
                     <option key={day.id} value={day.id}>
@@ -1989,7 +2029,7 @@ function StallBookingForm({
             </span>
             <span>
               <strong>{formatCurrency(totalPrice, currency)}</strong>
-              <small>Total facture</small>
+              <small>{uiText(locale, "Total facture", "Invoice total")}</small>
             </span>
           </div>
           <label>
@@ -2000,7 +2040,7 @@ function StallBookingForm({
 
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
-          Creer reservation
+          {uiText(locale, "Créer la réservation", "Create reservation")}
         </button>
       </form>
     </section>
@@ -2008,6 +2048,7 @@ function StallBookingForm({
 }
 
 function StallBookingEditForm({
+  locale,
   booking,
   contacts,
   contactRoles,
@@ -2024,6 +2065,7 @@ function StallBookingEditForm({
   onCreateContact,
   onUpdateStallBooking,
 }: {
+  locale: Locale;
   booking: StallBooking;
   contacts: Contact[];
   contactRoles: ContactRole[];
@@ -2085,7 +2127,7 @@ function StallBookingEditForm({
     selectedShowId: booking.show_id,
   });
   const blocksBalance = !["cancelled", "completed"].includes(status) && blockingInvoices.length > 0;
-  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, shows });
+  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, locale, shows });
   const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && (!selectedOptionUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) && !quantityTooHigh && !healthBlocksBooking && !blocksBalance);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -2120,47 +2162,47 @@ function StallBookingEditForm({
     <section className="panel edit-panel">
       <div className="panel-header">
         <div>
-          <h2>Modifier reservation</h2>
+          <h2>{uiText(locale, "Modifier la réservation", "Edit reservation")}</h2>
           <p>
             {healthBlocksBooking && selectedHealthValidity
               ? stallHealthValidityMessage(selectedHealthValidity)
               : blocksBalance
                 ? blockingInvoiceMessage
                 : quantityTooHigh
-                  ? `Seulement ${editableAvailability} disponible pour ce produit.`
-                  : `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`}
+                  ? uiText(locale, `Seulement ${editableAvailability} disponible pour ce produit.`, `Only ${editableAvailability} available for this product.`)
+                  : uiText(locale, `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`, `Invoice line: ${formatCurrency(totalPrice, currency)}.`)}
           </p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <div className="form-section">
           <div className="form-section-header">
-            <strong>1. Produit</strong>
-            <span>{selectedOption ? `Disponible pour edition: ${editableAvailability}` : "Choisir le produit a modifier."}</span>
+            <strong>1. {uiText(locale, "Produit", "Product")}</strong>
+            <span>{selectedOption ? uiText(locale, `Disponible pour édition: ${editableAvailability}`, `Available for editing: ${editableAvailability}`) : uiText(locale, "Choisir le produit à modifier.", "Choose the product to edit.")}</span>
           </div>
           <label>
-            Produit de reservation
+            {uiText(locale, "Produit de réservation", "Reservation product")}
             <select disabled={!optionChoices.length} required value={optionId} onChange={(event) => setOptionId(event.target.value)}>
-              <option value="">Choisir un produit</option>
+              <option value="">{uiText(locale, "Choisir un produit", "Choose a product")}</option>
               {optionChoices.map((option) => (
                 <option key={option.id} value={option.id}>
-                  {reservationOptionSelectLabel(option, currency)}
+                  {reservationOptionSelectLabel(option, currency, locale)}
                 </option>
               ))}
             </select>
           </label>
-          <ReservationProductSummary availableQuantity={editableAvailability} currency={currency} option={selectedOption ?? null} quantityNumber={quantityNumber} quantityTooHigh={quantityTooHigh} totalPrice={totalPrice} />
+          <ReservationProductSummary locale={locale} availableQuantity={editableAvailability} currency={currency} option={selectedOption ?? null} quantityNumber={quantityNumber} quantityTooHigh={quantityTooHigh} totalPrice={totalPrice} />
           <div className="form-grid">
             <label>
-              Quantite
+              {uiText(locale, "Quantité", "Quantity")}
               <input max={editableAvailability || undefined} min="1" step="1" type="number" value={quantity} onChange={(event) => setQuantity(event.target.value)} />
             </label>
             <label>
-              Statut
+              {uiText(locale, "Statut", "Status")}
               <select value={status} onChange={(event) => setStatus(event.target.value as StallBooking["status"])}>
                 {bookingStatuses.map((candidate) => (
                   <option key={candidate} value={candidate}>
-                    {candidate}
+                    {bookingStatusLabel(candidate, locale)}
                   </option>
                 ))}
               </select>
@@ -2171,10 +2213,10 @@ function StallBookingEditForm({
         <div className="form-section">
           <div className="form-section-header">
             <strong>2. Contacts</strong>
-            <span>Roles booker et payer assignes automatiquement.</span>
+            <span>{uiText(locale, "Rôles booker et payeur assignés automatiquement.", "Booker and payer roles are assigned automatically.")}</span>
           </div>
           <label>
-            Cheval
+            {uiText(locale, "Cheval", "Horse")}
             <SearchSelect
               allowEmpty
               items={horses.map((horse) => {
@@ -2191,7 +2233,7 @@ function StallBookingEditForm({
                   detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallHealthValidityMessage(validity)}`,
                 };
               })}
-              placeholder="Search horse"
+              placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
               value={selectedHorse?.id ?? ""}
               onChange={setHorseId}
             />
@@ -2202,7 +2244,8 @@ function StallBookingEditForm({
               contacts={contacts}
               contactRoles={contactRoles}
               createdByUserId={profileId}
-              label="Reserve par"
+              label={uiText(locale, "Réservé par", "Reserved by")}
+              locale={locale}
               organization={organization}
               role="booker"
               value={bookerContactId}
@@ -2213,7 +2256,8 @@ function StallBookingEditForm({
               contacts={contacts}
               contactRoles={contactRoles}
               createdByUserId={profileId}
-              label="Facture a"
+              label={uiText(locale, "Facture à", "Bill to")}
+              locale={locale}
               organization={organization}
               role="payer"
               value={payerContactId}
@@ -2225,19 +2269,19 @@ function StallBookingEditForm({
 
         <div className="form-section">
           <div className="form-section-header">
-            <strong>3. Dates et notes</strong>
+            <strong>3. {uiText(locale, "Dates et notes", "Dates and notes")}</strong>
             <span>
               {selectedOptionUsesDailyReservations
                 ? dayOptions.length
-                  ? `${dayOptions.length} jour${dayOptions.length === 1 ? "" : "s"} disponible${dayOptions.length === 1 ? "" : "s"}.`
-                  : "Aucun jour disponible."
+                  ? uiText(locale, `${dayOptions.length} jour${dayOptions.length === 1 ? "" : "s"} disponible${dayOptions.length === 1 ? "" : "s"}.`, `${dayOptions.length} day${dayOptions.length === 1 ? "" : "s"} available.`)
+                  : uiText(locale, "Aucun jour disponible.", "No days available.")
                 : ""}
             </span>
           </div>
           {selectedOptionUsesDailyReservations ? (
             <div className="form-grid">
               <label>
-                Jour debut
+                {uiText(locale, "Jour début", "Start day")}
                 <select disabled={!dayOptions.length} value={selectedStartDayId} onChange={(event) => setStartDayId(event.target.value)}>
                   {dayOptions.map((day) => (
                     <option key={day.id} value={day.id}>
@@ -2247,7 +2291,7 @@ function StallBookingEditForm({
                 </select>
               </label>
               <label>
-                Jour fin
+                {uiText(locale, "Jour fin", "End day")}
                 <select disabled={!dayOptions.length} value={selectedEndDayId} onChange={(event) => setEndDayId(event.target.value)}>
                   {dayOptions.map((day) => (
                     <option key={day.id} value={day.id}>
@@ -2263,7 +2307,7 @@ function StallBookingEditForm({
             <input value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
         </div>
-        <FormActions busy={busy || !canUpdate} onCancel={onCancel} />
+        <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
@@ -2274,12 +2318,12 @@ function invoiceForBooking(booking: StallBooking, invoices: Invoice[], lineItems
   return lineItem ? findById(invoices, lineItem.invoice_id) : undefined;
 }
 
-function reservationInvoiceState(invoice: Invoice | undefined, currency: string) {
+function reservationInvoiceState(invoice: Invoice | undefined, currency: string, locale: Locale = "fr") {
   if (!invoice) {
     return {
       badgeClass: "warning",
-      confirmationLabel: "Facture a creer",
-      detail: "La reservation attend sa ligne de facture.",
+      confirmationLabel: uiText(locale, "Facture à créer", "Invoice to create"),
+      detail: uiText(locale, "La réservation attend sa ligne de facture.", "The reservation is waiting for its invoice line."),
     };
   }
 
@@ -2289,59 +2333,59 @@ function reservationInvoiceState(invoice: Invoice | undefined, currency: string)
   if (invoice.status === "void") {
     return {
       badgeClass: "void",
-      confirmationLabel: "Facture annulee",
-      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status)}`,
+      confirmationLabel: uiText(locale, "Facture annulée", "Invoice voided"),
+      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)}`,
     };
   }
 
   if (invoice.status === "paid" || balance <= 0) {
     return {
       badgeClass: "paid",
-      confirmationLabel: "Confirmee",
-      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status)}`,
+      confirmationLabel: uiText(locale, "Confirmée", "Confirmed"),
+      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)}`,
     };
   }
 
   return {
     badgeClass: invoice.status === "overdue" ? "overdue" : "warning",
-    confirmationLabel: "Solde ouvert",
-    detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status)} - ${formatCurrency(balance, currency)}`,
+    confirmationLabel: uiText(locale, "Solde ouvert", "Open balance"),
+    detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)} - ${formatCurrency(balance, currency)}`,
   };
 }
 
-function bookingStatusLabel(status: StallBooking["status"]) {
+function bookingStatusLabel(status: StallBooking["status"], locale: Locale = "fr") {
   switch (status) {
     case "requested":
-      return "Demandee";
+      return uiText(locale, "Demandée", "Requested");
     case "reserved":
-      return "Reservee";
+      return uiText(locale, "Réservée", "Reserved");
     case "active":
       return "Active";
     case "cancelled":
-      return "Annulee";
+      return uiText(locale, "Annulée", "Cancelled");
     case "completed":
-      return "Completee";
+      return uiText(locale, "Complétée", "Completed");
     default:
       return status;
   }
 }
 
-function invoiceStatusLabel(status: Invoice["status"]) {
+function invoiceStatusLabel(status: Invoice["status"], locale: Locale = "fr") {
   switch (status) {
     case "draft":
-      return "Brouillon";
+      return uiText(locale, "Brouillon", "Draft");
     case "sent":
-      return "Envoyee";
+      return uiText(locale, "Envoyée", "Sent");
     case "viewed":
-      return "Consultee";
+      return uiText(locale, "Consultée", "Viewed");
     case "partially_paid":
-      return "Partiellement payee";
+      return uiText(locale, "Partiellement payée", "Partially paid");
     case "paid":
-      return "Payee";
+      return uiText(locale, "Payée", "Paid");
     case "overdue":
-      return "En retard";
+      return uiText(locale, "En retard", "Overdue");
     case "void":
-      return "Annulee";
+      return uiText(locale, "Annulée", "Void");
     default:
       return status;
   }
@@ -2379,11 +2423,13 @@ function blockingReservationInvoiceMessage({
   contacts,
   currency,
   invoices,
+  locale = "fr",
   shows,
 }: {
   contacts: Contact[];
   currency: string;
   invoices: Invoice[];
+  locale?: Locale;
   shows: Show[];
 }) {
   const invoice = invoices[0];
@@ -2396,7 +2442,11 @@ function blockingReservationInvoiceMessage({
   const showName = showLabel(findById(shows, invoice.show_id));
   const remaining = invoices.reduce((sum, candidate) => sum + Number(candidate.balance_due ?? 0), 0);
 
-  return `${payerName} a un solde ouvert de ${formatCurrency(remaining, currency)} dans cette association (${showName}, facture #${formatInvoiceNumber(invoice.invoice_number)}). Impossible de reserver pour un autre evenement avant paiement.`;
+  return uiText(
+    locale,
+    `${payerName} a un solde ouvert de ${formatCurrency(remaining, currency)} dans cette association (${showName}, facture #${formatInvoiceNumber(invoice.invoice_number)}). Impossible de réserver pour un autre événement avant paiement.`,
+    `${payerName} has an open balance of ${formatCurrency(remaining, currency)} in this association (${showName}, invoice #${formatInvoiceNumber(invoice.invoice_number)}). They cannot reserve for another event before payment.`,
+  );
 }
 
 function invoiceHasOpenBalance(invoice: Invoice) {
@@ -2408,6 +2458,7 @@ function uniqueIds(values: Array<string | null | undefined>) {
 }
 
 function reservationCreateMessage({
+  locale = "fr",
   allowedTackQuantity,
   beddingAvailabilityTooLow,
   beddingTotalQuantity,
@@ -2444,6 +2495,7 @@ function reservationCreateMessage({
   tackQuantityNumber,
   totalPrice,
 }: {
+  locale?: Locale;
   allowedTackQuantity: number | null;
   beddingAvailabilityTooLow: boolean;
   beddingTotalQuantity: number;
@@ -2481,23 +2533,23 @@ function reservationCreateMessage({
   totalPrice: number;
 }) {
   if (canCreate) {
-    return `Reservation prete. Total: ${formatCurrency(totalPrice, currency)}.`;
+    return uiText(locale, `Réservation prête. Total: ${formatCurrency(totalPrice, currency)}.`, `Reservation ready. Total: ${formatCurrency(totalPrice, currency)}.`);
   }
 
   if (!organization) {
-    return "Choisir une association avant de creer une reservation.";
+    return uiText(locale, "Choisir une association avant de créer une réservation.", "Choose an association before creating a reservation.");
   }
 
   if (!profileId) {
-    return "Le profil usager charge encore.";
+    return uiText(locale, "Le profil usager charge encore.", "The user profile is still loading.");
   }
 
   if (!responsibleContactId) {
-    return "Choisir ou creer le contact responsable.";
+    return uiText(locale, "Choisir ou créer le contact responsable.", "Choose or create the responsible contact.");
   }
 
   if (!hasRequiredContactRoles) {
-    return "Le contact responsable doit etre booker pour creer la reservation.";
+    return uiText(locale, "Le contact responsable doit être booker pour créer la réservation.", "The responsible contact must be a booker to create the reservation.");
   }
 
   if (hasBlockingInvoiceBalance) {
@@ -2505,74 +2557,74 @@ function reservationCreateMessage({
   }
 
   if (needsStallOption || (selectedHorseCount > 0 && !selectedStallOption)) {
-    return "Choisir le type de stall.";
+    return uiText(locale, "Choisir le type de stall.", "Choose the stall type.");
   }
 
   if (needsTackSplitHorses) {
-    return "Choisir les chevaux qui partageront les frais de tack.";
+    return uiText(locale, "Choisir les chevaux qui partageront les frais de tack.", "Choose the horses that will split tack fees.");
   }
 
   if (needsTackPayer) {
-    return "Choisir le contact a facturer pour le tack.";
+    return uiText(locale, "Choisir le contact à facturer pour le tack.", "Choose the contact to bill for tack.");
   }
 
   if (missingCampingPayerCount) {
-    return `Assigner ${missingCampingPayerCount} camping${missingCampingPayerCount === 1 ? "" : "s"} a un contact.`;
+    return uiText(locale, `Assigner ${missingCampingPayerCount} camping${missingCampingPayerCount === 1 ? "" : "s"} à un contact.`, `Assign ${missingCampingPayerCount} camping spot${missingCampingPayerCount === 1 ? "" : "s"} to a contact.`);
   }
 
   if (selectedStallOption && !selectedHorseCount && !hasReservationItems) {
-    return "Choisir au moins un cheval pour reserver un stall.";
+    return uiText(locale, "Choisir au moins un cheval pour réserver un stall.", "Choose at least one horse to reserve a stall.");
   }
 
   if (!hasReservationItems) {
-    return "Choisir au moins un stall, un tack stall ou du camping.";
+    return uiText(locale, "Choisir au moins un stall, un tack stall ou du camping.", "Choose at least one stall, tack stall or camping spot.");
   }
 
   if (selectedReservedHorseCount) {
-    return `${selectedReservedHorseCount} cheval${selectedReservedHorseCount === 1 ? "" : "x"} a deja un stall pour ce show.`;
+    return uiText(locale, `${selectedReservedHorseCount} cheval${selectedReservedHorseCount === 1 ? "" : "x"} a déjà un stall pour ce concours.`, `${selectedReservedHorseCount} horse${selectedReservedHorseCount === 1 ? "" : "s"} already has a stall for this show.`);
   }
 
   if (invalidHealthHorseNames.length) {
-    return `Documents sante invalides pour ${invalidHealthHorseNames.join(", ")}.`;
+    return uiText(locale, `Documents santé invalides pour ${invalidHealthHorseNames.join(", ")}.`, `Invalid health documents for ${invalidHealthHorseNames.join(", ")}.`);
   }
 
   if (stallAvailabilityTooLow && selectedStallOption) {
-    return `Seulement ${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"} pour ce produit.`;
+    return uiText(locale, `Seulement ${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"} pour ce produit.`, `Only ${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} available for this product.`);
   }
 
   if (tackLimitTooHigh) {
-    return `Limite de tack stalls: ${allowedTackQuantity ?? 0} permis pour ${selectedHorseCount} stall${selectedHorseCount === 1 ? "" : "s"} chevaux.`;
+    return uiText(locale, `Limite de tack stalls: ${allowedTackQuantity ?? 0} permis pour ${selectedHorseCount} stall${selectedHorseCount === 1 ? "" : "s"} chevaux.`, `Tack stall limit: ${allowedTackQuantity ?? 0} allowed for ${selectedHorseCount} horse stall${selectedHorseCount === 1 ? "" : "s"}.`);
   }
 
   if (tackAvailabilityTooLow) {
-    return `Pas assez de tack stalls disponibles pour ${tackQuantityNumber} demande${tackQuantityNumber === 1 ? "" : "s"}.`;
+    return uiText(locale, `Pas assez de tack stalls disponibles pour ${tackQuantityNumber} demande${tackQuantityNumber === 1 ? "" : "s"}.`, `Not enough tack stalls available for ${tackQuantityNumber} request${tackQuantityNumber === 1 ? "" : "s"}.`);
   }
 
   if (needsBeddingOption) {
-    return "Choisir le produit de ripe a ajouter.";
+    return uiText(locale, "Choisir le produit de ripe à ajouter.", "Choose the shavings product to add.");
   }
 
   if (beddingAvailabilityTooLow) {
-    return `Pas assez de ripe disponible pour ${beddingTotalQuantity} sac${beddingTotalQuantity === 1 ? "" : "s"}.`;
+    return uiText(locale, `Pas assez de ripe disponible pour ${beddingTotalQuantity} sac${beddingTotalQuantity === 1 ? "" : "s"}.`, `Not enough shavings available for ${beddingTotalQuantity} bag${beddingTotalQuantity === 1 ? "" : "s"}.`);
   }
 
   if (needsHayOption) {
-    return "Choisir le produit de foin a ajouter.";
+    return uiText(locale, "Choisir le produit de foin à ajouter.", "Choose the hay product to add.");
   }
 
   if (hayAvailabilityTooLow) {
-    return `Pas assez de foin disponible pour ${hayTotalQuantity} unite${hayTotalQuantity === 1 ? "" : "s"}.`;
+    return uiText(locale, `Pas assez de foin disponible pour ${hayTotalQuantity} unité${hayTotalQuantity === 1 ? "" : "s"}.`, `Not enough hay available for ${hayTotalQuantity} unit${hayTotalQuantity === 1 ? "" : "s"}.`);
   }
 
   if (campingAvailabilityTooLow) {
-    return `Pas assez de camping disponible pour ${campingQuantityNumber} unite${campingQuantityNumber === 1 ? "" : "s"}.`;
+    return uiText(locale, `Pas assez de camping disponible pour ${campingQuantityNumber} unité${campingQuantityNumber === 1 ? "" : "s"}.`, `Not enough camping available for ${campingQuantityNumber} unit${campingQuantityNumber === 1 ? "" : "s"}.`);
   }
 
   if (selectedOptionUsesDailyReservations && (!dayOptions.length || !selectedStartDayId || !selectedEndDayId)) {
-    return "Ce show a besoin de jours avant de creer une reservation.";
+    return uiText(locale, "Ce concours a besoin de journées avant de créer une réservation.", "This show needs days before creating a reservation.");
   }
 
-  return "Completer les informations de reservation.";
+  return uiText(locale, "Compléter les informations de réservation.", "Complete reservation information.");
 }
 
 function getStallHorseHealthValidity(input: {
@@ -2601,7 +2653,7 @@ function stallHealthValidityMessage(validity: StallHorseHealthValidity) {
   }
 
   if (validity.coggins.status === "not_required" && validity.vaccine.status === "not_required") {
-    return "Documents sante non exiges";
+    return "Documents santé non exigés";
   }
 
   const parts = [
@@ -2609,12 +2661,12 @@ function stallHealthValidityMessage(validity: StallHorseHealthValidity) {
     validity.vaccine.expiresOn ? `Vaccin valide jusqu'au ${formatDate(validity.vaccine.expiresOn)}` : null,
   ].filter(Boolean);
 
-  return parts.length ? parts.join(" / ") : "Documents sante valides";
+  return parts.length ? parts.join(" / ") : "Documents santé valides";
 }
 
 function stallSingleHealthValidityMessage(label: string, validity: Pick<HorseCogginsValidity, "expiresOn" | "status" | "valid">) {
   if (validity.status === "not_required") {
-    return `${label} non exige`;
+    return `${label} non exigé`;
   }
 
   if (validity.status === "valid" && validity.expiresOn) {
@@ -2622,15 +2674,15 @@ function stallSingleHealthValidityMessage(label: string, validity: Pick<HorseCog
   }
 
   if (validity.status === "expired" && validity.expiresOn) {
-    return `${label} expire le ${formatDate(validity.expiresOn)}`;
+    return `${label} expiré le ${formatDate(validity.expiresOn)}`;
   }
 
   if (validity.status === "pending_review") {
-    return `${label} en revision`;
+    return `${label} en révision`;
   }
 
   if (validity.status === "rejected") {
-    return `${label} refuse`;
+    return `${label} refusé`;
   }
 
   return `${label} manquant`;
@@ -2645,20 +2697,20 @@ function stallHealthValidityTagLabel(validity: StallHorseHealthValidity) {
     return stallSingleHealthValidityTagLabel("Vaccin", validity.vaccine);
   }
 
-  return "Sante valide";
+  return "Santé valide";
 }
 
 function stallSingleHealthValidityTagLabel(label: string, validity: Pick<HorseCogginsValidity, "expiresOn" | "status">) {
   if (validity.status === "expired" && validity.expiresOn) {
-    return `${label} expire ${formatDate(validity.expiresOn)}`;
+    return `${label} expiré ${formatDate(validity.expiresOn)}`;
   }
 
   if (validity.status === "pending_review") {
-    return `${label} en revision`;
+    return `${label} en révision`;
   }
 
   if (validity.status === "rejected") {
-    return `${label} refuse`;
+    return `${label} refusé`;
   }
 
   return `${label} manquant`;
@@ -2703,16 +2755,16 @@ function isActiveHorseStallBookingForShow(booking: StallBooking, showId: string,
   return Boolean(showId && booking.show_id === showId && booking.horse_id && booking.status !== "cancelled" && option && isStallReservationOption(option));
 }
 
-function stallOptionAssignmentLabel(option: StallOption) {
+function stallOptionAssignmentLabel(option: StallOption, locale: Locale = "fr") {
   if (option.category === "stall") {
     if (isTackStallOption(option)) {
-      return option.limit_per_horse_stalls ? `Non attitre, limite 1/${option.limit_per_horse_stalls} stalls chevaux` : "Non attitre";
+      return option.limit_per_horse_stalls ? uiText(locale, `Non attitré, limite 1/${option.limit_per_horse_stalls} stalls chevaux`, `Unassigned, limit 1/${option.limit_per_horse_stalls} horse stalls`) : uiText(locale, "Non attitré", "Unassigned");
     }
 
-    return "Par cheval";
+    return uiText(locale, "Par cheval", "Per horse");
   }
 
-  return "Reservation simple";
+  return uiText(locale, "Réservation simple", "Simple reservation");
 }
 
 function optionUsesDailyReservations(option: StallOption | null) {
@@ -2745,6 +2797,7 @@ function reservationStandaloneNotes(notes: string, productName: string) {
 }
 
 function ReservationProductSummary({
+  locale,
   availableQuantity,
   currency,
   option,
@@ -2752,6 +2805,7 @@ function ReservationProductSummary({
   quantityTooHigh,
   totalPrice,
 }: {
+  locale: Locale;
   availableQuantity?: number;
   currency: string;
   option: StallOption | null;
@@ -2763,8 +2817,8 @@ function ReservationProductSummary({
     return (
       <div className="reservation-product-summary empty">
         <span>
-          <strong>Aucun produit choisi</strong>
-          <small>Le prix, les dates et la facture se calculeront apres le choix du produit.</small>
+          <strong>{uiText(locale, "Aucun produit choisi", "No product selected")}</strong>
+          <small>{uiText(locale, "Le prix, les dates et la facture se calculeront après le choix du produit.", "Price, dates and invoice will be calculated after selecting a product.")}</small>
         </span>
       </div>
     );
@@ -2777,25 +2831,25 @@ function ReservationProductSummary({
       <span>
         <strong>{option.name}</strong>
         <small>
-          {categoryLabel(option.category)} / {displayAvailability} disponible{displayAvailability === 1 ? "" : "s"}
+          {categoryLabel(option.category, locale)} / {displayAvailability} {uiText(locale, `disponible${displayAvailability === 1 ? "" : "s"}`, "available")}
         </small>
       </span>
       <span>
         <strong>{formatCurrency(option.price, currency)}</strong>
-        <small>Prix unitaire</small>
+        <small>{uiText(locale, "Prix unitaire", "Unit price")}</small>
       </span>
       <span>
         <strong>{formatCurrency(totalPrice, currency)}</strong>
         <small>
-          {quantityNumber} x facture
+          {quantityNumber} x {uiText(locale, "facture", "invoice")}
         </small>
       </span>
     </div>
   );
 }
 
-function reservationOptionSelectLabel(option: StallOption, currency: string) {
-  const availability = option.available_quantity > 0 ? `${option.available_quantity}/${option.total_quantity} disponible` : "complet";
+function reservationOptionSelectLabel(option: StallOption, currency: string, locale: Locale = "fr") {
+  const availability = option.available_quantity > 0 ? uiText(locale, `${option.available_quantity}/${option.total_quantity} disponible`, `${option.available_quantity}/${option.total_quantity} available`) : uiText(locale, "complet", "full");
   return `${option.name} - ${formatCurrency(option.price, currency)} - ${availability}`;
 }
 
@@ -2803,7 +2857,7 @@ function reservationOptionAvailabilityLabel(option: StallOption, currency: strin
   return `${option.available_quantity} disponible${option.available_quantity === 1 ? "" : "s"} a ${formatCurrency(option.price, currency)}`;
 }
 
-function categoryLabel(category: StallOption["category"]) {
+function categoryLabel(category: StallOption["category"], locale: Locale = "fr") {
   switch (category) {
     case "stall":
       return "Stall";
@@ -2814,7 +2868,7 @@ function categoryLabel(category: StallOption["category"]) {
     case "extra":
       return "Extra";
     default:
-      return "Uncategorized";
+      return uiText(locale, "Sans catégorie", "Uncategorized");
   }
 }
 

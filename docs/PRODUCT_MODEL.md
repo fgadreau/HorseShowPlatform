@@ -28,7 +28,7 @@ For organization admins, show secretaries and show organizers.
 Expected workflows:
 
 - Configure shows
-- Configure slates, blocs, classes and pricing
+- Configure schedule, slates, blocs, classes and pricing
 - Search existing contacts, horses and entries
 - Create or edit records on behalf of competitors when needed
 - Manage invoices, payments, scratches and refunds
@@ -40,7 +40,7 @@ Admin data entry should avoid large dropdown menus. As the system grows, selecto
 
 Short lists such as status, language or role can remain dropdowns.
 
-## Program Structure
+## Schedule Structure
 
 The scheduling and sanctioning model should follow this hierarchy:
 
