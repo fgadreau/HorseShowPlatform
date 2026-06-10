@@ -293,6 +293,7 @@ export type EligibilityRules = {
 };
 
 export type PayoutScheduleType = "none" | "nrha_schedule_a" | "nrha_schedule_b" | "house_concentrated" | "house_distributed" | "house_custom" | "jackpot_100";
+export type ScheduleStartMode = "fixed" | "after_previous" | "unscheduled";
 
 export type ClassTemplate = {
   id: string;
@@ -358,6 +359,8 @@ export type ClassRecord = {
   draw_prepared_at: string | null;
   eligibility_rules: EligibilityRules;
   judge_name: string | null;
+  schedule_start_mode: ScheduleStartMode;
+  scheduled_time: string | null;
   sort_order: number;
   entry_fee: number | null;
   status: "open" | "closed" | "running" | "finished";
@@ -647,6 +650,8 @@ export type ClassInput = {
   draw_prepared_at?: string | null;
   eligibility_rules?: EligibilityRules;
   judge_name?: string;
+  schedule_start_mode?: ScheduleStartMode;
+  scheduled_time?: string | null;
   sort_order?: number;
   entry_fee?: number;
 };
@@ -669,6 +674,8 @@ export type ClassUpdateInput = {
   draw_prepared_at?: string | null;
   eligibility_rules?: EligibilityRules;
   judge_name?: string | null;
+  schedule_start_mode?: ScheduleStartMode;
+  scheduled_time?: string | null;
   sort_order?: number;
   entry_fee?: number | null;
   status?: ClassRecord["status"];

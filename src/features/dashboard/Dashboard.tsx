@@ -2,7 +2,11 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
   CalendarDays,
+  ChevronDown,
+  ChevronRight,
   CheckCircle2,
   CircleDollarSign,
   ClipboardList,
@@ -99,6 +103,7 @@ import type {
   OrganizationExternalMembershipRequirement,
   PayoutScheduleType,
   SanctioningBody,
+  ScheduleStartMode,
   Show,
   ShowDay,
   ShowScoreClassSetup,
@@ -2928,19 +2933,107 @@ function ClassesView({
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
 }) {
   const [creatingClassTemplate, setCreatingClassTemplate] = useState(false);
-  const [creatingClassTemplateDivision, setCreatingClassTemplateDivision] = useState(false);
-  const [creatingClass, setCreatingClass] = useState<"preset" | "custom" | null>(null);
-  const [creatingDivision, setCreatingDivision] = useState(false);
+  const [creatingClassTemplateDivision, setCreatingClassTemplateDivision] = useState<{ templateId?: string } | null>(null);
+  const [creatingClass, setCreatingClass] = useState<{ mode: "preset" | "custom"; classTemplateId?: string; showId?: string; showDayId?: string } | null>(null);
+  const [creatingDivision, setCreatingDivision] = useState<{ classId?: string } | null>(null);
   const [editingClassTemplate, setEditingClassTemplate] = useState<ClassTemplate | null>(null);
   const [editingClassTemplateDivision, setEditingClassTemplateDivision] = useState<ClassTemplateDivision | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingDivision, setEditingDivision] = useState<Division | null>(null);
+  const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
+  const [expandedScheduleBlockId, setExpandedScheduleBlockId] = useState<string | null>(null);
+  const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
+  const sortedShows = useMemo(() => [...shows].sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name)), [shows]);
+  const showDaysByShowId = useMemo(() => {
+    const grouped = new Map<string, ShowDay[]>();
+
+    for (const day of showDays) {
+      const days = grouped.get(day.show_id) ?? [];
+      days.push(day);
+      grouped.set(day.show_id, days);
+    }
+
+    for (const days of grouped.values()) {
+      days.sort((a, b) => a.sort_order - b.sort_order || a.day_date.localeCompare(b.day_date));
+    }
+
+    return grouped;
+  }, [showDays]);
+  const classesByShowDayId = useMemo(() => {
+    const grouped = new Map<string, ClassRecord[]>();
+
+    for (const classRecord of classes) {
+      if (!classRecord.show_day_id) {
+        continue;
+      }
+
+      const dayClasses = grouped.get(classRecord.show_day_id) ?? [];
+      dayClasses.push(classRecord);
+      grouped.set(classRecord.show_day_id, dayClasses);
+    }
+
+    for (const dayClasses of grouped.values()) {
+      dayClasses.sort(compareScheduleClasses);
+    }
+
+    return grouped;
+  }, [classes]);
+  const divisionsByClassId = useMemo(() => {
+    const grouped = new Map<string, Division[]>();
+
+    for (const division of divisions) {
+      const classDivisions = grouped.get(division.class_id) ?? [];
+      classDivisions.push(division);
+      grouped.set(division.class_id, classDivisions);
+    }
+
+    for (const classDivisions of grouped.values()) {
+      classDivisions.sort((a, b) => (a.code ?? "").localeCompare(b.code ?? "") || a.name.localeCompare(b.name));
+    }
+
+    return grouped;
+  }, [divisions]);
+  const templateDivisionsByTemplateId = useMemo(() => {
+    const grouped = new Map<string, ClassTemplateDivision[]>();
+
+    for (const division of classTemplateDivisions) {
+      const templateDivisions = grouped.get(division.class_template_id) ?? [];
+      templateDivisions.push(division);
+      grouped.set(division.class_template_id, templateDivisions);
+    }
+
+    for (const templateDivisions of grouped.values()) {
+      templateDivisions.sort((a, b) => a.sort_order - b.sort_order || (a.code ?? "").localeCompare(b.code ?? "") || a.name.localeCompare(b.name));
+    }
+
+    return grouped;
+  }, [classTemplateDivisions]);
+  const unassignedClassesByShowId = useMemo(() => {
+    const grouped = new Map<string, ClassRecord[]>();
+
+    for (const classRecord of classes) {
+      if (classRecord.show_day_id) {
+        continue;
+      }
+
+      const showClasses = grouped.get(classRecord.show_id) ?? [];
+      showClasses.push(classRecord);
+      grouped.set(classRecord.show_id, showClasses);
+    }
+
+    for (const showClasses of grouped.values()) {
+      showClasses.sort(compareScheduleClasses);
+    }
+
+    return grouped;
+  }, [classes]);
+  const hasActiveClassTemplates = classTemplates.some((template) => template.is_active);
 
   async function handleDeleteClassTemplate(template: ClassTemplate) {
     const templateClassCount = classTemplateDivisions.filter((division) => division.class_template_id === template.id).length;
     const message = templateClassCount
-      ? `Supprimer le bloc preset "${template.name}" et ses ${templateClassCount} classe${templateClassCount === 1 ? "" : "s"} de bloc preset?`
-      : `Supprimer le bloc preset "${template.name}"?`;
+      ? `Supprimer le bloc récurrent "${template.name}" et ses ${templateClassCount} classe${templateClassCount === 1 ? "" : "s"}?`
+      : `Supprimer le bloc récurrent "${template.name}"?`;
 
     if (!window.confirm(message)) {
       return;
@@ -2953,7 +3046,7 @@ function ClassesView({
   }
 
   async function handleDeleteClassTemplateDivision(division: ClassTemplateDivision) {
-    if (!window.confirm(`Supprimer la classe de bloc preset "${division.name}"? Les classes déjà créées depuis ce bloc preset resteront dans leurs blocs.`)) {
+    if (!window.confirm(`Supprimer la classe récurrente "${division.name}"? Les classes déjà créées depuis ce bloc récurrent resteront dans leurs blocs.`)) {
       return;
     }
 
@@ -3001,52 +3094,217 @@ function ClassesView({
     }
   }
 
+  async function handleMoveScheduleBlock(classRecord: ClassRecord, dayClasses: ClassRecord[], direction: -1 | 1) {
+    if (!canManuallyOrderClass(classRecord)) {
+      return;
+    }
+
+    const movableClasses = dayClasses.filter(canManuallyOrderClass).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    const currentIndex = movableClasses.findIndex((candidate) => candidate.id === classRecord.id);
+    const targetIndex = currentIndex + direction;
+
+    if (currentIndex < 0 || targetIndex < 0 || targetIndex >= movableClasses.length) {
+      return;
+    }
+
+    const nextOrder = [...movableClasses];
+    [nextOrder[currentIndex], nextOrder[targetIndex]] = [nextOrder[targetIndex], nextOrder[currentIndex]];
+
+    await Promise.all(nextOrder.map((candidate, index) => onUpdateClass(candidate.id, { sort_order: (index + 1) * 10 })));
+  }
+
+  function renderScheduleBlock(classRecord: ClassRecord, dayClasses: ClassRecord[]) {
+    const classDivisions = divisionsByClassId.get(classRecord.id) ?? [];
+    const isExpanded = expandedScheduleBlockId === classRecord.id;
+    const movableClasses = dayClasses.filter(canManuallyOrderClass).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    const movableIndex = movableClasses.findIndex((candidate) => candidate.id === classRecord.id);
+    const canMove = canManuallyOrderClass(classRecord) && movableIndex >= 0;
+
+    return (
+      <article className={`schedule-block ${isExpanded ? "expanded" : ""}`} key={classRecord.id}>
+        <div className="schedule-block-header">
+          <button aria-expanded={isExpanded} className="schedule-block-trigger" type="button" onClick={() => setExpandedScheduleBlockId(isExpanded ? null : classRecord.id)}>
+            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            <span>
+              <strong>{classRecord.name}</strong>
+              <span className="muted-line">
+                {[
+                  classDivisions.length ? uiText(locale, `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}`, `${classDivisions.length} class${classDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes"),
+                  classScheduleStartLabel(classRecord, locale),
+                  classRecord.block_label,
+                  classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
+                  classRecord.nrha_slate_number ? `Slate / show technique ${classRecord.nrha_slate_number}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" - ")}
+              </span>
+            </span>
+          </button>
+          <div className="row-actions schedule-block-actions">
+            {canMove ? (
+              <div className="schedule-order-actions">
+                <button className="icon-button" disabled={movableIndex <= 0} title={uiText(locale, "Monter", "Move up")} type="button" onClick={() => handleMoveScheduleBlock(classRecord, dayClasses, -1)}>
+                  <ArrowUp size={16} />
+                </button>
+                <button className="icon-button" disabled={movableIndex >= movableClasses.length - 1} title={uiText(locale, "Descendre", "Move down")} type="button" onClick={() => handleMoveScheduleBlock(classRecord, dayClasses, 1)}>
+                  <ArrowDown size={16} />
+                </button>
+              </div>
+            ) : null}
+            <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
+              {uiText(locale, "Modifier", "Edit")}
+            </button>
+            <button className="text-button" type="button" onClick={() => setCreatingDivision({ classId: classRecord.id })}>
+              {uiText(locale, "+ Classe", "+ Class")}
+            </button>
+            <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
+              {uiText(locale, "Supprimer", "Delete")}
+            </button>
+          </div>
+        </div>
+        <div className="schedule-block-meta">
+          <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies, locale)}</span>
+          <span>
+            {[
+              backNumberPolicyLabel(classRecord.back_number_policy, locale),
+              classRecord.entry_fee == null ? null : formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD"),
+              concurrentClassLabel(classRecord, classes, locale),
+              classEntriesCloseLabel(classRecord),
+            ]
+              .filter(Boolean)
+              .join(" - ") || uiText(locale, "Paramètres du bloc", "Block settings")}
+          </span>
+        </div>
+        {isExpanded ? (
+          <div className="schedule-class-list">
+            {classDivisions.map((division) => (
+              <div className="schedule-class-row" key={division.id}>
+                <div>
+                  <strong>{division.name}</strong>
+                  <span className="muted-line">
+                    {[
+                      division.code ? `#${division.code}` : null,
+                      isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
+                      division.entry_fee == null ? uiText(locale, "Frais classe", "Class fee") : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
+                      division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
+                      payoutDivisionSummary(division, locale),
+                    ]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </span>
+                </div>
+                <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies, locale)}</span>
+                <div className="row-actions schedule-class-actions">
+                  <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
+                    {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteDivision(division)}>
+                    {uiText(locale, "Supprimer", "Delete")}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!classDivisions.length ? <EmptyState label={uiText(locale, "Clique + Classe pour ajouter une classe dans ce bloc.", "Click + Class to add a class to this block.")} /> : null}
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
+  function renderRecurringBlock(template: ClassTemplate) {
+    const templateDivisions = templateDivisionsByTemplateId.get(template.id) ?? [];
+    const isExpanded = expandedTemplateId === template.id;
+
+    return (
+      <article className={`recurring-block ${isExpanded ? "expanded" : ""}`} key={template.id}>
+        <div className="recurring-block-header">
+          <button aria-expanded={isExpanded} className="recurring-block-trigger" type="button" onClick={() => setExpandedTemplateId(isExpanded ? null : template.id)}>
+            {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+            <span>
+              <strong>{template.name}</strong>
+              <span className="muted-line">
+                {[
+                  templateDivisions.length ? uiText(locale, `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`, `${templateDivisions.length} class${templateDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes"),
+                  template.block_label,
+                  template.category,
+                  template.default_pattern ? `Pattern ${template.default_pattern}` : null,
+                ]
+                  .filter(Boolean)
+                  .join(" - ") || template.code || uiText(locale, "Bloc récurrent", "Recurring block")}
+              </span>
+            </span>
+          </button>
+          <div className="row-actions recurring-block-actions">
+            <button className="text-button" disabled={!organization || !shows.length || !template.is_active} type="button" onClick={() => setCreatingClass({ mode: "preset", classTemplateId: template.id })}>
+              {uiText(locale, "Utiliser", "Use")}
+            </button>
+            <button className="text-button" type="button" onClick={() => setEditingClassTemplate(template)}>
+              {uiText(locale, "Modifier", "Edit")}
+            </button>
+            <button className="text-button" type="button" onClick={() => setCreatingClassTemplateDivision({ templateId: template.id })}>
+              {uiText(locale, "+ Classe", "+ Class")}
+            </button>
+            <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplate(template)}>
+              {uiText(locale, "Supprimer", "Delete")}
+            </button>
+          </div>
+        </div>
+        <div className="recurring-block-meta">
+          <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale)}</span>
+          <span>{backNumberPolicyLabel(template.back_number_policy, locale)}</span>
+        </div>
+        {isExpanded ? (
+          <div className="schedule-class-list">
+            {templateDivisions.map((division) => (
+              <div className="schedule-class-row recurring-class-row" key={division.id}>
+                <div>
+                  <strong>{division.name}</strong>
+                  <span className="muted-line">
+                    {[
+                      division.code ? `#${division.code}` : uiText(locale, "Sans code", "No code"),
+                      isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
+                      division.default_entry_fee == null ? null : `${uiText(locale, "Insc.", "Entry")} ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
+                      division.default_judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
+                      payoutTemplateDivisionSummary(division, locale),
+                    ]
+                      .filter(Boolean)
+                      .join(" - ")}
+                  </span>
+                </div>
+                <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies, locale)}</span>
+                <div className="row-actions schedule-class-actions">
+                  <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
+                    {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplateDivision(division)}>
+                    {uiText(locale, "Supprimer", "Delete")}
+                  </button>
+                </div>
+              </div>
+            ))}
+            {!templateDivisions.length ? <EmptyState label={uiText(locale, "Ajoute les classes qui reviennent avec ce bloc.", "Add the classes that recur with this block.")} /> : null}
+          </div>
+        ) : null}
+      </article>
+    );
+  }
+
   return (
     <div className="content-grid">
       <ViewIntro
         eyebrow={uiText(locale, "Horaire", "Schedule")}
-        title={uiText(locale, "Blocs et classes", "Schedule blocks and classes")}
-        description={uiText(locale, "Structure l'horaire sportif: blocs, classes, frais et statuts d'ouverture.", "Structure the show schedule: schedule blocks, classes, fees and entry status.")}
+        title={uiText(locale, "Horaire par journées", "Schedule by day")}
+        description={uiText(locale, "Place les blocs dans les journées du concours, puis gère les classes directement dans chaque bloc.", "Place blocks inside show days, then manage the classes directly inside each block.")}
         stats={[
+          { label: uiText(locale, "Journées", "Days"), value: String(showDays.length) },
           { label: uiText(locale, "Blocs", "Blocks"), value: String(classes.length) },
           { label: uiText(locale, "Classes", "Classes"), value: String(divisions.length) },
-          { label: "Presets", value: String(classTemplates.length) },
+          { label: uiText(locale, "Récurrents", "Recurring"), value: String(classTemplates.length) },
         ]}
       />
 
-      <section className="panel span-2 form-launch-panel">
-        <div className="panel-header">
-          <div>
-            <h2>{uiText(locale, "Ajouter à l'horaire", "Add to schedule")}</h2>
-            <p>{uiText(locale, "Crée un bloc depuis un bloc preset, un bloc libre ou une classe sans quitter l'horaire.", "Create a block from a preset, a custom block or a class without leaving the schedule.")}</p>
-          </div>
-          <div className="row-actions">
-            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingClassTemplate(true)}>
-              <Plus size={18} />
-              {uiText(locale, "Bloc preset", "Block preset")}
-            </button>
-            <button className="primary-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision(true)}>
-              <Plus size={18} />
-              {uiText(locale, "Classe de bloc preset", "Preset block class")}
-            </button>
-            <button className="primary-button" disabled={!organization || !shows.length || !classTemplates.length} type="button" onClick={() => setCreatingClass("preset")}>
-              <Plus size={18} />
-              {uiText(locale, "Bloc preset", "Preset block")}
-            </button>
-            <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingClass("custom")}>
-              <Plus size={18} />
-              {uiText(locale, "Bloc libre", "Custom block")}
-            </button>
-            <button className="primary-button" disabled={!organization || !classes.length} type="button" onClick={() => setCreatingDivision(true)}>
-              <Plus size={18} />
-              {uiText(locale, "Classe", "Class")}
-            </button>
-          </div>
-        </div>
-      </section>
-
       {creatingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc preset", "New block preset")} onClose={() => setCreatingClassTemplate(false)}>
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc récurrent", "New recurring block")} onClose={() => setCreatingClassTemplate(false)}>
           <ClassTemplateForm
             locale={locale}
             organization={organization}
@@ -3058,26 +3316,30 @@ function ClassesView({
       ) : null}
 
       {creatingClassTemplateDivision ? (
-        <ModalDialog className="class-program-modal" description={uiText(locale, "Classe régulière rattachée à un bloc preset.", "Reusable class attached to a block preset.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Classe de bloc preset", "Preset block class")} onClose={() => setCreatingClassTemplateDivision(false)}>
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Classe régulière rattachée à un bloc récurrent.", "Reusable class attached to a recurring block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Classe de bloc récurrent", "Recurring block class")} onClose={() => setCreatingClassTemplateDivision(null)}>
           <ClassTemplateDivisionForm
             locale={locale}
             classTemplates={classTemplates}
+            defaultTemplateId={creatingClassTemplateDivision.templateId}
             organization={organization}
             sanctioningBodies={sanctioningBodies}
             onCreateClassTemplateDivision={onCreateClassTemplateDivision}
-            onCreated={() => setCreatingClassTemplateDivision(false)}
+            onCreated={() => setCreatingClassTemplateDivision(null)}
           />
         </ModalDialog>
       ) : null}
 
       {creatingClass ? (
-        <ModalDialog className="class-program-modal" description={creatingClass === "preset" ? uiText(locale, "Choisis un bloc preset ou passe en bloc libre au besoin.", "Choose a block preset or switch to custom if needed.") : uiText(locale, "Crée un bloc hors catalogue.", "Create a block outside the catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={creatingClass === "preset" ? uiText(locale, "Nouveau bloc depuis bloc preset", "New block from preset") : uiText(locale, "Nouveau bloc libre", "New custom block")} onClose={() => setCreatingClass(null)}>
+        <ModalDialog className="class-program-modal" description={creatingClass.mode === "preset" ? uiText(locale, "Choisis un bloc récurrent de l'association.", "Choose an association recurring block.") : uiText(locale, "Crée un bloc libre pour une journée du concours.", "Create a custom block for a show day.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={creatingClass.mode === "preset" ? uiText(locale, "Nouveau bloc depuis un bloc récurrent", "New block from recurring block") : uiText(locale, "Nouveau bloc libre", "New custom block")} onClose={() => setCreatingClass(null)}>
           <ClassForm
             locale={locale}
             classes={classes}
             classTemplateDivisions={classTemplateDivisions}
             classTemplates={classTemplates}
-            defaultMode={creatingClass}
+            defaultMode={creatingClass.mode}
+            defaultTemplateId={creatingClass.classTemplateId}
+            defaultShowDayId={creatingClass.showDayId}
+            defaultShowId={creatingClass.showId}
             organization={organization}
             sanctioningBodies={sanctioningBodies}
             showDays={showDays}
@@ -3090,13 +3352,13 @@ function ClassesView({
       ) : null}
 
       {creatingDivision ? (
-        <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute une classe d'inscription sous un bloc existant.", "Add an entry class under an existing block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvelle classe", "New class")} onClose={() => setCreatingDivision(false)}>
-          <DivisionForm locale={locale} classes={classes} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(false)} />
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute une classe d'inscription sous un bloc existant.", "Add an entry class under an existing block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvelle classe", "New class")} onClose={() => setCreatingDivision(null)}>
+          <DivisionForm locale={locale} classes={classes} defaultClassId={creatingDivision.classId} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(null)} />
         </ModalDialog>
       ) : null}
 
       {editingClassTemplate ? (
-        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le bloc preset", "Edit block preset")} onClose={() => setEditingClassTemplate(null)}>
+        <ModalDialog className="class-program-modal" description={editingClassTemplate.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le bloc récurrent", "Edit recurring block")} onClose={() => setEditingClassTemplate(null)}>
           <ClassTemplateEditForm
             locale={locale}
             classTemplate={editingClassTemplate}
@@ -3111,7 +3373,7 @@ function ClassesView({
       ) : null}
 
       {editingClassTemplateDivision ? (
-        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier la classe de bloc preset", "Edit preset block class")} onClose={() => setEditingClassTemplateDivision(null)}>
+        <ModalDialog className="class-program-modal" description={editingClassTemplateDivision.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier la classe récurrente", "Edit recurring class")} onClose={() => setEditingClassTemplateDivision(null)}>
           <ClassTemplateDivisionEditForm
             locale={locale}
             classTemplates={classTemplates}
@@ -3133,6 +3395,7 @@ function ClassesView({
             classes={classes}
             classRecord={editingClass}
             sanctioningBodies={sanctioningBodies}
+            showDays={showDays}
             onCancel={() => setEditingClass(null)}
             onUpdateClass={async (id, input) => {
               await onUpdateClass(id, input);
@@ -3158,223 +3421,122 @@ function ClassesView({
         </ModalDialog>
       ) : null}
 
-      <section className="panel span-2">
+      <section className="panel span-2 schedule-days-panel">
         <div className="panel-header">
           <div>
-            <h2>{uiText(locale, "Blocs presets", "Block presets")}</h2>
-            <p>{classTemplates.length ? uiText(locale, `${classTemplates.length} bloc${classTemplates.length === 1 ? "" : "s"} preset configuré${classTemplates.length === 1 ? "" : "s"}.`, `${classTemplates.length} block preset${classTemplates.length === 1 ? "" : "s"} configured.`) : uiText(locale, "Le catalogue de blocs récurrents de l'association.", "The association catalog of reusable schedule blocks.")}</p>
+            <h2>{uiText(locale, "Journées du concours", "Show days")}</h2>
+            <p>{uiText(locale, "Chaque show garde ses journées issues des dates; les blocs se placent ensuite dans la bonne journée.", "Each show keeps the days generated from its dates; blocks are then placed in the right day.")}</p>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>{uiText(locale, "Bloc preset", "Block preset")}</span>
-            <span>{uiText(locale, "Sanctions", "Sanctioning")}</span>
-            <span>{uiText(locale, "Dossard", "Back number")}</span>
-            <span>{uiText(locale, "Classes", "Classes")}</span>
-          </div>
-          {classTemplates.map((template) => {
-            const templateDivisions = classTemplateDivisions.filter((division) => division.class_template_id === template.id);
+        <div className="show-schedule-list">
+          {sortedShows.map((show) => {
+            const showDaysForShow = showDaysByShowId.get(show.id) ?? [];
+            const unassignedClasses = unassignedClassesByShowId.get(show.id) ?? [];
+            const showClassCount = showDaysForShow.reduce((total, day) => total + (classesByShowDayId.get(day.id)?.length ?? 0), unassignedClasses.length);
+            const isShowExpanded = expandedShowId === show.id;
+
             return (
-              <div className="table-row" key={template.id}>
-                <div>
-                  <strong>{template.name}</strong>
-                  <span className="muted-line">
-                    {[
-                      template.block_label,
-                      template.category,
-                      template.default_pattern ? `Pattern ${template.default_pattern}` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(" - ") || template.code || uiText(locale, "Bloc preset", "Block preset")}
+              <div className={`show-schedule-group ${isShowExpanded ? "expanded" : ""}`} key={show.id}>
+                <div className="show-schedule-header">
+                  <button aria-expanded={isShowExpanded} className="show-schedule-trigger" type="button" onClick={() => setExpandedShowId(isShowExpanded ? null : show.id)}>
+                    {isShowExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                    <span>
+                      <strong>{show.name}</strong>
+                      <span className="muted-line">
+                        {[
+                          uiText(locale, `${showDaysForShow.length} journée${showDaysForShow.length === 1 ? "" : "s"}`, `${showDaysForShow.length} day${showDaysForShow.length === 1 ? "" : "s"}`),
+                          uiText(locale, `${showClassCount} bloc${showClassCount === 1 ? "" : "s"}`, `${showClassCount} block${showClassCount === 1 ? "" : "s"}`),
+                        ].join(" - ")}
+                      </span>
+                    </span>
+                  </button>
+                  <span className="schedule-count-pill">
+                    {showStatusLabel(show.status, locale)}
                   </span>
-                  <button className="text-button inline-action" type="button" onClick={() => setEditingClassTemplate(template)}>
-                    {uiText(locale, "Modifier", "Edit")}
-                  </button>
-                  <button className="text-button danger-text inline-action" type="button" onClick={() => handleDeleteClassTemplate(template)}>
-                    {uiText(locale, "Supprimer", "Delete")}
-                  </button>
                 </div>
-                <span>{sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale)}</span>
-                <span>{backNumberPolicyLabel(template.back_number_policy, locale)}</span>
-                <span>
-                  {templateDivisions.length
-                    ? templateDivisions
-                        .map((division) =>
-                          [
-                            division.code ? `#${division.code}` : null,
-                            division.name,
-                            isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "type NRHA à préciser", "NRHA type required") : null,
-                            division.default_entry_fee == null ? null : `insc. ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
-                            division.default_judge_fee == null ? null : `juge ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
-                            payoutTemplateDivisionSummary(division, locale),
-                          ]
-                            .filter(Boolean)
-                            .join(" "),
-                        )
-                        .join(", ")
-                    : uiText(locale, "Aucune classe", "No classes")}
-                </span>
+                {isShowExpanded ? (
+                  <div className="show-schedule-body">
+                    <div className="show-schedule-details">
+                      <span>{show.start_date === show.end_date ? formatDate(show.start_date) : `${formatDate(show.start_date)} - ${formatDate(show.end_date)}`}</span>
+                      {show.venue ? <span>{show.venue}</span> : null}
+                      {show.location ? <span>{show.location}</span> : null}
+                    </div>
+                    <div className="schedule-day-list">
+                      {showDaysForShow.map((day) => {
+                        const dayClasses = classesByShowDayId.get(day.id) ?? [];
+
+                        return (
+                          <article className="schedule-day" key={day.id}>
+                            <div className="schedule-day-header">
+                              <div>
+                                <span className="schedule-day-date">
+                                  <CalendarDays size={18} />
+                                  {showDayLabel(day)}
+                                </span>
+                                <span className="muted-line">
+                                  {day.start_time ? `${uiText(locale, "Début", "Start")} ${day.start_time.slice(0, 5)}` : uiText(locale, "Début à préciser", "Start to confirm")}
+                                </span>
+                              </div>
+                              <div className="row-actions schedule-day-actions">
+                                <button className="primary-button" disabled={!organization || !hasActiveClassTemplates} type="button" onClick={() => setCreatingClass({ mode: "preset", showId: show.id, showDayId: day.id })}>
+                                  <Plus size={18} />
+                                  {uiText(locale, "Bloc récurrent", "Recurring block")}
+                                </button>
+                                <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingClass({ mode: "custom", showId: show.id, showDayId: day.id })}>
+                                  <Plus size={18} />
+                                  {uiText(locale, "Bloc libre", "Custom block")}
+                                </button>
+                              </div>
+                            </div>
+                            <div className="schedule-block-list">
+                              {dayClasses.map((classRecord) => renderScheduleBlock(classRecord, dayClasses))}
+                              {!dayClasses.length ? <EmptyState label={uiText(locale, "Aucun bloc dans cette journée.", "No block in this day.")} /> : null}
+                            </div>
+                          </article>
+                        );
+                      })}
+                      {!showDaysForShow.length ? <EmptyState label={uiText(locale, "Aucune journée n'est générée pour ce show.", "No day has been generated for this show.")} /> : null}
+                      {unassignedClasses.length ? (
+                        <article className="schedule-day schedule-day-unassigned">
+                          <div className="schedule-day-header">
+                            <div>
+                              <span className="schedule-day-date">{uiText(locale, "Blocs à placer", "Blocks to place")}</span>
+                              <span className="muted-line">{uiText(locale, "Ces blocs existent, mais ne sont pas encore rattachés à une journée.", "These blocks exist, but are not attached to a day yet.")}</span>
+                            </div>
+                          </div>
+                          <div className="schedule-block-list">{unassignedClasses.map((classRecord) => renderScheduleBlock(classRecord, unassignedClasses))}</div>
+                        </article>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
               </div>
             );
           })}
-          {!classTemplates.length ? <EmptyState label={uiText(locale, "Crée le premier bloc preset de cette association.", "Create the first block preset for this association.")} /> : null}
+          {!sortedShows.length ? <EmptyState label={uiText(locale, "Crée un show pour générer ses journées.", "Create a show to generate its days.")} /> : null}
         </div>
       </section>
 
-      <section className="panel span-2">
+      <section className="panel span-2 recurring-catalog-panel">
         <div className="panel-header">
           <div>
-            <h2>{uiText(locale, "Classes de blocs presets", "Preset block classes")}</h2>
-            <p>{classTemplateDivisions.length ? uiText(locale, `${classTemplateDivisions.length} classe${classTemplateDivisions.length === 1 ? "" : "s"} de bloc preset.`, `${classTemplateDivisions.length} preset block class${classTemplateDivisions.length === 1 ? "" : "es"}.`) : uiText(locale, "Ajoute les classes régulières sous un bloc preset.", "Add reusable classes under a block preset.")}</p>
+            <h2>{uiText(locale, "Blocs de classes récurrents", "Recurring class blocks")}</h2>
+            <p>{uiText(locale, "Catalogue de l'association, réutilisable dans n'importe quel show.", "Association catalog, reusable in any show.")}</p>
+          </div>
+          <div className="row-actions">
+            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingClassTemplate(true)}>
+              <Plus size={18} />
+              {uiText(locale, "Bloc récurrent", "Recurring block")}
+            </button>
+            <button className="ghost-button" disabled={!organization || !classTemplates.length} type="button" onClick={() => setCreatingClassTemplateDivision({})}>
+              <Plus size={18} />
+              {uiText(locale, "Classe récurrente", "Recurring class")}
+            </button>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>{uiText(locale, "Classe", "Class")}</span>
-            <span>{uiText(locale, "Bloc preset", "Block preset")}</span>
-            <span>{uiText(locale, "Frais", "Fees")}</span>
-            <span>{uiText(locale, "Action", "Action")}</span>
-          </div>
-          {classTemplateDivisions.map((division) => (
-            <div className="table-row" key={division.id}>
-              <div>
-                <strong>{division.name}</strong>
-                <span className="muted-line">
-                  {[
-                    division.code ? `#${division.code}` : uiText(locale, "Sans code", "No code"),
-                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" - ")}
-                </span>
-              </div>
-              <span>{findById(classTemplates, division.class_template_id)?.name ?? uiText(locale, "Bloc preset inconnu", "Unknown block preset")}</span>
-              <span>
-                {[
-                  division.default_entry_fee == null ? null : `${uiText(locale, "Insc.", "Entry")} ${formatCurrency(division.default_entry_fee, organization?.currency ?? "CAD")}`,
-                  division.default_judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.default_judge_fee, organization?.currency ?? "CAD")}`,
-                  payoutTemplateDivisionSummary(division, locale),
-                ]
-                  .filter(Boolean)
-                  .join(" - ") || uiText(locale, "Aucun frais", "No fees")}
-              </span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingClassTemplateDivision(division)}>
-                  {uiText(locale, "Modifier", "Edit")}
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplateDivision(division)}>
-                  {uiText(locale, "Supprimer", "Delete")}
-                </button>
-              </div>
-            </div>
-          ))}
-          {!classTemplateDivisions.length ? <EmptyState label={uiText(locale, "Aucune classe de bloc preset pour l'instant.", "No preset block classes yet.")} /> : null}
-        </div>
-      </section>
-
-      <section className="panel span-2">
-        <div className="panel-header">
-          <div>
-            <h2>{uiText(locale, "Blocs", "Schedule blocks")}</h2>
-            <p>{classes.length ? uiText(locale, `${classes.length} bloc${classes.length === 1 ? "" : "s"} configuré${classes.length === 1 ? "" : "s"}.`, `${classes.length} schedule block${classes.length === 1 ? "" : "s"} configured.`) : uiText(locale, "Les blocs regroupent les classes qui partagent un ordre de passage.", "Schedule blocks group classes that share one draw order.")}</p>
-          </div>
-        </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>{uiText(locale, "Bloc", "Block")}</span>
-            <span>{uiText(locale, "Concours", "Show")}</span>
-            <span>{uiText(locale, "Horaire", "Schedule")}</span>
-            <span>{uiText(locale, "Action", "Action")}</span>
-          </div>
-          {classes.map((classRecord) => {
-            const classDivisions = divisions.filter((division) => division.class_id === classRecord.id);
-            return (
-              <div className="table-row" key={classRecord.id}>
-                <div>
-                  <strong>{classRecord.name}</strong>
-                  <span className="muted-line">
-                    {classDivisions.length ? uiText(locale, `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}`, `${classDivisions.length} class${classDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes")}
-                    {classRecord.entry_fee == null ? "" : ` - ${formatCurrency(classRecord.entry_fee, organization?.currency ?? "CAD")}`}
-                  </span>
-                </div>
-                <div>
-                  <span>{showLabel(findById(shows, classRecord.show_id))}</span>
-                  <span className="muted-line">
-                    {classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : uiText(locale, "Aucune journée", "No day")}
-                  </span>
-                </div>
-                <div>
-                  <span>{sanctionLabel(classRecord.sanctioning_body_codes, sanctioningBodies, locale)}</span>
-                  <span className="muted-line">
-                    {[
-                      classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
-                      classRecord.nrha_slate_number ? `Slate / show technique ${classRecord.nrha_slate_number}` : null,
-                      concurrentClassLabel(classRecord, classes, locale),
-                      backNumberPolicyLabel(classRecord.back_number_policy, locale),
-                      classEntriesCloseLabel(classRecord),
-                    ]
-                      .filter(Boolean)
-                      .join(" - ")}
-                  </span>
-                </div>
-                <div className="row-actions">
-                  <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
-                    {uiText(locale, "Modifier", "Edit")}
-                  </button>
-                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
-                    {uiText(locale, "Supprimer", "Delete")}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-          {!classes.length ? <EmptyState label={uiText(locale, "Crée le premier bloc du concours.", "Create the first schedule block for the show.")} /> : null}
-        </div>
-      </section>
-
-      <section className="panel span-2">
-        <div className="panel-header">
-          <div>
-            <h2>{uiText(locale, "Classes", "Classes")}</h2>
-            <p>{divisions.length ? uiText(locale, `${divisions.length} classe${divisions.length === 1 ? "" : "s"} configurée${divisions.length === 1 ? "" : "s"}.`, `${divisions.length} class${divisions.length === 1 ? "" : "es"} configured.`) : uiText(locale, "Les classes sont rattachées aux blocs.", "Classes are attached to schedule blocks.")}</p>
-          </div>
-        </div>
-        <div className="table">
-          <div className="table-row table-head">
-            <span>{uiText(locale, "Classe", "Class")}</span>
-            <span>{uiText(locale, "Bloc", "Block")}</span>
-            <span>{uiText(locale, "Sanctions", "Sanctioning")}</span>
-            <span>{uiText(locale, "Action", "Action")}</span>
-          </div>
-          {divisions.map((division) => (
-            <div className="table-row" key={division.id}>
-              <div>
-                <strong>{division.name}</strong>
-                <span className="muted-line">
-                  {[
-                    division.code ? `#${division.code}` : null,
-                    isNrhaSanctioned(division.sanctioning_body_codes) ? nrhaClassTypeLabel(nrhaClassTypeFromRules(division.eligibility_rules)) || uiText(locale, "Type NRHA à préciser", "NRHA type required") : null,
-                    division.entry_fee == null ? uiText(locale, "Frais classe", "Class fee") : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(division.entry_fee, organization?.currency ?? "CAD")}`,
-                    division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
-                    payoutDivisionSummary(division, locale),
-                    ]
-                    .filter(Boolean)
-                    .join(" - ")}
-                </span>
-              </div>
-              <span>{findById(classes, division.class_id)?.name ?? uiText(locale, "Bloc inconnu", "Unknown block")}</span>
-              <span>{sanctionLabel(division.sanctioning_body_codes, sanctioningBodies, locale)}</span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingDivision(division)}>
-                  {uiText(locale, "Modifier", "Edit")}
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteDivision(division)}>
-                  {uiText(locale, "Supprimer", "Delete")}
-                </button>
-              </div>
-            </div>
-          ))}
-          {!divisions.length ? <EmptyState label={uiText(locale, "Crée une classe après avoir créé un bloc.", "Create a class after creating a schedule block.")} /> : null}
+        <div className="recurring-block-list">
+          {classTemplates.map(renderRecurringBlock)}
+          {!classTemplates.length ? <EmptyState label={uiText(locale, "Crée le premier bloc récurrent de cette association.", "Create the first recurring block for this association.")} /> : null}
         </div>
       </section>
     </div>
@@ -8777,8 +8939,79 @@ function showPaymentSummary(show: Show) {
   return `${reservationLabel} - ${entryLabel}`;
 }
 
+function showStatusLabel(status: Show["status"], locale: Locale = "fr") {
+  switch (status) {
+    case "open":
+      return uiText(locale, "Ouvert", "Open");
+    case "closed":
+      return uiText(locale, "Fermé", "Closed");
+    case "archived":
+      return uiText(locale, "Archivé", "Archived");
+    case "draft":
+    default:
+      return uiText(locale, "Brouillon", "Draft");
+  }
+}
+
 function showDayLabel(day: ShowDay) {
   return `${day.day_name || `Day ${day.day_number ?? ""}`.trim()} - ${formatDate(day.day_date)}`;
+}
+
+function scheduleStartModeForClass(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">): ScheduleStartMode {
+  return classRecord.schedule_start_mode ?? (classRecord.scheduled_time ? "fixed" : "unscheduled");
+}
+
+function classHasFixedStart(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">) {
+  return scheduleStartModeForClass(classRecord) === "fixed" && Boolean(classRecord.scheduled_time);
+}
+
+function canManuallyOrderClass(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">) {
+  return !classHasFixedStart(classRecord);
+}
+
+function compareScheduleClasses(a: ClassRecord, b: ClassRecord) {
+  const aFixed = classHasFixedStart(a);
+  const bFixed = classHasFixedStart(b);
+
+  if (aFixed && bFixed) {
+    return (a.scheduled_time ?? "").localeCompare(b.scheduled_time ?? "") || a.sort_order - b.sort_order || a.name.localeCompare(b.name);
+  }
+
+  if (aFixed !== bFixed) {
+    return aFixed ? -1 : 1;
+  }
+
+  return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
+}
+
+function timeInputValue(time: string | null | undefined) {
+  return time ? time.slice(0, 5) : "";
+}
+
+function classScheduleStartLabel(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">, locale: Locale = "fr") {
+  const mode = scheduleStartModeForClass(classRecord);
+
+  if (mode === "fixed" && classRecord.scheduled_time) {
+    return uiText(locale, `Début ${timeInputValue(classRecord.scheduled_time)}`, `Start ${timeInputValue(classRecord.scheduled_time)}`);
+  }
+
+  if (mode === "after_previous") {
+    return uiText(locale, "À la suite du bloc précédent", "After previous block");
+  }
+
+  return uiText(locale, "Heure indéfinie", "Start undefined");
+}
+
+function scheduleStartModeLabel(mode: ScheduleStartMode, locale: Locale = "fr") {
+  switch (mode) {
+    case "fixed":
+      return uiText(locale, "Heure fixe", "Fixed time");
+    case "after_previous":
+      return uiText(locale, "À la suite du bloc précédent", "After previous block");
+    case "unscheduled":
+    default:
+      return uiText(locale, "Heure indéfinie", "Undefined time");
+  }
 }
 
 function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"], locale: Locale = "fr") {
@@ -8896,7 +9129,7 @@ function ClassTemplateForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>{uiText(locale, "Nouveau bloc preset", "New block preset")}</h2>
+          <h2>{uiText(locale, "Nouveau bloc récurrent", "New recurring block")}</h2>
           <p>{uiText(locale, "Catalogue régulier de l'association.", "Reusable association catalog.")}</p>
         </div>
       </div>
@@ -8949,7 +9182,7 @@ function ClassTemplateForm({
         </label>
         <button className="primary-button" disabled={busy || !organization} type="submit">
           <Plus size={18} />
-          {uiText(locale, "Créer le bloc preset", "Create block preset")}
+          {uiText(locale, "Créer le bloc récurrent", "Create recurring block")}
         </button>
       </form>
     </section>
@@ -8959,6 +9192,7 @@ function ClassTemplateForm({
 function ClassTemplateDivisionForm({
   locale = "fr",
   classTemplates,
+  defaultTemplateId,
   organization,
   sanctioningBodies,
   onCreateClassTemplateDivision,
@@ -8966,12 +9200,13 @@ function ClassTemplateDivisionForm({
 }: {
   locale?: Locale;
   classTemplates: ClassTemplate[];
+  defaultTemplateId?: string;
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreated?: () => void;
 }) {
-  const [templateId, setTemplateId] = useState("");
+  const [templateId, setTemplateId] = useState(defaultTemplateId ?? "");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
@@ -9059,17 +9294,17 @@ function ClassTemplateDivisionForm({
     <section className="panel">
       <div className="panel-header">
         <div>
-          <h2>{uiText(locale, "Classe de bloc preset", "Preset block class")}</h2>
-          <p>{selectedTemplate ? selectedTemplate.name : uiText(locale, "Crée un bloc preset d'abord.", "Create a block preset first.")}</p>
+          <h2>{uiText(locale, "Classe de bloc récurrent", "Recurring block class")}</h2>
+          <p>{selectedTemplate ? selectedTemplate.name : uiText(locale, "Crée un bloc récurrent d'abord.", "Create a recurring block first.")}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          {uiText(locale, "Bloc preset", "Block preset")}
+          {uiText(locale, "Bloc récurrent", "Recurring block")}
           <SearchSelect
             disabled={!organization || !classTemplates.length}
             items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale) }))}
-            placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
+            placeholder={uiText(locale, "Rechercher un bloc récurrent", "Search recurring block")}
             value={selectedTemplate?.id ?? ""}
             onChange={setTemplateId}
           />
@@ -9148,7 +9383,7 @@ function ClassTemplateDivisionForm({
         </label>
         <button className="primary-button" disabled={busy || !organization || !classTemplates.length} type="submit">
           <Plus size={18} />
-          {uiText(locale, "Créer la classe de bloc preset", "Create preset block class")}
+          {uiText(locale, "Créer la classe récurrente", "Create recurring class")}
         </button>
       </form>
     </section>
@@ -9213,7 +9448,7 @@ function ClassTemplateEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>{uiText(locale, "Modifier le bloc preset", "Edit block preset")}</h2>
+          <h2>{uiText(locale, "Modifier le bloc récurrent", "Edit recurring block")}</h2>
           <p>{classTemplate.name}</p>
         </div>
       </div>
@@ -9265,7 +9500,7 @@ function ClassTemplateEditForm({
         </label>
         <label className="check-row">
           <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
-          <span>{uiText(locale, "Bloc preset actif", "Active block preset")}</span>
+          <span>{uiText(locale, "Bloc récurrent actif", "Active recurring block")}</span>
         </label>
         <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
@@ -9360,16 +9595,16 @@ function ClassTemplateDivisionEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>{uiText(locale, "Modifier la classe de bloc preset", "Edit preset block class")}</h2>
+          <h2>{uiText(locale, "Modifier la classe récurrente", "Edit recurring class")}</h2>
           <p>{classTemplateDivision.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          {uiText(locale, "Bloc preset", "Block preset")}
+          {uiText(locale, "Bloc récurrent", "Recurring block")}
           <SearchSelect
             items={classTemplates.map((template) => ({ id: template.id, label: template.name, detail: sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale) }))}
-            placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
+            placeholder={uiText(locale, "Rechercher un bloc récurrent", "Search recurring block")}
             value={templateId}
             onChange={setTemplateId}
           />
@@ -9451,6 +9686,9 @@ function ClassForm({
   classTemplateDivisions,
   classTemplates,
   defaultMode = "preset",
+  defaultShowDayId,
+  defaultShowId,
+  defaultTemplateId,
   organization,
   sanctioningBodies,
   showDays,
@@ -9464,6 +9702,9 @@ function ClassForm({
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
   defaultMode?: "preset" | "custom";
+  defaultShowDayId?: string;
+  defaultShowId?: string;
+  defaultTemplateId?: string;
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   showDays: ShowDay[];
@@ -9472,23 +9713,26 @@ function ClassForm({
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreated?: () => void;
 }) {
+  const initialTemplate = defaultTemplateId ? findById(classTemplates, defaultTemplateId) : null;
   const [creationMode, setCreationMode] = useState<"preset" | "custom">(defaultMode);
-  const [showId, setShowId] = useState("");
-  const [showDayId, setShowDayId] = useState("");
-  const [templateId, setTemplateId] = useState("");
-  const [name, setName] = useState("");
-  const [code, setCode] = useState("");
-  const [blockLabel, setBlockLabel] = useState("");
-  const [pattern, setPattern] = useState("");
-  const [entryFee, setEntryFee] = useState("");
-  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>([]);
-  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>("horse");
+  const [showId, setShowId] = useState(defaultShowId ?? "");
+  const [showDayId, setShowDayId] = useState(defaultShowDayId ?? "");
+  const [templateId, setTemplateId] = useState(initialTemplate?.id ?? "");
+  const [name, setName] = useState(initialTemplate?.name ?? "");
+  const [code, setCode] = useState(initialTemplate?.code ?? "");
+  const [blockLabel, setBlockLabel] = useState(initialTemplate?.block_label ?? "");
+  const [pattern, setPattern] = useState(initialTemplate?.default_pattern ?? "");
+  const [entryFee, setEntryFee] = useState(initialTemplate?.default_entry_fee == null ? "" : String(initialTemplate.default_entry_fee));
+  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(initialTemplate?.sanctioning_body_codes ?? []);
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(initialTemplate?.back_number_policy ?? "horse");
   const [nrhaSlateNumber, setNrhaSlateNumber] = useState("");
   const [entriesCloseAt, setEntriesCloseAt] = useState("");
   const [lateEntriesAllowed, setLateEntriesAllowed] = useState(true);
   const [lateEntryFeePercent, setLateEntryFeePercent] = useState("50");
   const [concurrentClassId, setConcurrentClassId] = useState("");
-  const [eligibilityNotes, setEligibilityNotes] = useState("");
+  const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>("unscheduled");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(initialTemplate?.eligibility_rules));
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShowDays = showDays.filter((day) => day.show_id === selectedShowId);
@@ -9500,6 +9744,7 @@ function ClassForm({
   const selectedTemplateDivisions = selectedTemplate ? classTemplateDivisions.filter((division) => division.class_template_id === selectedTemplate.id) : [];
   const concurrentClassChoices = classes.filter((classRecord) => classRecord.show_id === selectedShowId);
   const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
+  const nextSortOrder = Math.max(0, ...classes.filter((classRecord) => classRecord.show_day_id === selectedShowDayId).map((classRecord) => classRecord.sort_order)) + 10;
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
@@ -9563,6 +9808,9 @@ function ClassForm({
         entries_close_at: datetimeLocalToIso(effectiveEntriesCloseAt),
         late_entries_allowed: lateEntriesAllowed,
         late_entry_fee_percent: numericValue(lateEntryFeePercent) ?? 50,
+        schedule_start_mode: scheduleStartMode,
+        scheduled_time: scheduleStartMode === "fixed" ? scheduledTime || null : null,
+        sort_order: nextSortOrder,
         eligibility_rules: classProgramRules(eligibilityNotes, {
           concurrentClass: selectedConcurrentClass,
         }),
@@ -9605,6 +9853,8 @@ function ClassForm({
       setLateEntriesAllowed(true);
       setLateEntryFeePercent("50");
       setConcurrentClassId("");
+      setScheduleStartMode("unscheduled");
+      setScheduledTime("");
       setEligibilityNotes("");
       onCreated?.();
     } finally {
@@ -9623,7 +9873,7 @@ function ClassForm({
       <form className="stack" onSubmit={handleSubmit}>
         <div className="segmented-control">
           <button className={creationMode === "preset" ? "active" : ""} disabled={!organization || !activeClassTemplates.length} type="button" onClick={() => handleCreationModeChange("preset")}>
-            {uiText(locale, "Depuis un bloc preset", "From block preset")}
+            {uiText(locale, "Depuis un bloc récurrent", "From recurring block")}
           </button>
           <button className={creationMode === "custom" ? "active" : ""} disabled={!organization} type="button" onClick={() => handleCreationModeChange("custom")}>
             {uiText(locale, "Bloc libre", "Custom block")}
@@ -9652,9 +9902,26 @@ function ClassForm({
             </select>
           </label>
         </div>
+        <fieldset className="stack nested-fieldset">
+          <legend>{uiText(locale, "Départ du bloc", "Block start")}</legend>
+          <div className="form-grid">
+            <label>
+              {uiText(locale, "Mode de départ", "Start mode")}
+              <select disabled={!organization || !shows.length} value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+                <option value="unscheduled">{scheduleStartModeLabel("unscheduled", locale)}</option>
+                <option value="fixed">{scheduleStartModeLabel("fixed", locale)}</option>
+                <option value="after_previous">{scheduleStartModeLabel("after_previous", locale)}</option>
+              </select>
+            </label>
+            <label>
+              {uiText(locale, "Heure", "Time")}
+              <input disabled={!organization || !shows.length || scheduleStartMode !== "fixed"} required={scheduleStartMode === "fixed"} type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} />
+            </label>
+          </div>
+        </fieldset>
         {creationMode === "preset" ? (
           <label>
-            {uiText(locale, "Bloc preset", "Block preset")}
+            {uiText(locale, "Bloc récurrent", "Recurring block")}
             <SearchSelect
               allowEmpty
               disabled={!organization || !activeClassTemplates.length}
@@ -9673,7 +9940,7 @@ function ClassForm({
                     .join(" - "),
                 };
               })}
-              placeholder={uiText(locale, "Rechercher un bloc preset", "Search block preset")}
+              placeholder={uiText(locale, "Rechercher un bloc récurrent", "Search recurring block")}
               value={templateId}
               onChange={handleTemplateChange}
             />
@@ -9772,6 +10039,7 @@ function ClassForm({
 function DivisionForm({
   locale = "fr",
   classes,
+  defaultClassId,
   organization,
   sanctioningBodies,
   shows,
@@ -9780,13 +10048,14 @@ function DivisionForm({
 }: {
   locale?: Locale;
   classes: ClassRecord[];
+  defaultClassId?: string;
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreated?: () => void;
 }) {
-  const [classId, setClassId] = useState("");
+  const [classId, setClassId] = useState(defaultClassId ?? "");
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
@@ -9975,6 +10244,7 @@ function ClassEditForm({
   classes,
   classRecord,
   sanctioningBodies,
+  showDays,
   onCancel,
   onUpdateClass,
 }: {
@@ -9982,11 +10252,13 @@ function ClassEditForm({
   classes: ClassRecord[];
   classRecord: ClassRecord;
   sanctioningBodies: SanctioningBody[];
+  showDays: ShowDay[];
   onCancel: () => void;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
 }) {
   const [name, setName] = useState(classRecord.name);
   const [code, setCode] = useState(classRecord.code ?? "");
+  const [showDayId, setShowDayId] = useState(classRecord.show_day_id ?? "");
   const [blockLabel, setBlockLabel] = useState(classRecord.block_label ?? "");
   const [pattern, setPattern] = useState(classRecord.pattern ?? "");
   const [entryFee, setEntryFee] = useState(classRecord.entry_fee == null ? "" : String(classRecord.entry_fee));
@@ -9997,11 +10269,14 @@ function ClassEditForm({
   const [lateEntriesAllowed, setLateEntriesAllowed] = useState(classRecord.late_entries_allowed ?? true);
   const [lateEntryFeePercent, setLateEntryFeePercent] = useState(classRecord.late_entry_fee_percent == null ? "50" : String(classRecord.late_entry_fee_percent));
   const [concurrentClassId, setConcurrentClassId] = useState(concurrentClassIdFromRules(classRecord.eligibility_rules));
+  const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(scheduleStartModeForClass(classRecord));
+  const [scheduledTime, setScheduledTime] = useState(timeInputValue(classRecord.scheduled_time));
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classRecord.eligibility_rules));
   const [status, setStatus] = useState<ClassRecord["status"]>(classRecord.status);
   const [busy, setBusy] = useState(false);
   const concurrentClassChoices = classes.filter((candidate) => candidate.show_id === classRecord.show_id && candidate.id !== classRecord.id);
   const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
+  const selectedShowDays = showDays.filter((day) => day.show_id === classRecord.show_id);
 
   function handleSanctioningBodyCodes(nextCodes: string[]) {
     setSanctioningBodyCodes(nextCodes);
@@ -10016,6 +10291,7 @@ function ClassEditForm({
       await onUpdateClass(classRecord.id, {
         name,
         code: code || null,
+        show_day_id: showDayId || null,
         block_label: blockLabel || null,
         pattern: pattern || null,
         sanctioning_body_codes: sanctioningBodyCodes,
@@ -10024,6 +10300,8 @@ function ClassEditForm({
         entries_close_at: datetimeLocalToIso(entriesCloseAt),
         late_entries_allowed: lateEntriesAllowed,
         late_entry_fee_percent: numericValue(lateEntryFeePercent) ?? 50,
+        schedule_start_mode: scheduleStartMode,
+        scheduled_time: scheduleStartMode === "fixed" ? scheduledTime || null : null,
         eligibility_rules: classProgramRules(eligibilityNotes, {
           concurrentClass: selectedConcurrentClass,
         }),
@@ -10054,11 +10332,39 @@ function ClassEditForm({
             <input value={code} onChange={(event) => setCode(event.target.value)} />
           </label>
           <label>
+            {uiText(locale, "Journée", "Day")}
+            <select value={showDayId} onChange={(event) => setShowDayId(event.target.value)}>
+              <option value="">{uiText(locale, "Aucune journée", "No day")}</option>
+              {selectedShowDays.map((day) => (
+                <option key={day.id} value={day.id}>
+                  {showDayLabel(day)}
+                </option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <fieldset className="stack nested-fieldset">
+          <legend>{uiText(locale, "Départ du bloc", "Block start")}</legend>
+          <div className="form-grid">
+            <label>
+              {uiText(locale, "Mode de départ", "Start mode")}
+              <select value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+                <option value="unscheduled">{scheduleStartModeLabel("unscheduled", locale)}</option>
+                <option value="fixed">{scheduleStartModeLabel("fixed", locale)}</option>
+                <option value="after_previous">{scheduleStartModeLabel("after_previous", locale)}</option>
+              </select>
+            </label>
+            <label>
+              {uiText(locale, "Heure", "Time")}
+              <input disabled={scheduleStartMode !== "fixed"} required={scheduleStartMode === "fixed"} type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} />
+            </label>
+          </div>
+        </fieldset>
+        <div className="form-grid">
+          <label>
             {uiText(locale, "Frais d'inscription", "Entry fee")}
             <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
           </label>
-        </div>
-        <div className="form-grid">
           <label>
             {uiText(locale, "Libellé d'horaire", "Schedule label")}
             <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
