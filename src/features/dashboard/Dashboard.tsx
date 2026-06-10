@@ -2263,7 +2263,7 @@ function PeopleView({
     : [];
 
   async function handleDeleteHorse(horse: Horse) {
-    if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/reservations liees?`)) {
+    if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/réservations liées?`)) {
       return;
     }
 
@@ -2276,7 +2276,7 @@ function PeopleView({
   async function handleDeleteContact(contact: Contact) {
     const label = contactLabel(contact);
 
-    if (!window.confirm(`Supprimer ${label}? Si ce contact est utilise comme cavalier dans une inscription de test, il sera detache de l'inscription.`)) {
+    if (!window.confirm(`Supprimer ${label}? Si ce contact est utilisé comme cavalier dans une inscription de test, il sera détaché de l'inscription.`)) {
       return;
     }
 
@@ -2289,9 +2289,9 @@ function PeopleView({
   return (
     <div className="content-grid">
       <ViewIntro
-        eyebrow="Registre"
-        title="Contacts et chevaux"
-        description="Centralise les proprietaires, cavaliers, payeurs et chevaux qui serviront aux inscriptions."
+        eyebrow="Répertoire"
+        title="Répertoire"
+        description="Centralise les propriétaires, cavaliers, payeurs et chevaux qui serviront aux inscriptions."
         stats={[
           { label: "Contacts", value: String(contacts.length) },
           { label: "Chevaux", value: String(horses.length) },
@@ -2301,8 +2301,8 @@ function PeopleView({
       <section className="panel span-2 form-launch-panel">
         <div className="panel-header">
           <div>
-            <h2>Ajouter au registre</h2>
-            <p>Ouvre le bon formulaire sans quitter la liste des contacts et chevaux.</p>
+            <h2>Ajouter au répertoire</h2>
+            <p>Ouvre le bon formulaire sans quitter la recherche de contacts et chevaux.</p>
           </div>
           <div className="row-actions">
             <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingContact(true)}>
@@ -2318,7 +2318,7 @@ function PeopleView({
       </section>
 
       {creatingContact ? (
-        <ModalDialog description={organization ? organization.name : "Create an organization first."} eyebrow="Registre" title="Nouveau contact" onClose={() => setCreatingContact(false)}>
+        <ModalDialog description={organization ? organization.name : "Crée une association d'abord."} eyebrow="Répertoire" title="Nouveau contact" onClose={() => setCreatingContact(false)}>
           <ContactForm
             externalOrganizations={externalOrganizations}
             membershipRequirements={membershipRequirements}
@@ -2330,7 +2330,7 @@ function PeopleView({
       ) : null}
 
       {creatingHorse ? (
-        <ModalDialog description={contacts.length ? "Connecte le cheval a un proprietaire." : "Cree un contact proprietaire directement dans ce formulaire au besoin."} eyebrow="Registre" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
+        <ModalDialog description={contacts.length ? "Connecte le cheval à un propriétaire." : "Crée un contact propriétaire directement dans ce formulaire au besoin."} eyebrow="Répertoire" title="Nouveau cheval" onClose={() => setCreatingHorse(false)}>
           <HorseForm
             contacts={contacts}
             contactRoles={contactRoles}
@@ -2347,7 +2347,7 @@ function PeopleView({
       ) : null}
 
       {editingContact ? (
-        <ModalDialog description={contactLabel(editingContact)} eyebrow="Registre" title="Modifier le contact" onClose={() => setEditingContact(null)}>
+        <ModalDialog description={contactLabel(editingContact)} eyebrow="Répertoire" title="Modifier le contact" onClose={() => setEditingContact(null)}>
           <ContactEditForm
             contact={editingContact}
             contactExternalMemberships={contactExternalMemberships}
@@ -2363,7 +2363,7 @@ function PeopleView({
       ) : null}
 
       {editingHorse ? (
-        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Registre" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
+        <ModalDialog className="horse-form-modal" description={editingHorse.name} eyebrow="Répertoire" title="Modifier le cheval" onClose={() => setEditingHorse(null)}>
           <HorseEditForm
             contacts={contacts}
             contactRoles={contactRoles}
@@ -2392,21 +2392,21 @@ function PeopleView({
         <div className="panel-header">
           <div>
             <h2>Contacts</h2>
-            <p>{normalizedContactSearch ? `${filteredContacts.length} resultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.` : "Recherche par nom, role, courriel ou ecurie."}</p>
+            <p>{normalizedContactSearch ? `${filteredContacts.length} résultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.` : "Recherche par nom, rôle, courriel ou écurie."}</p>
           </div>
         </div>
         <label className="directory-search-field">
           <span>Rechercher un contact</span>
           <div>
             <Search size={16} />
-            <input placeholder="Nom, role, email, ecurie..." value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
+            <input placeholder="Nom, rôle, courriel, écurie..." value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
           </div>
         </label>
         <div className="horse-list directory-list">
           {normalizedContactSearch ? (
             <div className="horse-list-row horse-list-head">
               <span>Contact</span>
-              <span>Roles</span>
+              <span>Rôles</span>
               <span>Courriel</span>
               <span>Action</span>
             </div>
@@ -2422,20 +2422,20 @@ function PeopleView({
                   .split(" / ")
                   .map((role) => (
                     <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
-                      <span>Role</span>
+                      <span>Rôle</span>
                       <strong>{role}</strong>
                     </span>
                   ))}
               </div>
               <div className="horse-chip-row">
                 <span className="horse-status-chip neutral">
-                  <span>Email</span>
+                  <span>Courriel</span>
                   <strong>{contact.email || "Aucun"}</strong>
                 </span>
               </div>
               <div className="row-actions horse-row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                  Edit
+                  Modifier
                 </button>
                 <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
                   Supprimer
@@ -2444,7 +2444,7 @@ function PeopleView({
             </div>
           ))}
           {!normalizedContactSearch ? <EmptyState label="Lance une recherche pour afficher les contacts de l'association." /> : null}
-          {normalizedContactSearch && !filteredContacts.length ? <EmptyState label="Aucun contact ne correspond a cette recherche." /> : null}
+          {normalizedContactSearch && !filteredContacts.length ? <EmptyState label="Aucun contact ne correspond à cette recherche." /> : null}
         </div>
       </section>
 
@@ -2452,14 +2452,14 @@ function PeopleView({
         <div className="panel-header">
           <div>
             <h2>Chevaux</h2>
-            <p>{normalizedHorseSearch ? `${filteredHorses.length} resultat${filteredHorses.length === 1 ? "" : "s"} sur ${horses.length} ${horses.length === 1 ? "cheval" : "chevaux"}.` : "Recherche par nom, proprietaire, sexe ou numero externe."}</p>
+            <p>{normalizedHorseSearch ? `${filteredHorses.length} résultat${filteredHorses.length === 1 ? "" : "s"} sur ${horses.length} ${horses.length === 1 ? "cheval" : "chevaux"}.` : "Recherche par nom, propriétaire, sexe ou numéro externe."}</p>
           </div>
         </div>
         <label className="directory-search-field">
           <span>Rechercher un cheval</span>
           <div>
             <Search size={16} />
-            <input placeholder="Nom, proprietaire, reference..." value={horseSearch} onChange={(event) => setHorseSearch(event.target.value)} />
+            <input placeholder="Nom, propriétaire, référence..." value={horseSearch} onChange={(event) => setHorseSearch(event.target.value)} />
           </div>
         </label>
         <div className="horse-list directory-list">
@@ -2504,7 +2504,7 @@ function PeopleView({
                 </div>
                 <div className="row-actions horse-row-actions">
                   <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                    Edit
+                    Modifier
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteHorse(horse)}>
                     Supprimer
@@ -2514,7 +2514,7 @@ function PeopleView({
             );
           })}
           {!normalizedHorseSearch ? <EmptyState label="Lance une recherche pour afficher les chevaux de l'association." /> : null}
-          {normalizedHorseSearch && !filteredHorses.length ? <EmptyState label="Aucun cheval ne correspond a cette recherche." /> : null}
+          {normalizedHorseSearch && !filteredHorses.length ? <EmptyState label="Aucun cheval ne correspond à cette recherche." /> : null}
         </div>
       </section>
     </div>
