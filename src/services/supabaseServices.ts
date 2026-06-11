@@ -437,6 +437,36 @@ export async function loadAppContext(user: User): Promise<AppContext> {
   };
 }
 
+export type PublicShowSummary = {
+  id: string;
+  name: string;
+  slug: string;
+  start_date: string;
+  end_date: string;
+  location: string | null;
+  city: string | null;
+  state: string | null;
+  country: string | null;
+  status: Show["status"];
+  default_currency: string | null;
+  organization_name: string;
+};
+
+export async function fetchPublicShows(): Promise<PublicShowSummary[]> {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("shows")
+    .select("id, name, slug, start_date, end_date, location, city, state, country, status, default_currency, organizations(name)")
+    .eq("is_public", true)
+    .order("start_date", { ascending: true });
+  if (error) throw error;
+  return (data ?? []).map((row: any) => ({
+    ...row,
+    organization_name: row.organizations?.name ?? "",
+    organizations: undefined,
+  }));
+}
+
 export type PublicShowContext = {
   show: Show;
   organization: Organization;

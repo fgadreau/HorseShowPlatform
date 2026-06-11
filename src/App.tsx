@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./features/auth/AuthScreen";
 import { LoadingScreen } from "./features/setup/LoadingScreen";
 import { SetupScreen } from "./features/setup/SetupScreen";
+import { LandingPage } from "./features/shows/LandingPage";
 import { PublicShowPage } from "./features/shows/PublicShowPage";
 import { isSupabaseConfigured } from "./lib/env";
 import { errorMessage } from "./lib/display";
@@ -80,6 +81,7 @@ export default function App() {
   const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [showAuth, setShowAuth] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const t = translations[locale];
 
@@ -187,7 +189,10 @@ export default function App() {
   }
 
   if (!session) {
-    return <AuthScreen locale={locale} t={t} onLocaleChange={handleLocaleChange} onNotice={setNotice} notice={notice} />;
+    if (showAuth) {
+      return <AuthScreen locale={locale} t={t} onLocaleChange={handleLocaleChange} onNotice={setNotice} notice={notice} />;
+    }
+    return <LandingPage onSignIn={() => setShowAuth(true)} />;
   }
 
   return (
