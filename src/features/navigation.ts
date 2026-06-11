@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, CalendarDays, CircleDollarSign, ClipboardList, Hash, HeartPulse, ShieldCheck, Tent, Trophy, Users, Warehouse } from "lucide-react";
+import { Bell, BookOpen, Building2, CalendarDays, CircleDollarSign, ClipboardList, Hash, HeartPulse, LayoutDashboard, ShieldCheck, Tent, Trophy, UserCircle, Users, Warehouse } from "lucide-react";
 import type { NavItem, ViewKey } from "../types/ui";
 
 export const associationNavigation: NavItem[] = [
@@ -17,6 +17,8 @@ export const associationNavigation: NavItem[] = [
 ];
 
 export const personalNavigation: NavItem[] = [
+  { key: "my-overview", labelKey: "myOverview", icon: LayoutDashboard },
+  { key: "my-profile", labelKey: "myProfile", icon: UserCircle },
   { key: "my-horses", labelKey: "myHorses", icon: ClipboardList },
   { key: "my-riders", labelKey: "myRiders", icon: Users },
   { key: "my-entries", labelKey: "myEntries", icon: CalendarDays },

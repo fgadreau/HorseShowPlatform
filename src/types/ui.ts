@@ -14,6 +14,8 @@ export type ViewKey =
   | "scoring"
   | "billing"
   | "settings"
+  | "my-overview"
+  | "my-profile"
   | "my-horses"
   | "my-riders"
   | "my-entries"

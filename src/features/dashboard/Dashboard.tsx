@@ -48,6 +48,8 @@ import {
   createUploadedHorseHealthDocument,
   createOrganization,
   createShow,
+  createShowAnnouncement,
+  deleteShowAnnouncement,
   createStallBooking,
   createStallOption,
   deleteClass,
@@ -76,6 +78,7 @@ import {
   updateShow,
   updateStallBooking,
   updateStallOption,
+  updateUserProfile,
   verifyGvlCogginsDocument,
   type AppContext,
 } from "../../services/supabaseServices";
@@ -125,6 +128,8 @@ import { ScoringView } from "../scoring/ScoringView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
+import { ProfileView, profileIsComplete } from "../profile/ProfileView";
+import { ClientDashboardView } from "./ClientDashboardView";
 
 export function Dashboard({
   activeView,
@@ -152,6 +157,8 @@ export function Dashboard({
   onCreateHorseHealthDocument,
   onCreateOrganization,
   onCreateShow,
+  onCreateShowAnnouncement,
+  onDeleteShowAnnouncement,
   onCreateStallBooking,
   onCreateStallOption,
   onDeleteClass,
@@ -180,6 +187,7 @@ export function Dashboard({
   onUpdateShow,
   onUpdateStallBooking,
   onUpdateStallOption,
+  onUpdateUserProfile,
   onViewChange,
 }: {
   activeView: ViewKey;
@@ -207,6 +215,8 @@ export function Dashboard({
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
+  onCreateShowAnnouncement: (input: Parameters<typeof createShowAnnouncement>[0]) => Promise<void>;
+  onDeleteShowAnnouncement: (id: string) => Promise<void>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
   onDeleteClass: (id: Parameters<typeof deleteClass>[0]) => Promise<void>;
@@ -235,12 +245,14 @@ export function Dashboard({
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
+  onUpdateUserProfile: (id: string, input: Parameters<typeof updateUserProfile>[1]) => Promise<void>;
   onViewChange: (view: ViewKey) => void;
 }) {
   const organizations = context?.organizations ?? [];
   const organizationMembers = context?.organizationMembers ?? [];
   const shows = context?.shows ?? [];
   const showDays = context?.showDays ?? [];
+  const showAnnouncements = context?.showAnnouncements ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const contacts = context?.contacts ?? [];
   const contactOrganizationLinks = context?.contactOrganizationLinks ?? [];
@@ -269,12 +281,17 @@ export function Dashboard({
     ? organizationMembers.find((member) => member.organization_id === selectedOrganization.id && member.user_id === context?.profile.id)
     : null;
   const canManageAssociation = selectedMembership?.role === "admin" || selectedMembership?.role === "secretary";
-  const effectiveView = canManageAssociation || !associationViewKeys.has(activeView) ? activeView : "my-horses";
+  const profileIncomplete = context ? !profileIsComplete(context.profile) : false;
+  const rawEffectiveView = canManageAssociation || !associationViewKeys.has(activeView) ? activeView : "my-overview";
+  const effectiveView: ViewKey = !canManageAssociation && profileIncomplete && rawEffectiveView === "my-overview" ? "my-profile" : rawEffectiveView;
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationShowDays = selectedOrganization
     ? showDays.filter((day) => day.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationShowAnnouncements = selectedOrganization
+    ? showAnnouncements.filter((a) => a.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationShowScoreSetups = selectedOrganization
     ? showScoreClassSetups.filter((setup) => setup.organization_id === selectedOrganization.id)
@@ -432,21 +449,28 @@ export function Dashboard({
       <section className="workspace">
         <header className="workspace-header">
           <div>
-            <p className="eyebrow">{t.shell.workspace}</p>
-            <h1>{selectedOrganization?.name ?? "Horse Show Platform"}</h1>
+            {effectiveView.startsWith("my-") ? (
+              <>
+                <p className="eyebrow">{t.nav.mySpace}</p>
+                <h1>{[context?.profile.first_name, context?.profile.last_name].filter(Boolean).join(" ") || "Horse Show Platform"}</h1>
+              </>
+            ) : (
+              <>
+                <p className="eyebrow">{t.shell.workspace}</p>
+                <h1>{selectedOrganization?.name ?? "Horse Show Platform"}</h1>
+              </>
+            )}
           </div>
           <div className="header-actions">
-            <select value={selectedOrganization?.id ?? ""} onChange={(event) => onChangeOrganization(event.target.value)}>
-              {organizations.length ? (
-                organizations.map((organization) => (
+            {!effectiveView.startsWith("my-") && organizations.length > 1 ? (
+              <select value={selectedOrganization?.id ?? ""} onChange={(event) => onChangeOrganization(event.target.value)}>
+                {organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
                     {organization.name}
                   </option>
-                ))
-              ) : (
-                <option value="">{t.common.noOrganization}</option>
-              )}
-            </select>
+                ))}
+              </select>
+            ) : null}
             <button className="icon-button" title={t.common.refresh} type="button" onClick={onRefresh}>
               <RefreshCw className={loading ? "spin" : ""} size={18} />
             </button>
@@ -489,11 +513,14 @@ export function Dashboard({
             entries={selectedOrganizationEntries}
             invoices={selectedOrganizationInvoices}
             organization={selectedOrganization}
+            showAnnouncements={selectedOrganizationShowAnnouncements}
             showDays={selectedOrganizationShowDays}
             showScoreClassSetups={selectedOrganizationShowScoreSetups}
             shows={selectedOrganizationShows}
             stallOptions={selectedOrganizationStallOptions}
             onCreateShow={onCreateShow}
+            onCreateShowAnnouncement={onCreateShowAnnouncement}
+            onDeleteShowAnnouncement={onDeleteShowAnnouncement}
             onUpdateShow={onUpdateShow}
             onViewChange={onViewChange}
           />
@@ -670,6 +697,35 @@ export function Dashboard({
             organization={selectedOrganization}
             shows={selectedOrganizationShows}
             unpaidBalance={unpaidBalance}
+          />
+        ) : null}
+
+        {effectiveView === "my-overview" && context ? (
+          <ClientDashboardView
+            locale={locale}
+            contacts={personalContacts}
+            divisions={selectedOrganizationDivisions}
+            entries={personalEntries}
+            horses={personalHorses}
+            invoices={personalInvoices}
+            organizations={organizations}
+            profile={context.profile}
+            shows={selectedOrganizationShows}
+            showDays={selectedOrganizationShowDays}
+            stallBookings={personalStallBookings}
+            stallOptions={selectedOrganizationStallOptions}
+            onViewChange={onViewChange}
+          />
+        ) : null}
+
+        {effectiveView === "my-profile" && context ? (
+          <ProfileView
+            locale={locale}
+            horses={personalHorses}
+            horseHealthDocuments={personalHorseHealthDocuments}
+            profile={context.profile}
+            onUpdateUserProfile={onUpdateUserProfile}
+            onViewChange={onViewChange}
           />
         ) : null}
 

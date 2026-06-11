@@ -72,6 +72,15 @@ export type UserProfile = {
   phone: string | null;
   type_user: "owner" | "agent" | "secretary" | "admin" | null;
   avatar_url: string | null;
+  address: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  country: string | null;
+  date_of_birth: string | null;
+  preferred_locale: string;
+  marketing_opt_in: boolean;
   created_at: string;
 };
 
@@ -126,6 +135,13 @@ export type Contact = {
   phone: string | null;
   barn_name: string | null;
   linked_user_id: string | null;
+  address: string | null;
+  address_line2: string | null;
+  city: string | null;
+  state: string | null;
+  zip_code: string | null;
+  country: string | null;
+  date_of_birth: string | null;
   created_at: string;
 };
 
@@ -365,6 +381,7 @@ export type ClassRecord = {
   entry_fee: number | null;
   status: "open" | "closed" | "running" | "finished";
   is_public: boolean;
+  is_event_block: boolean;
   created_at: string;
 };
 
@@ -379,6 +396,24 @@ export type ShowDay = {
   start_time: string | null;
   end_time: string | null;
   created_at: string;
+};
+
+export type ShowAnnouncement = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  title: string;
+  body: string;
+  created_by_user_id: string | null;
+  created_at: string;
+};
+
+export type ShowAnnouncementInput = {
+  organization_id: string;
+  show_id: string;
+  title: string;
+  body: string;
+  created_by_user_id?: string;
 };
 
 export type ShowScoreClassSetup = {
@@ -488,6 +523,21 @@ export type StallBooking = {
   created_at: string;
 };
 
+export type UserProfileUpdateInput = {
+  first_name?: string | null;
+  last_name?: string | null;
+  phone?: string | null;
+  address?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  country?: string | null;
+  date_of_birth?: string | null;
+  preferred_locale?: string;
+  marketing_opt_in?: boolean;
+};
+
 export type OrganizationInput = {
   name: string;
   slug: string;
@@ -574,6 +624,13 @@ export type ContactInput = {
   barn_name?: string;
   linked_user_id?: string;
   created_by_user_id?: string;
+  address?: string;
+  address_line2?: string;
+  city?: string;
+  state?: string;
+  zip_code?: string;
+  country?: string;
+  date_of_birth?: string;
   external_memberships?: ExternalMembershipInput[];
 };
 
@@ -584,6 +641,13 @@ export type ContactUpdateInput = {
   email?: string | null;
   phone?: string | null;
   barn_name?: string | null;
+  address?: string | null;
+  address_line2?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip_code?: string | null;
+  country?: string | null;
+  date_of_birth?: string | null;
   external_memberships?: ExternalMembershipInput[];
 };
 
@@ -654,6 +718,7 @@ export type ClassInput = {
   scheduled_time?: string | null;
   sort_order?: number;
   entry_fee?: number;
+  is_event_block?: boolean;
 };
 
 export type ClassUpdateInput = {
@@ -679,6 +744,7 @@ export type ClassUpdateInput = {
   sort_order?: number;
   entry_fee?: number | null;
   status?: ClassRecord["status"];
+  is_event_block?: boolean;
 };
 
 export type DivisionInput = {

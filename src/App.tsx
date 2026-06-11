@@ -3,6 +3,7 @@ import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./features/auth/AuthScreen";
 import { LoadingScreen } from "./features/setup/LoadingScreen";
 import { SetupScreen } from "./features/setup/SetupScreen";
+import { PublicShowPage } from "./features/shows/PublicShowPage";
 import { isSupabaseConfigured } from "./lib/env";
 import { errorMessage } from "./lib/display";
 import { getInitialLocale, saveLocale, translations } from "./lib/i18n";
@@ -21,6 +22,8 @@ import {
   createUploadedHorseHealthDocument,
   createOrganization,
   createShow,
+  createShowAnnouncement,
+  deleteShowAnnouncement,
   createStallBooking,
   createStallOption,
   deleteClass,
@@ -51,6 +54,7 @@ import {
   updateShow,
   updateStallBooking,
   updateStallOption,
+  updateUserProfile,
   verifyGvlCogginsDocument,
   type AppContext,
 } from "./services/supabaseServices";
@@ -58,7 +62,18 @@ import type { Notice, ViewKey } from "./types/ui";
 
 const Dashboard = lazy(() => import("./features/dashboard/Dashboard").then((module) => ({ default: module.Dashboard })));
 
+function matchPublicShowSlug() {
+  const match = window.location.pathname.match(/^\/shows\/([^/]+)\/?$/);
+  return match ? match[1] : null;
+}
+
 export default function App() {
+  const publicShowSlug = matchPublicShowSlug();
+
+  if (publicShowSlug) {
+    return <PublicShowPage slug={publicShowSlug} />;
+  }
+
   const [session, setSession] = useState<Session | null>(null);
   const [context, setContext] = useState<AppContext | null>(null);
   const [activeView, setActiveView] = useState<ViewKey>("overview");
@@ -239,6 +254,16 @@ export default function App() {
         setNotice({ tone: "success", message: "Show created." });
         await refreshContext();
         return show;
+      }}
+      onCreateShowAnnouncement={async (input) => {
+        await createShowAnnouncement(input);
+        setNotice({ tone: "success", message: "Annonce publiée." });
+        await refreshContext();
+      }}
+      onDeleteShowAnnouncement={async (id) => {
+        await deleteShowAnnouncement(id);
+        setNotice({ tone: "success", message: "Annonce supprimée." });
+        await refreshContext();
       }}
       onUpdateShow={async (id, input) => {
         await updateShow(id, input);
@@ -433,6 +458,11 @@ export default function App() {
       onUpdateOrganizationHealthSettings={async (id, input) => {
         await updateOrganizationHealthSettings(id, input);
         setNotice({ tone: "success", message: "Reglages de l'association mis a jour." });
+        await refreshContext();
+      }}
+      onUpdateUserProfile={async (id, input) => {
+        await updateUserProfile(id, input);
+        setNotice({ tone: "success", message: "Profil mis à jour." });
         await refreshContext();
       }}
       onViewChange={setActiveView}

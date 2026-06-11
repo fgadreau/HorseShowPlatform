@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, Plus } from "lucide-react";
 import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
 import { divisionLabel, findById, formatCurrency, formatDate, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
@@ -14,6 +14,7 @@ import { ClassTemplateDivisionEditForm } from "./ClassTemplateDivisionEditForm";
 import { DivisionForm } from "./DivisionForm";
 import { ClassEditForm } from "./ClassEditForm";
 import { DivisionEditForm } from "./DivisionEditForm";
+import { EventBlockForm } from "./EventBlockForm";
 import { sanctionLabel, payoutDivisionSummary, payoutTemplateDivisionSummary, classScheduleStartLabel, compareScheduleClasses, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, backNumberPolicyLabel, concurrentClassLabel, isNrhaSanctioned, nrhaClassTypeLabel, nrhaClassTypeFromRules } from "./classUtils";
 
 function ClassesView({
@@ -66,6 +67,7 @@ function ClassesView({
   const [creatingClassTemplate, setCreatingClassTemplate] = useState(false);
   const [creatingClassTemplateDivision, setCreatingClassTemplateDivision] = useState<{ templateId?: string } | null>(null);
   const [creatingClass, setCreatingClass] = useState<{ mode: "preset" | "custom"; classTemplateId?: string; showId?: string; showDayId?: string } | null>(null);
+  const [creatingEventBlock, setCreatingEventBlock] = useState<{ showId?: string; showDayId?: string } | null>(null);
   const [creatingDivision, setCreatingDivision] = useState<{ classId?: string } | null>(null);
   const [editingClassTemplate, setEditingClassTemplate] = useState<ClassTemplate | null>(null);
   const [editingClassTemplateDivision, setEditingClassTemplateDivision] = useState<ClassTemplateDivision | null>(null);
@@ -245,6 +247,10 @@ function ClassesView({
   }
 
   function renderScheduleBlock(classRecord: ClassRecord, dayClasses: ClassRecord[]) {
+    if (classRecord.is_event_block) {
+      return renderEventBlock(classRecord, dayClasses);
+    }
+
     const classDivisions = divisionsByClassId.get(classRecord.id) ?? [];
     const isExpanded = expandedScheduleBlockId === classRecord.id;
     const movableClasses = dayClasses.filter(canManuallyOrderClass).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
@@ -338,6 +344,52 @@ function ClassesView({
             {!classDivisions.length ? <EmptyState label={uiText(locale, "Clique + Classe pour ajouter une classe dans ce bloc.", "Click + Class to add a class to this block.")} /> : null}
           </div>
         ) : null}
+      </article>
+    );
+  }
+
+  function renderEventBlock(classRecord: ClassRecord, dayClasses: ClassRecord[]) {
+    const movableClasses = dayClasses.filter(canManuallyOrderClass).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
+    const movableIndex = movableClasses.findIndex((candidate) => candidate.id === classRecord.id);
+    const canMove = canManuallyOrderClass(classRecord) && movableIndex >= 0;
+    const timeLabel = classRecord.scheduled_time ? classRecord.scheduled_time.slice(0, 5) : null;
+
+    return (
+      <article className="schedule-block schedule-event-block" key={classRecord.id}>
+        <div className="schedule-block-header">
+          <div className="schedule-block-trigger schedule-event-trigger">
+            <Clock size={18} />
+            <span>
+              <strong>{classRecord.name}</strong>
+              <span className="muted-line">
+                {[
+                  classRecord.block_label,
+                  timeLabel,
+                ]
+                  .filter(Boolean)
+                  .join(" - ") || uiText(locale, "Événement", "Event")}
+              </span>
+            </span>
+          </div>
+          <div className="row-actions schedule-block-actions">
+            {canMove ? (
+              <div className="schedule-order-actions">
+                <button className="icon-button" disabled={movableIndex <= 0} title={uiText(locale, "Monter", "Move up")} type="button" onClick={() => handleMoveScheduleBlock(classRecord, dayClasses, -1)}>
+                  <ArrowUp size={16} />
+                </button>
+                <button className="icon-button" disabled={movableIndex >= movableClasses.length - 1} title={uiText(locale, "Descendre", "Move down")} type="button" onClick={() => handleMoveScheduleBlock(classRecord, dayClasses, 1)}>
+                  <ArrowDown size={16} />
+                </button>
+              </div>
+            ) : null}
+            <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
+              {uiText(locale, "Modifier", "Edit")}
+            </button>
+            <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
+              {uiText(locale, "Supprimer", "Delete")}
+            </button>
+          </div>
+        </div>
       </article>
     );
   }
@@ -482,6 +534,21 @@ function ClassesView({
         </ModalDialog>
       ) : null}
 
+      {creatingEventBlock ? (
+        <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute un bloc non-classe dans l'horaire.", "Add a non-class event to the schedule.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvel événement", "New event")} onClose={() => setCreatingEventBlock(null)}>
+          <EventBlockForm
+            locale={locale}
+            defaultShowDayId={creatingEventBlock.showDayId}
+            defaultShowId={creatingEventBlock.showId}
+            organization={organization}
+            showDays={showDays}
+            shows={shows}
+            onCreateClass={onCreateClass}
+            onCreated={() => setCreatingEventBlock(null)}
+          />
+        </ModalDialog>
+      ) : null}
+
       {creatingDivision ? (
         <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute une classe d'inscription sous un bloc existant.", "Add an entry class under an existing block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvelle classe", "New class")} onClose={() => setCreatingDivision(null)}>
           <DivisionForm locale={locale} classes={classes} defaultClassId={creatingDivision.classId} organization={organization} sanctioningBodies={sanctioningBodies} shows={shows} onCreateDivision={onCreateDivision} onCreated={() => setCreatingDivision(null)} />
@@ -616,6 +683,10 @@ function ClassesView({
                                 <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingClass({ mode: "custom", showId: show.id, showDayId: day.id })}>
                                   <Plus size={18} />
                                   {uiText(locale, "Bloc libre", "Custom block")}
+                                </button>
+                                <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingEventBlock({ showId: show.id, showDayId: day.id })}>
+                                  <Plus size={18} />
+                                  {uiText(locale, "Événement", "Event")}
                                 </button>
                               </div>
                             </div>

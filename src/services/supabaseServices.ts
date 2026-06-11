@@ -43,6 +43,8 @@ import type {
   OrganizationSettingsInput,
   SanctioningBody,
   Show,
+  ShowAnnouncement,
+  ShowAnnouncementInput,
   ShowDay,
   ShowScoreClassSetup,
   ShowInput,
@@ -54,6 +56,7 @@ import type {
   StallOptionInput,
   StallOptionUpdateInput,
   UserProfile,
+  UserProfileUpdateInput,
 } from "../types/domain";
 import { buildShowScoreRunsForClass } from "./showScoreAdapters";
 
@@ -65,6 +68,7 @@ export type AppContext = {
   organizationMembers: OrganizationMember[];
   shows: Show[];
   showDays: ShowDay[];
+  showAnnouncements: ShowAnnouncement[];
   showScoreClassSetups: ShowScoreClassSetup[];
   contacts: Contact[];
   contactOrganizationLinks: ContactOrganizationLink[];
@@ -186,6 +190,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     stallBookingsResult,
     invoicesResult,
     invoiceLineItemsResult,
+    showAnnouncementsResult,
   ] = await Promise.all([
     client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
     client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
@@ -213,6 +218,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(),
     client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(),
     client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(),
+    client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
 
@@ -392,12 +398,19 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw invoiceLineItemsResult.error;
   }
 
+  const showAnnouncements = showAnnouncementsResult.error
+    ? isMissingSchemaError(showAnnouncementsResult.error, "show_announcements")
+      ? []
+      : (() => { throw showAnnouncementsResult.error; })()
+    : showAnnouncementsResult.data ?? [];
+
   return {
     profile,
     organizations: organizationsResult.data ?? [],
     organizationMembers: organizationMembersResult.data ?? [],
     shows: showsResult.data ?? [],
     showDays: showDaysResult.data ?? [],
+    showAnnouncements,
     showScoreClassSetups,
     contacts: contactsResult.data ?? [],
     contactOrganizationLinks,
@@ -422,6 +435,139 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     invoices: invoicesResult.data ?? [],
     invoiceLineItems: invoiceLineItemsResult.data ?? [],
   };
+}
+
+export type PublicShowContext = {
+  show: Show;
+  organization: Organization;
+  showDays: ShowDay[];
+  classes: ClassRecord[];
+  divisions: Division[];
+  stallOptions: StallOption[];
+  announcements: ShowAnnouncement[];
+  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  externalOrganizations: ExternalOrganization[];
+  sanctioningBodies: SanctioningBody[];
+};
+
+export async function fetchPublicShow(slug: string): Promise<PublicShowContext | null> {
+  const client = requireSupabase();
+
+  const { data: show, error: showError } = await client
+    .from("shows")
+    .select("*")
+    .eq("slug", slug)
+    .eq("is_public", true)
+    .maybeSingle<Show>();
+
+  if (showError) throw showError;
+  if (!show) return null;
+
+  const [
+    orgResult,
+    daysResult,
+    classesResult,
+    stallOptionsResult,
+    announcementsResult,
+    membershipReqResult,
+    externalOrgsResult,
+    sanctioningBodiesResult,
+  ] = await Promise.all([
+    client.from("organizations").select("*").eq("id", show.organization_id).single<Organization>(),
+    client.from("show_days").select("*").eq("show_id", show.id).order("sort_order", { ascending: true }).returns<ShowDay[]>(),
+    client.from("classes").select("*").eq("show_id", show.id).eq("is_public", true).order("sort_order", { ascending: true }).returns<ClassRecord[]>(),
+    client.from("stall_options").select("*").eq("show_id", show.id).order("price", { ascending: true }).returns<StallOption[]>(),
+    client.from("show_announcements").select("*").eq("show_id", show.id).order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
+    client.from("organization_external_membership_requirements").select("*").eq("organization_id", show.organization_id).returns<OrganizationExternalMembershipRequirement[]>(),
+    client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
+    client.from("sanctioning_bodies").select("*").order("name", { ascending: true }).returns<SanctioningBody[]>(),
+  ]);
+
+  if (orgResult.error) throw orgResult.error;
+  if (daysResult.error) throw daysResult.error;
+  if (classesResult.error) throw classesResult.error;
+
+  const classIds = (classesResult.data ?? []).map((c) => c.id);
+  const divisionsResult = classIds.length
+    ? await client.from("divisions").select("*").in("class_id", classIds).returns<Division[]>()
+    : { data: [], error: null };
+
+  if (divisionsResult.error) throw divisionsResult.error;
+
+  return {
+    show,
+    organization: orgResult.data,
+    showDays: daysResult.data ?? [],
+    classes: classesResult.data ?? [],
+    divisions: divisionsResult.data ?? [],
+    stallOptions: stallOptionsResult.data ?? [],
+    announcements: announcementsResult.data ?? [],
+    membershipRequirements: membershipReqResult.data ?? [],
+    externalOrganizations: externalOrgsResult.data ?? [],
+    sanctioningBodies: sanctioningBodiesResult.data ?? [],
+  };
+}
+
+export async function updateUserProfile(id: string, input: UserProfileUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("user_profiles")
+    .update(cleanPayload(input))
+    .eq("id", id)
+    .select("*")
+    .single<UserProfile>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function createShowAnnouncement(input: ShowAnnouncementInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("show_announcements")
+    .insert({
+      organization_id: input.organization_id,
+      show_id: input.show_id,
+      title: input.title.trim(),
+      body: input.body.trim(),
+      created_by_user_id: input.created_by_user_id || null,
+    })
+    .select("*")
+    .single<ShowAnnouncement>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateShowAnnouncement(id: string, input: Pick<ShowAnnouncementInput, "title" | "body">) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("show_announcements")
+    .update({ title: input.title.trim(), body: input.body.trim() })
+    .eq("id", id)
+    .select("*")
+    .single<ShowAnnouncement>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteShowAnnouncement(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("show_announcements").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
 }
 
 export async function createOrganization(profileId: string, input: OrganizationInput) {
@@ -596,6 +742,13 @@ export async function createContact(input: ContactInput) {
       barn_name: input.barn_name?.trim() || null,
       linked_user_id: input.linked_user_id || null,
       created_by_user_id: input.created_by_user_id || null,
+      address: input.address?.trim() || null,
+      address_line2: input.address_line2?.trim() || null,
+      city: input.city?.trim() || null,
+      state: input.state?.trim() || null,
+      zip_code: input.zip_code?.trim() || null,
+      country: input.country?.trim() || null,
+      date_of_birth: input.date_of_birth || null,
     })
     .select("*")
     .single<Contact>();
@@ -1622,6 +1775,7 @@ export async function createClass(input: ClassInput) {
       entry_fee: input.entry_fee ?? null,
       status: "open",
       is_public: true,
+      is_event_block: input.is_event_block ?? false,
     })
     .select("*")
     .single<ClassRecord>();
