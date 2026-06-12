@@ -440,6 +440,38 @@ export type ShowScoreClassSetup = {
   updated_at: string;
 };
 
+export type ShowScorePaidWarmupEntryStatus = "pending" | "done" | "no_show" | "scratch";
+
+export type ShowScorePaidWarmupEntry = {
+  id: string;
+  order: number;
+  rider: string;
+  status: ShowScorePaidWarmupEntryStatus;
+  completedAt?: string | null;
+};
+
+export type ShowScorePaidWarmup = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  show_day_id: string;
+  name: string;
+  arena: string | null;
+  duration_minutes_per_rider: number;
+  drag_interval: number | null;
+  drag_duration_minutes: number;
+  schedule_start_mode: ScheduleStartMode | null;
+  schedule_start_time: string | null;
+  is_public_live: boolean;
+  active_entry_id: string | null;
+  active_started_at: string | null;
+  entries: ShowScorePaidWarmupEntry[];
+  sort_order: number;
+  legacy_payload: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Division = {
   id: string;
   organization_id: string;
@@ -889,6 +921,30 @@ export type EntryUpdateInput = {
   is_late?: boolean;
   late_fee_percent?: number;
   late_fee_amount?: number;
+};
+
+export type ShowScorePaidWarmupInput = {
+  id?: string;
+  organization_id: string;
+  show_id: string;
+  show_day_id: string;
+  name: string;
+  arena?: string | null;
+  duration_minutes_per_rider?: number;
+  drag_interval?: number | null;
+  drag_duration_minutes?: number;
+  schedule_start_mode?: ScheduleStartMode | null;
+  schedule_start_time?: string | null;
+  is_public_live?: boolean;
+  active_entry_id?: string | null;
+  active_started_at?: string | null;
+  entries?: ShowScorePaidWarmupEntry[];
+  sort_order?: number;
+  legacy_payload?: Record<string, unknown> | null;
+};
+
+export type ShowScorePaidWarmupUpdateInput = Partial<Omit<ShowScorePaidWarmupInput, "id" | "organization_id" | "show_id" | "show_day_id">> & {
+  show_day_id?: string;
 };
 
 export type StallOptionInput = {

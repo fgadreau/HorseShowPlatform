@@ -38,6 +38,8 @@ import {
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
+  prepareShowScorePaidWarmupFromClass,
+  deleteShowScorePaidWarmup,
   assignBackNumber,
   assignNextBackNumber,
   releaseBackNumber,
@@ -452,6 +454,31 @@ export default function App() {
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
         }
+      }}
+      onPrepareShowScorePaidWarmup={async (classRecord, paidWarmupId) => {
+        if (!context) {
+          return;
+        }
+
+        try {
+          const warmup = await prepareShowScorePaidWarmupFromClass({
+            paidWarmupId,
+            classRecord,
+            contacts: context.contacts,
+            divisions: context.divisions,
+            entries: context.entries,
+            horses: context.horses,
+          });
+          setNotice({ tone: "success", message: `Paid warm up prêt avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onDeleteShowScorePaidWarmup={async (id) => {
+        await deleteShowScorePaidWarmup(id);
+        setNotice({ tone: "success", message: "Paid warm up supprimé." });
+        await refreshContext();
       }}
       onRefresh={() => refreshContext()}
       onSignOut={handleSignOut}

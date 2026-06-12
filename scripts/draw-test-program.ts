@@ -131,10 +131,13 @@ function makeClass(id: string, name: string): ClassRecord {
     draw_prepared_at: null,
     eligibility_rules: {},
     judge_name: null,
+    schedule_start_mode: "fixed",
+    scheduled_time: "08:00",
     sort_order: 1,
     entry_fee: 125,
     status: "open",
     is_public: true,
+    is_event_block: false,
     created_at: createdAt,
   };
 }
@@ -175,6 +178,13 @@ function makeContact(id: string, type: Contact["type"], firstName: string, lastN
     phone: null,
     barn_name: null,
     linked_user_id: null,
+    address: null,
+    address_line2: null,
+    city: null,
+    state: null,
+    zip_code: null,
+    country: null,
+    date_of_birth: null,
     created_at: createdAt,
   };
 }

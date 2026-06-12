@@ -42,11 +42,16 @@ import type {
   OrganizationMember,
   OrganizationSettingsInput,
   SanctioningBody,
+  ScheduleStartMode,
   Show,
   ShowAnnouncement,
   ShowAnnouncementInput,
   ShowDay,
   ShowScoreClassSetup,
+  ShowScorePaidWarmup,
+  ShowScorePaidWarmupEntry,
+  ShowScorePaidWarmupInput,
+  ShowScorePaidWarmupUpdateInput,
   ShowInput,
   ShowUpdateInput,
   StallBooking,
@@ -70,6 +75,7 @@ export type AppContext = {
   showDays: ShowDay[];
   showAnnouncements: ShowAnnouncement[];
   showScoreClassSetups: ShowScoreClassSetup[];
+  showScorePaidWarmups: ShowScorePaidWarmup[];
   contacts: Contact[];
   contactOrganizationLinks: ContactOrganizationLink[];
   contactRoles: ContactRole[];
@@ -191,6 +197,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     invoicesResult,
     invoiceLineItemsResult,
     showAnnouncementsResult,
+    showScorePaidWarmupsResult,
   ] = await Promise.all([
     client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
     client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
@@ -219,6 +226,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(),
     client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(),
     client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
+    client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
 
@@ -403,6 +411,11 @@ export async function loadAppContext(user: User): Promise<AppContext> {
       ? []
       : (() => { throw showAnnouncementsResult.error; })()
     : showAnnouncementsResult.data ?? [];
+  const showScorePaidWarmups = showScorePaidWarmupsResult.error
+    ? isMissingShowScoreSchemaError(showScorePaidWarmupsResult.error)
+      ? []
+      : (() => { throw showScorePaidWarmupsResult.error; })()
+    : showScorePaidWarmupsResult.data ?? [];
 
   return {
     profile,
@@ -412,6 +425,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showDays: showDaysResult.data ?? [],
     showAnnouncements,
     showScoreClassSetups,
+    showScorePaidWarmups,
     contacts: contactsResult.data ?? [],
     contactOrganizationLinks,
     contactRoles,
@@ -2820,6 +2834,116 @@ export async function prepareShowScoreClassSetup(input: {
   return data;
 }
 
+export function buildShowScorePaidWarmupEntriesForClass(
+  classId: string,
+  entries: Entry[],
+  relations: {
+    contacts: Contact[];
+    divisions: Division[];
+    horses: Horse[];
+  },
+): ShowScorePaidWarmupEntry[] {
+  return buildShowScoreRunsForClass(classId, entries, relations).map((run, index) => ({
+    id: run.entryId,
+    order: index + 1,
+    rider: formatPaidWarmupEntryLabel(run),
+    status: "pending",
+    completedAt: null,
+  }));
+}
+
+export async function prepareShowScorePaidWarmupFromClass(input: {
+  paidWarmupId?: string;
+  classRecord: ClassRecord;
+  entries: Entry[];
+  divisions: Division[];
+  horses: Horse[];
+  contacts: Contact[];
+  name?: string;
+  durationMinutesPerRider?: number;
+  dragInterval?: number | null;
+  dragDurationMinutes?: number;
+  isPublicLive?: boolean;
+}) {
+  if (!input.classRecord.show_day_id) {
+    throw new Error("Le bloc doit être assigné à une journée avant de créer un paid warm up.");
+  }
+
+  const entries = buildShowScorePaidWarmupEntriesForClass(input.classRecord.id, input.entries, {
+    contacts: input.contacts,
+    divisions: input.divisions,
+    horses: input.horses,
+  });
+
+  if (!entries.length) {
+    throw new Error("Aucune inscription à envoyer dans le paid warm up.");
+  }
+
+  return saveShowScorePaidWarmup({
+    id: input.paidWarmupId,
+    organization_id: input.classRecord.organization_id,
+    show_id: input.classRecord.show_id,
+    show_day_id: input.classRecord.show_day_id,
+    name: input.name || `Paid warm up - ${input.classRecord.name}`,
+    arena: input.classRecord.arena,
+    duration_minutes_per_rider: input.durationMinutesPerRider ?? 5,
+    drag_interval: input.dragInterval ?? null,
+    drag_duration_minutes: input.dragDurationMinutes ?? 8,
+    schedule_start_mode: input.classRecord.schedule_start_mode,
+    schedule_start_time: input.classRecord.scheduled_time,
+    is_public_live: input.isPublicLive ?? false,
+    active_entry_id: null,
+    active_started_at: null,
+    entries,
+    sort_order: input.classRecord.sort_order,
+    legacy_payload: {
+      source: "hsp_class_entries",
+      source_class_id: input.classRecord.id,
+    },
+  });
+}
+
+export async function saveShowScorePaidWarmup(input: ShowScorePaidWarmupInput) {
+  const client = requireSupabase();
+  const row = showScorePaidWarmupRow(input);
+  const { data, error } = await client
+    .from("show_score_paid_warmups")
+    .upsert(row, { onConflict: "id" })
+    .select("*")
+    .single<ShowScorePaidWarmup>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateShowScorePaidWarmup(id: string, input: ShowScorePaidWarmupUpdateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("show_score_paid_warmups")
+    .update(cleanPayload(showScorePaidWarmupPatch(input)))
+    .eq("id", id)
+    .select("*")
+    .single<ShowScorePaidWarmup>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteShowScorePaidWarmup(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("show_score_paid_warmups").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function ensureContactRole(input: {
   organization_id: string;
   contact_id: string;
@@ -3511,6 +3635,110 @@ function birthYearFromDate(value: string | null | undefined) {
 
   const year = Number(value.slice(0, 4));
   return Number.isFinite(year) ? year : null;
+}
+
+function showScorePaidWarmupRow(input: ShowScorePaidWarmupInput) {
+  return cleanPayload({
+    id: input.id || crypto.randomUUID(),
+    organization_id: input.organization_id,
+    show_id: input.show_id,
+    show_day_id: input.show_day_id,
+    name: input.name.trim() || "Paid warm up",
+    arena: nullableTrim(input.arena),
+    duration_minutes_per_rider: normalizePositiveInteger(input.duration_minutes_per_rider, 5),
+    drag_interval: normalizeNullablePositiveInteger(input.drag_interval),
+    drag_duration_minutes: normalizeNonNegativeInteger(input.drag_duration_minutes, 8),
+    schedule_start_mode: normalizeScheduleStartMode(input.schedule_start_mode),
+    schedule_start_time: input.schedule_start_mode === "fixed" ? nullableTrim(input.schedule_start_time) : null,
+    is_public_live: Boolean(input.is_public_live),
+    active_entry_id: input.active_entry_id || null,
+    active_started_at: input.active_started_at || null,
+    entries: normalizeShowScorePaidWarmupEntries(input.entries),
+    sort_order: normalizePositiveInteger(input.sort_order, 1),
+    legacy_payload: input.legacy_payload ?? null,
+  });
+}
+
+function showScorePaidWarmupPatch(input: ShowScorePaidWarmupUpdateInput) {
+  const scheduleStartMode = input.schedule_start_mode === undefined ? undefined : normalizeScheduleStartMode(input.schedule_start_mode);
+
+  return cleanPayload({
+    show_day_id: input.show_day_id,
+    name: input.name == null ? input.name : input.name.trim() || "Paid warm up",
+    arena: nullableTrim(input.arena),
+    duration_minutes_per_rider: normalizeOptionalPositiveInteger(input.duration_minutes_per_rider),
+    drag_interval: input.drag_interval === undefined ? undefined : normalizeNullablePositiveInteger(input.drag_interval),
+    drag_duration_minutes: normalizeOptionalNonNegativeInteger(input.drag_duration_minutes),
+    schedule_start_mode: scheduleStartMode,
+    schedule_start_time: scheduleStartMode === "fixed" ? nullableTrim(input.schedule_start_time) : scheduleStartMode ? null : nullableTrim(input.schedule_start_time),
+    is_public_live: input.is_public_live,
+    active_entry_id: input.active_entry_id,
+    active_started_at: input.active_started_at,
+    entries: input.entries === undefined ? undefined : normalizeShowScorePaidWarmupEntries(input.entries),
+    sort_order: normalizeOptionalPositiveInteger(input.sort_order),
+    legacy_payload: input.legacy_payload,
+  });
+}
+
+function normalizeShowScorePaidWarmupEntries(entries?: ShowScorePaidWarmupEntry[]) {
+  return (Array.isArray(entries) ? entries : []).map((entry, index) => ({
+    id: entry.id,
+    order: index + 1,
+    rider: entry.rider || "",
+    status: normalizePaidWarmupEntryStatus(entry.status),
+    completedAt: entry.completedAt || null,
+  }));
+}
+
+function normalizePaidWarmupEntryStatus(status: ShowScorePaidWarmupEntry["status"]) {
+  return status === "done" || status === "no_show" || status === "scratch" ? status : "pending";
+}
+
+function normalizeScheduleStartMode(mode?: ScheduleStartMode | null): ScheduleStartMode {
+  return mode === "fixed" || mode === "after_previous" ? mode : "unscheduled";
+}
+
+function normalizePositiveInteger(value: unknown, fallback: number) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizeOptionalPositiveInteger(value: unknown) {
+  return value === undefined ? undefined : normalizePositiveInteger(value, 1);
+}
+
+function normalizeNullablePositiveInteger(value: unknown) {
+  if (value == null || value === "") {
+    return null;
+  }
+
+  const parsed = Number.parseInt(String(value), 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function normalizeNonNegativeInteger(value: unknown, fallback: number) {
+  const parsed = Number.parseInt(String(value ?? ""), 10);
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function normalizeOptionalNonNegativeInteger(value: unknown) {
+  return value === undefined ? undefined : normalizeNonNegativeInteger(value, 0);
+}
+
+function formatPaidWarmupEntryLabel(run: ReturnType<typeof buildShowScoreRunsForClass>[number]) {
+  const parts = [];
+
+  if (run.backNumber) {
+    parts.push(`#${run.backNumber}`);
+  }
+
+  parts.push(run.rider || "Cavalier");
+
+  if (run.horse) {
+    parts.push(run.horse);
+  }
+
+  return parts.join(" · ");
 }
 
 function cleanPayload<T extends Record<string, unknown>>(input: T) {

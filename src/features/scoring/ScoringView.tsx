@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { Download, FileText, RefreshCw } from "lucide-react";
+import { Trash2 } from "lucide-react";
 import { EmptyState, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
-import type { ClassRecord, Contact, Division, Entry, Horse, Organization, Show, ShowDay, ShowScoreClassSetup } from "../../types/domain";
+import type { ClassRecord, Contact, Division, Entry, Horse, Show, ShowDay, ShowScoreClassSetup, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { classEntriesCloseLabel, showDayLabel } from "../classes/classUtils";
 import { classEntriesAreClosed } from "../dashboard/shared";
@@ -18,8 +18,11 @@ function ScoringView({
   horses,
   showDays,
   showScoreClassSetups,
+  showScorePaidWarmups,
   shows,
+  onDeleteShowScorePaidWarmup,
   onPrepareShowScoreClass,
+  onPrepareShowScorePaidWarmup,
 }: {
   locale: Locale;
   classes: ClassRecord[];
@@ -29,14 +32,22 @@ function ScoringView({
   horses: Horse[];
   showDays: ShowDay[];
   showScoreClassSetups: ShowScoreClassSetup[];
+  showScorePaidWarmups: ShowScorePaidWarmup[];
   shows: Show[];
+  onDeleteShowScorePaidWarmup: (id: string) => Promise<void>;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
+  onPrepareShowScorePaidWarmup: (classRecord: ClassRecord, paidWarmupId?: string) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
   const [busyClassId, setBusyClassId] = useState("");
+  const [busyWarmupId, setBusyWarmupId] = useState("");
   const [expandedDrawClassIds, setExpandedDrawClassIds] = useState<string[]>([]);
+  const [expandedWarmupIds, setExpandedWarmupIds] = useState<string[]>([]);
   const selectedShowId = showId || shows[0]?.id || "";
   const visibleClasses = selectedShowId ? classes.filter((classRecord) => classRecord.show_id === selectedShowId) : classes;
+  const visiblePaidWarmups = selectedShowId ? showScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShowId) : showScorePaidWarmups;
+  const sortedVisiblePaidWarmups = [...visiblePaidWarmups].sort(compareShowScorePaidWarmups);
+  const sourceWarmupByClassId = buildSourceWarmupByClassId(sortedVisiblePaidWarmups);
   const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.class_id));
   const totalRuns = visibleClasses.reduce(
     (sum, classRecord) =>
@@ -59,8 +70,37 @@ function ScoringView({
     }
   }
 
+  async function handlePreparePaidWarmup(classRecord: ClassRecord, paidWarmupId?: string) {
+    const busyId = paidWarmupId || `new-${classRecord.id}`;
+    setBusyWarmupId(busyId);
+
+    try {
+      await onPrepareShowScorePaidWarmup(classRecord, paidWarmupId);
+    } finally {
+      setBusyWarmupId("");
+    }
+  }
+
+  async function handleDeletePaidWarmup(warmup: ShowScorePaidWarmup) {
+    if (!window.confirm(`Supprimer le paid warm up "${warmup.name}"?`)) {
+      return;
+    }
+
+    setBusyWarmupId(warmup.id);
+
+    try {
+      await onDeleteShowScorePaidWarmup(warmup.id);
+    } finally {
+      setBusyWarmupId("");
+    }
+  }
+
   function toggleDraw(classId: string) {
     setExpandedDrawClassIds((current) => (current.includes(classId) ? current.filter((candidate) => candidate !== classId) : [...current, classId]));
+  }
+
+  function toggleWarmup(warmupId: string) {
+    setExpandedWarmupIds((current) => (current.includes(warmupId) ? current.filter((candidate) => candidate !== warmupId) : [...current, warmupId]));
   }
 
   return (
@@ -72,6 +112,7 @@ function ScoringView({
         stats={[
           { label: uiText(locale, "Blocs", "Blocks"), value: String(visibleClasses.length) },
           { label: "Runs", value: String(totalRuns) },
+          { label: "Paid warmups", value: String(visiblePaidWarmups.length) },
         ]}
       />
 
@@ -79,6 +120,7 @@ function ScoringView({
         <Metric label={uiText(locale, "Blocs de pointage", "Scoring blocks")} value={String(visibleClasses.length)} />
         <Metric label={uiText(locale, "Runs depuis les inscriptions", "Runs from entries")} value={String(totalRuns)} />
         <Metric label={uiText(locale, "Préparations prêtes", "Prepared setups")} value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
+        <Metric label="Paid warmups" value={String(visiblePaidWarmups.length)} />
       </section>
 
       <section className="panel span-2">
@@ -192,6 +234,142 @@ function ScoringView({
           {!visibleClasses.length ? <EmptyState label={uiText(locale, "Crée des blocs avant de préparer ShowScore.", "Create schedule blocks before preparing ShowScore.")} /> : null}
         </div>
       </section>
+
+      <section className="panel span-2">
+        <div className="panel-header">
+          <div>
+            <h2>{uiText(locale, "Paid warmups ShowScore", "ShowScore paid warmups")}</h2>
+            <p>{uiText(locale, "Crée les paid warmups avec les inscriptions HSP, dans l'ordre de passage que ShowScore sait lire en live.", "Create paid warmups from HSP entries in the draw order ShowScore already reads live.")}</p>
+          </div>
+        </div>
+
+        <div className="table scoring-table">
+          <div className="table-row table-head">
+            <span>Paid warmup</span>
+            <span>{uiText(locale, "Horaire", "Schedule")}</span>
+            <span>{uiText(locale, "Inscriptions", "Entries")}</span>
+            <span>ShowScore</span>
+          </div>
+          {sortedVisiblePaidWarmups.map((warmup) => {
+            const sourceClassId = sourceClassIdFromWarmup(warmup);
+            const sourceClass = sourceClassId ? findById(classes, sourceClassId) : null;
+            const day = findById(showDays, warmup.show_day_id);
+            const warmupEntries = normalizePaidWarmupEntries(warmup.entries);
+            const expanded = expandedWarmupIds.includes(warmup.id);
+            const busy = busyWarmupId === warmup.id;
+
+            return (
+              <div className="scoring-class-group" key={warmup.id}>
+                <div className="table-row">
+                  <div>
+                    <strong>{warmup.name}</strong>
+                    <span className="muted-line">{warmup.arena || uiText(locale, "Arène non assignée", "No arena assigned")}</span>
+                  </div>
+                  <div>
+                    <span>{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
+                    <span className="muted-line">{formatPaidWarmupSchedule(warmup, locale)}</span>
+                  </div>
+                  <div>
+                    <strong>{warmupEntries.length}</strong>
+                    <span className="muted-line">{formatPaidWarmupPacing(warmup, locale)}</span>
+                  </div>
+                  <div className="row-actions">
+                    <span className={`badge ${warmup.is_public_live ? "open" : "draft"}`}>{warmup.is_public_live ? uiText(locale, "Public", "Public") : uiText(locale, "Privé", "Private")}</span>
+                    <button className="text-button" disabled={!sourceClass || busy} type="button" onClick={() => sourceClass ? handlePreparePaidWarmup(sourceClass, warmup.id) : undefined}>
+                      {busy ? uiText(locale, "Rafraîchissement", "Refreshing") : uiText(locale, "Rafraîchir", "Refresh")}
+                    </button>
+                    <button className="text-button" disabled={!warmupEntries.length} type="button" onClick={() => toggleWarmup(warmup.id)}>
+                      {expanded ? uiText(locale, "Masquer ordre", "Hide order") : uiText(locale, "Voir ordre", "View order")}
+                    </button>
+                    <button className="text-button danger-text inline-action" disabled={busy} type="button" onClick={() => handleDeletePaidWarmup(warmup)}>
+                      <Trash2 size={14} aria-hidden="true" />
+                      {uiText(locale, "Supprimer", "Delete")}
+                    </button>
+                  </div>
+                </div>
+                {expanded ? (
+                  <div className="draw-detail-panel">
+                    <div className="draw-detail-summary">
+                      <span>{warmupEntries.length} {uiText(locale, "inscriptions", "entries")}</span>
+                      <span>{uiText(locale, "Durée", "Duration")} {warmup.duration_minutes_per_rider} min</span>
+                      <span>{uiText(locale, "Drag", "Drag")} {warmup.drag_interval || "-"} / {warmup.drag_duration_minutes} min</span>
+                      <span>{sourceClass ? sourceClass.name : uiText(locale, "Source manuelle", "Manual source")}</span>
+                    </div>
+                    <div className="draw-list">
+                      <div className="draw-list-row draw-list-head">
+                        <span>{uiText(locale, "Ordre", "Order")}</span>
+                        <span>ID</span>
+                        <span>{uiText(locale, "Inscription", "Entry")}</span>
+                        <span>{uiText(locale, "Statut", "Status")}</span>
+                        <span />
+                        <span />
+                        <span />
+                      </div>
+                      {warmupEntries.map((entry) => (
+                        <div className="draw-list-row" key={entry.id}>
+                          <strong>#{entry.order}</strong>
+                          <span>{entry.id.slice(0, 8)}</span>
+                          <span>{entry.rider || "-"}</span>
+                          <span className={`badge ${entry.status === "pending" ? "draft" : entry.status === "done" ? "completed" : "warning"}`}>{paidWarmupEntryStatusLabel(entry.status, locale)}</span>
+                          <span />
+                          <span />
+                          <span />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })}
+          {!sortedVisiblePaidWarmups.length ? <EmptyState label={uiText(locale, "Aucun paid warmup préparé pour ce concours.", "No paid warmups prepared for this show.")} /> : null}
+        </div>
+
+        <div className="table scoring-table" style={{ marginTop: 16 }}>
+          <div className="table-row table-head">
+            <span>{uiText(locale, "Créer depuis un bloc", "Create from block")}</span>
+            <span>{uiText(locale, "Horaire", "Schedule")}</span>
+            <span>{uiText(locale, "Inscriptions", "Entries")}</span>
+            <span>ShowScore</span>
+          </div>
+          {visibleClasses.map((classRecord) => {
+            const day = findById(showDays, classRecord.show_day_id);
+            const warmup = sourceWarmupByClassId.get(classRecord.id);
+            const runs = buildShowScoreRunsForClass(classRecord.id, entries, {
+              contacts,
+              divisions,
+              horses,
+            });
+            const busyId = warmup?.id || `new-${classRecord.id}`;
+            const busy = busyWarmupId === busyId;
+            const canPrepare = Boolean(classRecord.show_day_id && runs.length);
+
+            return (
+              <div className="table-row" key={`paid-warmup-source-${classRecord.id}`}>
+                <div>
+                  <strong>{classRecord.name}</strong>
+                  <span className="muted-line">{classRecord.code || uiText(locale, "Sans code", "No code")}</span>
+                </div>
+                <div>
+                  <span>{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
+                  <span className="muted-line">{formatClassSchedule(classRecord, locale)}</span>
+                </div>
+                <div>
+                  <strong>{runs.length}</strong>
+                  <span className="muted-line">{warmup ? uiText(locale, "Paid warmup existant", "Existing paid warmup") : uiText(locale, "Prêt à générer", "Ready to generate")}</span>
+                </div>
+                <div className="row-actions">
+                  <span className={`badge ${warmup ? "info" : canPrepare ? "open" : "draft"}`}>{warmup ? uiText(locale, "Lié", "Linked") : canPrepare ? uiText(locale, "Disponible", "Available") : uiText(locale, "Incomplet", "Incomplete")}</span>
+                  <button className="text-button" disabled={!canPrepare || busy} type="button" onClick={() => handlePreparePaidWarmup(classRecord, warmup?.id)}>
+                    {busy ? uiText(locale, "Préparation", "Preparing") : warmup ? uiText(locale, "Rafraîchir paid warmup", "Refresh paid warmup") : uiText(locale, "Créer paid warmup", "Create paid warmup")}
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+          {!visibleClasses.length ? <EmptyState label={uiText(locale, "Crée un bloc avec inscriptions avant de générer un paid warmup.", "Create a block with entries before generating a paid warmup.")} /> : null}
+        </div>
+      </section>
     </div>
   );
 }
@@ -290,6 +468,83 @@ function formatRunDivisionNames(run: ShowScoreRun, divisions: Division[], classe
 
   const division = findById(divisions, run.divisionId);
   return division ? divisionLabel(division, classes) : run.divisionId || "-";
+}
+
+function compareShowScorePaidWarmups(first: ShowScorePaidWarmup, second: ShowScorePaidWarmup) {
+  return (
+    first.show_day_id.localeCompare(second.show_day_id) ||
+    first.sort_order - second.sort_order ||
+    first.name.localeCompare(second.name)
+  );
+}
+
+function buildSourceWarmupByClassId(warmups: ShowScorePaidWarmup[]) {
+  const warmupByClassId = new Map<string, ShowScorePaidWarmup>();
+
+  warmups.forEach((warmup) => {
+    const sourceClassId = sourceClassIdFromWarmup(warmup);
+
+    if (sourceClassId && !warmupByClassId.has(sourceClassId)) {
+      warmupByClassId.set(sourceClassId, warmup);
+    }
+  });
+
+  return warmupByClassId;
+}
+
+function sourceClassIdFromWarmup(warmup: ShowScorePaidWarmup) {
+  const payload = warmup.legacy_payload;
+
+  if (!payload || typeof payload !== "object") {
+    return "";
+  }
+
+  const sourceClassId = payload.source_class_id ?? payload.sourceClassId;
+  return typeof sourceClassId === "string" ? sourceClassId : "";
+}
+
+function normalizePaidWarmupEntries(entries: ShowScorePaidWarmup["entries"]) {
+  return (Array.isArray(entries) ? entries : [])
+    .filter((entry) => entry.id && entry.order > 0)
+    .sort((first, second) => first.order - second.order);
+}
+
+function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale) {
+  if (warmup.schedule_start_mode === "after_previous") {
+    return uiText(locale, "Après le bloc", "After block");
+  }
+
+  if (warmup.schedule_start_time) {
+    return warmup.schedule_start_time;
+  }
+
+  return uiText(locale, "Départ non fixé", "Start not set");
+}
+
+function formatPaidWarmupPacing(warmup: ShowScorePaidWarmup, locale: Locale) {
+  const dragInterval = warmup.drag_interval ? uiText(locale, `drag aux ${warmup.drag_interval}`, `drag every ${warmup.drag_interval}`) : uiText(locale, "drag manuel", "manual drag");
+  return `${warmup.duration_minutes_per_rider} min / ${dragInterval}`;
+}
+
+function paidWarmupEntryStatusLabel(status: ShowScorePaidWarmup["entries"][number]["status"], locale: Locale) {
+  switch (status) {
+    case "done":
+      return uiText(locale, "Fait", "Done");
+    case "no_show":
+      return uiText(locale, "Absent", "No show");
+    case "scratch":
+      return uiText(locale, "Scratch", "Scratch");
+    default:
+      return uiText(locale, "En attente", "Pending");
+  }
+}
+
+function formatClassSchedule(classRecord: ClassRecord, locale: Locale) {
+  if (classRecord.schedule_start_mode === "after_previous") {
+    return uiText(locale, "Après le bloc précédent", "After previous block");
+  }
+
+  return classRecord.scheduled_time || uiText(locale, "Horaire non fixé", "Schedule not set");
 }
 
 

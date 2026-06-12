@@ -61,6 +61,7 @@ import {
   deleteDivision,
   deleteHorse,
   deleteStallBooking,
+  deleteShowScorePaidWarmup,
   getHorseHealthDocumentFileUrl,
   releaseBackNumber,
   reviewHorseHealthDocument,
@@ -171,6 +172,8 @@ export function Dashboard({
   onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
+  onPrepareShowScorePaidWarmup,
+  onDeleteShowScorePaidWarmup,
   onRefresh,
   onReviewHorseHealthDocument,
   onSignOut,
@@ -229,6 +232,8 @@ export function Dashboard({
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
+  onPrepareShowScorePaidWarmup: (classRecord: ClassRecord, paidWarmupId?: string) => Promise<void>;
+  onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onSignOut: () => void;
@@ -254,6 +259,7 @@ export function Dashboard({
   const showDays = context?.showDays ?? [];
   const showAnnouncements = context?.showAnnouncements ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
+  const showScorePaidWarmups = context?.showScorePaidWarmups ?? [];
   const contacts = context?.contacts ?? [];
   const contactOrganizationLinks = context?.contactOrganizationLinks ?? [];
   const contactRoles = context?.contactRoles ?? [];
@@ -295,6 +301,9 @@ export function Dashboard({
     : [];
   const selectedOrganizationShowScoreSetups = selectedOrganization
     ? showScoreClassSetups.filter((setup) => setup.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationShowScorePaidWarmups = selectedOrganization
+    ? showScorePaidWarmups.filter((warmup) => warmup.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
@@ -682,8 +691,11 @@ export function Dashboard({
             horses={selectedOrganizationHorses}
             showDays={selectedOrganizationShowDays}
             showScoreClassSetups={selectedOrganizationShowScoreSetups}
+            showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
             shows={selectedOrganizationShows}
+            onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
             onPrepareShowScoreClass={onPrepareShowScoreClass}
+            onPrepareShowScorePaidWarmup={onPrepareShowScorePaidWarmup}
           />
         ) : null}
 
