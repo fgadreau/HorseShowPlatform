@@ -8,6 +8,8 @@ import type { BackNumberPolicy, ClassTemplate, SanctioningBody } from "../../typ
 import { uiText } from "../dashboard/shared";
 import { defaultBackNumberPolicy, eligibilityRulesFromNotes, eligibilityNotesFromRules } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
+import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
+import { showScorePatternSelectValue } from "./showScorePatterns";
 
 function ClassTemplateEditForm({
   locale = "fr",
@@ -26,7 +28,7 @@ function ClassTemplateEditForm({
   const [code, setCode] = useState(classTemplate.code ?? "");
   const [blockLabel, setBlockLabel] = useState(classTemplate.block_label ?? "");
   const [category, setCategory] = useState(classTemplate.category ?? "");
-  const [pattern, setPattern] = useState(classTemplate.default_pattern ?? "");
+  const [pattern, setPattern] = useState(showScorePatternSelectValue(classTemplate.default_pattern));
   const [entryFee, setEntryFee] = useState(classTemplate.default_entry_fee == null ? "" : String(classTemplate.default_entry_fee));
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classTemplate.sanctioning_body_codes ?? []);
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classTemplate.back_number_policy ?? "horse");
@@ -50,7 +52,7 @@ function ClassTemplateEditForm({
         code: code || null,
         block_label: blockLabel || null,
         category: category || null,
-        default_pattern: pattern || null,
+        default_pattern: showScorePatternSelectValue(pattern) || null,
         default_entry_fee: numericValue(entryFee) ?? null,
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
@@ -93,7 +95,7 @@ function ClassTemplateEditForm({
           </label>
           <label>
             Patron
-            <input value={pattern} onChange={(event) => setPattern(event.target.value)} />
+            <ShowScorePatternSelect locale={locale} value={pattern} onChange={setPattern} />
           </label>
         </div>
         <label>

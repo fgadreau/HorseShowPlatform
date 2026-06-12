@@ -8,6 +8,8 @@ import type { BackNumberPolicy, ClassRecord, EligibilityRules, Organization, San
 import { uiText } from "../dashboard/shared";
 import { defaultBackNumberPolicy, eligibilityRulesFromNotes, eligibilityNotesFromRules, scheduleStartModeForClass, scheduleStartModeLabel, showDayLabel, datetimeLocalToIso, datetimeLocalInputValue, classProgramRules, concurrentClassIdFromRules, concurrentGroupLabelFromRules, timeInputValue } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
+import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
+import { patternForConcurrentClass, showScorePatternLabel } from "./showScorePatterns";
 
 function ClassEditForm({
   locale = "fr",
@@ -26,11 +28,13 @@ function ClassEditForm({
   onCancel: () => void;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
 }) {
+  const initialConcurrentClassId = concurrentClassIdFromRules(classRecord.eligibility_rules);
+  const initialConcurrentClass = findById(classes, initialConcurrentClassId);
   const [name, setName] = useState(classRecord.name);
   const [code, setCode] = useState(classRecord.code ?? "");
   const [showDayId, setShowDayId] = useState(classRecord.show_day_id ?? "");
   const [blockLabel, setBlockLabel] = useState(classRecord.block_label ?? "");
-  const [pattern, setPattern] = useState(classRecord.pattern ?? "");
+  const [pattern, setPattern] = useState(patternForConcurrentClass(classRecord.pattern, initialConcurrentClass));
   const [entryFee, setEntryFee] = useState(classRecord.entry_fee == null ? "" : String(classRecord.entry_fee));
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classRecord.sanctioning_body_codes ?? []);
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classRecord.back_number_policy ?? "horse");
@@ -38,7 +42,7 @@ function ClassEditForm({
   const [entriesCloseAt, setEntriesCloseAt] = useState(datetimeLocalInputValue(classRecord.entries_close_at));
   const [lateEntriesAllowed, setLateEntriesAllowed] = useState(classRecord.late_entries_allowed ?? true);
   const [lateEntryFeePercent, setLateEntryFeePercent] = useState(classRecord.late_entry_fee_percent == null ? "50" : String(classRecord.late_entry_fee_percent));
-  const [concurrentClassId, setConcurrentClassId] = useState(concurrentClassIdFromRules(classRecord.eligibility_rules));
+  const [concurrentClassId, setConcurrentClassId] = useState(initialConcurrentClassId);
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(scheduleStartModeForClass(classRecord));
   const [scheduledTime, setScheduledTime] = useState(timeInputValue(classRecord.scheduled_time));
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classRecord.eligibility_rules));
@@ -46,6 +50,7 @@ function ClassEditForm({
   const [busy, setBusy] = useState(false);
   const concurrentClassChoices = classes.filter((candidate) => candidate.show_id === classRecord.show_id && candidate.id !== classRecord.id);
   const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
+  const patternLockedToConcurrent = Boolean(selectedConcurrentClass);
   const selectedShowDays = showDays.filter((day) => day.show_id === classRecord.show_id);
 
   function handleSanctioningBodyCodes(nextCodes: string[]) {
@@ -53,17 +58,27 @@ function ClassEditForm({
     setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
   }
 
+  function handleConcurrentClassChange(nextClassId: string) {
+    setConcurrentClassId(nextClassId);
+
+    const nextConcurrentClass = findById(classes, nextClassId);
+    if (nextConcurrentClass) {
+      setPattern(patternForConcurrentClass(pattern, nextConcurrentClass));
+    }
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
 
     try {
+      const patternForSave = patternForConcurrentClass(pattern, selectedConcurrentClass);
       await onUpdateClass(classRecord.id, {
         name,
         code: code || null,
         show_day_id: showDayId || null,
         block_label: blockLabel || null,
-        pattern: pattern || null,
+        pattern: patternForSave || null,
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
         nrha_slate_number: nrhaSlateNumber.trim() || null,
@@ -141,7 +156,12 @@ function ClassEditForm({
           </label>
           <label>
             Patron
-            <input value={pattern} onChange={(event) => setPattern(event.target.value)} />
+            <ShowScorePatternSelect disabled={patternLockedToConcurrent} locale={locale} value={pattern} onChange={setPattern} />
+            {patternLockedToConcurrent ? (
+              <span className="input-help">
+                {uiText(locale, "Synchronise avec le bloc concurrent choisi.", "Synced with the selected concurrent block.")}
+              </span>
+            ) : null}
           </label>
         </div>
         <SanctioningFields
@@ -184,11 +204,16 @@ function ClassEditForm({
             items={concurrentClassChoices.map((candidate) => ({
               id: candidate.id,
               label: candidate.name,
-              detail: candidate.block_label || uiText(locale, "Libellé d'horaire absent", "Missing schedule label"),
+              detail: [
+                candidate.block_label || uiText(locale, "Libellé d'horaire absent", "Missing schedule label"),
+                showScorePatternLabel(candidate.pattern) ? `${uiText(locale, "Patron", "Pattern")} ${showScorePatternLabel(candidate.pattern)}` : null,
+              ]
+                .filter(Boolean)
+                .join(" - "),
             }))}
             placeholder={uiText(locale, "Rechercher un bloc concurrent", "Search concurrent block")}
             value={concurrentClassId}
-            onChange={setConcurrentClassId}
+            onChange={handleConcurrentClassChange}
           />
         </label>
         <label>

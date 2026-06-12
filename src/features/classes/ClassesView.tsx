@@ -17,6 +17,7 @@ import { DivisionEditForm } from "./DivisionEditForm";
 import { EventBlockForm } from "./EventBlockForm";
 import { PaidWarmupForm } from "./PaidWarmupForm";
 import { sanctionLabel, payoutDivisionSummary, payoutTemplateDivisionSummary, classScheduleStartLabel, compareScheduleClasses, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, backNumberPolicyLabel, concurrentClassLabel, isNrhaSanctioned, nrhaClassTypeLabel, nrhaClassTypeFromRules } from "./classUtils";
+import { showScorePatternLabel } from "./showScorePatterns";
 
 function ClassesView({
   locale,
@@ -314,7 +315,7 @@ function ClassesView({
                   classDivisions.length ? uiText(locale, `${classDivisions.length} classe${classDivisions.length === 1 ? "" : "s"}`, `${classDivisions.length} class${classDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes"),
                   classScheduleStartLabel(classRecord, locale),
                   classRecord.block_label,
-                  classRecord.pattern ? `Pattern ${classRecord.pattern}` : null,
+                  classRecord.pattern ? `Pattern ${showScorePatternLabel(classRecord.pattern)}` : null,
                   classRecord.nrha_slate_number ? `Slate / show technique ${classRecord.nrha_slate_number}` : null,
                 ]
                   .filter(Boolean)
@@ -494,7 +495,7 @@ function ClassesView({
                   templateDivisions.length ? uiText(locale, `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`, `${templateDivisions.length} class${templateDivisions.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No classes"),
                   template.block_label,
                   template.category,
-                  template.default_pattern ? `Pattern ${template.default_pattern}` : null,
+                  template.default_pattern ? `Pattern ${showScorePatternLabel(template.default_pattern)}` : null,
                 ]
                   .filter(Boolean)
                   .join(" - ") || template.code || uiText(locale, "Bloc récurrent", "Recurring block")}

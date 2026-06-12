@@ -3,6 +3,7 @@ import { AlertTriangle, CalendarDays, Clock, DollarSign, ExternalLink, MapPin, S
 import { formatCurrency, formatDate } from "../../lib/display";
 import { fetchPublicShow, type PublicShowContext } from "../../services/supabaseServices";
 import type { ClassRecord, Division, ShowDay } from "../../types/domain";
+import { showScorePatternLabel } from "../classes/showScorePatterns";
 
 function totalAddedMoney(divisions: Division[]) {
   return divisions.reduce((sum, d) => sum + (d.added_money ?? 0), 0);
@@ -60,7 +61,7 @@ function ScheduleDay({ day, classes, divisions }: { day: ShowDay; classes: Class
                 <strong>{block.name}</strong>
                 <div className="public-class-block-meta">
                   {block.scheduled_time ? <span><Clock size={12} />{block.scheduled_time.slice(0, 5)}</span> : null}
-                  {block.pattern ? <span>Pattern {block.pattern}</span> : null}
+                  {block.pattern ? <span>Pattern {showScorePatternLabel(block.pattern)}</span> : null}
                   {blockAddedMoney > 0 ? <span className="public-money-badge"><DollarSign size={12} />{formatCurrency(blockAddedMoney, "CAD")} added</span> : null}
                 </div>
               </div>

@@ -8,6 +8,8 @@ import type { BackNumberPolicy, Organization, SanctioningBody } from "../../type
 import { uiText } from "../dashboard/shared";
 import { defaultBackNumberPolicy, eligibilityRulesFromNotes } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
+import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
+import { showScorePatternSelectValue } from "./showScorePatterns";
 
 function ClassTemplateForm({
   locale = "fr",
@@ -55,7 +57,7 @@ function ClassTemplateForm({
         code,
         block_label: blockLabel,
         category,
-        default_pattern: pattern,
+        default_pattern: showScorePatternSelectValue(pattern),
         default_entry_fee: numericValue(entryFee),
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
@@ -108,7 +110,7 @@ function ClassTemplateForm({
           </label>
           <label>
             Patron
-            <input disabled={!organization} value={pattern} onChange={(event) => setPattern(event.target.value)} />
+            <ShowScorePatternSelect disabled={!organization} locale={locale} value={pattern} onChange={setPattern} />
           </label>
         </div>
         <label>

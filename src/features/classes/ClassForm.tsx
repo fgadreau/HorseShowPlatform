@@ -9,6 +9,8 @@ import type { BackNumberPolicy, ClassRecord, ClassTemplate, ClassTemplateDivisio
 import { uiText } from "../dashboard/shared";
 import { defaultBackNumberPolicy, eligibilityRulesFromNotes, eligibilityNotesFromRules, sanctionLabel, scheduleStartModeLabel, showDayLabel, datetimeLocalToIso, defaultEntriesCloseAtForShowDay, classProgramRules } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
+import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
+import { patternForConcurrentClass, showScorePatternLabel, showScorePatternSelectValue } from "./showScorePatterns";
 
 function ClassForm({
   locale = "fr",
@@ -51,7 +53,7 @@ function ClassForm({
   const [name, setName] = useState(initialTemplate?.name ?? "");
   const [code, setCode] = useState(initialTemplate?.code ?? "");
   const [blockLabel, setBlockLabel] = useState(initialTemplate?.block_label ?? "");
-  const [pattern, setPattern] = useState(initialTemplate?.default_pattern ?? "");
+  const [pattern, setPattern] = useState(showScorePatternSelectValue(initialTemplate?.default_pattern));
   const [entryFee, setEntryFee] = useState(initialTemplate?.default_entry_fee == null ? "" : String(initialTemplate.default_entry_fee));
   const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(initialTemplate?.sanctioning_body_codes ?? []);
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(initialTemplate?.back_number_policy ?? "horse");
@@ -74,6 +76,7 @@ function ClassForm({
   const selectedTemplateDivisions = selectedTemplate ? classTemplateDivisions.filter((division) => division.class_template_id === selectedTemplate.id) : [];
   const concurrentClassChoices = classes.filter((classRecord) => classRecord.show_id === selectedShowId);
   const selectedConcurrentClass = findById(classes, concurrentClassId) ?? null;
+  const patternLockedToConcurrent = Boolean(selectedConcurrentClass);
   const nextSortOrder = Math.max(0, ...classes.filter((classRecord) => classRecord.show_day_id === selectedShowDayId).map((classRecord) => classRecord.sort_order)) + 10;
 
   function handleShowChange(nextShowId: string) {
@@ -101,7 +104,7 @@ function ClassForm({
     setName(template.name);
     setCode(template.code ?? "");
     setBlockLabel(template.block_label ?? "");
-    setPattern(template.default_pattern ?? "");
+    setPattern(patternForConcurrentClass(template.default_pattern, selectedConcurrentClass));
     setEntryFee(template.default_entry_fee == null ? "" : String(template.default_entry_fee));
     setSanctioningBodyCodes(template.sanctioning_body_codes ?? []);
     setBackNumberPolicy(template.back_number_policy ?? defaultBackNumberPolicy(template.sanctioning_body_codes ?? [], sanctioningBodies));
@@ -111,6 +114,15 @@ function ClassForm({
   function handleSanctioningBodyCodes(nextCodes: string[]) {
     setSanctioningBodyCodes(nextCodes);
     setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+  }
+
+  function handleConcurrentClassChange(nextClassId: string) {
+    setConcurrentClassId(nextClassId);
+
+    const nextConcurrentClass = findById(classes, nextClassId);
+    if (nextConcurrentClass) {
+      setPattern(patternForConcurrentClass(pattern, nextConcurrentClass));
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -123,6 +135,7 @@ function ClassForm({
     setBusy(true);
 
     try {
+      const patternForSave = patternForConcurrentClass(pattern, selectedConcurrentClass);
       const createdClass = await onCreateClass({
         organization_id: organization.id,
         show_id: selectedShowId,
@@ -131,7 +144,7 @@ function ClassForm({
         name,
         code,
         block_label: blockLabel,
-        pattern,
+        pattern: patternForSave || undefined,
         sanctioning_body_codes: sanctioningBodyCodes,
         back_number_policy: backNumberPolicy,
         nrha_slate_number: nrhaSlateNumber.trim() || null,
@@ -262,7 +275,7 @@ function ClassForm({
                   id: template.id,
                   label: template.name,
                   detail: [
-                    template.default_pattern ? `${uiText(locale, "Patron", "Pattern")} ${template.default_pattern}` : null,
+                    template.default_pattern ? `${uiText(locale, "Patron", "Pattern")} ${showScorePatternLabel(template.default_pattern)}` : null,
                     uiText(locale, `${templateDivisions.length} classe${templateDivisions.length === 1 ? "" : "s"}`, `${templateDivisions.length} class${templateDivisions.length === 1 ? "" : "es"}`),
                     sanctionLabel(template.sanctioning_body_codes, sanctioningBodies, locale),
                   ]
@@ -297,7 +310,12 @@ function ClassForm({
           </label>
           <label>
             Patron
-            <input disabled={!organization || !shows.length} value={pattern} onChange={(event) => setPattern(event.target.value)} />
+            <ShowScorePatternSelect disabled={!organization || !shows.length || patternLockedToConcurrent} locale={locale} value={pattern} onChange={setPattern} />
+            {patternLockedToConcurrent ? (
+              <span className="input-help">
+                {uiText(locale, "Synchronise avec le bloc concurrent choisi.", "Synced with the selected concurrent block.")}
+              </span>
+            ) : null}
           </label>
         </div>
         <SanctioningFields
@@ -343,6 +361,7 @@ function ClassForm({
               label: classRecord.name,
               detail: [
                 classRecord.block_label || uiText(locale, "Libellé d'horaire absent", "Missing schedule label"),
+                showScorePatternLabel(classRecord.pattern) ? `${uiText(locale, "Patron", "Pattern")} ${showScorePatternLabel(classRecord.pattern)}` : null,
                 classRecord.show_day_id && findById(showDays, classRecord.show_day_id) ? showDayLabel(findById(showDays, classRecord.show_day_id) as ShowDay) : null,
               ]
                 .filter(Boolean)
@@ -350,7 +369,7 @@ function ClassForm({
             }))}
             placeholder={uiText(locale, "Rechercher un bloc concurrent", "Search concurrent block")}
             value={concurrentClassId}
-            onChange={setConcurrentClassId}
+            onChange={handleConcurrentClassChange}
           />
         </label>
         <label>
