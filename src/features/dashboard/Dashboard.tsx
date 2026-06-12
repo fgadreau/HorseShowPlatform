@@ -65,6 +65,7 @@ import {
   getHorseHealthDocumentFileUrl,
   releaseBackNumber,
   reviewHorseHealthDocument,
+  saveShowScorePaidWarmup,
   setOrganizationExternalMembershipRequirement,
   slugify,
   updateClass,
@@ -77,6 +78,7 @@ import {
   updateHorse,
   updateOrganizationHealthSettings,
   updateShow,
+  updateShowScorePaidWarmup,
   updateStallBooking,
   updateStallOption,
   updateUserProfile,
@@ -172,7 +174,7 @@ export function Dashboard({
   onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
-  onPrepareShowScorePaidWarmup,
+  onSaveShowScorePaidWarmup,
   onDeleteShowScorePaidWarmup,
   onRefresh,
   onReviewHorseHealthDocument,
@@ -188,6 +190,7 @@ export function Dashboard({
   onUpdateOrganizationHealthSettings,
   onVerifyGvlCogginsDocument,
   onUpdateShow,
+  onUpdateShowScorePaidWarmup,
   onUpdateStallBooking,
   onUpdateStallOption,
   onUpdateUserProfile,
@@ -232,7 +235,7 @@ export function Dashboard({
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
-  onPrepareShowScorePaidWarmup: (classRecord: ClassRecord, paidWarmupId?: string) => Promise<void>;
+  onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
@@ -248,6 +251,7 @@ export function Dashboard({
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
+  onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
   onUpdateUserProfile: (id: string, input: Parameters<typeof updateUserProfile>[1]) => Promise<void>;
@@ -591,11 +595,14 @@ export function Dashboard({
             classes={selectedOrganizationClasses}
             classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
             classTemplates={selectedOrganizationClassTemplates}
+            contacts={selectedOrganizationContacts}
             divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
+            horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             sanctioningBodies={sanctioningBodies}
             showDays={selectedOrganizationShowDays}
+            showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
             shows={selectedOrganizationShows}
             onCreateClass={onCreateClass}
             onCreateClassTemplate={onCreateClassTemplate}
@@ -605,10 +612,13 @@ export function Dashboard({
             onDeleteClassTemplate={onDeleteClassTemplate}
             onDeleteClassTemplateDivision={onDeleteClassTemplateDivision}
             onDeleteDivision={onDeleteDivision}
+            onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
+            onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
             onUpdateClass={onUpdateClass}
             onUpdateClassTemplate={onUpdateClassTemplate}
             onUpdateClassTemplateDivision={onUpdateClassTemplateDivision}
             onUpdateDivision={onUpdateDivision}
+            onUpdateShowScorePaidWarmup={onUpdateShowScorePaidWarmup}
           />
         ) : null}
 
@@ -695,7 +705,6 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
             onPrepareShowScoreClass={onPrepareShowScoreClass}
-            onPrepareShowScorePaidWarmup={onPrepareShowScorePaidWarmup}
           />
         ) : null}
 

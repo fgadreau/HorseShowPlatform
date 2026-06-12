@@ -38,7 +38,7 @@ import {
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
-  prepareShowScorePaidWarmupFromClass,
+  saveShowScorePaidWarmup,
   deleteShowScorePaidWarmup,
   assignBackNumber,
   assignNextBackNumber,
@@ -55,6 +55,7 @@ import {
   updateHorse,
   updateOrganizationHealthSettings,
   updateShow,
+  updateShowScorePaidWarmup,
   updateStallBooking,
   updateStallOption,
   updateUserProfile,
@@ -455,21 +456,10 @@ export default function App() {
           setNotice({ tone: "error", message: errorMessage(error) });
         }
       }}
-      onPrepareShowScorePaidWarmup={async (classRecord, paidWarmupId) => {
-        if (!context) {
-          return;
-        }
-
+      onSaveShowScorePaidWarmup={async (input) => {
         try {
-          const warmup = await prepareShowScorePaidWarmupFromClass({
-            paidWarmupId,
-            classRecord,
-            contacts: context.contacts,
-            divisions: context.divisions,
-            entries: context.entries,
-            horses: context.horses,
-          });
-          setNotice({ tone: "success", message: `Paid warm up prêt avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
+          const warmup = await saveShowScorePaidWarmup(input);
+          setNotice({ tone: "success", message: `Paid warm up créé avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
@@ -491,6 +481,15 @@ export default function App() {
         await updateOrganizationHealthSettings(id, input);
         setNotice({ tone: "success", message: "Reglages de l'association mis a jour." });
         await refreshContext();
+      }}
+      onUpdateShowScorePaidWarmup={async (id, input) => {
+        try {
+          const warmup = await updateShowScorePaidWarmup(id, input);
+          setNotice({ tone: "success", message: `Paid warm up mis à jour avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
       }}
       onUpdateUserProfile={async (id, input) => {
         await updateUserProfile(id, input);

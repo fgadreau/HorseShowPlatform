@@ -1406,6 +1406,15 @@ button:focus-visible {
   border-color: #c5daf5;
 }
 
+.paid-warmup-schedule-block {
+  background: #fff8eb;
+  border-color: #e5b65f;
+}
+
+.paid-warmup-schedule-block .schedule-event-trigger svg {
+  color: #b45309;
+}
+
 .schedule-event-trigger {
   align-items: center;
   display: grid;
@@ -1513,6 +1522,72 @@ button:focus-visible {
 .class-program-modal {
   max-width: 980px;
   width: min(100%, 980px);
+}
+
+.paid-warmup-program-modal {
+  max-width: 1120px;
+  width: min(100%, 1120px);
+}
+
+.paid-warmup-entry-picker {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.picker-column {
+  border: 1px solid #dce5e1;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+}
+
+.subsection-heading {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.subsection-heading h3 {
+  font-size: 14px;
+  margin: 0;
+}
+
+.entry-check-list,
+.selected-entry-list {
+  display: grid;
+  gap: 8px;
+  max-height: 360px;
+  overflow: auto;
+}
+
+.entry-check-row,
+.selected-entry-row {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid #e3ebe8;
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 10px;
+}
+
+.entry-check-row {
+  cursor: pointer;
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.entry-check-row.selected {
+  background: #eef8f3;
+  border-color: #75b798;
+}
+
+.selected-entry-row {
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .contact-create-modal {

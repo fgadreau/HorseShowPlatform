@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, Plus } from "lucide-react";
 import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
-import { divisionLabel, findById, formatCurrency, formatDate, numericValue, showLabel } from "../../lib/display";
+import { divisionLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createClass, createClassTemplate, createClassTemplateDivision, createDivision, deleteClass, deleteClassTemplate, deleteClassTemplateDivision, deleteDivision, updateClass, updateClassTemplate, updateClassTemplateDivision, updateDivision } from "../../services/supabaseServices";
-import type { ClassRecord, ClassTemplate, ClassTemplateDivision, Division, Entry, EligibilityRules, Organization, SanctioningBody, Show, ShowDay } from "../../types/domain";
+import { createClass, createClassTemplate, createClassTemplateDivision, createDivision, deleteClass, deleteClassTemplate, deleteClassTemplateDivision, deleteDivision, saveShowScorePaidWarmup, updateClass, updateClassTemplate, updateClassTemplateDivision, updateDivision, updateShowScorePaidWarmup } from "../../services/supabaseServices";
+import type { ClassRecord, ClassTemplate, ClassTemplateDivision, Contact, Division, Entry, EligibilityRules, Horse, Organization, SanctioningBody, Show, ShowDay, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { ClassForm } from "./ClassForm";
 import { ClassTemplateForm } from "./ClassTemplateForm";
@@ -15,6 +15,7 @@ import { DivisionForm } from "./DivisionForm";
 import { ClassEditForm } from "./ClassEditForm";
 import { DivisionEditForm } from "./DivisionEditForm";
 import { EventBlockForm } from "./EventBlockForm";
+import { PaidWarmupForm } from "./PaidWarmupForm";
 import { sanctionLabel, payoutDivisionSummary, payoutTemplateDivisionSummary, classScheduleStartLabel, compareScheduleClasses, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, backNumberPolicyLabel, concurrentClassLabel, isNrhaSanctioned, nrhaClassTypeLabel, nrhaClassTypeFromRules } from "./classUtils";
 
 function ClassesView({
@@ -22,11 +23,14 @@ function ClassesView({
   classes,
   classTemplateDivisions,
   classTemplates,
+  contacts,
   divisions,
   entries,
+  horses,
   organization,
   sanctioningBodies,
   showDays,
+  showScorePaidWarmups,
   shows,
   onCreateClass,
   onCreateClassTemplate,
@@ -36,20 +40,26 @@ function ClassesView({
   onDeleteClassTemplate,
   onDeleteClassTemplateDivision,
   onDeleteDivision,
+  onDeleteShowScorePaidWarmup,
+  onSaveShowScorePaidWarmup,
   onUpdateClass,
   onUpdateClassTemplate,
   onUpdateClassTemplateDivision,
   onUpdateDivision,
+  onUpdateShowScorePaidWarmup,
 }: {
   locale: Locale;
   classes: ClassRecord[];
   classTemplateDivisions: ClassTemplateDivision[];
   classTemplates: ClassTemplate[];
+  contacts: Contact[];
   divisions: Division[];
   entries: Entry[];
+  horses: Horse[];
   organization: Organization | null;
   sanctioningBodies: SanctioningBody[];
   showDays: ShowDay[];
+  showScorePaidWarmups: ShowScorePaidWarmup[];
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
@@ -59,20 +69,25 @@ function ClassesView({
   onDeleteClassTemplate: (id: string) => Promise<void>;
   onDeleteClassTemplateDivision: (id: string) => Promise<void>;
   onDeleteDivision: (id: string) => Promise<void>;
+  onDeleteShowScorePaidWarmup: (id: string) => Promise<void>;
+  onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
   onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
+  onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
 }) {
   const [creatingClassTemplate, setCreatingClassTemplate] = useState(false);
   const [creatingClassTemplateDivision, setCreatingClassTemplateDivision] = useState<{ templateId?: string } | null>(null);
   const [creatingClass, setCreatingClass] = useState<{ mode: "preset" | "custom"; classTemplateId?: string; showId?: string; showDayId?: string } | null>(null);
   const [creatingEventBlock, setCreatingEventBlock] = useState<{ showId?: string; showDayId?: string } | null>(null);
+  const [creatingPaidWarmup, setCreatingPaidWarmup] = useState<{ showId?: string; showDayId?: string } | null>(null);
   const [creatingDivision, setCreatingDivision] = useState<{ classId?: string } | null>(null);
   const [editingClassTemplate, setEditingClassTemplate] = useState<ClassTemplate | null>(null);
   const [editingClassTemplateDivision, setEditingClassTemplateDivision] = useState<ClassTemplateDivision | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingDivision, setEditingDivision] = useState<Division | null>(null);
+  const [editingPaidWarmup, setEditingPaidWarmup] = useState<ShowScorePaidWarmup | null>(null);
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
   const [expandedScheduleBlockId, setExpandedScheduleBlockId] = useState<string | null>(null);
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
@@ -111,6 +126,25 @@ function ClassesView({
 
     return grouped;
   }, [classes]);
+  const paidWarmupsByShowDayId = useMemo(() => {
+    const grouped = new Map<string, ShowScorePaidWarmup[]>();
+
+    for (const warmup of showScorePaidWarmups) {
+      if (!warmup.show_day_id) {
+        continue;
+      }
+
+      const dayWarmups = grouped.get(warmup.show_day_id) ?? [];
+      dayWarmups.push(warmup);
+      grouped.set(warmup.show_day_id, dayWarmups);
+    }
+
+    for (const dayWarmups of grouped.values()) {
+      dayWarmups.sort(comparePaidWarmupsForSchedule);
+    }
+
+    return grouped;
+  }, [showScorePaidWarmups]);
   const divisionsByClassId = useMemo(() => {
     const grouped = new Map<string, Division[]>();
 
@@ -208,6 +242,17 @@ function ClassesView({
     await onDeleteClass(classRecord.id);
     if (editingClass?.id === classRecord.id) {
       setEditingClass(null);
+    }
+  }
+
+  async function handleDeletePaidWarmup(warmup: ShowScorePaidWarmup) {
+    if (!window.confirm(`Supprimer le paid warmup "${warmup.name}"?`)) {
+      return;
+    }
+
+    await onDeleteShowScorePaidWarmup(warmup.id);
+    if (editingPaidWarmup?.id === warmup.id) {
+      setEditingPaidWarmup(null);
     }
   }
 
@@ -394,6 +439,45 @@ function ClassesView({
     );
   }
 
+  function renderPaidWarmupBlock(warmup: ShowScorePaidWarmup) {
+    const timeLabel = formatPaidWarmupSchedule(warmup, locale);
+
+    return (
+      <article className="schedule-block schedule-event-block paid-warmup-schedule-block" key={warmup.id}>
+        <div className="schedule-block-header">
+          <div className="schedule-block-trigger schedule-event-trigger">
+            <Clock size={18} />
+            <span>
+              <strong>{warmup.name}</strong>
+              <span className="muted-line">
+                {[
+                  "Paid warmup",
+                  warmup.arena,
+                  timeLabel,
+                  uiText(locale, `${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}`, `${warmup.entries.length} entr${warmup.entries.length === 1 ? "y" : "ies"}`),
+                ]
+                  .filter(Boolean)
+                  .join(" - ")}
+              </span>
+            </span>
+          </div>
+          <div className="row-actions schedule-block-actions">
+            <button className="text-button" type="button" onClick={() => setEditingPaidWarmup(warmup)}>
+              {uiText(locale, "Modifier", "Edit")}
+            </button>
+            <button className="text-button danger-text" type="button" onClick={() => handleDeletePaidWarmup(warmup)}>
+              {uiText(locale, "Supprimer", "Delete")}
+            </button>
+          </div>
+        </div>
+        <div className="schedule-block-meta">
+          <span>{warmup.is_public_live ? uiText(locale, "Live public", "Public live") : uiText(locale, "Privé ShowScore", "Private ShowScore")}</span>
+          <span>{formatPaidWarmupPacing(warmup, locale)}</span>
+        </div>
+      </article>
+    );
+  }
+
   function renderRecurringBlock(template: ClassTemplate) {
     const templateDivisions = templateDivisionsByTemplateId.get(template.id) ?? [];
     const isExpanded = expandedTemplateId === template.id;
@@ -482,7 +566,7 @@ function ClassesView({
           { label: uiText(locale, "Journées", "Days"), value: String(showDays.length) },
           { label: uiText(locale, "Blocs", "Blocks"), value: String(classes.length) },
           { label: uiText(locale, "Classes", "Classes"), value: String(divisions.length) },
-          { label: uiText(locale, "Récurrents", "Recurring"), value: String(classTemplates.length) },
+          { label: "Paid warmups", value: String(showScorePaidWarmups.length) },
         ]}
       />
 
@@ -545,6 +629,28 @@ function ClassesView({
             shows={shows}
             onCreateClass={onCreateClass}
             onCreated={() => setCreatingEventBlock(null)}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {creatingPaidWarmup ? (
+        <ModalDialog className="class-program-modal paid-warmup-program-modal" description={uiText(locale, "Ajoute un paid warmup ShowScore directement à la journée, sans créer de classe.", "Add a ShowScore paid warmup directly to the day without creating a class.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau paid warmup", "New paid warmup")} onClose={() => setCreatingPaidWarmup(null)}>
+          <PaidWarmupForm
+            classes={classes}
+            contacts={contacts}
+            defaultShowDayId={creatingPaidWarmup.showDayId}
+            defaultShowId={creatingPaidWarmup.showId}
+            divisions={divisions}
+            entries={entries}
+            horses={horses}
+            locale={locale}
+            organization={organization}
+            showDays={showDays}
+            showScorePaidWarmups={showScorePaidWarmups}
+            shows={shows}
+            onCancel={() => setCreatingPaidWarmup(null)}
+            onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
+            onSaved={() => setCreatingPaidWarmup(null)}
           />
         </ModalDialog>
       ) : null}
@@ -619,6 +725,28 @@ function ClassesView({
         </ModalDialog>
       ) : null}
 
+      {editingPaidWarmup ? (
+        <ModalDialog className="class-program-modal paid-warmup-program-modal" description={editingPaidWarmup.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le paid warmup", "Edit paid warmup")} onClose={() => setEditingPaidWarmup(null)}>
+          <PaidWarmupForm
+            classes={classes}
+            contacts={contacts}
+            divisions={divisions}
+            entries={entries}
+            horses={horses}
+            locale={locale}
+            organization={organization}
+            showDays={showDays}
+            showScorePaidWarmups={showScorePaidWarmups}
+            shows={shows}
+            warmup={editingPaidWarmup}
+            onCancel={() => setEditingPaidWarmup(null)}
+            onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
+            onUpdateShowScorePaidWarmup={onUpdateShowScorePaidWarmup}
+            onSaved={() => setEditingPaidWarmup(null)}
+          />
+        </ModalDialog>
+      ) : null}
+
       <section className="panel span-2 schedule-days-panel">
         <div className="panel-header">
           <div>
@@ -662,6 +790,8 @@ function ClassesView({
                     <div className="schedule-day-list">
                       {showDaysForShow.map((day) => {
                         const dayClasses = classesByShowDayId.get(day.id) ?? [];
+                        const dayPaidWarmups = paidWarmupsByShowDayId.get(day.id) ?? [];
+                        const dayScheduleItems = buildDayScheduleItems(dayClasses, dayPaidWarmups);
 
                         return (
                           <article className="schedule-day" key={day.id}>
@@ -688,11 +818,19 @@ function ClassesView({
                                   <Plus size={18} />
                                   {uiText(locale, "Événement", "Event")}
                                 </button>
+                                <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingPaidWarmup({ showId: show.id, showDayId: day.id })}>
+                                  <Plus size={18} />
+                                  Paid warmup
+                                </button>
                               </div>
                             </div>
                             <div className="schedule-block-list">
-                              {dayClasses.map((classRecord) => renderScheduleBlock(classRecord, dayClasses))}
-                              {!dayClasses.length ? <EmptyState label={uiText(locale, "Aucun bloc dans cette journée.", "No block in this day.")} /> : null}
+                              {dayScheduleItems.map((item) =>
+                                item.type === "class"
+                                  ? renderScheduleBlock(item.classRecord, dayClasses)
+                                  : renderPaidWarmupBlock(item.warmup)
+                              )}
+                              {!dayScheduleItems.length ? <EmptyState label={uiText(locale, "Aucun bloc dans cette journée.", "No block in this day.")} /> : null}
                             </div>
                           </article>
                         );
@@ -743,6 +881,69 @@ function ClassesView({
       </section>
     </div>
   );
+}
+
+type DayScheduleItem =
+  | { type: "class"; classRecord: ClassRecord }
+  | { type: "paidWarmup"; warmup: ShowScorePaidWarmup };
+
+function buildDayScheduleItems(classes: ClassRecord[], paidWarmups: ShowScorePaidWarmup[]): DayScheduleItem[] {
+  return [
+    ...classes.map((classRecord) => ({ type: "class" as const, classRecord })),
+    ...paidWarmups.map((warmup) => ({ type: "paidWarmup" as const, warmup })),
+  ].sort(compareDayScheduleItems);
+}
+
+function compareDayScheduleItems(first: DayScheduleItem, second: DayScheduleItem) {
+  const firstTime = scheduleItemTime(first);
+  const secondTime = scheduleItemTime(second);
+
+  if (firstTime && secondTime && firstTime !== secondTime) {
+    return firstTime.localeCompare(secondTime);
+  }
+
+  if (firstTime && !secondTime) {
+    return -1;
+  }
+
+  if (!firstTime && secondTime) {
+    return 1;
+  }
+
+  return scheduleItemSortOrder(first) - scheduleItemSortOrder(second) || scheduleItemName(first).localeCompare(scheduleItemName(second));
+}
+
+function scheduleItemTime(item: DayScheduleItem) {
+  return item.type === "class" ? item.classRecord.scheduled_time : item.warmup.schedule_start_time;
+}
+
+function scheduleItemSortOrder(item: DayScheduleItem) {
+  return item.type === "class" ? item.classRecord.sort_order : item.warmup.sort_order;
+}
+
+function scheduleItemName(item: DayScheduleItem) {
+  return item.type === "class" ? item.classRecord.name : item.warmup.name;
+}
+
+function comparePaidWarmupsForSchedule(first: ShowScorePaidWarmup, second: ShowScorePaidWarmup) {
+  return (
+    (first.schedule_start_time || "").localeCompare(second.schedule_start_time || "") ||
+    first.sort_order - second.sort_order ||
+    first.name.localeCompare(second.name)
+  );
+}
+
+function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale) {
+  if (warmup.schedule_start_mode === "after_previous") {
+    return uiText(locale, "Après le bloc précédent", "After previous block");
+  }
+
+  return warmup.schedule_start_time || uiText(locale, "Départ à préciser", "Start to confirm");
+}
+
+function formatPaidWarmupPacing(warmup: ShowScorePaidWarmup, locale: Locale) {
+  const drag = warmup.drag_interval ? uiText(locale, `drag aux ${warmup.drag_interval}`, `drag every ${warmup.drag_interval}`) : uiText(locale, "drag manuel", "manual drag");
+  return `${warmup.duration_minutes_per_rider} min / rider - ${drag} - ${warmup.drag_duration_minutes} min`;
 }
 
 export { ClassesView };
