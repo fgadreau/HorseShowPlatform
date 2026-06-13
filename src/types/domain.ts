@@ -28,10 +28,19 @@ export type Organization = {
   back_number_policy: OrganizationBackNumberAssignmentMode;
   health_verification_required: boolean;
   coggins_validity_months: 6 | 12;
-  subscription_plan: string;
+  subscription_plan: PlanTier;
   subscription_status: string;
+  subscription_expires_at: string | null;
+  subscription_notes: string | null;
+  modules_enabled: OrganizationModules;
   created_by_user_id: string | null;
   created_at: string;
+};
+
+export type PlanTier = 'community' | 'professional' | 'premium';
+
+export type OrganizationModules = {
+  show_score: boolean;
 };
 
 export type Show = {

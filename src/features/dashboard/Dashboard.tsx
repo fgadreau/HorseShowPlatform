@@ -17,13 +17,15 @@ import {
   Plus,
   RefreshCw,
   Search,
+  Shield,
   Tent,
   Trophy,
   Users,
   Warehouse,
   X,
 } from "lucide-react";
-import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, ViewIntro } from "../../components/ui";
+import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, UpgradePrompt, ViewIntro } from "../../components/ui";
+import { hasPlanFeature } from "../../utils/planFeatures";
 import { canadianProvinceOptions, countryOptions, currencyOptions, taxPresetById, taxPresetForLocation, taxPresetIdForValues, taxPresetsForLocation, type TaxPreset } from "../../lib/billingSettings";
 import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
@@ -133,6 +135,7 @@ import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
 import { ClientDashboardView } from "./ClientDashboardView";
+import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
 
 export function Dashboard({
   activeView,
@@ -291,8 +294,9 @@ export function Dashboard({
     ? organizationMembers.find((member) => member.organization_id === selectedOrganization.id && member.user_id === context?.profile.id)
     : null;
   const canManageAssociation = selectedMembership?.role === "admin" || selectedMembership?.role === "secretary";
+  const isPlatformAdmin = context?.isPlatformAdmin ?? false;
   const profileIncomplete = context ? !profileIsComplete(context.profile) : false;
-  const rawEffectiveView = canManageAssociation || !associationViewKeys.has(activeView) ? activeView : "my-overview";
+  const rawEffectiveView = canManageAssociation || isPlatformAdmin || !associationViewKeys.has(activeView) ? activeView : "my-overview";
   const effectiveView: ViewKey = !canManageAssociation && profileIncomplete && rawEffectiveView === "my-overview" ? "my-profile" : rawEffectiveView;
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
@@ -449,6 +453,19 @@ export function Dashboard({
             <NavigationSection activeView={effectiveView} items={associationNavigation} label={t.nav.association} t={t} onViewChange={onViewChange} />
           ) : null}
           <NavigationSection activeView={effectiveView} items={personalNavigation} label={t.nav.mySpace} t={t} onViewChange={onViewChange} />
+          {isPlatformAdmin ? (
+            <div className="nav-section">
+              <p className="nav-section-label">Platform</p>
+              <button
+                type="button"
+                className={`nav-item${effectiveView === "platform-admin" ? " active" : ""}`}
+                onClick={() => onViewChange("platform-admin")}
+              >
+                <Shield size={18} />
+                Admin plans
+              </button>
+            </div>
+          ) : null}
         </nav>
 
         <LanguageToggle locale={locale} onLocaleChange={onLocaleChange} />
@@ -692,20 +709,24 @@ export function Dashboard({
         ) : null}
 
         {effectiveView === "scoring" ? (
-          <ScoringView
-            locale={locale}
-            classes={selectedOrganizationClasses}
-            contacts={selectedOrganizationContacts}
-            divisions={selectedOrganizationDivisions}
-            entries={selectedOrganizationEntries}
-            horses={selectedOrganizationHorses}
-            showDays={selectedOrganizationShowDays}
-            showScoreClassSetups={selectedOrganizationShowScoreSetups}
-            showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
-            shows={selectedOrganizationShows}
-            onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
-            onPrepareShowScoreClass={onPrepareShowScoreClass}
-          />
+          selectedOrganization && hasPlanFeature(selectedOrganization, 'show_score') ? (
+            <ScoringView
+              locale={locale}
+              classes={selectedOrganizationClasses}
+              contacts={selectedOrganizationContacts}
+              divisions={selectedOrganizationDivisions}
+              entries={selectedOrganizationEntries}
+              horses={selectedOrganizationHorses}
+              showDays={selectedOrganizationShowDays}
+              showScoreClassSetups={selectedOrganizationShowScoreSetups}
+              showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
+              shows={selectedOrganizationShows}
+              onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
+              onPrepareShowScoreClass={onPrepareShowScoreClass}
+            />
+          ) : (
+            <UpgradePrompt feature="ShowScore Live Scoring" requiredPlan="professional" />
+          )
         ) : null}
 
         {effectiveView === "billing" ? (
@@ -871,6 +892,13 @@ export function Dashboard({
             organization={selectedOrganization}
             onSetExternalMembershipRequirement={onSetExternalMembershipRequirement}
             onUpdateOrganizationHealthSettings={onUpdateOrganizationHealthSettings}
+          />
+        ) : null}
+
+        {effectiveView === "platform-admin" && isPlatformAdmin ? (
+          <PlatformAdminView
+            organizations={organizations}
+            onRefresh={onRefresh}
           />
         ) : null}
       </section>

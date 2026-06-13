@@ -21,7 +21,8 @@ export type ViewKey =
   | "my-entries"
   | "my-back-numbers"
   | "my-stalls"
-  | "my-invoices";
+  | "my-invoices"
+  | "platform-admin";
 
 export type Notice = {
   tone: "success" | "error" | "info";

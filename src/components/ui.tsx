@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Globe2, X } from "lucide-react";
+import { Globe2, Lock, X } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { Locale } from "../lib/i18n";
 import { contactLabel, findById, itemSearchLabel } from "../lib/display";
-import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization } from "../types/domain";
+import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization, PlanTier } from "../types/domain";
 import type { Notice } from "../types/ui";
+import { getPlanLabel } from "../utils/planFeatures";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -571,4 +572,23 @@ export function NoticeBanner({ notice }: { notice: Notice }) {
 
 export function EmptyState({ label }: { label: string }) {
   return <div className="empty-state">{label}</div>;
+}
+
+export function UpgradePrompt({
+  feature,
+  requiredPlan,
+}: {
+  feature: string;
+  requiredPlan: PlanTier;
+}) {
+  return (
+    <div className="upgrade-prompt">
+      <Lock size={24} />
+      <h3>{feature}</h3>
+      <p>Cette fonctionnalité est disponible à partir du plan <strong>{getPlanLabel(requiredPlan)}</strong>.</p>
+      <a className="button button-primary" href="mailto:support@horseshowplatform.com?subject=Upgrade plan">
+        Contacter pour activer
+      </a>
+    </div>
+  );
 }

@@ -69,6 +69,7 @@ const inactiveEntryStatuses: Entry["status"][] = ["cancelled", "scratched", "scr
 
 export type AppContext = {
   profile: UserProfile;
+  isPlatformAdmin: boolean;
   organizations: Organization[];
   organizationMembers: OrganizationMember[];
   shows: Show[];
@@ -229,6 +230,9 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
+
+  const { data: isPlatformAdminData } = await client.rpc("is_platform_admin").returns<boolean>();
+  const isPlatformAdmin = Boolean(isPlatformAdminData);
 
   if (organizationsResult.error) {
     throw organizationsResult.error;
@@ -419,6 +423,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
 
   return {
     profile,
+    isPlatformAdmin,
     organizations: organizationsResult.data ?? [],
     organizationMembers: organizationMembersResult.data ?? [],
     shows: showsResult.data ?? [],
@@ -3780,6 +3785,23 @@ function isMissingShowScoreSchemaError(error: { code?: string; message?: string 
 function isMissingSchemaError(error: { code?: string; message?: string }, relationName: string) {
   const message = String(error.message || "").toLowerCase();
   return error.code === "42P01" || (message.includes("schema cache") && message.includes(relationName));
+}
+
+export async function setOrganizationPlan(input: {
+  organizationId: string;
+  plan: 'community' | 'professional' | 'premium';
+  expiresAt?: string | null;
+  notes?: string | null;
+}): Promise<void> {
+  const client = requireSupabase();
+  const { error } = await client.rpc("set_organization_plan", {
+    target_org_id: input.organizationId,
+    target_plan: input.plan,
+    target_expires_at: input.expiresAt ?? null,
+    target_notes: input.notes ?? null,
+  });
+
+  if (error) throw error;
 }
 
 function isMissingRpcError(error: { code?: string; message?: string }, functionName: string) {
