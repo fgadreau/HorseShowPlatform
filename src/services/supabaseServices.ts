@@ -20,6 +20,7 @@ import type {
   Division,
   DivisionInput,
   DivisionUpdateInput,
+  EntryImportBatch,
   EntryResult,
   Entry,
   EntryInput,
@@ -72,6 +73,18 @@ import type {
   UserProfile,
   UserProfileUpdateInput,
 } from "../types/domain";
+import {
+  AQR_AUDIT_IMPORT_SOURCE,
+  buildAqrExternalSourceKey,
+  captureRunTechnicalSnapshot,
+  isAqrScratchRun,
+  matchRunDivisions,
+  normalizeShowScoreDrawRun,
+  previewShowScoreDrawEntryImport as buildAqrAuditImportPreview,
+  restoreRunTechnicalSnapshot,
+  type NormalizedShowScoreDrawRun,
+  type RunTechnicalSnapshot,
+} from "../lib/aqrAuditImport";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "./showScoreAdapters";
 
 const inactiveEntryStatuses: Entry["status"][] = ["cancelled", "scratched", "scratched_pending_refund"];
@@ -94,6 +107,7 @@ export type AppContext = {
   payoutCalculations: PayoutCalculation[];
   payoutAwards: PayoutAward[];
   showScorePaidWarmups: ShowScorePaidWarmup[];
+  entryImportBatches: EntryImportBatch[];
   contacts: Contact[];
   contactOrganizationLinks: ContactOrganizationLink[];
   contactRoles: ContactRole[];
@@ -224,6 +238,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     payoutCalculationsResult,
     payoutAwardsResult,
     showScorePaidWarmupsResult,
+    entryImportBatchesResult,
   ] = await Promise.all([
     client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
     client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
@@ -261,6 +276,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("payout_calculations").select("*").order("calculated_at", { ascending: false }).returns<PayoutCalculation[]>(),
     client.from("payout_awards").select("*").order("rank", { ascending: true }).returns<PayoutAward[]>(),
     client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(),
+    client.from("entry_import_batches").select("*").order("created_at", { ascending: false }).returns<EntryImportBatch[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
 
@@ -493,6 +509,11 @@ export async function loadAppContext(user: User): Promise<AppContext> {
       ? []
       : (() => { throw payoutAwardsResult.error; })()
     : payoutAwardsResult.data ?? [];
+  const entryImportBatches = entryImportBatchesResult.error
+    ? isMissingSchemaError(entryImportBatchesResult.error, "entry_import_batches")
+      ? []
+      : (() => { throw entryImportBatchesResult.error; })()
+    : entryImportBatchesResult.data ?? [];
 
   return {
     profile,
@@ -512,6 +533,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     payoutCalculations,
     payoutAwards,
     showScorePaidWarmups,
+    entryImportBatches,
     contacts: contactsResult.data ?? [],
     contactOrganizationLinks,
     contactRoles,
@@ -2027,6 +2049,7 @@ type PayoutCalculationSaveInput = Pick<
   PayoutCalculation,
   | "show_id"
   | "division_id"
+  | "import_batch_id"
   | "currency"
   | "entry_count"
   | "gross_entry_fees"
@@ -2052,7 +2075,7 @@ export async function savePayoutCalculationDraft(input: {
 }) {
   const client = requireSupabase();
   const now = new Date().toISOString();
-  const calculationPayload = {
+  const calculationPayload: Record<string, unknown> = {
     ...input.calculation,
     calculated_at: now,
     calculated_by: input.calculatedByUserId ?? null,
@@ -2071,21 +2094,37 @@ export async function savePayoutCalculationDraft(input: {
     throw existingError;
   }
 
-  const { data: calculation, error: calculationError } = existing
-    ? await client
-        .from("payout_calculations")
-        .update(calculationPayload)
-        .eq("id", existing.id)
-        .select("*")
-        .single<PayoutCalculation>()
-    : await client
-        .from("payout_calculations")
-        .insert(calculationPayload)
-        .select("*")
-        .single<PayoutCalculation>();
+  const saveCalculation = (payload: Record<string, unknown>) =>
+    existing
+      ? client
+          .from("payout_calculations")
+          .update(payload)
+          .eq("id", existing.id)
+          .select("*")
+          .single<PayoutCalculation>()
+      : client
+          .from("payout_calculations")
+          .insert(payload)
+          .select("*")
+          .single<PayoutCalculation>();
+
+  let { data: calculation, error: calculationError } = await saveCalculation(calculationPayload);
+
+  if (calculationError && isMissingColumnError(calculationError, "import_batch_id")) {
+    if (input.calculation.import_batch_id) {
+      throw toAqrAuditImportSchemaError(calculationError);
+    }
+
+    const { import_batch_id: _importBatchId, ...legacyPayload } = calculationPayload;
+    ({ data: calculation, error: calculationError } = await saveCalculation(legacyPayload));
+  }
 
   if (calculationError) {
     throw calculationError;
+  }
+
+  if (!calculation) {
+    throw new Error("Le calcul de bourse n'a pas pu etre sauvegarde.");
   }
 
   const { error: deleteAwardsError } = await client.from("payout_awards").delete().eq("calculation_id", calculation.id);
@@ -3044,6 +3083,960 @@ async function loadShowScoreClassSetups() {
   }
 
   return data ?? [];
+}
+
+export function previewShowScoreDrawEntryImport(input: {
+  showId: string;
+  classIds?: string[];
+  classes: ClassRecord[];
+  divisions: Division[];
+  showScoreClassSetups: ShowScoreClassSetup[];
+}) {
+  return buildAqrAuditImportPreview(input);
+}
+
+export async function syncShowScoreDrawEntryImportBatch(input: {
+  showId: string;
+  classIds?: string[];
+  createdByUserId: string;
+}) {
+  const client = requireSupabase();
+  const { data: show, error: showError } = await client
+    .from("shows")
+    .select("*")
+    .eq("id", input.showId)
+    .single<Show>();
+
+  if (showError) {
+    throw showError;
+  }
+
+  const { data: activeBatch, error: activeBatchError } = await client
+    .from("entry_import_batches")
+    .select("*")
+    .eq("show_id", input.showId)
+    .eq("source", AQR_AUDIT_IMPORT_SOURCE)
+    .in("status", ["created", "failed"])
+    .limit(1)
+    .maybeSingle<EntryImportBatch>();
+
+  if (activeBatchError) {
+    throw toAqrAuditImportSchemaError(activeBatchError);
+  }
+
+  if (activeBatch) {
+    throw new Error("Un batch AQR est deja actif pour ce show. Nettoie-le avant de relancer l'import.");
+  }
+
+  const [
+    setupsResult,
+    classesResult,
+    divisionsResult,
+    contactsResult,
+    horsesResult,
+  ] = await Promise.all([
+    client.from("show_score_class_setups").select("*").eq("show_id", input.showId).returns<ShowScoreClassSetup[]>(),
+    client.from("classes").select("*").eq("show_id", input.showId).returns<ClassRecord[]>(),
+    client.from("divisions").select("*").eq("show_id", input.showId).returns<Division[]>(),
+    client.from("contacts").select("*").eq("organization_id", show.organization_id).returns<Contact[]>(),
+    client.from("horses").select("*").eq("organization_id", show.organization_id).returns<Horse[]>(),
+  ]);
+
+  if (setupsResult.error) {
+    throw setupsResult.error;
+  }
+  if (classesResult.error) {
+    throw classesResult.error;
+  }
+  if (divisionsResult.error) {
+    throw divisionsResult.error;
+  }
+  if (contactsResult.error) {
+    throw contactsResult.error;
+  }
+  if (horsesResult.error) {
+    throw horsesResult.error;
+  }
+
+  const preview = buildAqrAuditImportPreview({
+    showId: input.showId,
+    classIds: input.classIds,
+    classes: classesResult.data ?? [],
+    divisions: divisionsResult.data ?? [],
+    showScoreClassSetups: setupsResult.data ?? [],
+  });
+
+  if (preview.errors.length) {
+    throw new Error(`Import AQR bloque: ${preview.errors.join(" ")}`);
+  }
+
+  if (!preview.totalEntries) {
+    throw new Error("Aucune entry a creer depuis les draws ShowScore selectionnes.");
+  }
+
+  await assertShowScoreOfficialScoringNotStarted(
+    input.showId,
+    preview.classPreviews.map((classPreview) => classPreview.classRecord.id),
+  );
+
+  const sourceRunSnapshots: Record<string, Record<string, unknown>> = {};
+  const createdContactIds = new Set<string>();
+  const createdHorseIds = new Set<string>();
+  const createdEntryIds: string[] = [];
+  const runIds: string[] = [];
+  const blockRunIds: string[] = [];
+  const mutableContacts = [...(contactsResult.data ?? [])];
+  const mutableHorses = [...(horsesResult.data ?? [])];
+
+  const { data: batch, error: batchError } = await client
+    .from("entry_import_batches")
+    .insert({
+      organization_id: show.organization_id,
+      show_id: input.showId,
+      source: AQR_AUDIT_IMPORT_SOURCE,
+      status: "created",
+      created_by_user_id: input.createdByUserId,
+      summary: {
+        totalRuns: preview.totalRuns,
+        totalEntries: preview.totalEntries,
+        classCount: preview.classPreviews.length,
+        warnings: preview.warnings,
+      },
+      source_run_snapshots: {},
+    })
+    .select("*")
+    .single<EntryImportBatch>();
+
+  if (batchError) {
+    throw toAqrAuditImportSchemaError(batchError);
+  }
+
+  try {
+    for (const classPreview of preview.classPreviews) {
+      const setupRuns = classPreview.setup.runs.map((run, index) => normalizeShowScoreDrawRun(run, index));
+      const setupRunsBySourceId = new Map(setupRuns.map((run) => [run.sourceRunId, run]));
+      const updatedRuns: Array<Record<string, unknown> & { __normalizedAqrRun?: NormalizedShowScoreDrawRun }> = classPreview.setup.runs.map((run, index) => {
+        const normalizedRun = setupRunsBySourceId.get(normalizeShowScoreDrawRun(run, index).sourceRunId) ?? normalizeShowScoreDrawRun(run, index);
+        return { ...run, __normalizedAqrRun: normalizedRun };
+      });
+
+      sourceRunSnapshots[classPreview.classRecord.id] = {};
+
+      for (const runPreview of classPreview.runs) {
+        const run = runPreview.run;
+        const sourceRun = classPreview.setup.runs.find((candidate, index) => normalizeShowScoreDrawRun(candidate, index).sourceRunId === run.sourceRunId) ?? run.raw;
+        const snapshot = captureRunTechnicalSnapshot(sourceRun);
+        const ownerContact = await findOrCreateAuditContact({
+          contacts: mutableContacts,
+          createdByUserId: input.createdByUserId,
+          name: run.owner || run.rider,
+          organizationId: show.organization_id,
+          role: "owner",
+        });
+        const riderContact = run.rider
+          ? await findOrCreateAuditContact({
+              contacts: mutableContacts,
+              createdByUserId: input.createdByUserId,
+              name: run.rider,
+              organizationId: show.organization_id,
+              role: "rider",
+            })
+          : ownerContact;
+        const payerContact = ownerContact;
+        const horse = await findOrCreateAuditHorse({
+          createdByUserId: input.createdByUserId,
+          horses: mutableHorses,
+          name: run.horse,
+          organizationId: show.organization_id,
+          ownerContactId: ownerContact.id,
+        });
+
+        if (ownerContact.wasCreated) {
+          createdContactIds.add(ownerContact.id);
+        }
+        if (riderContact.wasCreated) {
+          createdContactIds.add(riderContact.id);
+        }
+        if (horse.wasCreated) {
+          createdHorseIds.add(horse.id);
+        }
+
+        const runId = pickRunUuid(sourceRun, ["runId", "run_id", "id"]) ?? crypto.randomUUID();
+        const blockRunId = pickRunUuid(sourceRun, ["blockRunId", "block_run_id"]) ?? crypto.randomUUID();
+        const entryIds: string[] = [];
+
+        for (const division of runPreview.matchedDivisions) {
+          const externalSourceKey = buildAqrExternalSourceKey({
+            classId: classPreview.classRecord.id,
+            divisionId: division.id,
+            run,
+          });
+          const entryStatus: Entry["status"] = isAqrScratchRun(run) ? "scratched" : "active";
+          const baseFee = division.entry_fee ?? classPreview.classRecord.entry_fee ?? 0;
+          const { data: entry, error: entryError } = await client
+            .from("entries")
+            .insert({
+              organization_id: show.organization_id,
+              show_id: input.showId,
+              horse_id: horse.id,
+              division_id: division.id,
+              created_by_user_id: input.createdByUserId,
+              owner_contact_id: ownerContact.id,
+              rider_contact_id: riderContact.id,
+              payer_contact_id: payerContact.id,
+              entry_number: parseBackNumber(run.backNumber),
+              base_fee: baseFee,
+              total_fees: baseFee,
+              is_late: false,
+              late_fee_percent: 0,
+              late_fee_amount: 0,
+              status: "draft",
+              import_source: AQR_AUDIT_IMPORT_SOURCE,
+              import_batch_id: batch.id,
+              external_source_key: externalSourceKey,
+              source_payload: {
+                classId: classPreview.classRecord.id,
+                className: classPreview.classRecord.name,
+                divisionId: division.id,
+                divisionCode: division.code,
+                run,
+                runId,
+                blockRunId,
+              },
+            })
+            .select("*")
+            .single<Entry>();
+
+          if (entryError) {
+            throw entryError;
+          }
+
+          const { error: entryStatusError } = await client
+            .from("entries")
+            .update({ status: entryStatus })
+            .eq("id", entry.id);
+
+          if (entryStatusError) {
+            throw entryStatusError;
+          }
+
+          entryIds.push(entry.id);
+          createdEntryIds.push(entry.id);
+        }
+
+        await upsertAuditRunLinks({
+          blockId: classPreview.classRecord.id,
+          blockRunId,
+          entryIds,
+          orderOfGo: run.order || run.draw,
+          runId,
+          showId: input.showId,
+        });
+
+        runIds.push(runId);
+        blockRunIds.push(blockRunId);
+        sourceRunSnapshots[classPreview.classRecord.id][run.sourceRunId] = {
+          snapshot,
+          runId,
+          blockRunId,
+          entryIds,
+          divisionIds: runPreview.matchedDivisions.map((division) => division.id),
+          horseId: horse.id,
+          ownerContactId: ownerContact.id,
+          riderContactId: riderContact.id,
+          payerContactId: payerContact.id,
+        };
+
+        for (let index = 0; index < updatedRuns.length; index += 1) {
+          const updatedRun = updatedRuns[index] as Record<string, unknown> & { __normalizedAqrRun?: NormalizedShowScoreDrawRun };
+
+          if (updatedRun.__normalizedAqrRun?.sourceRunId !== run.sourceRunId) {
+            continue;
+          }
+
+          delete updatedRun.__normalizedAqrRun;
+          updatedRuns[index] = {
+            ...updatedRun,
+            runId,
+            blockRunId,
+            entryId: entryIds[0] ?? null,
+            entryIds,
+            divisionId: runPreview.matchedDivisions[0]?.id ?? null,
+            divisionIds: runPreview.matchedDivisions.map((division) => division.id),
+            horseId: horse.id,
+            ownerContactId: ownerContact.id,
+            riderContactId: riderContact.id,
+            payerContactId: payerContact.id,
+            hspImportBatchId: batch.id,
+          };
+        }
+      }
+
+      const cleanedRuns = updatedRuns.map((run) => {
+        const { __normalizedAqrRun, ...cleanRun } = run as Record<string, unknown> & { __normalizedAqrRun?: NormalizedShowScoreDrawRun };
+        return cleanRun;
+      });
+
+      const { error: setupError } = await client
+        .from("show_score_class_setups")
+        .update({ runs: cleanedRuns })
+        .eq("class_id", classPreview.classRecord.id)
+        .eq("show_id", input.showId);
+
+      if (setupError) {
+        throw setupError;
+      }
+    }
+
+    const { data: updatedBatch, error: updateBatchError } = await client
+      .from("entry_import_batches")
+      .update({
+        summary: {
+          totalRuns: preview.totalRuns,
+          totalEntries: preview.totalEntries,
+          classCount: preview.classPreviews.length,
+          createdEntryIds,
+          createdContactIds: [...createdContactIds],
+          createdHorseIds: [...createdHorseIds],
+          runIds,
+          blockRunIds,
+          warnings: preview.warnings,
+        },
+        source_run_snapshots: sourceRunSnapshots,
+      })
+      .eq("id", batch.id)
+      .select("*")
+      .single<EntryImportBatch>();
+
+    if (updateBatchError) {
+      throw updateBatchError;
+    }
+
+    return updatedBatch;
+  } catch (error) {
+    await client
+      .from("entry_import_batches")
+      .update({
+        status: "failed",
+        summary: {
+          totalRuns: preview.totalRuns,
+          totalEntries: preview.totalEntries,
+          createdEntryIds,
+          createdContactIds: [...createdContactIds],
+          createdHorseIds: [...createdHorseIds],
+          runIds,
+          blockRunIds,
+          error: error instanceof Error ? error.message : String(error),
+        },
+        source_run_snapshots: sourceRunSnapshots,
+      })
+      .eq("id", batch.id);
+    throw toAqrAuditImportSchemaError(error);
+  }
+}
+
+export async function cleanupShowScoreDrawEntryImportBatch(batchId: string) {
+  const client = requireSupabase();
+  const { data: batch, error: batchError } = await client
+    .from("entry_import_batches")
+    .select("*")
+    .eq("id", batchId)
+    .single<EntryImportBatch>();
+
+  if (batchError) {
+    throw toAqrAuditImportSchemaError(batchError);
+  }
+
+  if (batch.source !== AQR_AUDIT_IMPORT_SOURCE) {
+    throw new Error("Ce batch ne provient pas de l'import audit AQR.");
+  }
+
+  const { data: entries, error: entriesError } = await client
+    .from("entries")
+    .select("*")
+    .eq("import_batch_id", batchId)
+    .returns<Entry[]>();
+
+  if (entriesError) {
+    throw toAqrAuditImportSchemaError(entriesError);
+  }
+
+  const entryIds = (entries ?? []).map((entry) => entry.id);
+  const sourceSnapshots = normalizeSourceRunSnapshots(batch.source_run_snapshots);
+  const runIds = uniqueStrings(sourceSnapshots.flatMap((snapshot) => [snapshot.runId]));
+  const blockRunIds = uniqueStrings(sourceSnapshots.flatMap((snapshot) => [snapshot.blockRunId]));
+  const createdContactIds = jsonStringArray(batch.summary.createdContactIds);
+  const createdHorseIds = jsonStringArray(batch.summary.createdHorseIds);
+  const invoiceIds = entryIds.length ? await invoiceIdsForEntries(entryIds) : [];
+
+  const { data: payoutCalculations, error: payoutCalculationsError } = await client
+    .from("payout_calculations")
+    .select("id")
+    .eq("import_batch_id", batchId)
+    .returns<Array<Pick<PayoutCalculation, "id">>>();
+
+  if (payoutCalculationsError) {
+    throw toAqrAuditImportSchemaError(payoutCalculationsError);
+  }
+
+  const payoutCalculationIds = (payoutCalculations ?? []).map((calculation) => calculation.id);
+
+  if (payoutCalculationIds.length) {
+    const { error: payoutAwardsError } = await client
+      .from("payout_awards")
+      .delete()
+      .in("calculation_id", payoutCalculationIds);
+
+    if (payoutAwardsError) {
+      throw payoutAwardsError;
+    }
+
+    const { error: payoutDeleteError } = await client
+      .from("payout_calculations")
+      .delete()
+      .in("id", payoutCalculationIds);
+
+    if (payoutDeleteError) {
+      throw payoutDeleteError;
+    }
+  }
+
+  if (runIds.length) {
+    const { error: scoredRunError } = await client.from("scored_runs").delete().in("run_id", runIds);
+
+    if (scoredRunError) {
+      throw scoredRunError;
+    }
+  }
+
+  if (blockRunIds.length) {
+    const { error: blockRunClassError } = await client
+      .from("block_run_class_entries")
+      .delete()
+      .in("block_run_id", blockRunIds);
+
+    if (blockRunClassError) {
+      throw blockRunClassError;
+    }
+
+    const { error: blockRunError } = await client
+      .from("block_run_entries")
+      .delete()
+      .in("block_run_id", blockRunIds);
+
+    if (blockRunError) {
+      throw blockRunError;
+    }
+  }
+
+  if (entryIds.length) {
+    const { error: deleteEntriesError } = await client.from("entries").delete().in("id", entryIds);
+
+    if (deleteEntriesError) {
+      throw deleteEntriesError;
+    }
+  }
+
+  await deleteEmptyDraftInvoices(invoiceIds);
+  await cleanupAuditHorses(createdHorseIds, batch.organization_id);
+  await cleanupAuditContacts(createdContactIds, batch.organization_id);
+  await restoreShowScoreRunsForBatch(batch);
+
+  const { data: cleanedBatch, error: cleanedBatchError } = await client
+    .from("entry_import_batches")
+    .update({
+      status: "cleaned",
+      cleaned_at: new Date().toISOString(),
+    })
+    .eq("id", batchId)
+    .select("*")
+    .single<EntryImportBatch>();
+
+  if (cleanedBatchError) {
+    throw cleanedBatchError;
+  }
+
+  return cleanedBatch;
+}
+
+async function assertShowScoreOfficialScoringNotStarted(showId: string, classIds: string[]) {
+  if (!classIds.length) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const { data: scoringSessions, error: scoringError } = await client
+    .from("show_score_scoring_sessions")
+    .select("class_id,started_at")
+    .eq("show_id", showId)
+    .in("class_id", classIds)
+    .returns<Array<{ class_id: string; started_at: string | null }>>();
+
+  if (scoringError && !isMissingSchemaError(scoringError, "show_score_scoring_sessions")) {
+    throw scoringError;
+  }
+
+  const startedClassIds = (scoringSessions ?? [])
+    .filter((session) => session.started_at)
+    .map((session) => session.class_id);
+
+  if (startedClassIds.length) {
+    throw new Error("Import AQR bloque: le pointage officiel ShowScore a deja commence pour une classe selectionnee.");
+  }
+
+  const { data: judgeSessions, error: judgeError } = await client
+    .from("show_score_judge_sessions")
+    .select("class_id,finalized")
+    .eq("show_id", showId)
+    .in("class_id", classIds)
+    .returns<Array<{ class_id: string; finalized: boolean }>>();
+
+  if (judgeError && !isMissingSchemaError(judgeError, "show_score_judge_sessions")) {
+    throw judgeError;
+  }
+
+  if ((judgeSessions ?? []).some((session) => session.finalized)) {
+    throw new Error("Import AQR bloque: une session juge ShowScore est deja finalisee pour une classe selectionnee.");
+  }
+}
+
+async function findOrCreateAuditContact(input: {
+  contacts: Contact[];
+  createdByUserId: string;
+  name: string;
+  organizationId: string;
+  role: Contact["type"];
+}): Promise<Contact & { wasCreated: boolean }> {
+  const name = input.name.trim();
+
+  if (!name) {
+    throw new Error("Impossible de creer un contact AQR sans nom.");
+  }
+
+  const existing = findContactByName(input.contacts, name);
+
+  if (existing) {
+    await ensureContactRole({
+      organization_id: input.organizationId,
+      contact_id: existing.id,
+      role: input.role,
+      source: "entry",
+    });
+    return { ...existing, wasCreated: false };
+  }
+
+  const splitName = splitDisplayName(name);
+  const contact = await createContact({
+    organization_id: input.organizationId,
+    type: input.role,
+    roles: [input.role],
+    first_name: splitName.firstName,
+    last_name: splitName.lastName,
+    created_by_user_id: input.createdByUserId,
+  });
+
+  input.contacts.push(contact);
+  return { ...contact, wasCreated: true };
+}
+
+async function findOrCreateAuditHorse(input: {
+  createdByUserId: string;
+  horses: Horse[];
+  name: string;
+  organizationId: string;
+  ownerContactId: string;
+}): Promise<Horse & { wasCreated: boolean }> {
+  const name = input.name.trim();
+
+  if (!name) {
+    throw new Error("Impossible de creer un cheval AQR sans nom.");
+  }
+
+  const existing = input.horses.find((horse) => normalizeNameKey(horse.name) === normalizeNameKey(name));
+
+  if (existing) {
+    await ensureHorseOrganizationLink({
+      organization_id: input.organizationId,
+      horse_id: existing.id,
+      source: "entry",
+      created_by_user_id: input.createdByUserId,
+    });
+    await upsertHorseContact({
+      organization_id: input.organizationId,
+      horse_id: existing.id,
+      contact_id: input.ownerContactId,
+      role: "owner",
+    });
+    return { ...existing, wasCreated: false };
+  }
+
+  const horse = await createHorse({
+    organization_id: input.organizationId,
+    name,
+    primary_owner_contact_id: input.ownerContactId,
+    created_by_user_id: input.createdByUserId,
+  });
+
+  input.horses.push(horse);
+  return { ...horse, wasCreated: true };
+}
+
+async function upsertAuditRunLinks(input: {
+  blockId: string;
+  blockRunId: string;
+  entryIds: string[];
+  orderOfGo: number;
+  runId: string;
+  showId: string;
+}) {
+  const client = requireSupabase();
+  const { error: blockRunError } = await client.from("block_run_entries").upsert(
+    {
+      block_run_id: input.blockRunId,
+      run_id: input.runId,
+      show_id: input.showId,
+      block_id: input.blockId,
+      order_of_go: input.orderOfGo,
+    },
+    { onConflict: "block_run_id" },
+  );
+
+  if (blockRunError) {
+    throw blockRunError;
+  }
+
+  if (!input.entryIds.length) {
+    return;
+  }
+
+  const { error: classEntriesError } = await client
+    .from("block_run_class_entries")
+    .upsert(
+      input.entryIds.map((entryId) => ({
+        block_run_id: input.blockRunId,
+        entry_id: entryId,
+      })),
+      { onConflict: "block_run_id,entry_id" },
+    );
+
+  if (classEntriesError) {
+    throw classEntriesError;
+  }
+}
+
+async function invoiceIdsForEntries(entryIds: string[]) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("invoice_line_items")
+    .select("invoice_id")
+    .eq("item_type", "entry")
+    .in("item_id", entryIds)
+    .returns<Array<Pick<InvoiceLineItem, "invoice_id">>>();
+
+  if (error) {
+    throw error;
+  }
+
+  return uniqueStrings((data ?? []).map((lineItem) => lineItem.invoice_id));
+}
+
+async function deleteEmptyDraftInvoices(invoiceIds: string[]) {
+  if (!invoiceIds.length) {
+    return;
+  }
+
+  const client = requireSupabase();
+
+  for (const invoiceId of invoiceIds) {
+    const { data: invoice, error: invoiceError } = await client
+      .from("invoices")
+      .select("id,status")
+      .eq("id", invoiceId)
+      .maybeSingle<Pick<Invoice, "id" | "status">>();
+
+    if (invoiceError) {
+      throw invoiceError;
+    }
+
+    if (!invoice || invoice.status !== "draft") {
+      continue;
+    }
+
+    const { count, error: countError } = await client
+      .from("invoice_line_items")
+      .select("id", { count: "exact", head: true })
+      .eq("invoice_id", invoiceId);
+
+    if (countError) {
+      throw countError;
+    }
+
+    if ((count ?? 0) > 0) {
+      continue;
+    }
+
+    const { error: deleteError } = await client.from("invoices").delete().eq("id", invoiceId);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+  }
+}
+
+async function cleanupAuditHorses(horseIds: string[], organizationId: string) {
+  const client = requireSupabase();
+
+  for (const horseId of uniqueStrings(horseIds)) {
+    const [entryCount, stallCount] = await Promise.all([
+      countRows("entries", "horse_id", horseId),
+      countRows("stall_bookings", "horse_id", horseId),
+    ]);
+
+    if (entryCount + stallCount > 0) {
+      continue;
+    }
+
+    const { error } = await client
+      .from("horses")
+      .delete()
+      .eq("id", horseId)
+      .eq("organization_id", organizationId);
+
+    if (error && error.code !== "23503") {
+      throw error;
+    }
+  }
+}
+
+async function cleanupAuditContacts(contactIds: string[], organizationId: string) {
+  const client = requireSupabase();
+
+  for (const contactId of uniqueStrings(contactIds)) {
+    const [
+      ownerEntryCount,
+      riderEntryCount,
+      payerEntryCount,
+      bookerStallCount,
+      payerStallCount,
+      horseContactCount,
+    ] = await Promise.all([
+      countRows("entries", "owner_contact_id", contactId),
+      countRows("entries", "rider_contact_id", contactId),
+      countRows("entries", "payer_contact_id", contactId),
+      countRows("stall_bookings", "booker_contact_id", contactId),
+      countRows("stall_bookings", "payer_contact_id", contactId),
+      countRows("horse_contacts", "contact_id", contactId),
+    ]);
+
+    if (ownerEntryCount + riderEntryCount + payerEntryCount + bookerStallCount + payerStallCount + horseContactCount > 0) {
+      continue;
+    }
+
+    const { error } = await client
+      .from("contacts")
+      .delete()
+      .eq("id", contactId)
+      .eq("organization_id", organizationId);
+
+    if (error && error.code !== "23503") {
+      throw error;
+    }
+  }
+}
+
+async function countRows(tableName: string, columnName: string, value: string) {
+  const client = requireSupabase();
+  const { count, error } = await client
+    .from(tableName)
+    .select("id", { count: "exact", head: true })
+    .eq(columnName, value);
+
+  if (error) {
+    if (isMissingSchemaError(error, tableName)) {
+      return 0;
+    }
+
+    throw error;
+  }
+
+  return count ?? 0;
+}
+
+async function restoreShowScoreRunsForBatch(batch: EntryImportBatch) {
+  const client = requireSupabase();
+  const snapshots = normalizeSourceRunSnapshotMap(batch.source_run_snapshots);
+  const classIds = Object.keys(snapshots);
+
+  if (!classIds.length) {
+    return;
+  }
+
+  const { data: setups, error } = await client
+    .from("show_score_class_setups")
+    .select("*")
+    .eq("show_id", batch.show_id)
+    .in("class_id", classIds)
+    .returns<ShowScoreClassSetup[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  for (const setup of setups ?? []) {
+    const classSnapshots = snapshots[setup.class_id] ?? {};
+    let changed = false;
+    const restoredRuns = setup.runs.map((run, index) => {
+      const normalizedRun = normalizeShowScoreDrawRun(run, index);
+      const snapshotRecord = classSnapshots[normalizedRun.sourceRunId];
+
+      if (!snapshotRecord && run.hspImportBatchId !== batch.id) {
+        return run;
+      }
+
+      changed = true;
+      return restoreRunTechnicalSnapshot(run, snapshotRecord?.snapshot);
+    });
+
+    if (!changed) {
+      continue;
+    }
+
+    const { error: updateError } = await client
+      .from("show_score_class_setups")
+      .update({ runs: restoredRuns })
+      .eq("class_id", setup.class_id)
+      .eq("show_id", setup.show_id);
+
+    if (updateError) {
+      throw updateError;
+    }
+  }
+}
+
+type FlatSourceRunSnapshot = {
+  classId: string;
+  sourceRunId: string;
+  snapshot: RunTechnicalSnapshot;
+  runId: string | null;
+  blockRunId: string | null;
+};
+
+function normalizeSourceRunSnapshots(value: Record<string, unknown>) {
+  return Object.entries(normalizeSourceRunSnapshotMap(value)).flatMap(([classId, classSnapshots]) =>
+    Object.entries(classSnapshots).map(([sourceRunId, snapshotRecord]) => ({
+      classId,
+      sourceRunId,
+      ...snapshotRecord,
+    })),
+  );
+}
+
+function normalizeSourceRunSnapshotMap(value: Record<string, unknown>) {
+  const map: Record<string, Record<string, Omit<FlatSourceRunSnapshot, "classId" | "sourceRunId">>> = {};
+
+  for (const [classId, classValue] of Object.entries(value ?? {})) {
+    if (!classValue || typeof classValue !== "object" || Array.isArray(classValue)) {
+      continue;
+    }
+
+    map[classId] = {};
+
+    for (const [sourceRunId, runValue] of Object.entries(classValue as Record<string, unknown>)) {
+      if (!runValue || typeof runValue !== "object" || Array.isArray(runValue)) {
+        continue;
+      }
+
+      const record = runValue as Record<string, unknown>;
+      map[classId][sourceRunId] = {
+        snapshot: normalizeRunTechnicalSnapshot(record.snapshot),
+        runId: typeof record.runId === "string" ? record.runId : null,
+        blockRunId: typeof record.blockRunId === "string" ? record.blockRunId : null,
+      };
+    }
+  }
+
+  return map;
+}
+
+function normalizeRunTechnicalSnapshot(value: unknown): RunTechnicalSnapshot {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return { presentFields: [], values: {} };
+  }
+
+  const record = value as Record<string, unknown>;
+  return {
+    presentFields: Array.isArray(record.presentFields)
+      ? record.presentFields.filter((field): field is RunTechnicalSnapshot["presentFields"][number] => typeof field === "string")
+      : [],
+    values: record.values && typeof record.values === "object" && !Array.isArray(record.values)
+      ? record.values as RunTechnicalSnapshot["values"]
+      : {},
+  };
+}
+
+function findContactByName(contacts: Contact[], name: string) {
+  const targetKey = normalizeNameKey(name);
+  return contacts.find((contact) => {
+    const fullName = `${contact.first_name} ${contact.last_name}`.trim();
+    const reversedName = `${contact.last_name} ${contact.first_name}`.trim();
+    return normalizeNameKey(fullName) === targetKey || normalizeNameKey(reversedName) === targetKey;
+  });
+}
+
+function splitDisplayName(name: string) {
+  const trimmed = name.trim();
+
+  if (trimmed.includes(",")) {
+    const [lastName, ...firstNameParts] = trimmed.split(",").map((part) => part.trim()).filter(Boolean);
+    return {
+      firstName: firstNameParts.join(" ") || lastName || "AQR",
+      lastName: lastName || "Audit",
+    };
+  }
+
+  const parts = trimmed.split(/\s+/).filter(Boolean);
+
+  if (parts.length <= 1) {
+    return { firstName: parts[0] || "AQR", lastName: "Audit" };
+  }
+
+  return {
+    firstName: parts.slice(0, -1).join(" "),
+    lastName: parts[parts.length - 1],
+  };
+}
+
+function normalizeNameKey(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function parseBackNumber(value: string) {
+  const parsed = Number(value);
+  return Number.isInteger(parsed) && parsed >= 0 ? parsed : null;
+}
+
+function pickRunUuid(run: Record<string, unknown>, keys: string[]) {
+  for (const key of keys) {
+    const value = run[key];
+
+    if (typeof value === "string" && isUuid(value)) {
+      return value;
+    }
+  }
+
+  return null;
+}
+
+function isUuid(value: string) {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+}
+
+function jsonStringArray(value: unknown) {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+}
+
+function uniqueStrings(values: Array<string | null | undefined>) {
+  return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
 export async function prepareShowScoreClassSetup(input: {
@@ -4100,6 +5093,52 @@ function normalizeTaxRate(value: number) {
 
 function isMissingShowScoreSchemaError(error: { code?: string; message?: string }) {
   return isMissingSchemaError(error, "show_score_class_setups");
+}
+
+const AQR_AUDIT_IMPORT_MIGRATION_MESSAGE =
+  "Le module Audit AQR n'est pas encore installe dans Supabase. Applique la migration 0065_aqr_audit_import_batches.sql dans le projet Supabase partage avant d'utiliser l'import ou le cleanup AQR.";
+
+function toAqrAuditImportSchemaError(error: unknown) {
+  return isAqrAuditImportSchemaError(error) ? new Error(AQR_AUDIT_IMPORT_MIGRATION_MESSAGE) : toServiceError(error);
+}
+
+function isAqrAuditImportSchemaError(error: unknown) {
+  const pgError = error as { code?: string; message?: string; details?: string; hint?: string };
+  const message = `${pgError?.message ?? ""} ${pgError?.details ?? ""} ${pgError?.hint ?? ""}`.toLowerCase();
+
+  return (
+    isMissingSchemaError(pgError, "entry_import_batches") ||
+    isMissingColumnError(pgError, "import_source") ||
+    isMissingColumnError(pgError, "import_batch_id") ||
+    isMissingColumnError(pgError, "external_source_key") ||
+    isMissingColumnError(pgError, "source_payload") ||
+    (message.includes("entry_import_batches") && (message.includes("does not exist") || message.includes("schema cache")))
+  );
+}
+
+function isMissingColumnError(error: unknown, columnName: string) {
+  const pgError = error as { code?: string; message?: string; details?: string; hint?: string };
+  const message = `${pgError?.message ?? ""} ${pgError?.details ?? ""} ${pgError?.hint ?? ""}`.toLowerCase();
+  const normalizedColumn = columnName.toLowerCase();
+
+  return (
+    pgError?.code === "42703" ||
+    ((message.includes("column") || message.includes("schema cache") || message.includes("could not find")) &&
+      message.includes(normalizedColumn) &&
+      (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find")))
+  );
+}
+
+function toServiceError(error: unknown) {
+  if (error instanceof Error) {
+    return error;
+  }
+
+  if (error && typeof error === "object" && "message" in error && typeof (error as { message?: unknown }).message === "string") {
+    return new Error((error as { message: string }).message);
+  }
+
+  return new Error(String(error));
 }
 
 function isMissingSchemaError(error: { code?: string; message?: string }, relationName: string) {

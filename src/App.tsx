@@ -35,12 +35,14 @@ import {
   deleteContact,
   deleteDivision,
   deleteHorse,
+  cleanupShowScoreDrawEntryImportBatch,
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
   deleteShowScorePaidWarmup,
+  syncShowScoreDrawEntryImportBatch,
   assignBackNumber,
   assignNextBackNumber,
   releaseBackNumber,
@@ -454,6 +456,33 @@ export default function App() {
             horses: context.horses,
           });
           setNotice({ tone: "success", message: `ShowScore setup prepared with ${setup.runs.length} run${setup.runs.length === 1 ? "" : "s"}.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onSyncShowScoreDrawEntryImportBatch={async (showId, classIds) => {
+        if (!context) {
+          return;
+        }
+
+        try {
+          const batch = await syncShowScoreDrawEntryImportBatch({
+            showId,
+            classIds,
+            createdByUserId: context.profile.user_id,
+          });
+          const totalEntries = typeof batch.summary.totalEntries === "number" ? batch.summary.totalEntries : 0;
+          setNotice({ tone: "success", message: `Batch AQR créé avec ${totalEntries} entry${totalEntries === 1 ? "" : "s"} et factures draft.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onCleanupShowScoreDrawEntryImportBatch={async (batchId) => {
+        try {
+          await cleanupShowScoreDrawEntryImportBatch(batchId);
+          setNotice({ tone: "success", message: "Batch AQR nettoyé et métadonnées ShowScore restaurées." });
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });

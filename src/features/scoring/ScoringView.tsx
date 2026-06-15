@@ -1,13 +1,16 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Trash2 } from "lucide-react";
 import { EmptyState, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { divisionLabel, findById, formatDate, showLabel } from "../../lib/display";
+import { AQR_AUDIT_IMPORT_SOURCE, previewShowScoreDrawEntryImport } from "../../lib/aqrAuditImport";
 import type { Locale } from "../../lib/i18n";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
-import type { ClassRecord, Contact, Division, Entry, Horse, Show, ShowDay, ShowScoreClassSetup, ShowScorePaidWarmup } from "../../types/domain";
+import type { ClassRecord, Contact, Division, Entry, EntryImportBatch, Horse, Show, ShowDay, ShowScoreClassSetup, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { classEntriesCloseLabel, showDayLabel } from "../classes/classUtils";
 import { classEntriesAreClosed } from "../dashboard/shared";
+
+const aqrAuditImportEnabled = import.meta.env.VITE_AQR_AUDIT_IMPORT_ENABLED !== "false";
 
 function ScoringView({
   locale,
@@ -15,36 +18,65 @@ function ScoringView({
   contacts,
   divisions,
   entries,
+  entryImportBatches,
   horses,
   showDays,
   showScoreClassSetups,
   showScorePaidWarmups,
   shows,
+  onCleanupShowScoreDrawEntryImportBatch,
   onDeleteShowScorePaidWarmup,
   onPrepareShowScoreClass,
+  onSyncShowScoreDrawEntryImportBatch,
 }: {
   locale: Locale;
   classes: ClassRecord[];
   contacts: Contact[];
   divisions: Division[];
   entries: Entry[];
+  entryImportBatches: EntryImportBatch[];
   horses: Horse[];
   showDays: ShowDay[];
   showScoreClassSetups: ShowScoreClassSetup[];
   showScorePaidWarmups: ShowScorePaidWarmup[];
   shows: Show[];
+  onCleanupShowScoreDrawEntryImportBatch: (batchId: string) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: string) => Promise<void>;
   onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
+  onSyncShowScoreDrawEntryImportBatch: (showId: string, classIds?: string[]) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
   const [busyClassId, setBusyClassId] = useState("");
   const [busyWarmupId, setBusyWarmupId] = useState("");
+  const [busyAqrBatchId, setBusyAqrBatchId] = useState("");
+  const [isAqrSyncing, setIsAqrSyncing] = useState(false);
   const [expandedDrawClassIds, setExpandedDrawClassIds] = useState<string[]>([]);
   const [expandedWarmupIds, setExpandedWarmupIds] = useState<string[]>([]);
   const selectedShowId = showId || shows[0]?.id || "";
   const visibleClasses = selectedShowId ? classes.filter((classRecord) => classRecord.show_id === selectedShowId) : classes;
   const visiblePaidWarmups = selectedShowId ? showScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShowId) : showScorePaidWarmups;
   const sortedVisiblePaidWarmups = [...visiblePaidWarmups].sort(compareShowScorePaidWarmups);
+  const visibleAqrBatches = selectedShowId
+    ? entryImportBatches.filter((batch) => batch.show_id === selectedShowId && batch.source === AQR_AUDIT_IMPORT_SOURCE)
+    : [];
+  const activeAqrBatches = visibleAqrBatches.filter((batch) => batch.status !== "cleaned");
+  const aqrPreview = useMemo(
+    () =>
+      previewShowScoreDrawEntryImport({
+        showId: selectedShowId,
+        classes,
+        divisions,
+        showScoreClassSetups,
+      }),
+    [classes, divisions, selectedShowId, showScoreClassSetups],
+  );
+  const aqrPreviewClassIds = aqrPreview.classPreviews.map((classPreview) => classPreview.classRecord.id);
+  const canCreateAqrBatch =
+    aqrAuditImportEnabled &&
+    !activeAqrBatches.length &&
+    !aqrPreview.errors.length &&
+    aqrPreview.totalEntries > 0 &&
+    Boolean(selectedShowId);
   const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.class_id));
   const totalRuns = visibleClasses.reduce(
     (sum, classRecord) =>
@@ -81,6 +113,30 @@ function ScoringView({
     }
   }
 
+  async function handleSyncAqrBatch() {
+    setIsAqrSyncing(true);
+
+    try {
+      await onSyncShowScoreDrawEntryImportBatch(selectedShowId, aqrPreviewClassIds);
+    } finally {
+      setIsAqrSyncing(false);
+    }
+  }
+
+  async function handleCleanupAqrBatch(batch: EntryImportBatch) {
+    if (!window.confirm(uiText(locale, "Nettoyer ce batch AQR et restaurer les métadonnées ShowScore?", "Clean this AQR batch and restore ShowScore metadata?"))) {
+      return;
+    }
+
+    setBusyAqrBatchId(batch.id);
+
+    try {
+      await onCleanupShowScoreDrawEntryImportBatch(batch.id);
+    } finally {
+      setBusyAqrBatchId("");
+    }
+  }
+
   function toggleDraw(classId: string) {
     setExpandedDrawClassIds((current) => (current.includes(classId) ? current.filter((candidate) => candidate !== classId) : [...current, classId]));
   }
@@ -108,6 +164,90 @@ function ScoringView({
         <Metric label={uiText(locale, "Préparations prêtes", "Prepared setups")} value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
         <Metric label="Paid warmups" value={String(visiblePaidWarmups.length)} />
       </section>
+
+      {aqrAuditImportEnabled ? (
+        <section className="panel span-2">
+          <div className="panel-header">
+            <div>
+              <h2>Audit AQR</h2>
+              <p>{uiText(locale, "Crée des entries et factures draft HSP depuis les draws déjà importés dans ShowScore.", "Create HSP entries and draft invoices from draws already imported in ShowScore.")}</p>
+            </div>
+            <button className="text-button" disabled={!canCreateAqrBatch || isAqrSyncing} type="button" onClick={handleSyncAqrBatch}>
+              {isAqrSyncing ? uiText(locale, "Création", "Creating") : uiText(locale, "Créer entries depuis draws", "Create entries from draws")}
+            </button>
+          </div>
+          <section className="metric-grid">
+            <Metric label={uiText(locale, "Draws importés", "Imported draws")} value={String(aqrPreview.classPreviews.length)} />
+            <Metric label="Runs" value={String(aqrPreview.totalRuns)} />
+            <Metric label="Entries HSP" value={String(aqrPreview.totalEntries)} />
+            <Metric label={uiText(locale, "Batch actif", "Active batch")} value={String(activeAqrBatches.length)} />
+          </section>
+          {aqrPreview.classPreviews.length ? (
+            <div className="table scoring-table">
+              <div className="table-row table-head">
+                <span>Bloc</span>
+                <span>Runs</span>
+                <span>Entries</span>
+                <span>{uiText(locale, "État", "Status")}</span>
+              </div>
+              {aqrPreview.classPreviews.map((classPreview) => (
+                <div className="table-row" key={classPreview.classRecord.id}>
+                  <div>
+                    <strong>{classPreview.classRecord.name}</strong>
+                    <span className="muted-line">{classPreview.classRecord.code || uiText(locale, "Sans code", "No code")}</span>
+                  </div>
+                  <span>{classPreview.runs.length}</span>
+                  <span>{classPreview.entryCount}</span>
+                  <span className={`badge ${classPreview.errors.length ? "warning" : "open"}`}>
+                    {classPreview.errors.length ? uiText(locale, "À corriger", "Needs fix") : uiText(locale, "Prêt", "Ready")}
+                  </span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <EmptyState label={uiText(locale, "Aucun draw ShowScore importé pour ce show.", "No imported ShowScore draw for this show.")} />
+          )}
+          {aqrPreview.errors.length ? (
+            <div className="draw-detail-summary">
+              {aqrPreview.errors.slice(0, 6).map((error, index) => (
+                <span className="badge warning" key={`${error}-${index}`}>{error}</span>
+              ))}
+              {aqrPreview.errors.length > 6 ? <span className="badge warning">+{aqrPreview.errors.length - 6}</span> : null}
+            </div>
+          ) : null}
+          {aqrPreview.warnings.length && !aqrPreview.errors.length ? (
+            <div className="draw-detail-summary">
+              {aqrPreview.warnings.slice(0, 4).map((warning, index) => (
+                <span className="badge info" key={`${warning}-${index}`}>{warning}</span>
+              ))}
+              {aqrPreview.warnings.length > 4 ? <span className="badge info">+{aqrPreview.warnings.length - 4}</span> : null}
+            </div>
+          ) : null}
+          {activeAqrBatches.length ? (
+            <div className="draw-list">
+              <div className="draw-list-row draw-list-head">
+                <span>Batch</span>
+                <span>Entries</span>
+                <span>{uiText(locale, "Statut", "Status")}</span>
+                <span>{uiText(locale, "Action", "Action")}</span>
+              </div>
+              {activeAqrBatches.map((batch) => {
+                const totalEntries = typeof batch.summary.totalEntries === "number" ? batch.summary.totalEntries : "-";
+                return (
+                  <div className="draw-list-row" key={batch.id}>
+                    <span>{formatDate(batch.created_at)}</span>
+                    <span>{totalEntries}</span>
+                    <span className={`badge ${batch.status === "failed" ? "warning" : "info"}`}>{batch.status}</span>
+                    <button className="text-button" disabled={busyAqrBatchId === batch.id} type="button" onClick={() => handleCleanupAqrBatch(batch)}>
+                      {busyAqrBatchId === batch.id ? uiText(locale, "Nettoyage", "Cleaning") : uiText(locale, "Nettoyer batch", "Clean batch")}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">

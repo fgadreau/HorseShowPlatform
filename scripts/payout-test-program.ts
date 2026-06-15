@@ -4,6 +4,7 @@ import {
   defaultPayoutSchedules,
   payoutNeedsScheduleBHint,
 } from "../src/lib/payouts";
+import { AQR_AUDIT_IMPORT_SOURCE } from "../src/lib/aqrAuditImport";
 import type { Contact, Division, Entry, EntryResult, Horse, Organization, PayoutScheduleType, Show } from "../src/types/domain";
 
 const organizationId = "payout-test-organization";
@@ -23,6 +24,7 @@ function main() {
   testRoundingResidualGoesToBestRank();
   testHouseCustom();
   testJackpotDefaultRetainage();
+  testAuditImportBatchTagging();
 
   console.log("Payout test program OK");
 }
@@ -182,6 +184,22 @@ function testJackpotDefaultRetainage() {
   assertMoney(draft.calculation.retainage_amount, 0, "Jackpot defaults retainage to zero");
   assertMoney(draft.awards[0].amount, 120, "Jackpot first payout");
   assertMoney(draft.awards[1].amount, 80, "Jackpot second payout");
+}
+
+function testAuditImportBatchTagging() {
+  const fixture = buildFixture({ entryCount: 2, entryFee: 100, scheduleType: "nrha_schedule_a", scores: [75, 74] });
+  fixture.entries = fixture.entries.map((entry) => ({
+    ...entry,
+    import_source: AQR_AUDIT_IMPORT_SOURCE,
+    import_batch_id: "aqr-batch-1",
+  }));
+
+  const draft = buildDraft(fixture);
+  assertEqual(draft.calculation.import_batch_id, "aqr-batch-1", "AQR payout calculation keeps import batch id");
+
+  fixture.entries[1] = { ...fixture.entries[1], import_batch_id: "aqr-batch-2" };
+  const mixedDraft = buildDraft(fixture);
+  assertEqual(mixedDraft.calculation.import_batch_id, null, "Mixed import batches are not batch-tagged");
 }
 
 type BuildFixtureOptions = {
@@ -389,6 +407,10 @@ function makeEntry(id: string, division: Division, horse: Horse, rider: Contact,
     show_id: showId,
     horse_id: horse.id,
     division_id: division.id,
+    import_source: null,
+    import_batch_id: null,
+    external_source_key: null,
+    source_payload: {},
     created_by_user_id: "payout-test-user",
     owner_contact_id: horse.primary_owner_contact_id,
     rider_contact_id: rider.id,
