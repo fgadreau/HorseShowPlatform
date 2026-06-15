@@ -14,6 +14,7 @@ import {
   FileText,
   LogOut,
   MapPin,
+  Menu,
   Plus,
   RefreshCw,
   Search,
@@ -327,6 +328,7 @@ export function Dashboard({
   const profileIncomplete = context ? !profileIsComplete(context.profile) : false;
   const rawEffectiveView = canManageAssociation || isPlatformAdmin || !associationViewKeys.has(activeView) ? activeView : "my-overview";
   const effectiveView: ViewKey = !canManageAssociation && profileIncomplete && rawEffectiveView === "my-overview" ? "my-profile" : rawEffectiveView;
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
     : [];
@@ -528,10 +530,76 @@ export function Dashboard({
     shows: selectedOrganizationShows,
     stallOptions: selectedOrganizationStallOptions,
   });
+  const activeNavItem = [...associationNavigation, ...personalNavigation].find((item) => item.key === effectiveView);
+  const activeViewLabel = effectiveView === "platform-admin" ? "Admin plans" : activeNavItem ? t.nav[activeNavItem.labelKey] : t.shell.productName;
+
+  const handleViewChange = (view: ViewKey) => {
+    setIsMobileMenuOpen(false);
+    onViewChange(view);
+  };
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const mediaQuery = window.matchMedia("(min-width: 641px)");
+    if (mediaQuery.matches) {
+      setIsMobileMenuOpen(false);
+      return;
+    }
+
+    const handleChange = (event: MediaQueryListEvent) => {
+      if (event.matches) {
+        setIsMobileMenuOpen(false);
+      }
+    };
+
+    mediaQuery.addEventListener("change", handleChange);
+    return () => mediaQuery.removeEventListener("change", handleChange);
+  }, [isMobileMenuOpen]);
+
+  useEffect(() => {
+    if (!isMobileMenuOpen) return;
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [isMobileMenuOpen]);
 
   return (
     <main className="app-shell">
-      <aside className="sidebar">
+      <aside className={`sidebar${isMobileMenuOpen ? " open" : ""}`}>
+        <div className="mobile-menu-bar">
+          <div className="mobile-menu-title">
+            <strong>{t.shell.productName}</strong>
+            <span>{activeViewLabel}</span>
+          </div>
+          <button
+            aria-controls="primary-navigation"
+            aria-expanded={isMobileMenuOpen}
+            aria-label={isMobileMenuOpen ? "Fermer la navigation" : "Ouvrir la navigation"}
+            className="mobile-menu-toggle"
+            onClick={() => setIsMobileMenuOpen((value) => !value)}
+            type="button"
+          >
+            {isMobileMenuOpen ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
+
         <div className="brand-lockup compact">
           <div className="brand-mark">
             <ClipboardList size={22} />
@@ -542,18 +610,18 @@ export function Dashboard({
           </div>
         </div>
 
-        <nav className="nav-list" aria-label="Main navigation">
+        <nav className="nav-list" id="primary-navigation" aria-label="Main navigation">
           {canManageAssociation ? (
-            <NavigationSection activeView={effectiveView} items={associationNavigation} label={t.nav.association} t={t} onViewChange={onViewChange} />
+            <NavigationSection activeView={effectiveView} items={associationNavigation} label={t.nav.association} t={t} onViewChange={handleViewChange} />
           ) : null}
-          <NavigationSection activeView={effectiveView} items={personalNavigation} label={t.nav.mySpace} t={t} onViewChange={onViewChange} />
+          <NavigationSection activeView={effectiveView} items={personalNavigation} label={t.nav.mySpace} t={t} onViewChange={handleViewChange} />
           {isPlatformAdmin ? (
             <div className="nav-section">
               <p className="nav-section-label">Platform</p>
               <button
                 type="button"
                 className={`nav-item${effectiveView === "platform-admin" ? " active" : ""}`}
-                onClick={() => onViewChange("platform-admin")}
+                onClick={() => handleViewChange("platform-admin")}
               >
                 <Shield size={18} />
                 Admin plans
