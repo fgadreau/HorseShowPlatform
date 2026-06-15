@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { FormEvent } from "react";
 import { ClipboardList, UserRound } from "lucide-react";
 import type { Locale, Translation } from "../../lib/i18n";
+import { appEnv } from "../../lib/env";
 import { supabase } from "../../lib/supabase";
 import { errorMessage } from "../../lib/display";
 import { LanguageToggle, NoticeBanner } from "../../components/ui";
@@ -27,7 +28,42 @@ const localLoginAccounts = [
 ];
 
 function isLocalHostname() {
-  return window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  const hostname = window.location.hostname;
+  return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0" || hostname.endsWith(".local") || isPrivateNetworkAddress(hostname);
+}
+
+function isLocalSupabaseUrl() {
+  try {
+    const hostname = new URL(appEnv.supabaseUrl ?? "").hostname;
+    return hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0";
+  } catch {
+    return false;
+  }
+}
+
+function isPrivateNetworkAddress(hostname: string) {
+  if (hostname.startsWith("10.") || hostname.startsWith("192.168.")) {
+    return true;
+  }
+
+  const match = hostname.match(/^172\.(\d{1,2})\./);
+  return Boolean(match && Number(match[1]) >= 16 && Number(match[1]) <= 31);
+}
+
+function clearLocalSupabaseAuthStorage() {
+  if (!isLocalSupabaseUrl()) {
+    return;
+  }
+
+  try {
+    for (const key of Object.keys(window.localStorage)) {
+      if (key.startsWith("sb-") && key.endsWith("-auth-token")) {
+        window.localStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // If storage is blocked, signInWithPassword can still replace the session.
+  }
 }
 
 function authEmailRedirectUrl() {
@@ -55,7 +91,7 @@ export function AuthScreen({
   const [phone, setPhone] = useState("");
   const [accountType, setAccountType] = useState<NonNullable<UserProfile["type_user"]>>("owner");
   const [busy, setBusy] = useState(false);
-  const showLocalLogin = isLocalHostname();
+  const showLocalLogin = isLocalHostname() || isLocalSupabaseUrl();
   const signUpMissingDetails = mode === "signup" && (!firstName.trim() || !lastName.trim());
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -115,6 +151,7 @@ export function AuthScreen({
     setPassword(account.password);
     setBusy(true);
     onNotice(null);
+    clearLocalSupabaseAuthStorage();
 
     try {
       const result = await supabase.auth.signInWithPassword({

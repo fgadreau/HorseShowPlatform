@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { AlertCircle, CheckCircle2, FileCheck2, RefreshCw, Send } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronDown, FileCheck2, RefreshCw, Send } from "lucide-react";
 import { EmptyState, ViewIntro } from "../../components/ui";
 import { contactLabel, errorMessage, findById, formatCurrency, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
@@ -25,6 +25,7 @@ import type {
   PayoutScheduleBracket,
   Show,
 } from "../../types/domain";
+import { payoutScheduleLabel } from "../classes/classUtils";
 import { uiText } from "../dashboard/shared";
 
 function ResultsView({
@@ -66,6 +67,8 @@ function ResultsView({
 }) {
   const [busyKey, setBusyKey] = useState("");
   const [actionError, setActionError] = useState("");
+  const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
+  const [collapsedDivisionIds, setCollapsedDivisionIds] = useState<Record<string, boolean>>({});
   const classesByShow = useMemo(() => {
     const grouped = new Map<string, ClassRecord[]>();
 
@@ -136,6 +139,14 @@ function ResultsView({
     }
   }
 
+  function toggleBlock(id: string) {
+    setCollapsedBlockIds((current) => ({ ...current, [id]: !(current[id] ?? true) }));
+  }
+
+  function toggleDivision(id: string) {
+    setCollapsedDivisionIds((current) => ({ ...current, [id]: !(current[id] ?? true) }));
+  }
+
   return (
     <div className="stack">
       <ViewIntro
@@ -176,16 +187,28 @@ function ResultsView({
             <div className="results-block-list">
               {showClasses.map((classRecord) => {
                 const classDivisions = divisionsByClass.get(classRecord.id) ?? [];
+                const blockCollapsed = collapsedBlockIds[classRecord.id] ?? true;
 
                 return (
                   <section className="results-block" key={classRecord.id}>
-                    <div className="results-block-header">
-                      <div>
+                    <button
+                      aria-expanded={!blockCollapsed}
+                      className="results-block-header results-collapse-button"
+                      type="button"
+                      onClick={() => toggleBlock(classRecord.id)}
+                    >
+                      <span className={`results-chevron ${blockCollapsed ? "" : "open"}`}>
+                        <ChevronDown size={16} />
+                      </span>
+                      <span className="results-block-title">
                         <strong>{classRecord.name}</strong>
-                        {[classRecord.block_label, classRecord.code].filter(Boolean).join(" - ")}
-                      </div>
-                    </div>
-                    {classDivisions.length ? (
+                        <span>{[classRecord.block_label, classRecord.code].filter(Boolean).join(" - ")}</span>
+                      </span>
+                      <span className="results-collapse-count">
+                        {classDivisions.length} {uiText(locale, "classes", "classes")}
+                      </span>
+                    </button>
+                    {!blockCollapsed && classDivisions.length ? (
                       <div className="results-division-list">
                         {classDivisions.map((division) => {
                           const calculation = latestCalculationByDivision.get(division.id) ?? null;
@@ -209,16 +232,38 @@ function ResultsView({
                           const canPublish = Boolean(calculation && inSync && calculation.status === "reviewed");
                           const rows = mergeSavedPayees(draft.calculation.result_snapshot, savedAwards);
                           const divisionBusy = busyKey.endsWith(`:${division.id}`);
+                          const statusTone = payoutStatusTone(calculation, inSync);
+                          const divisionCollapsed = collapsedDivisionIds[division.id] ?? true;
 
                           return (
                             <section className="results-division" key={division.id}>
                               <div className="results-division-header">
-                                <div>
-                                  <h3>{division.name}</h3>
-                                  <p>
-                                    {statusLabel}
-                                    {!inSync && calculation ? ` - ${uiText(locale, "à recalculer", "recalculation needed")}` : ""}
-                                  </p>
+                                <div className="results-division-title">
+                                  <div className="results-title-row">
+                                    <button
+                                      aria-expanded={!divisionCollapsed}
+                                      className="icon-button results-collapse-icon"
+                                      title={divisionCollapsed ? uiText(locale, "Ouvrir", "Open") : uiText(locale, "Replier", "Collapse")}
+                                      type="button"
+                                      onClick={() => toggleDivision(division.id)}
+                                    >
+                                      <ChevronDown className={`results-chevron ${divisionCollapsed ? "" : "open"}`} size={16} />
+                                    </button>
+                                    <h3>{division.name}</h3>
+                                    <span className={`status-chip ${statusTone}`}>
+                                      {calculation?.status === "published" ? <Send size={14} /> : calculation?.status === "reviewed" ? <FileCheck2 size={14} /> : <AlertCircle size={14} />}
+                                      {statusLabel}
+                                    </span>
+                                  </div>
+                                  <div className="results-division-meta">
+                                    <span>{payoutScheduleLabel(division.payout_schedule_type, locale)}</span>
+                                    <span>{draft.calculation.currency}</span>
+                                    <span>
+                                      {draft.awards.length} {uiText(locale, "payouts", "payouts")}
+                                    </span>
+                                    <span>{formatCurrency(draft.calculation.net_purse, draft.calculation.currency)}</span>
+                                    {!inSync && calculation ? <span className="warning">{uiText(locale, "À recalculer", "Recalculation needed")}</span> : null}
+                                  </div>
                                 </div>
                                 <div className="results-division-actions">
                                   {payoutNeedsScheduleBHint(division) ? (
@@ -265,43 +310,65 @@ function ResultsView({
                                 </div>
                               </div>
 
-                              <div className="results-worksheet">
-                                <span>{uiText(locale, "Entrées", "Entries")}: <strong>{draft.calculation.entry_count}</strong></span>
-                                <span>{uiText(locale, "Brut", "Gross")}: <strong>{formatCurrency(draft.calculation.gross_entry_fees, draft.calculation.currency)}</strong></span>
-                                <span>{uiText(locale, "Après trophée", "After trophy")}: <strong>{formatCurrency(draft.calculation.base_after_trophy_fee, draft.calculation.currency)}</strong></span>
-                                <span>{uiText(locale, "Frais NRHA", "NRHA fee")}: <strong>{formatCurrency(draft.calculation.nrha_fee_amount, draft.calculation.currency)}</strong></span>
-                                <span>{uiText(locale, "Retenue", "Retainage")}: <strong>{formatCurrency(draft.calculation.retainage_amount, draft.calculation.currency)}</strong></span>
-                                <span>{uiText(locale, "Bourse nette", "Net purse")}: <strong>{formatCurrency(draft.calculation.net_purse, draft.calculation.currency)}</strong></span>
-                              </div>
+                              {!divisionCollapsed ? (
+                                <div className="results-division-body">
+                                  <div className="results-worksheet">
+                                    <div className="results-worksheet-item">
+                                      <span>{uiText(locale, "Entrées", "Entries")}</span>
+                                      <strong>{draft.calculation.entry_count}</strong>
+                                    </div>
+                                    <div className="results-worksheet-item">
+                                      <span>{uiText(locale, "Brut", "Gross")}</span>
+                                      <strong>{formatCurrency(draft.calculation.gross_entry_fees, draft.calculation.currency)}</strong>
+                                    </div>
+                                    <div className="results-worksheet-item">
+                                      <span>{uiText(locale, "Après trophée", "After trophy")}</span>
+                                      <strong>{formatCurrency(draft.calculation.base_after_trophy_fee, draft.calculation.currency)}</strong>
+                                    </div>
+                                    <div className="results-worksheet-item">
+                                      <span>{uiText(locale, "Frais NRHA", "NRHA fee")}</span>
+                                      <strong>{formatCurrency(draft.calculation.nrha_fee_amount, draft.calculation.currency)}</strong>
+                                    </div>
+                                    <div className="results-worksheet-item">
+                                      <span>{uiText(locale, "Retenue", "Retainage")}</span>
+                                      <strong>{formatCurrency(draft.calculation.retainage_amount, draft.calculation.currency)}</strong>
+                                    </div>
+                                    <div className="results-worksheet-item emph">
+                                      <span>{uiText(locale, "Bourse nette", "Net purse")}</span>
+                                      <strong>{formatCurrency(draft.calculation.net_purse, draft.calculation.currency)}</strong>
+                                    </div>
+                                  </div>
 
-                              {needsReview ? (
-                                <div className="inline-alert">
-                                  <AlertCircle size={16} />
-                                  {uiText(
-                                    locale,
-                                    "Recalcule et révise cette division avant de publier. Les drafts ne sont jamais publics.",
-                                    "Recalculate and review this division before publishing. Drafts are never public.",
-                                  )}
+                                  {needsReview ? (
+                                    <div className="inline-alert">
+                                      <AlertCircle size={16} />
+                                      {uiText(
+                                        locale,
+                                        "Recalcule et révise cette division avant de publier. Les drafts ne sont jamais publics.",
+                                        "Recalculate and review this division before publishing. Drafts are never public.",
+                                      )}
+                                    </div>
+                                  ) : null}
+
+                                  <ResultsTable
+                                    calculation={calculation}
+                                    contacts={contacts}
+                                    currency={draft.calculation.currency}
+                                    disabled={!calculation || calculation.status !== "draft" || divisionBusy}
+                                    locale={locale}
+                                    rows={rows}
+                                    savedAwards={savedAwards}
+                                    onUpdatePayoutAwardPayee={onUpdatePayoutAwardPayee}
+                                  />
                                 </div>
                               ) : null}
-
-                              <ResultsTable
-                                calculation={calculation}
-                                contacts={contacts}
-                                currency={draft.calculation.currency}
-                                disabled={!calculation || calculation.status !== "draft" || divisionBusy}
-                                locale={locale}
-                                rows={rows}
-                                savedAwards={savedAwards}
-                                onUpdatePayoutAwardPayee={onUpdatePayoutAwardPayee}
-                              />
                             </section>
                           );
                         })}
                       </div>
-                    ) : (
+                    ) : !blockCollapsed ? (
                       <EmptyState label={uiText(locale, "Aucune classe dans ce bloc.", "No classes in this block.")} />
-                    )}
+                    ) : null}
                   </section>
                 );
               })}
@@ -389,22 +456,34 @@ function ResultsTable({
         <tbody>
           {rows.map((row) => {
             const award = awardByEntryId.get(row.entry_id);
+            const payoutAmount = numberValue(row.payout_amount);
+            const payoutPercentage = numberValue(row.payout_percentage);
+            const payeeName = award?.payee_name ?? row.payee_name;
+            const payeeChanged = Boolean(payeeName && payeeName !== row.owner_name);
 
             return (
-              <tr key={row.entry_id}>
-                <td>{row.rank ?? "-"}</td>
-                <td>{row.back_number ?? "-"}</td>
-                <td>{row.rider_name}</td>
+              <tr className={`results-row ${row.status !== "scored" ? "is-unpaid" : ""}`} key={row.entry_id}>
+                <td className="rank-cell">
+                  <span className="rank-pill">{row.rank ?? "-"}</span>
+                </td>
+                <td>
+                  <span className="back-number-pill">{row.back_number ?? "-"}</span>
+                </td>
+                <td>
+                  <strong className="results-primary-text">{row.rider_name}</strong>
+                </td>
                 <td>{row.horse_name}</td>
                 <td>
                   <div className="results-payee-cell">
                     <span>{row.owner_name}</span>
+                    {payeeChanged ? <small>{payeeName}</small> : null}
                     {award && calculation ? (
                       <select
                         disabled={disabled || payeeBusyId === award.id}
                         value={award.payee_contact_id ?? ""}
                         onChange={(event) => void handlePayeeChange(award, event.target.value)}
                       >
+                        <option value="">{uiText(locale, "Owner par défaut", "Default owner")}</option>
                         {contacts.map((contact) => (
                           <option key={contact.id} value={contact.id}>
                             {contactLabel(contact)}
@@ -414,16 +493,19 @@ function ResultsTable({
                     ) : null}
                   </div>
                 </td>
-                <td>{row.final_score == null ? "-" : row.final_score.toFixed(3).replace(/\.?0+$/, "")}</td>
+                <td className="score-cell">{formatScore(row.final_score)}</td>
                 <td>
                   <span className={`status-chip ${row.status === "scored" ? "success" : row.status === "pending" ? "" : "warning"}`}>
                     {row.status === "scored" ? <CheckCircle2 size={14} /> : null}
                     {resultStatusLabel(row.status, locale)}
                   </span>
                 </td>
-                <td>
-                  {numberValue(row.payout_amount) > 0 ? (
-                    <strong>{formatCurrency(numberValue(row.payout_amount), currency)}</strong>
+                <td className="payout-cell">
+                  {payoutAmount > 0 ? (
+                    <>
+                      <strong>{formatCurrency(payoutAmount, currency)}</strong>
+                      <small>{formatPercent(payoutPercentage, locale)}</small>
+                    </>
                   ) : (
                     <span className="muted">{uiText(locale, "Aucun", "None")}</span>
                   )}
@@ -467,9 +549,31 @@ function payoutStatusLabel(status: PayoutCalculation["status"], locale: Locale) 
   }
 }
 
+function payoutStatusTone(calculation: PayoutCalculation | null, inSync: boolean) {
+  if (!calculation || !inSync || calculation.status === "draft") {
+    return "warning";
+  }
+
+  return calculation.status === "published" ? "success" : "neutral";
+}
+
 function numberValue(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function formatScore(value: number | null) {
+  if (value == null) {
+    return "-";
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed.toFixed(3).replace(/\.?0+$/, "") : "-";
+}
+
+function formatPercent(value: number, locale: Locale) {
+  const language = locale === "fr" ? "fr-CA" : "en-CA";
+  return `${new Intl.NumberFormat(language, { maximumFractionDigits: 3 }).format(value)} %`;
 }
 
 function resultStatusLabel(status: PayoutResultSnapshotRow["status"], locale: Locale) {

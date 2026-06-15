@@ -55,8 +55,9 @@ values
   ('20000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000004', 'Phase1', 'Org A Owner', 'owner'),
   ('20000000-0000-0000-0000-000000000005', '10000000-0000-0000-0000-000000000005', 'Phase1', 'Org A Judge', 'secretary'),
   ('20000000-0000-0000-0000-000000000006', '10000000-0000-0000-0000-000000000006', 'Phase1', 'Org B Admin', 'admin')
-on conflict (id) do update
+on conflict (user_id) do update
 set
+  id = excluded.id,
   first_name = excluded.first_name,
   last_name = excluded.last_name,
   type_user = excluded.type_user,
@@ -150,8 +151,10 @@ insert into public.show_days (
 values
   ('41000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '2026-06-12', 'Friday', 1, 1, '08:00'),
   ('41000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '2026-07-10', 'Friday', 1, 1, '08:00')
-on conflict (id) do update
+on conflict (show_id, day_date) do update
 set
+  id = excluded.id,
+  organization_id = excluded.organization_id,
   day_date = excluded.day_date,
   day_name = excluded.day_name,
   day_number = excluded.day_number,
