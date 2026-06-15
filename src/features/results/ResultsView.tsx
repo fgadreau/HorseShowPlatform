@@ -69,10 +69,13 @@ function ResultsView({
   const [actionError, setActionError] = useState("");
   const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
   const [collapsedDivisionIds, setCollapsedDivisionIds] = useState<Record<string, boolean>>({});
+  const resultClasses = useMemo(() => classes.filter((classRecord) => !classRecord.is_event_block), [classes]);
+  const resultClassIds = useMemo(() => new Set(resultClasses.map((classRecord) => classRecord.id)), [resultClasses]);
+  const resultDivisions = useMemo(() => divisions.filter((division) => resultClassIds.has(division.class_id)), [divisions, resultClassIds]);
   const classesByShow = useMemo(() => {
     const grouped = new Map<string, ClassRecord[]>();
 
-    for (const classRecord of classes) {
+    for (const classRecord of resultClasses) {
       const group = grouped.get(classRecord.show_id) ?? [];
       group.push(classRecord);
       grouped.set(classRecord.show_id, group);
@@ -83,18 +86,18 @@ function ResultsView({
     }
 
     return grouped;
-  }, [classes]);
+  }, [resultClasses]);
   const divisionsByClass = useMemo(() => {
     const grouped = new Map<string, Division[]>();
 
-    for (const division of divisions) {
+    for (const division of resultDivisions) {
       const group = grouped.get(division.class_id) ?? [];
       group.push(division);
       grouped.set(division.class_id, group);
     }
 
     return grouped;
-  }, [divisions]);
+  }, [resultDivisions]);
   const latestCalculationByDivision = useMemo(() => {
     const mapped = new Map<string, PayoutCalculation>();
 
@@ -158,7 +161,7 @@ function ResultsView({
           "Review synced results, recalculate purses, and publish final results together with payout amounts.",
         )}
         stats={[
-          { label: uiText(locale, "classes", "classes"), value: String(divisions.length) },
+          { label: uiText(locale, "classes", "classes"), value: String(resultDivisions.length) },
           { label: uiText(locale, "révisées", "reviewed"), value: String(reviewedCount) },
           { label: uiText(locale, "publiées", "published"), value: String(publishedCount) },
         ]}
