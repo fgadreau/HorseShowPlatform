@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { AlertCircle, CheckCircle2, FileCheck2, RefreshCw, Send } from "lucide-react";
 import { EmptyState, ViewIntro } from "../../components/ui";
-import { contactLabel, findById, formatCurrency, showLabel } from "../../lib/display";
+import { contactLabel, errorMessage, findById, formatCurrency, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import {
   buildPayoutDraft,
@@ -65,6 +65,7 @@ function ResultsView({
   onUpdatePayoutCalculationStatus: (id: string, status: "reviewed" | "published") => Promise<void>;
 }) {
   const [busyKey, setBusyKey] = useState("");
+  const [actionError, setActionError] = useState("");
   const classesByShow = useMemo(() => {
     const grouped = new Map<string, ClassRecord[]>();
 
@@ -114,7 +115,7 @@ function ResultsView({
     }
 
     for (const group of grouped.values()) {
-      group.sort((a, b) => a.rank - b.rank || b.amount - a.amount);
+      group.sort((a, b) => numberValue(a.rank) - numberValue(b.rank) || numberValue(b.amount) - numberValue(a.amount));
     }
 
     return grouped;
@@ -124,9 +125,12 @@ function ResultsView({
 
   async function runAction(key: string, action: () => Promise<void>) {
     setBusyKey(key);
+    setActionError("");
 
     try {
       await action();
+    } catch (error) {
+      setActionError(errorMessage(error));
     } finally {
       setBusyKey("");
     }
@@ -150,6 +154,13 @@ function ResultsView({
       />
 
       {!shows.length ? <EmptyState label={uiText(locale, "Aucun show sélectionné.", "No show selected.")} /> : null}
+
+      {actionError ? (
+        <div className="inline-alert">
+          <AlertCircle size={16} />
+          {actionError}
+        </div>
+      ) : null}
 
       {shows.map((show) => {
         const showClasses = classesByShow.get(show.id) ?? [];
@@ -278,7 +289,7 @@ function ResultsView({
                                 calculation={calculation}
                                 contacts={contacts}
                                 currency={draft.calculation.currency}
-                                disabled={!calculation || calculation.status === "published" || divisionBusy}
+                                disabled={!calculation || calculation.status !== "draft" || divisionBusy}
                                 locale={locale}
                                 rows={rows}
                                 savedAwards={savedAwards}
@@ -322,14 +333,46 @@ function ResultsTable({
   savedAwards: PayoutAward[];
   onUpdatePayoutAwardPayee: (id: string, input: Pick<PayoutAward, "calculation_id" | "payee_contact_id" | "payee_name" | "payee_override_note">) => Promise<void>;
 }) {
+  const [payeeBusyId, setPayeeBusyId] = useState("");
+  const [payeeError, setPayeeError] = useState("");
   const awardByEntryId = new Map(savedAwards.map((award) => [award.entry_id, award]));
 
   if (!rows.length) {
     return <EmptyState label={uiText(locale, "Aucune inscription à afficher pour cette classe.", "No entries to display for this class.")} />;
   }
 
+  async function handlePayeeChange(award: PayoutAward, payeeContactId: string) {
+    if (!calculation) {
+      return;
+    }
+
+    const nextContact = findById(contacts, payeeContactId);
+
+    setPayeeBusyId(award.id);
+    setPayeeError("");
+
+    try {
+      await onUpdatePayoutAwardPayee(award.id, {
+        calculation_id: calculation.id,
+        payee_contact_id: nextContact?.id ?? null,
+        payee_name: nextContact ? contactLabel(nextContact) : null,
+        payee_override_note: nextContact ? uiText(locale, "Override manuel dans Résultats", "Manual override in Results") : null,
+      });
+    } catch (error) {
+      setPayeeError(errorMessage(error));
+    } finally {
+      setPayeeBusyId("");
+    }
+  }
+
   return (
     <div className="table-wrap results-table-wrap">
+      {payeeError ? (
+        <div className="inline-alert">
+          <AlertCircle size={16} />
+          {payeeError}
+        </div>
+      ) : null}
       <table className="data-table results-table">
         <thead>
           <tr>
@@ -358,17 +401,9 @@ function ResultsTable({
                     <span>{row.owner_name}</span>
                     {award && calculation ? (
                       <select
-                        disabled={disabled}
+                        disabled={disabled || payeeBusyId === award.id}
                         value={award.payee_contact_id ?? ""}
-                        onChange={(event) => {
-                          const nextContact = findById(contacts, event.target.value);
-                          void onUpdatePayoutAwardPayee(award.id, {
-                            calculation_id: calculation.id,
-                            payee_contact_id: nextContact?.id ?? null,
-                            payee_name: nextContact ? contactLabel(nextContact) : null,
-                            payee_override_note: nextContact ? uiText(locale, "Override manuel dans Résultats", "Manual override in Results") : null,
-                          });
-                        }}
+                        onChange={(event) => void handlePayeeChange(award, event.target.value)}
                       >
                         {contacts.map((contact) => (
                           <option key={contact.id} value={contact.id}>
@@ -387,8 +422,8 @@ function ResultsTable({
                   </span>
                 </td>
                 <td>
-                  {row.payout_amount > 0 ? (
-                    <strong>{formatCurrency(row.payout_amount, currency)}</strong>
+                  {numberValue(row.payout_amount) > 0 ? (
+                    <strong>{formatCurrency(numberValue(row.payout_amount), currency)}</strong>
                   ) : (
                     <span className="muted">{uiText(locale, "Aucun", "None")}</span>
                   )}
@@ -430,6 +465,11 @@ function payoutStatusLabel(status: PayoutCalculation["status"], locale: Locale) 
     default:
       return "Draft";
   }
+}
+
+function numberValue(value: unknown) {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function resultStatusLabel(status: PayoutResultSnapshotRow["status"], locale: Locale) {

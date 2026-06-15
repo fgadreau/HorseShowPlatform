@@ -12,17 +12,32 @@ const classId = "payout-test-class";
 const createdAt = "2026-06-15T12:00:00.000Z";
 
 function main() {
+  testNrhaBracketPercentagesSumTo100();
   testNrhaScheduleA();
   testNrhaScheduleB();
   testYouthExempt();
   testNetNegative();
   testDisqualifiedCountsFinanciallyWithoutAward();
   testTiesSplitCoveredPlaces();
+  testTiesCrossPaidPlaceLimit();
   testRoundingResidualGoesToBestRank();
   testHouseCustom();
   testJackpotDefaultRetainage();
 
   console.log("Payout test program OK");
+}
+
+function testNrhaBracketPercentagesSumTo100() {
+  const totals = new Map<string, number>();
+
+  for (const bracket of defaultPayoutScheduleBrackets) {
+    const key = [bracket.schedule_id, bracket.min_entries, bracket.max_entries ?? "open"].join(":");
+    totals.set(key, (totals.get(key) ?? 0) + bracket.percentage);
+  }
+
+  for (const [key, total] of totals.entries()) {
+    assertMoney(total, 100, `NRHA bracket total ${key}`);
+  }
 }
 
 function testNrhaScheduleA() {
@@ -102,6 +117,24 @@ function testTiesSplitCoveredPlaces() {
   assertEqual(draft.awards.map((award) => award.percentage).join(","), "50,50", "Tie splits first and second percentages");
   assertMoney(draft.awards[0].amount, 95, "First tied payout");
   assertMoney(draft.awards[1].amount, 95, "Second tied payout");
+}
+
+function testTiesCrossPaidPlaceLimit() {
+  const fixture = buildFixture({
+    customBrackets: [{ min_entries: "1", max_entries: "", percentages: "40,30,20,10" }],
+    entryCount: 6,
+    entryFee: 100,
+    scheduleType: "house_custom",
+    scores: [80, 79, 78, 77, 77, 77],
+  });
+  const draft = buildDraft(fixture);
+  const tiedAwards = draft.awards.filter((award) => award.rank === 4);
+
+  assertEqual(draft.awards.length, 6, "Tie crossing paid-place limit keeps all tied payouts");
+  assertEqual(tiedAwards.length, 3, "Three entries tied for the final paid place");
+  assertMoney(tiedAwards.reduce((sum, award) => sum + award.amount, 0), 60, "Final paid-place percentage split across tied group");
+  assertMoney(tiedAwards[0]?.percentage ?? 0, 3.333, "Tie crossing paid-place percentage per entry");
+  assertMoney(tiedAwards[0]?.amount ?? 0, 20, "Tie crossing paid-place amount per entry");
 }
 
 function testRoundingResidualGoesToBestRank() {

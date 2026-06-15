@@ -100,10 +100,47 @@ begin
 end;
 $$;
 
+create or replace function public.enforce_payout_calculation_status_transition()
+returns trigger
+language plpgsql
+as $$
+begin
+  if old.status is not distinct from new.status then
+    return new;
+  end if;
+
+  if new.status = 'draft' then
+    new.reviewed_at := null;
+    new.published_at := null;
+    return new;
+  end if;
+
+  if old.status = 'draft' and new.status = 'reviewed' then
+    new.reviewed_at := coalesce(new.reviewed_at, now());
+    new.published_at := null;
+    return new;
+  end if;
+
+  if old.status = 'reviewed' and new.status = 'published' then
+    new.reviewed_at := coalesce(new.reviewed_at, now());
+    new.published_at := coalesce(new.published_at, now());
+    return new;
+  end if;
+
+  raise exception 'Invalid payout calculation status transition from % to %', old.status, new.status
+    using errcode = '23514';
+end;
+$$;
+
 drop trigger if exists set_payout_schedules_updated_at_trigger on public.payout_schedules;
 create trigger set_payout_schedules_updated_at_trigger
   before update on public.payout_schedules
   for each row execute function public.set_payout_updated_at();
+
+drop trigger if exists enforce_payout_calculation_status_transition_trigger on public.payout_calculations;
+create trigger enforce_payout_calculation_status_transition_trigger
+  before update of status on public.payout_calculations
+  for each row execute function public.enforce_payout_calculation_status_transition();
 
 drop trigger if exists set_payout_calculations_updated_at_trigger on public.payout_calculations;
 create trigger set_payout_calculations_updated_at_trigger
@@ -153,8 +190,8 @@ with seeded_brackets(schedule_name, bracket_index, min_entries, max_entries, per
     ('NRHA Schedule A', 7, 25, 28, array[28,22,17,10,9,8,6]::numeric[]),
     ('NRHA Schedule A', 8, 29, 32, array[26,22,14,10,9,8,6,5]::numeric[]),
     ('NRHA Schedule A', 9, 33, 36, array[25,20,13,10,9,8,6,5,4]::numeric[]),
-    ('NRHA Schedule A', 10, 37, 40, array[25,18,13,10,9,7,6,5,4,3.5]::numeric[]),
-    ('NRHA Schedule A', 11, 41, 44, array[25,17,12,9.5,8.5,7,6,5,4,3.5,3]::numeric[]),
+    ('NRHA Schedule A', 10, 37, 40, array[25,18,13,10,9,7,6,4.5,4,3.5]::numeric[]),
+    ('NRHA Schedule A', 11, 41, 44, array[25,17,12,9.5,8.5,7,6,4.5,4,3.5,3]::numeric[]),
     ('NRHA Schedule A', 12, 45, 48, array[23,17,12,9,8,7,6,5,4,3.5,3,2.5]::numeric[]),
     ('NRHA Schedule A', 13, 49, 52, array[23,16,11,9,8,7,6,5,4,3.5,3,2.5,2]::numeric[]),
     ('NRHA Schedule A', 14, 53, 60, array[23,15,10.5,9,8,7,6,5,4,3.5,3,2.5,2,1.5]::numeric[]),
@@ -168,8 +205,8 @@ with seeded_brackets(schedule_name, bracket_index, min_entries, max_entries, per
     ('NRHA Schedule B', 7, 14, 15, array[28,22,17,10,9,8,6]::numeric[]),
     ('NRHA Schedule B', 8, 16, 17, array[26,22,14,10,9,8,6,5]::numeric[]),
     ('NRHA Schedule B', 9, 18, 19, array[25,20,13,10,9,8,6,5,4]::numeric[]),
-    ('NRHA Schedule B', 10, 20, 21, array[25,18,13,10,9,7,6,5,4,3.5]::numeric[]),
-    ('NRHA Schedule B', 11, 22, 23, array[25,17,12,9.5,8.5,7,6,5,4,3.5,3]::numeric[]),
+    ('NRHA Schedule B', 10, 20, 21, array[25,18,13,10,9,7,6,4.5,4,3.5]::numeric[]),
+    ('NRHA Schedule B', 11, 22, 23, array[25,17,12,9.5,8.5,7,6,4.5,4,3.5,3]::numeric[]),
     ('NRHA Schedule B', 12, 24, 25, array[23,17,12,9,8,7,6,5,4,3.5,3,2.5]::numeric[]),
     ('NRHA Schedule B', 13, 26, 27, array[23,16,11,9,8,7,6,5,4,3.5,3,2.5,2]::numeric[]),
     ('NRHA Schedule B', 14, 28, 29, array[23,15,10.5,9,8,7,6,5,4,3.5,3,2.5,2,1.5]::numeric[]),

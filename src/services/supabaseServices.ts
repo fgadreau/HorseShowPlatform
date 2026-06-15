@@ -2114,9 +2114,27 @@ export async function savePayoutCalculationDraft(input: {
 export async function updatePayoutCalculationStatus(id: string, status: Extract<PayoutCalculationStatus, "reviewed" | "published">) {
   const client = requireSupabase();
   const now = new Date().toISOString();
+  const { data: existing, error: existingError } = await client
+    .from("payout_calculations")
+    .select("status, reviewed_at")
+    .eq("id", id)
+    .single<Pick<PayoutCalculation, "reviewed_at" | "status">>();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  if (status === "reviewed" && existing.status !== "draft") {
+    throw new Error("Seul un calcul draft peut être marqué révisé.");
+  }
+
+  if (status === "published" && existing.status !== "reviewed") {
+    throw new Error("Seul un calcul révisé peut être publié.");
+  }
+
   const patch =
     status === "published"
-      ? { status, published_at: now, reviewed_at: now }
+      ? { status, published_at: now, reviewed_at: existing.reviewed_at ?? now }
       : { status, reviewed_at: now, published_at: null };
   const { data, error } = await client
     .from("payout_calculations")
@@ -2137,6 +2155,20 @@ export async function updatePayoutAwardPayee(
   input: Pick<PayoutAward, "calculation_id" | "payee_contact_id" | "payee_name" | "payee_override_note">,
 ) {
   const client = requireSupabase();
+  const { data: calculation, error: calculationError } = await client
+    .from("payout_calculations")
+    .select("status")
+    .eq("id", input.calculation_id)
+    .single<Pick<PayoutCalculation, "status">>();
+
+  if (calculationError) {
+    throw calculationError;
+  }
+
+  if (calculation.status !== "draft") {
+    throw new Error("Le payee peut seulement être modifié sur un calcul draft.");
+  }
+
   const { data, error } = await client
     .from("payout_awards")
     .update({
@@ -2145,20 +2177,12 @@ export async function updatePayoutAwardPayee(
       payee_override_note: input.payee_override_note,
     })
     .eq("id", id)
+    .eq("calculation_id", input.calculation_id)
     .select("*")
     .single<PayoutAward>();
 
   if (error) {
     throw error;
-  }
-
-  const { error: calculationError } = await client
-    .from("payout_calculations")
-    .update({ published_at: null, reviewed_at: null, status: "draft" })
-    .eq("id", input.calculation_id);
-
-  if (calculationError) {
-    throw calculationError;
   }
 
   return data;

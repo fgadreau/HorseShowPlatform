@@ -466,15 +466,17 @@ export default function App() {
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
+          throw error;
         }
       }}
       onUpdatePayoutAwardPayee={async (id, input) => {
         try {
           await updatePayoutAwardPayee(id, input);
-          setNotice({ tone: "info", message: "Payee mis à jour. Révision requise avant publication." });
+          setNotice({ tone: "info", message: "Payee mis à jour." });
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
+          throw error;
         }
       }}
       onUpdatePayoutCalculationStatus={async (id, status) => {
@@ -484,6 +486,7 @@ export default function App() {
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
+          throw error;
         }
       }}
       onSaveShowScorePaidWarmup={async (input) => {

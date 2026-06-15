@@ -478,14 +478,51 @@ reset role;
 
 set local role authenticated;
 select results_payouts_test.as_user('10640000-0000-0000-0000-000000000001');
-update public.shows
-set is_public = true
-where id = '40640000-0000-0000-0000-000000000001';
+
+do $$
+begin
+  update public.payout_calculations
+  set status = 'published',
+      published_at = now()
+  where id = '64640000-0000-0000-0000-000000001001';
+
+  raise exception 'draft payout calculation published without review';
+exception
+  when check_violation then
+    raise notice 'ok - draft payout calculation cannot publish directly';
+end;
+$$;
+
+update public.payout_calculations
+set status = 'reviewed',
+    reviewed_at = now()
+where id = '64640000-0000-0000-0000-000000001001';
 
 update public.payout_calculations
 set status = 'published',
     published_at = now()
 where id = '64640000-0000-0000-0000-000000001001';
+reset role;
+
+set local role anon;
+select results_payouts_test.assert_count(
+  'anon cannot read published payout calculation for private show',
+  $$select count(*) from public.payout_calculations where id = '64640000-0000-0000-0000-000000001001'$$,
+  0
+);
+select results_payouts_test.assert_count(
+  'anon cannot read published payout award for private show',
+  $$select count(*) from public.payout_awards where id = '64640000-0000-0000-0000-000000001002'$$,
+  0
+);
+
+reset role;
+
+set local role authenticated;
+select results_payouts_test.as_user('10640000-0000-0000-0000-000000000001');
+update public.shows
+set is_public = true
+where id = '40640000-0000-0000-0000-000000000001';
 reset role;
 
 set local role anon;
