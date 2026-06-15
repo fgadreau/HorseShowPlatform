@@ -1,4 +1,4 @@
-import { Bell, BookOpen, Building2, CalendarDays, CircleDollarSign, ClipboardList, Hash, HeartPulse, LayoutDashboard, ShieldCheck, Tent, Trophy, UserCircle, Users, Warehouse } from "lucide-react";
+import { Bell, BookOpen, Building2, CalendarDays, CircleDollarSign, ClipboardList, Hash, HeartPulse, LayoutDashboard, Medal, ShieldCheck, Tent, Trophy, UserCircle, Users, Warehouse } from "lucide-react";
 import type { NavItem, ViewKey } from "../types/ui";
 
 export const associationNavigation: NavItem[] = [
@@ -12,6 +12,7 @@ export const associationNavigation: NavItem[] = [
   { key: "back-numbers", labelKey: "backNumbers", icon: Hash },
   { key: "stalls", labelKey: "stalls", icon: Warehouse },
   { key: "scoring", labelKey: "scoring", icon: Trophy },
+  { key: "results", labelKey: "results", icon: Medal },
   { key: "billing", labelKey: "billing", icon: CircleDollarSign },
   { key: "settings", labelKey: "settings", icon: ShieldCheck },
 ];

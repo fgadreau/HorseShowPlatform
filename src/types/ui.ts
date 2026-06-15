@@ -12,6 +12,7 @@ export type ViewKey =
   | "back-numbers"
   | "stalls"
   | "scoring"
+  | "results"
   | "billing"
   | "settings"
   | "my-overview"

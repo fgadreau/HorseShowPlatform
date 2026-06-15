@@ -56,9 +56,13 @@ export type ShowScoreClass = {
 
 export type ShowScoreRun = {
   id: string;
+  runId: string;
+  blockRunId: string;
   entryId: string;
+  entryIds: string[];
   classId: string;
   divisionId: string;
+  divisionIds: string[];
   horseId: string;
   riderContactId: string | null;
   ownerContactId: string;
@@ -72,6 +76,17 @@ export type ShowScoreRun = {
   divisionNames: string[];
   isLate: boolean;
   drawGroup: "late" | "regular";
+};
+
+type EntryRunGroup = {
+  id: string;
+  entries: Entry[];
+  created_at: string;
+  horse_id: string;
+  rider_contact_id: string | null;
+  owner_contact_id: string;
+  payer_contact_id: string;
+  is_late: boolean;
 };
 
 export type ShowScoreContext = {
@@ -180,63 +195,74 @@ export function buildShowScoreRunsForClass(
       .map((division) => division.id),
   );
   const eligibleEntries = entries.filter((entry) => classDivisionIds.has(entry.division_id) && !inactiveEntryStatuses.has(entry.status));
-  const lateEntries = stableShuffle(
-    eligibleEntries.filter((entry) => entry.is_late),
+  const eligibleRunGroups = groupEntriesForPhysicalRuns(eligibleEntries);
+  const lateRunGroups = stableShuffle(
+    eligibleRunGroups.filter((group) => group.is_late),
     `${classId}:late`,
   );
   const regularEntries = buildSpacedDrawOrder(
-    eligibleEntries.filter((entry) => !entry.is_late),
+    eligibleRunGroups.filter((group) => !group.is_late),
     classId,
-    lateEntries,
+    lateRunGroups,
   );
-  const orderedEntries = [...lateEntries, ...regularEntries];
-  const lateEntryCount = lateEntries.length;
+  const orderedRunGroups = [...lateRunGroups, ...regularEntries];
+  const lateRunCount = lateRunGroups.length;
 
-  return orderedEntries
-    .map((entry, index) => {
-      const draw = index < lateEntryCount ? index - lateEntryCount : index - lateEntryCount + 1;
-      return toShowScoreRun(entry, draw, divisionsById, relations);
+  return orderedRunGroups
+    .map((group, index) => {
+      const draw = index < lateRunCount ? index - lateRunCount : index - lateRunCount + 1;
+      return toShowScoreRun(group, draw, divisionsById, relations);
     })
     .filter((run): run is ShowScoreRun => Boolean(run));
 }
 
 function toShowScoreRun(
-  entry: Entry,
+  group: EntryRunGroup,
   fallbackDraw: number,
   divisionsById: Map<string, Division>,
   relations: RunRelations,
 ): ShowScoreRun | null {
-  const division = divisionsById.get(entry.division_id);
-  const horse = relations.horses.find((candidate) => candidate.id === entry.horse_id);
-  const owner = relations.contacts.find((candidate) => candidate.id === entry.owner_contact_id);
-  const rider = entry.rider_contact_id
-    ? relations.contacts.find((candidate) => candidate.id === entry.rider_contact_id)
+  const representativeEntry = group.entries[0];
+  const division = divisionsById.get(representativeEntry.division_id);
+  const horse = relations.horses.find((candidate) => candidate.id === group.horse_id);
+  const owner = relations.contacts.find((candidate) => candidate.id === group.owner_contact_id);
+  const rider = group.rider_contact_id
+    ? relations.contacts.find((candidate) => candidate.id === group.rider_contact_id)
     : owner;
 
-  if (!division || !horse || !owner) {
+  if (!representativeEntry || !division || !horse || !owner) {
     return null;
   }
 
   const draw = fallbackDraw;
+  const entryIds = group.entries.map((entry) => entry.id);
+  const divisionIds = Array.from(new Set(group.entries.map((entry) => entry.division_id)));
 
   return {
-    id: entry.id,
-    entryId: entry.id,
+    id: group.id,
+    runId: group.id,
+    blockRunId: group.id,
+    entryId: representativeEntry.id,
+    entryIds,
     classId: division.class_id,
     divisionId: division.id,
+    divisionIds,
     horseId: horse.id,
-    riderContactId: entry.rider_contact_id,
+    riderContactId: group.rider_contact_id,
     ownerContactId: owner.id,
-    payerContactId: entry.payer_contact_id,
+    payerContactId: group.payer_contact_id,
     order: draw,
     draw,
-    backNumber: entry.entry_number ? String(entry.entry_number) : "",
+    backNumber: representativeEntry.entry_number ? String(representativeEntry.entry_number) : "",
     rider: formatContactName(rider),
     horse: horse.name,
     owner: formatContactName(owner),
-    divisionNames: [divisionDisplayName(division)],
-    isLate: entry.is_late,
-    drawGroup: entry.is_late ? "late" : "regular",
+    divisionNames: group.entries
+      .map((entry) => divisionsById.get(entry.division_id))
+      .filter((entryDivision): entryDivision is Division => Boolean(entryDivision))
+      .map(divisionDisplayName),
+    isLate: group.is_late,
+    drawGroup: group.is_late ? "late" : "regular",
   };
 }
 
@@ -272,9 +298,52 @@ function formatDateLabel(date: string) {
   return date;
 }
 
-function buildSpacedDrawOrder(entries: Entry[], classId: string, precedingEntries: Entry[] = []) {
+function groupEntriesForPhysicalRuns(entries: Entry[]) {
+  const groupsByKey = new Map<string, Entry[]>();
+
+  entries.forEach((entry) => {
+    const key = physicalRunKey(entry);
+    const groupEntries = groupsByKey.get(key) ?? [];
+    groupEntries.push(entry);
+    groupsByKey.set(key, groupEntries);
+  });
+
+  return Array.from(groupsByKey.values()).map((groupEntries) => {
+    const sortedEntries = [...groupEntries].sort(compareEntriesForRunGroup);
+    const representative = sortedEntries[0];
+
+    return {
+      id: representative.id,
+      entries: sortedEntries,
+      created_at: representative.created_at,
+      horse_id: representative.horse_id,
+      rider_contact_id: representative.rider_contact_id,
+      owner_contact_id: representative.owner_contact_id,
+      payer_contact_id: representative.payer_contact_id,
+      is_late: sortedEntries.some((entry) => entry.is_late),
+    };
+  });
+}
+
+function physicalRunKey(entry: Entry) {
+  return [
+    entry.horse_id,
+    entry.rider_contact_id || entry.owner_contact_id,
+    entry.owner_contact_id,
+  ].join(":");
+}
+
+function compareEntriesForRunGroup(first: Entry, second: Entry) {
+  return first.created_at.localeCompare(second.created_at) || first.id.localeCompare(second.id);
+}
+
+function buildSpacedDrawOrder<T extends { id: string; created_at: string; rider_contact_id: string | null; owner_contact_id: string }>(
+  entries: T[],
+  classId: string,
+  precedingEntries: T[] = [],
+) {
   const remaining = stableShuffle(entries, `${classId}:regular`);
-  const ordered: Entry[] = [];
+  const ordered: T[] = [];
   const lastPositionByRider = new Map<string, number>();
 
   precedingEntries.forEach((entry, index) => {
@@ -321,7 +390,7 @@ function buildSpacedDrawOrder(entries: Entry[], classId: string, precedingEntrie
   return ordered;
 }
 
-function stableShuffle(entries: Entry[], salt: string) {
+function stableShuffle<T extends { id: string; created_at: string }>(entries: T[], salt: string) {
   return [...entries].sort((left, right) => {
     const leftWeight = stableNumber(`${salt}:${left.id}`);
     const rightWeight = stableNumber(`${salt}:${right.id}`);
@@ -345,6 +414,6 @@ function stableNumber(value: string) {
   return hash >>> 0;
 }
 
-function drawRiderKey(entry: Entry) {
+function drawRiderKey(entry: { rider_contact_id: string | null; owner_contact_id: string }) {
   return entry.rider_contact_id ?? entry.owner_contact_id;
 }

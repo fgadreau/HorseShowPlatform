@@ -20,6 +20,7 @@ import type {
   Division,
   DivisionInput,
   DivisionUpdateInput,
+  EntryResult,
   Entry,
   EntryInput,
   EntryUpdateInput,
@@ -42,11 +43,19 @@ import type {
   OrganizationMember,
   OrganizationSettingsInput,
   SanctioningBody,
+  PayoutAward,
+  PayoutCalculation,
+  PayoutCalculationStatus,
+  PayoutSchedule,
+  PayoutScheduleBracket,
   ScheduleStartMode,
   Show,
   ShowAnnouncement,
   ShowAnnouncementInput,
   ShowDay,
+  BlockRunClassEntry,
+  BlockRunEntry,
+  ScoredRun,
   ShowScoreClassSetup,
   ShowScorePaidWarmup,
   ShowScorePaidWarmupEntry,
@@ -63,7 +72,7 @@ import type {
   UserProfile,
   UserProfileUpdateInput,
 } from "../types/domain";
-import { buildShowScoreRunsForClass } from "./showScoreAdapters";
+import { buildShowScoreRunsForClass, type ShowScoreRun } from "./showScoreAdapters";
 
 const inactiveEntryStatuses: Entry["status"][] = ["cancelled", "scratched", "scratched_pending_refund"];
 
@@ -76,6 +85,14 @@ export type AppContext = {
   showDays: ShowDay[];
   showAnnouncements: ShowAnnouncement[];
   showScoreClassSetups: ShowScoreClassSetup[];
+  scoredRuns: ScoredRun[];
+  blockRunEntries: BlockRunEntry[];
+  blockRunClassEntries: BlockRunClassEntry[];
+  entryResults: EntryResult[];
+  payoutSchedules: PayoutSchedule[];
+  payoutScheduleBrackets: PayoutScheduleBracket[];
+  payoutCalculations: PayoutCalculation[];
+  payoutAwards: PayoutAward[];
   showScorePaidWarmups: ShowScorePaidWarmup[];
   contacts: Contact[];
   contactOrganizationLinks: ContactOrganizationLink[];
@@ -198,6 +215,14 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     invoicesResult,
     invoiceLineItemsResult,
     showAnnouncementsResult,
+    scoredRunsResult,
+    blockRunEntriesResult,
+    blockRunClassEntriesResult,
+    entryResultsResult,
+    payoutSchedulesResult,
+    payoutScheduleBracketsResult,
+    payoutCalculationsResult,
+    payoutAwardsResult,
     showScorePaidWarmupsResult,
   ] = await Promise.all([
     client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
@@ -227,6 +252,14 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(),
     client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(),
     client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
+    client.from("scored_runs").select("*").order("scored_at", { ascending: false }).returns<ScoredRun[]>(),
+    client.from("block_run_entries").select("*").order("order_of_go", { ascending: true }).returns<BlockRunEntry[]>(),
+    client.from("block_run_class_entries").select("*").returns<BlockRunClassEntry[]>(),
+    client.from("entry_results").select("*").order("synced_at", { ascending: false }).returns<EntryResult[]>(),
+    client.from("payout_schedules").select("*").order("federation", { ascending: true }).order("name", { ascending: true }).returns<PayoutSchedule[]>(),
+    client.from("payout_schedule_brackets").select("*").order("min_entries", { ascending: true }).order("place", { ascending: true }).returns<PayoutScheduleBracket[]>(),
+    client.from("payout_calculations").select("*").order("calculated_at", { ascending: false }).returns<PayoutCalculation[]>(),
+    client.from("payout_awards").select("*").order("rank", { ascending: true }).returns<PayoutAward[]>(),
     client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(),
   ]);
   const showScoreClassSetups = await loadShowScoreClassSetups();
@@ -420,6 +453,46 @@ export async function loadAppContext(user: User): Promise<AppContext> {
       ? []
       : (() => { throw showScorePaidWarmupsResult.error; })()
     : showScorePaidWarmupsResult.data ?? [];
+  const scoredRuns = scoredRunsResult.error
+    ? isMissingSchemaError(scoredRunsResult.error, "scored_runs")
+      ? []
+      : (() => { throw scoredRunsResult.error; })()
+    : scoredRunsResult.data ?? [];
+  const blockRunEntries = blockRunEntriesResult.error
+    ? isMissingSchemaError(blockRunEntriesResult.error, "block_run_entries")
+      ? []
+      : (() => { throw blockRunEntriesResult.error; })()
+    : blockRunEntriesResult.data ?? [];
+  const blockRunClassEntries = blockRunClassEntriesResult.error
+    ? isMissingSchemaError(blockRunClassEntriesResult.error, "block_run_class_entries")
+      ? []
+      : (() => { throw blockRunClassEntriesResult.error; })()
+    : blockRunClassEntriesResult.data ?? [];
+  const entryResults = entryResultsResult.error
+    ? isMissingSchemaError(entryResultsResult.error, "entry_results")
+      ? []
+      : (() => { throw entryResultsResult.error; })()
+    : entryResultsResult.data ?? [];
+  const payoutSchedules = payoutSchedulesResult.error
+    ? isMissingSchemaError(payoutSchedulesResult.error, "payout_schedules")
+      ? []
+      : (() => { throw payoutSchedulesResult.error; })()
+    : payoutSchedulesResult.data ?? [];
+  const payoutScheduleBrackets = payoutScheduleBracketsResult.error
+    ? isMissingSchemaError(payoutScheduleBracketsResult.error, "payout_schedule_brackets")
+      ? []
+      : (() => { throw payoutScheduleBracketsResult.error; })()
+    : payoutScheduleBracketsResult.data ?? [];
+  const payoutCalculations = payoutCalculationsResult.error
+    ? isMissingSchemaError(payoutCalculationsResult.error, "payout_calculations")
+      ? []
+      : (() => { throw payoutCalculationsResult.error; })()
+    : payoutCalculationsResult.data ?? [];
+  const payoutAwards = payoutAwardsResult.error
+    ? isMissingSchemaError(payoutAwardsResult.error, "payout_awards")
+      ? []
+      : (() => { throw payoutAwardsResult.error; })()
+    : payoutAwardsResult.data ?? [];
 
   return {
     profile,
@@ -430,6 +503,14 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showDays: showDaysResult.data ?? [],
     showAnnouncements,
     showScoreClassSetups,
+    scoredRuns,
+    blockRunEntries,
+    blockRunClassEntries,
+    entryResults,
+    payoutSchedules,
+    payoutScheduleBrackets,
+    payoutCalculations,
+    payoutAwards,
     showScorePaidWarmups,
     contacts: contactsResult.data ?? [],
     contactOrganizationLinks,
@@ -492,6 +573,8 @@ export type PublicShowContext = {
   showDays: ShowDay[];
   classes: ClassRecord[];
   divisions: Division[];
+  payoutCalculations: PayoutCalculation[];
+  payoutAwards: PayoutAward[];
   stallOptions: StallOption[];
   announcements: ShowAnnouncement[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
@@ -521,6 +604,7 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
     membershipReqResult,
     externalOrgsResult,
     sanctioningBodiesResult,
+    payoutCalculationsResult,
   ] = await Promise.all([
     client.from("organizations").select("*").eq("id", show.organization_id).single<Organization>(),
     client.from("show_days").select("*").eq("show_id", show.id).order("sort_order", { ascending: true }).returns<ShowDay[]>(),
@@ -530,6 +614,7 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
     client.from("organization_external_membership_requirements").select("*").eq("organization_id", show.organization_id).returns<OrganizationExternalMembershipRequirement[]>(),
     client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
     client.from("sanctioning_bodies").select("*").order("name", { ascending: true }).returns<SanctioningBody[]>(),
+    client.from("payout_calculations").select("*").eq("show_id", show.id).eq("status", "published").order("published_at", { ascending: false }).returns<PayoutCalculation[]>(),
   ]);
 
   if (orgResult.error) throw orgResult.error;
@@ -543,12 +628,30 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
 
   if (divisionsResult.error) throw divisionsResult.error;
 
+  const payoutCalculations = payoutCalculationsResult.error
+    ? isMissingSchemaError(payoutCalculationsResult.error, "payout_calculations")
+      ? []
+      : (() => { throw payoutCalculationsResult.error; })()
+    : payoutCalculationsResult.data ?? [];
+  const payoutCalculationIds = payoutCalculations.map((calculation) => calculation.id);
+  const payoutAwardsResult = payoutCalculationIds.length
+    ? await client.from("payout_awards").select("*").in("calculation_id", payoutCalculationIds).order("rank", { ascending: true }).returns<PayoutAward[]>()
+    : { data: [], error: null };
+
+  const payoutAwards = payoutAwardsResult.error
+    ? isMissingSchemaError(payoutAwardsResult.error, "payout_awards")
+      ? []
+      : (() => { throw payoutAwardsResult.error; })()
+    : payoutAwardsResult.data ?? [];
+
   return {
     show,
     organization: orgResult.data,
     showDays: daysResult.data ?? [],
     classes: classesResult.data ?? [],
     divisions: divisionsResult.data ?? [],
+    payoutCalculations,
+    payoutAwards,
     stallOptions: stallOptionsResult.data ?? [],
     announcements: announcementsResult.data ?? [],
     membershipRequirements: membershipReqResult.data ?? [],
@@ -1920,6 +2023,147 @@ export async function deleteDivision(id: string) {
   }
 }
 
+type PayoutCalculationSaveInput = Pick<
+  PayoutCalculation,
+  | "show_id"
+  | "division_id"
+  | "currency"
+  | "entry_count"
+  | "gross_entry_fees"
+  | "trophy_or_plaque_fee"
+  | "base_after_trophy_fee"
+  | "nrha_fee_amount"
+  | "net_entry_fee"
+  | "retainage_amount"
+  | "final_net_entry_fee"
+  | "added_money"
+  | "net_purse"
+  | "payout_schedule_id"
+  | "source_snapshot"
+  | "result_snapshot"
+>;
+
+type PayoutAwardSaveInput = Pick<PayoutAward, "entry_id" | "rank" | "percentage" | "amount" | "payee_contact_id" | "payee_name" | "payee_override_note">;
+
+export async function savePayoutCalculationDraft(input: {
+  awards: PayoutAwardSaveInput[];
+  calculatedByUserId?: string | null;
+  calculation: PayoutCalculationSaveInput;
+}) {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+  const calculationPayload = {
+    ...input.calculation,
+    calculated_at: now,
+    calculated_by: input.calculatedByUserId ?? null,
+    published_at: null,
+    reviewed_at: null,
+    status: "draft" as PayoutCalculationStatus,
+  };
+  const { data: existing, error: existingError } = await client
+    .from("payout_calculations")
+    .select("*")
+    .eq("show_id", input.calculation.show_id)
+    .eq("division_id", input.calculation.division_id)
+    .maybeSingle<PayoutCalculation>();
+
+  if (existingError) {
+    throw existingError;
+  }
+
+  const { data: calculation, error: calculationError } = existing
+    ? await client
+        .from("payout_calculations")
+        .update(calculationPayload)
+        .eq("id", existing.id)
+        .select("*")
+        .single<PayoutCalculation>()
+    : await client
+        .from("payout_calculations")
+        .insert(calculationPayload)
+        .select("*")
+        .single<PayoutCalculation>();
+
+  if (calculationError) {
+    throw calculationError;
+  }
+
+  const { error: deleteAwardsError } = await client.from("payout_awards").delete().eq("calculation_id", calculation.id);
+
+  if (deleteAwardsError) {
+    throw deleteAwardsError;
+  }
+
+  if (!input.awards.length) {
+    return { awards: [] as PayoutAward[], calculation };
+  }
+
+  const { data: awards, error: awardsError } = await client
+    .from("payout_awards")
+    .insert(input.awards.map((award) => ({ ...award, calculation_id: calculation.id })))
+    .select("*")
+    .returns<PayoutAward[]>();
+
+  if (awardsError) {
+    throw awardsError;
+  }
+
+  return { awards: awards ?? [], calculation };
+}
+
+export async function updatePayoutCalculationStatus(id: string, status: Extract<PayoutCalculationStatus, "reviewed" | "published">) {
+  const client = requireSupabase();
+  const now = new Date().toISOString();
+  const patch =
+    status === "published"
+      ? { status, published_at: now, reviewed_at: now }
+      : { status, reviewed_at: now, published_at: null };
+  const { data, error } = await client
+    .from("payout_calculations")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .single<PayoutCalculation>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updatePayoutAwardPayee(
+  id: string,
+  input: Pick<PayoutAward, "calculation_id" | "payee_contact_id" | "payee_name" | "payee_override_note">,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("payout_awards")
+    .update({
+      payee_contact_id: input.payee_contact_id,
+      payee_name: input.payee_name,
+      payee_override_note: input.payee_override_note,
+    })
+    .eq("id", id)
+    .select("*")
+    .single<PayoutAward>();
+
+  if (error) {
+    throw error;
+  }
+
+  const { error: calculationError } = await client
+    .from("payout_calculations")
+    .update({ published_at: null, reviewed_at: null, status: "draft" })
+    .eq("id", input.calculation_id);
+
+  if (calculationError) {
+    throw calculationError;
+  }
+
+  return data;
+}
+
 export async function createBackNumberRange(input: {
   organization_id: string;
   start_number: number;
@@ -2802,6 +3046,8 @@ export async function prepareShowScoreClassSetup(input: {
     throw new Error("Aucune inscription a envoyer dans l'ordre de passage.");
   }
 
+  await saveShowScoreRunLinks(input.classRecord, runs);
+
   const judges = input.classRecord.judge_name
     ? [{ id: "judge-1", name: input.classRecord.judge_name, order: 1 }]
     : [{ id: "judge-1", name: "", order: 1 }];
@@ -2837,6 +3083,56 @@ export async function prepareShowScoreClassSetup(input: {
   }
 
   return data;
+}
+
+async function saveShowScoreRunLinks(classRecord: ClassRecord, runs: ShowScoreRun[]) {
+  const client = requireSupabase();
+  const blockRunRows = runs.map((run) => ({
+    block_run_id: run.blockRunId,
+    run_id: run.runId,
+    show_id: classRecord.show_id,
+    block_id: classRecord.id,
+    order_of_go: run.draw,
+  }));
+  const entryRows = runs.flatMap((run) =>
+    (run.entryIds.length ? run.entryIds : [run.entryId]).map((entryId) => ({
+      block_run_id: run.blockRunId,
+      entry_id: entryId,
+    })),
+  );
+
+  try {
+    const { error: deleteError } = await client.from("block_run_entries").delete().eq("block_id", classRecord.id);
+
+    if (deleteError) {
+      throw deleteError;
+    }
+
+    const { error: blockRunError } = await client.from("block_run_entries").upsert(blockRunRows, { onConflict: "block_run_id" });
+
+    if (blockRunError) {
+      throw blockRunError;
+    }
+
+    if (entryRows.length) {
+      const { error: entryError } = await client
+        .from("block_run_class_entries")
+        .upsert(entryRows, { onConflict: "block_run_id,entry_id" });
+
+      if (entryError) {
+        throw entryError;
+      }
+    }
+  } catch (error) {
+    if (
+      isMissingSchemaError(error as { code?: string; message?: string }, "block_run_entries") ||
+      isMissingSchemaError(error as { code?: string; message?: string }, "block_run_class_entries")
+    ) {
+      return;
+    }
+
+    throw error;
+  }
 }
 
 export function buildShowScorePaidWarmupEntriesForClass(

@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Plus } from "lucide-react";
+import { useEffect, useState } from "react";
+import { AlertCircle, Plus } from "lucide-react";
 import { formatCurrency, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { PayoutScheduleType } from "../../types/domain";
@@ -11,7 +11,9 @@ function PayoutSettingsFields({
   addedMoney,
   currency = "CAD",
   disabled = false,
+  divisionName = "",
   entryFee,
+  isNrha = false,
   payoutNotes,
   payoutRules,
   payoutScheduleType,
@@ -30,7 +32,9 @@ function PayoutSettingsFields({
   addedMoney: string;
   currency?: string;
   disabled?: boolean;
+  divisionName?: string;
   entryFee: string;
+  isNrha?: boolean;
   payoutNotes: string;
   payoutRules: Record<string, unknown>;
   payoutScheduleType: PayoutScheduleType;
@@ -49,6 +53,10 @@ function PayoutSettingsFields({
   const selectedPayout = payoutScheduleOption(payoutScheduleType, locale);
   const [previewEntryCount, setPreviewEntryCount] = useState("10");
   const customRows = payoutRuleRows(payoutRules);
+  const youthExempt = payoutRules.nrha_youth_fee_exempt === true || payoutRules.nrha_youth_fee_exempt === "true";
+  const hasYouthExemptFlag = Object.prototype.hasOwnProperty.call(payoutRules, "nrha_youth_fee_exempt");
+  const looksLikeYouth = isNrha && /\byouth\b|13\s*&\s*under|14\s*[-–]\s*18|short stirrup/i.test(divisionName);
+  const shouldShowScheduleBHint = payoutScheduleType === "nrha_schedule_a" && (numericValue(addedMoney) ?? 0) >= 2000;
   const preview = payoutPreview({
     addedMoney,
     entryCount: previewEntryCount,
@@ -58,6 +66,12 @@ function PayoutSettingsFields({
     sanctioningFeePercent,
     trophyOrPlaqueFee,
   });
+
+  useEffect(() => {
+    if (looksLikeYouth && !hasYouthExemptFlag) {
+      onPayoutRulesChange({ ...payoutRules, nrha_youth_fee_exempt: true });
+    }
+  }, [hasYouthExemptFlag, looksLikeYouth, onPayoutRulesChange, payoutRules]);
 
   function handlePayoutScheduleTypeChange(nextType: PayoutScheduleType) {
     onPayoutScheduleTypeChange(nextType);
@@ -92,44 +106,72 @@ function PayoutSettingsFields({
     });
   }
 
+  function handleYouthExemptChange(checked: boolean) {
+    onPayoutRulesChange({
+      ...payoutRules,
+      nrha_youth_fee_exempt: checked,
+    });
+  }
+
   return (
     <fieldset className="stack nested-fieldset">
-      <legend>{uiText(locale, "Bourses et paiements", "Purses and payouts")}</legend>
-      <label>
-        {uiText(locale, "Type de paiement", "Payout type")}
-        <select disabled={disabled} value={payoutScheduleType} onChange={(event) => handlePayoutScheduleTypeChange(event.target.value as PayoutScheduleType)}>
-          {payoutOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
-        <span className="input-help">{selectedPayout.description}</span>
-      </label>
-      <div className="form-grid">
-        <label>
-          {uiText(locale, "Added money", "Added money")}
-          <input disabled={disabled} min="0" step="0.01" type="number" value={addedMoney} onChange={(event) => onAddedMoneyChange(event.target.value)} />
-        </label>
-        <label>
-          {uiText(locale, "Trophée / plaque", "Trophy / plaque")}
-          <input disabled={disabled} min="0" step="0.01" type="number" value={trophyOrPlaqueFee} onChange={(event) => onTrophyOrPlaqueFeeChange(event.target.value)} />
-        </label>
+      <legend>{uiText(locale, "Bourses / Payouts", "Purses / Payouts")}</legend>
+      <div className="payout-settings-summary">
+        <span><strong>{selectedPayout.label}</strong></span>
+        <span>{uiText(locale, "Added", "Added")}: {formatCurrency(numericValue(addedMoney) ?? 0, currency)}</span>
+        <span>{uiText(locale, "Trophée", "Trophy")}: {formatCurrency(numericValue(trophyOrPlaqueFee) ?? 0, currency)}</span>
+        <span>{uiText(locale, "Retenue", "Retainage")}: {retainagePercent || "0"}%</span>
+        <span>{uiText(locale, "Frais organisme", "Sanctioning fee")}: {sanctioningFeePercent || (payoutScheduleType.startsWith("nrha") ? "5" : "0")}%</span>
+        {youthExempt ? <span className="status-chip warning">{uiText(locale, "Youth exempt", "Youth exempt")}</span> : null}
       </div>
-      <div className="form-grid">
+      {shouldShowScheduleBHint ? (
+        <div className="inline-alert">
+          <AlertCircle size={16} />
+          {uiText(locale, "Added money de 2 000 $ ou plus: Schedule B est probablement le bon choix NRHA.", "Added money of $2,000 or more: Schedule B is probably the right NRHA choice.")}
+        </div>
+      ) : null}
+      <details className="payout-settings-details">
+        <summary>{uiText(locale, "Configurer les bourses / payouts", "Configure purses / payouts")}</summary>
         <label>
-          {uiText(locale, "Retenue personnalisée (%)", "Retainage override (%)")}
-          <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={retainagePercent} onChange={(event) => onRetainagePercentChange(event.target.value)} />
-          <span className="input-help">{uiText(locale, "Vide = utilise le réglage du concours ou de l'association.", "Blank = uses the show or association setting.")}</span>
+          {uiText(locale, "Type de paiement", "Payout type")}
+          <select disabled={disabled} value={payoutScheduleType} onChange={(event) => handlePayoutScheduleTypeChange(event.target.value as PayoutScheduleType)}>
+            {payoutOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <span className="input-help">{selectedPayout.description}</span>
         </label>
-        <label>
-          {uiText(locale, "Frais d'organisme (%)", "Sanctioning body fee (%)")}
-          <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={sanctioningFeePercent} onChange={(event) => onSanctioningFeePercentChange(event.target.value)} />
-          <span className="input-help">{uiText(locale, "Ex.: NRHA 5 %. Vide = aucun frais défini ici.", "Example: NRHA 5%. Blank = no fee defined here.")}</span>
+        <label className="checkbox-label">
+          <input checked={youthExempt} disabled={disabled || !isNrha} type="checkbox" onChange={(event) => handleYouthExemptChange(event.target.checked)} />
+          <span>{uiText(locale, "NRHA Youth: exclure trophée/plaque, frais NRHA 5 % et retenue", "NRHA Youth: exempt trophy/plaque, NRHA 5% fee, and retainage")}</span>
         </label>
-      </div>
-      {payoutScheduleUsesCustomTable(payoutScheduleType) ? (
-        <div className="payout-editor">
+        {looksLikeYouth && !youthExempt ? <span className="input-help">{uiText(locale, "La classe ressemble à une Youth; confirme si l'exemption s'applique.", "This class looks like Youth; confirm whether the exemption applies.")}</span> : null}
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Added money", "Added money")}
+            <input disabled={disabled} min="0" step="0.01" type="number" value={addedMoney} onChange={(event) => onAddedMoneyChange(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Trophée / plaque", "Trophy / plaque")}
+            <input disabled={disabled} min="0" step="0.01" type="number" value={trophyOrPlaqueFee} onChange={(event) => onTrophyOrPlaqueFeeChange(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Retenue personnalisée (%)", "Retainage override (%)")}
+            <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={retainagePercent} onChange={(event) => onRetainagePercentChange(event.target.value)} />
+            <span className="input-help">{uiText(locale, "Vide = utilise le réglage du concours ou de l'association.", "Blank = uses the show or association setting.")}</span>
+          </label>
+          <label>
+            {uiText(locale, "Frais d'organisme (%)", "Sanctioning body fee (%)")}
+            <input disabled={disabled} max="100" min="0" step="0.01" type="number" value={sanctioningFeePercent} onChange={(event) => onSanctioningFeePercentChange(event.target.value)} />
+            <span className="input-help">{uiText(locale, "Ex.: NRHA 5 %. Vide = aucun frais défini ici.", "Example: NRHA 5%. Blank = no fee defined here.")}</span>
+          </label>
+        </div>
+        {payoutScheduleUsesCustomTable(payoutScheduleType) ? (
+          <div className="payout-editor">
           <div className="payout-editor-header">
             <span className="contact-picker-label">{uiText(locale, "Tableau maison", "House table")}</span>
             <button className="text-button" disabled={disabled} type="button" onClick={() => handleLoadPreset()}>
@@ -190,12 +232,13 @@ function PayoutSettingsFields({
               <span className="input-help">{uiText(locale, "Aucune tranche ne correspond au nombre d'inscriptions choisi.", "No bracket matches the selected number of entries.")}</span>
             )}
           </div>
-        </div>
-      ) : null}
-      <label>
-        {uiText(locale, "Notes de paiement", "Payout notes")}
-        <textarea disabled={disabled} rows={2} value={payoutNotes} onChange={(event) => onPayoutNotesChange(event.target.value)} />
-      </label>
+          </div>
+        ) : null}
+        <label>
+          {uiText(locale, "Notes de paiement", "Payout notes")}
+          <textarea disabled={disabled} rows={2} value={payoutNotes} onChange={(event) => onPayoutNotesChange(event.target.value)} />
+        </label>
+      </details>
     </fieldset>
   );
 }

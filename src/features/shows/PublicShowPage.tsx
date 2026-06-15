@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, Clock, DollarSign, ExternalLink, MapPin, Shield, Stethoscope, Users } from "lucide-react";
 import { formatCurrency, formatDate } from "../../lib/display";
 import { fetchPublicShow, type PublicShowContext } from "../../services/supabaseServices";
-import type { ClassRecord, Division, ShowDay } from "../../types/domain";
+import type { ClassRecord, Division, PayoutCalculation, PayoutResultSnapshotRow, ShowDay } from "../../types/domain";
 import { showScorePatternLabel } from "../classes/showScorePatterns";
 
 function totalAddedMoney(divisions: Division[]) {
@@ -87,6 +87,79 @@ function ScheduleDay({ day, classes, divisions }: { day: ShowDay; classes: Class
   );
 }
 
+function PublishedResults({
+  calculations,
+  classes,
+  currency,
+  divisions,
+}: {
+  calculations: PayoutCalculation[];
+  classes: ClassRecord[];
+  currency: string;
+  divisions: Division[];
+}) {
+  const published = calculations.filter((calculation) => calculation.status === "published");
+
+  if (!published.length) {
+    return null;
+  }
+
+  return (
+    <section className="public-section public-results-section">
+      <h2>Résultats</h2>
+      <div className="public-results-list">
+        {published.map((calculation) => {
+          const division = divisions.find((candidate) => candidate.id === calculation.division_id);
+          const classRecord = division ? classes.find((candidate) => candidate.id === division.class_id) : null;
+          const rows = calculation.result_snapshot ?? [];
+
+          return (
+            <div className="public-results-card" key={calculation.id}>
+              <div className="public-results-card-header">
+                <div>
+                  <strong>{division ? division.name : "Classe"}</strong>
+                  {classRecord ? <span>{classRecord.name}</span> : null}
+                </div>
+                <span>{formatCurrency(calculation.net_purse, calculation.currency || currency)}</span>
+              </div>
+              {rows.length ? (
+                <div className="public-results-table-wrap">
+                  <table className="public-results-table">
+                    <thead>
+                      <tr>
+                        <th>Rang</th>
+                        <th>Dossard</th>
+                        <th>Cavalier</th>
+                        <th>Cheval</th>
+                        <th>Score</th>
+                        <th>Payout</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((row: PayoutResultSnapshotRow) => (
+                        <tr key={row.entry_id}>
+                          <td>{row.rank ?? "-"}</td>
+                          <td>{row.back_number ?? "-"}</td>
+                          <td>{row.rider_name}</td>
+                          <td>{row.horse_name}</td>
+                          <td>{row.final_score == null ? resultStatusLabel(row.status) : row.final_score.toFixed(3).replace(/\.?0+$/, "")}</td>
+                          <td>{row.payout_amount > 0 ? formatCurrency(row.payout_amount, calculation.currency || currency) : "-"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="public-muted">Résultats à confirmer.</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function PublicShowPage({ slug }: { slug: string }) {
   const [ctx, setCtx] = useState<PublicShowContext | null>(null);
   const [loading, setLoading] = useState(true);
@@ -129,7 +202,7 @@ function PublicShowPage({ slug }: { slug: string }) {
     );
   }
 
-  const { show, organization, showDays, classes, divisions, stallOptions, announcements, membershipRequirements, externalOrganizations } = ctx;
+  const { show, organization, showDays, classes, divisions, payoutCalculations, stallOptions, announcements, membershipRequirements, externalOrganizations } = ctx;
   const currency = show.default_currency ?? organization.currency ?? "CAD";
   const addedMoneyTotal = totalAddedMoney(divisions);
   const stallRange = stallPriceRange(stallOptions, currency);
@@ -212,6 +285,8 @@ function PublicShowPage({ slug }: { slug: string }) {
             ))}
             {!showDays.length ? <p className="public-muted">Le programme sera publié prochainement.</p> : null}
           </section>
+
+          <PublishedResults calculations={payoutCalculations} classes={classes} currency={currency} divisions={divisions} />
 
           <aside className="public-sidebar">
             <section className="public-section">
@@ -300,6 +375,22 @@ function PublicShowPage({ slug }: { slug: string }) {
       </footer>
     </div>
   );
+}
+
+function resultStatusLabel(status: PayoutResultSnapshotRow["status"]) {
+  switch (status) {
+    case "scratch":
+      return "Scratch";
+    case "no_score":
+      return "No score";
+    case "disqualified":
+      return "DQ";
+    case "pending":
+      return "En attente";
+    case "scored":
+    default:
+      return "-";
+  }
 }
 
 function setOrUpdateMeta(property: string, content: string) {

@@ -171,7 +171,9 @@ function ClassTemplateDivisionForm({
           addedMoney={addedMoney}
           currency={organization?.currency ?? "CAD"}
           disabled={!organization || !classTemplates.length}
+          divisionName={name}
           entryFee={entryFee}
+          isNrha={divisionIsNrha}
           payoutNotes={payoutNotes}
           payoutRules={payoutRules}
           payoutScheduleType={payoutScheduleType}

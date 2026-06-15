@@ -318,7 +318,85 @@ export type EligibilityRules = {
 };
 
 export type PayoutScheduleType = "none" | "nrha_schedule_a" | "nrha_schedule_b" | "house_concentrated" | "house_distributed" | "house_custom" | "jackpot_100";
+export type PayoutScheduleFederation = "NRHA" | "AQHA" | "NSBA" | "custom";
+export type PayoutCalculationStatus = "draft" | "reviewed" | "published";
 export type ScheduleStartMode = "fixed" | "after_previous" | "unscheduled";
+
+export type PayoutSchedule = {
+  id: string;
+  name: string;
+  federation: PayoutScheduleFederation;
+  description: string | null;
+  is_system: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PayoutScheduleBracket = {
+  id: string;
+  schedule_id: string;
+  min_entries: number;
+  max_entries: number | null;
+  place: number;
+  percentage: number;
+  created_at: string;
+};
+
+export type PayoutResultSnapshotRow = {
+  entry_id: string;
+  rank: number | null;
+  back_number: string | null;
+  rider_name: string;
+  horse_name: string;
+  owner_name: string;
+  final_score: number | null;
+  status: ScoredRunStatus | "pending";
+  payout_amount: number;
+  payout_percentage: number;
+  payee_contact_id: string | null;
+  payee_name: string;
+};
+
+export type PayoutCalculation = {
+  id: string;
+  show_id: string;
+  division_id: string;
+  status: PayoutCalculationStatus;
+  currency: string;
+  entry_count: number;
+  gross_entry_fees: number;
+  trophy_or_plaque_fee: number;
+  base_after_trophy_fee: number;
+  nrha_fee_amount: number;
+  net_entry_fee: number;
+  retainage_amount: number;
+  final_net_entry_fee: number;
+  added_money: number;
+  net_purse: number;
+  payout_schedule_id: string | null;
+  source_snapshot: Record<string, unknown>;
+  result_snapshot: PayoutResultSnapshotRow[];
+  calculated_at: string;
+  reviewed_at: string | null;
+  published_at: string | null;
+  calculated_by: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type PayoutAward = {
+  id: string;
+  calculation_id: string;
+  entry_id: string;
+  rank: number;
+  percentage: number;
+  amount: number;
+  payee_contact_id: string | null;
+  payee_name: string | null;
+  payee_override_note: string | null;
+  created_at: string;
+  updated_at: string;
+};
 
 export type ClassTemplate = {
   id: string;
@@ -446,6 +524,51 @@ export type ShowScoreClassSetup = {
   finalized_at: string | null;
   finalized_by_user_id: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+export type ScoredRunStatus = "scored" | "scratch" | "no_score" | "disqualified";
+
+export type ScoredRun = {
+  run_id: string;
+  show_id: string;
+  back_number: string | null;
+  rider_id: string | null;
+  horse_id: string | null;
+  owner_id: string | null;
+  scored_at: string;
+  status: ScoredRunStatus;
+  final_score: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlockRunEntry = {
+  block_run_id: string;
+  run_id: string;
+  show_id: string;
+  block_id: string;
+  order_of_go: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlockRunClassEntry = {
+  block_run_id: string;
+  entry_id: string;
+  created_at: string;
+};
+
+export type EntryResult = {
+  entry_id: string;
+  run_id: string;
+  block_run_id: string;
+  block_id: string;
+  division_id: string;
+  show_id: string;
+  final_score: number | null;
+  status: ScoredRunStatus;
+  synced_at: string;
   updated_at: string;
 };
 

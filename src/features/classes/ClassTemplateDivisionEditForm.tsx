@@ -144,7 +144,9 @@ function ClassTemplateDivisionEditForm({
         <PayoutSettingsFields
           locale={locale}
           addedMoney={addedMoney}
+          divisionName={name}
           entryFee={entryFee}
+          isNrha={divisionIsNrha}
           payoutNotes={payoutNotes}
           payoutRules={payoutRules}
           payoutScheduleType={payoutScheduleType}

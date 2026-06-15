@@ -327,9 +327,25 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
 
       return {
         id: stringFromRecord(run, "id") || entryId,
+        runId: stringFromRecord(run, "runId") || stringFromRecord(run, "run_id") || stringFromRecord(run, "id") || entryId,
+        blockRunId:
+          stringFromRecord(run, "blockRunId") ||
+          stringFromRecord(run, "block_run_id") ||
+          stringFromRecord(run, "id") ||
+          entryId,
         entryId,
+        entryIds: stringArrayFromRecord(run, "entryIds").length
+          ? stringArrayFromRecord(run, "entryIds")
+          : stringArrayFromRecord(run, "entry_ids").length
+            ? stringArrayFromRecord(run, "entry_ids")
+            : [entryId],
         classId: stringFromRecord(run, "classId") || stringFromRecord(run, "class_id"),
         divisionId: stringFromRecord(run, "divisionId") || stringFromRecord(run, "division_id"),
+        divisionIds: stringArrayFromRecord(run, "divisionIds").length
+          ? stringArrayFromRecord(run, "divisionIds")
+          : stringArrayFromRecord(run, "division_ids").length
+            ? stringArrayFromRecord(run, "division_ids")
+            : [stringFromRecord(run, "divisionId") || stringFromRecord(run, "division_id")].filter(Boolean),
         horseId: stringFromRecord(run, "horseId") || stringFromRecord(run, "horse_id"),
         riderContactId: stringFromRecord(run, "riderContactId") || stringFromRecord(run, "rider_contact_id") || null,
         ownerContactId: stringFromRecord(run, "ownerContactId") || stringFromRecord(run, "owner_contact_id"),

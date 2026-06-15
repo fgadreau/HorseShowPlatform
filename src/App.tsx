@@ -38,6 +38,7 @@ import {
   deleteStallBooking,
   loadAppContext,
   prepareShowScoreClassSetup,
+  savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
   deleteShowScorePaidWarmup,
   assignBackNumber,
@@ -54,6 +55,8 @@ import {
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
+  updatePayoutAwardPayee,
+  updatePayoutCalculationStatus,
   updateShow,
   updateShowScorePaidWarmup,
   updateStallBooking,
@@ -451,6 +454,33 @@ export default function App() {
             horses: context.horses,
           });
           setNotice({ tone: "success", message: `ShowScore setup prepared with ${setup.runs.length} run${setup.runs.length === 1 ? "" : "s"}.` });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onSavePayoutCalculationDraft={async (input) => {
+        try {
+          await savePayoutCalculationDraft(input);
+          setNotice({ tone: "success", message: "Calcul de bourse sauvegardé en draft." });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onUpdatePayoutAwardPayee={async (id, input) => {
+        try {
+          await updatePayoutAwardPayee(id, input);
+          setNotice({ tone: "info", message: "Payee mis à jour. Révision requise avant publication." });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+        }
+      }}
+      onUpdatePayoutCalculationStatus={async (id, status) => {
+        try {
+          await updatePayoutCalculationStatus(id, status);
+          setNotice({ tone: "success", message: status === "published" ? "Résultats et payouts publiés." : "Calcul marqué révisé." });
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });

@@ -67,6 +67,7 @@ import {
   getHorseHealthDocumentFileUrl,
   releaseBackNumber,
   reviewHorseHealthDocument,
+  savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
   setOrganizationExternalMembershipRequirement,
   slugify,
@@ -79,6 +80,8 @@ import {
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
+  updatePayoutAwardPayee,
+  updatePayoutCalculationStatus,
   updateShow,
   updateShowScorePaidWarmup,
   updateStallBooking,
@@ -130,12 +133,26 @@ import { ClassesView } from "../classes/ClassesView";
 import { EntriesView } from "../entries/EntriesView";
 import { MyEntriesView } from "../entries/MyEntriesView";
 import { ScoringView } from "../scoring/ScoringView";
+import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
 import { ClientDashboardView } from "./ClientDashboardView";
 import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
+
+const SHOW_CONTEXT_VIEW_KEYS = new Set<ViewKey>([
+  "classes",
+  "entries",
+  "stalls",
+  "scoring",
+  "results",
+  "billing",
+  "my-overview",
+  "my-entries",
+  "my-stalls",
+  "my-invoices",
+]);
 
 export function Dashboard({
   activeView,
@@ -181,6 +198,7 @@ export function Dashboard({
   onDeleteShowScorePaidWarmup,
   onRefresh,
   onReviewHorseHealthDocument,
+  onSavePayoutCalculationDraft,
   onSignOut,
   onSetExternalMembershipRequirement,
   onUpdateClass,
@@ -191,6 +209,8 @@ export function Dashboard({
   onUpdateEntry,
   onUpdateHorse,
   onUpdateOrganizationHealthSettings,
+  onUpdatePayoutAwardPayee,
+  onUpdatePayoutCalculationStatus,
   onVerifyGvlCogginsDocument,
   onUpdateShow,
   onUpdateShowScorePaidWarmup,
@@ -242,6 +262,7 @@ export function Dashboard({
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+  onSavePayoutCalculationDraft: (input: Parameters<typeof savePayoutCalculationDraft>[0]) => Promise<void>;
   onSignOut: () => void;
   onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
@@ -252,6 +273,8 @@ export function Dashboard({
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
+  onUpdatePayoutAwardPayee: (id: string, input: Parameters<typeof updatePayoutAwardPayee>[1]) => Promise<void>;
+  onUpdatePayoutCalculationStatus: (id: string, status: Parameters<typeof updatePayoutCalculationStatus>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
@@ -260,6 +283,7 @@ export function Dashboard({
   onUpdateUserProfile: (id: string, input: Parameters<typeof updateUserProfile>[1]) => Promise<void>;
   onViewChange: (view: ViewKey) => void;
 }) {
+  const [selectedShowId, setSelectedShowId] = useState("");
   const organizations = context?.organizations ?? [];
   const organizationMembers = context?.organizationMembers ?? [];
   const shows = context?.shows ?? [];
@@ -267,6 +291,11 @@ export function Dashboard({
   const showAnnouncements = context?.showAnnouncements ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const showScorePaidWarmups = context?.showScorePaidWarmups ?? [];
+  const entryResults = context?.entryResults ?? [];
+  const payoutSchedules = context?.payoutSchedules ?? [];
+  const payoutScheduleBrackets = context?.payoutScheduleBrackets ?? [];
+  const payoutCalculations = context?.payoutCalculations ?? [];
+  const payoutAwards = context?.payoutAwards ?? [];
   const contacts = context?.contacts ?? [];
   const contactOrganizationLinks = context?.contactOrganizationLinks ?? [];
   const contactRoles = context?.contactRoles ?? [];
@@ -301,6 +330,7 @@ export function Dashboard({
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
     : [];
+  const selectedOrganizationShowIds = new Set(selectedOrganizationShows.map((show) => show.id));
   const selectedOrganizationShowDays = selectedOrganization
     ? showDays.filter((day) => day.organization_id === selectedOrganization.id)
     : [];
@@ -315,6 +345,12 @@ export function Dashboard({
     : [];
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationEntryResults = selectedOrganization
+    ? entryResults.filter((result) => selectedOrganizationShowIds.has(result.show_id))
+    : [];
+  const selectedOrganizationPayoutCalculations = selectedOrganization
+    ? payoutCalculations.filter((calculation) => selectedOrganizationShowIds.has(calculation.show_id))
     : [];
   const selectedOrganizationContactIds = selectedOrganization
     ? new Set(
@@ -377,6 +413,48 @@ export function Dashboard({
   const selectedOrganizationInvoiceLineItems = selectedOrganization
     ? invoiceLineItems.filter((item) => item.organization_id === selectedOrganization.id)
     : [];
+  const selectedShow = selectedOrganizationShows.find((show) => show.id === selectedShowId) ?? selectedOrganizationShows[0] ?? null;
+  const activeShowId = selectedShow?.id ?? "";
+  const activeShowList = selectedShow ? [selectedShow] : selectedOrganizationShows;
+  const selectedShowClasses = selectedShow
+    ? selectedOrganizationClasses.filter((classRecord) => classRecord.show_id === selectedShow.id)
+    : selectedOrganizationClasses;
+  const selectedShowDivisions = selectedShow
+    ? selectedOrganizationDivisions.filter((division) => division.show_id === selectedShow.id)
+    : selectedOrganizationDivisions;
+  const selectedShowEntries = selectedShow
+    ? selectedOrganizationEntries.filter((entry) => entry.show_id === selectedShow.id)
+    : selectedOrganizationEntries;
+  const selectedShowShowDays = selectedShow
+    ? selectedOrganizationShowDays.filter((day) => day.show_id === selectedShow.id)
+    : selectedOrganizationShowDays;
+  const selectedShowShowScoreSetups = selectedShow
+    ? selectedOrganizationShowScoreSetups.filter((setup) => setup.show_id === selectedShow.id)
+    : selectedOrganizationShowScoreSetups;
+  const selectedShowShowScorePaidWarmups = selectedShow
+    ? selectedOrganizationShowScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShow.id)
+    : selectedOrganizationShowScorePaidWarmups;
+  const selectedShowEntryResults = selectedShow
+    ? selectedOrganizationEntryResults.filter((result) => result.show_id === selectedShow.id)
+    : selectedOrganizationEntryResults;
+  const selectedShowPayoutCalculations = selectedShow
+    ? selectedOrganizationPayoutCalculations.filter((calculation) => calculation.show_id === selectedShow.id)
+    : selectedOrganizationPayoutCalculations;
+  const selectedShowPayoutCalculationIds = new Set(selectedShowPayoutCalculations.map((calculation) => calculation.id));
+  const selectedShowPayoutAwards = payoutAwards.filter((award) => selectedShowPayoutCalculationIds.has(award.calculation_id));
+  const selectedShowStallOptions = selectedShow
+    ? selectedOrganizationStallOptions.filter((option) => option.show_id === selectedShow.id)
+    : selectedOrganizationStallOptions;
+  const selectedShowStallBookings = selectedShow
+    ? selectedOrganizationStallBookings.filter((booking) => booking.show_id === selectedShow.id)
+    : selectedOrganizationStallBookings;
+  const selectedShowInvoices = selectedShow
+    ? selectedOrganizationInvoices.filter((invoice) => invoice.show_id === selectedShow.id)
+    : selectedOrganizationInvoices;
+  const selectedShowInvoiceIds = new Set(selectedShowInvoices.map((invoice) => invoice.id));
+  const selectedShowInvoiceLineItems = selectedShow
+    ? selectedOrganizationInvoiceLineItems.filter((item) => selectedShowInvoiceIds.has(item.invoice_id))
+    : selectedOrganizationInvoiceLineItems;
   const personalContacts = contacts.filter((contact) => contact.linked_user_id === context?.profile.id);
   const personalContactIds = new Set(personalContacts.map((contact) => contact.id));
   const personalHorseIdsFromContacts = new Set(
@@ -414,8 +492,24 @@ export function Dashboard({
   const personalInvoices = selectedOrganizationInvoices.filter((invoice) => personalContactIds.has(invoice.payer_contact_id));
   const personalInvoiceIds = new Set(personalInvoices.map((invoice) => invoice.id));
   const personalInvoiceLineItems = selectedOrganizationInvoiceLineItems.filter((item) => personalInvoiceIds.has(item.invoice_id));
+  const selectedShowPersonalEntries = selectedShow
+    ? personalEntries.filter((entry) => entry.show_id === selectedShow.id)
+    : personalEntries;
+  const selectedShowPersonalStallBookings = selectedShow
+    ? personalStallBookings.filter((booking) => booking.show_id === selectedShow.id)
+    : personalStallBookings;
+  const selectedShowPersonalInvoices = selectedShow
+    ? personalInvoices.filter((invoice) => invoice.show_id === selectedShow.id)
+    : personalInvoices;
+  const selectedShowPersonalInvoiceIds = new Set(selectedShowPersonalInvoices.map((invoice) => invoice.id));
+  const selectedShowPersonalInvoiceLineItems = selectedShow
+    ? personalInvoiceLineItems.filter((item) => selectedShowPersonalInvoiceIds.has(item.invoice_id))
+    : personalInvoiceLineItems;
   const openShows = selectedOrganizationShows.filter((show) => show.status === "open").length;
   const unpaidBalance = selectedOrganizationInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const selectedShowUnpaidBalance = selectedShowInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const selectedShowPersonalUnpaidBalance = selectedShowPersonalInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
+  const shouldShowShowContext = selectedOrganizationShows.length > 0 && SHOW_CONTEXT_VIEW_KEYS.has(effectiveView);
   const selectedOrganizationNotifications = buildNotificationItems({
     backNumbers: selectedOrganizationBackNumbers,
     classes: selectedOrganizationClasses,
@@ -497,6 +591,20 @@ export function Dashboard({
                 {organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
                     {organization.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            {shouldShowShowContext ? (
+              <select
+                aria-label={locale === "fr" ? "Show actuel" : "Current show"}
+                title={locale === "fr" ? "Show actuel" : "Current show"}
+                value={activeShowId}
+                onChange={(event) => setSelectedShowId(event.target.value)}
+              >
+                {selectedOrganizationShows.map((show) => (
+                  <option key={show.id} value={show.id}>
+                    {showLabel(show)}
                   </option>
                 ))}
               </select>
@@ -609,18 +717,18 @@ export function Dashboard({
         {effectiveView === "classes" ? (
           <ClassesView
             locale={locale}
-            classes={selectedOrganizationClasses}
+            classes={selectedShowClasses}
             classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
             classTemplates={selectedOrganizationClassTemplates}
             contacts={selectedOrganizationContacts}
-            divisions={selectedOrganizationDivisions}
-            entries={selectedOrganizationEntries}
+            divisions={selectedShowDivisions}
+            entries={selectedShowEntries}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             sanctioningBodies={sanctioningBodies}
-            showDays={selectedOrganizationShowDays}
-            showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
-            shows={selectedOrganizationShows}
+            showDays={selectedShowShowDays}
+            showScorePaidWarmups={selectedShowShowScorePaidWarmups}
+            shows={activeShowList}
             onCreateClass={onCreateClass}
             onCreateClassTemplate={onCreateClassTemplate}
             onCreateClassTemplateDivision={onCreateClassTemplateDivision}
@@ -642,19 +750,19 @@ export function Dashboard({
         {effectiveView === "entries" ? (
           <EntriesView
             locale={locale}
-            classes={selectedOrganizationClasses}
+            classes={selectedShowClasses}
             contacts={selectedOrganizationContacts}
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
-            divisions={selectedOrganizationDivisions}
-            entries={selectedOrganizationEntries}
+            divisions={selectedShowDivisions}
+            entries={selectedShowEntries}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
-            shows={selectedOrganizationShows}
+            shows={activeShowList}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
             onCreateHorse={onCreateHorse}
@@ -686,19 +794,19 @@ export function Dashboard({
         {effectiveView === "stalls" ? (
           <StallsView
             locale={locale}
-            bookings={selectedOrganizationStallBookings}
+            bookings={selectedShowStallBookings}
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
-            invoiceLineItems={selectedOrganizationInvoiceLineItems}
-            invoices={selectedOrganizationInvoices}
+            invoiceLineItems={selectedShowInvoiceLineItems}
+            invoices={selectedShowInvoices}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
-            showDays={selectedOrganizationShowDays}
-            shows={selectedOrganizationShows}
-            stallOptions={selectedOrganizationStallOptions}
+            showDays={selectedShowShowDays}
+            shows={activeShowList}
+            stallOptions={selectedShowStallOptions}
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onCreateStallOption={onCreateStallOption}
@@ -712,15 +820,15 @@ export function Dashboard({
           selectedOrganization && hasPlanFeature(selectedOrganization, 'show_score') ? (
             <ScoringView
               locale={locale}
-              classes={selectedOrganizationClasses}
+              classes={selectedShowClasses}
               contacts={selectedOrganizationContacts}
-              divisions={selectedOrganizationDivisions}
-              entries={selectedOrganizationEntries}
+              divisions={selectedShowDivisions}
+              entries={selectedShowEntries}
               horses={selectedOrganizationHorses}
-              showDays={selectedOrganizationShowDays}
-              showScoreClassSetups={selectedOrganizationShowScoreSetups}
-              showScorePaidWarmups={selectedOrganizationShowScorePaidWarmups}
-              shows={selectedOrganizationShows}
+              showDays={selectedShowShowDays}
+              showScoreClassSetups={selectedShowShowScoreSetups}
+              showScorePaidWarmups={selectedShowShowScorePaidWarmups}
+              shows={activeShowList}
               onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
               onPrepareShowScoreClass={onPrepareShowScoreClass}
             />
@@ -729,16 +837,38 @@ export function Dashboard({
           )
         ) : null}
 
+        {effectiveView === "results" ? (
+          <ResultsView
+            locale={locale}
+            classes={selectedShowClasses}
+            contacts={selectedOrganizationContacts}
+            divisions={selectedShowDivisions}
+            entries={selectedShowEntries}
+            entryResults={selectedShowEntryResults}
+            horses={selectedOrganizationHorses}
+            organization={selectedOrganization}
+            payoutAwards={selectedShowPayoutAwards}
+            payoutCalculations={selectedShowPayoutCalculations}
+            payoutScheduleBrackets={payoutScheduleBrackets}
+            payoutSchedules={payoutSchedules}
+            profileId={context?.profile.user_id ?? ""}
+            shows={activeShowList}
+            onSavePayoutCalculationDraft={onSavePayoutCalculationDraft}
+            onUpdatePayoutAwardPayee={onUpdatePayoutAwardPayee}
+            onUpdatePayoutCalculationStatus={onUpdatePayoutCalculationStatus}
+          />
+        ) : null}
+
         {effectiveView === "billing" ? (
           <BillingView
             locale={locale}
             contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
-            invoices={selectedOrganizationInvoices}
-            lineItems={selectedOrganizationInvoiceLineItems}
+            invoices={selectedShowInvoices}
+            lineItems={selectedShowInvoiceLineItems}
             organization={selectedOrganization}
-            shows={selectedOrganizationShows}
-            unpaidBalance={unpaidBalance}
+            shows={activeShowList}
+            unpaidBalance={selectedShowUnpaidBalance}
           />
         ) : null}
 
@@ -746,16 +876,16 @@ export function Dashboard({
           <ClientDashboardView
             locale={locale}
             contacts={personalContacts}
-            divisions={selectedOrganizationDivisions}
-            entries={personalEntries}
+            divisions={selectedShowDivisions}
+            entries={selectedShowPersonalEntries}
             horses={personalHorses}
-            invoices={personalInvoices}
+            invoices={selectedShowPersonalInvoices}
             organizations={organizations}
             profile={context.profile}
-            shows={selectedOrganizationShows}
-            showDays={selectedOrganizationShowDays}
-            stallBookings={personalStallBookings}
-            stallOptions={selectedOrganizationStallOptions}
+            shows={activeShowList}
+            showDays={selectedShowShowDays}
+            stallBookings={selectedShowPersonalStallBookings}
+            stallOptions={selectedShowStallOptions}
             onViewChange={onViewChange}
           />
         ) : null}
@@ -813,19 +943,19 @@ export function Dashboard({
         {effectiveView === "my-entries" ? (
           <MyEntriesView
             locale={locale}
-            classes={selectedOrganizationClasses}
+            classes={selectedShowClasses}
             contacts={selectedOrganizationPersonalContacts}
             contactExternalMemberships={contactExternalMemberships}
             contactRoles={selectedOrganizationContactRoles}
-            divisions={selectedOrganizationDivisions}
-            entries={personalEntries}
+            divisions={selectedShowDivisions}
+            entries={selectedShowPersonalEntries}
             externalOrganizations={externalOrganizations}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
-            shows={selectedOrganizationShows}
+            shows={activeShowList}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
             onCreateHorse={onCreateHorse}
@@ -850,19 +980,19 @@ export function Dashboard({
         {effectiveView === "my-stalls" ? (
           <MyStallsView
             locale={locale}
-            bookings={personalStallBookings}
+            bookings={selectedShowPersonalStallBookings}
             contacts={selectedOrganizationPersonalContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
-            invoiceLineItems={personalInvoiceLineItems}
-            invoices={personalInvoices}
+            invoiceLineItems={selectedShowPersonalInvoiceLineItems}
+            invoices={selectedShowPersonalInvoices}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
-            showDays={selectedOrganizationShowDays}
-            shows={selectedOrganizationShows}
-            stallOptions={selectedOrganizationStallOptions}
+            showDays={selectedShowShowDays}
+            shows={activeShowList}
+            stallOptions={selectedShowStallOptions}
             onCreateContact={onCreateContact}
             onCreateStallBooking={onCreateStallBooking}
             onDeleteStallBooking={onDeleteStallBooking}
@@ -875,11 +1005,11 @@ export function Dashboard({
             locale={locale}
             contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
-            invoices={personalInvoices}
-            lineItems={personalInvoiceLineItems}
+            invoices={selectedShowPersonalInvoices}
+            lineItems={selectedShowPersonalInvoiceLineItems}
             organization={selectedOrganization}
-            shows={selectedOrganizationShows}
-            unpaidBalance={personalInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0)}
+            shows={activeShowList}
+            unpaidBalance={selectedShowPersonalUnpaidBalance}
           />
         ) : null}
 
