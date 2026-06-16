@@ -5,7 +5,7 @@ import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
 import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
-import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, contactRoleSummary, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
+import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
 import { HorseForm } from "../horses/HorseForm";
@@ -252,21 +252,20 @@ function PeopleView({
         <div className="panel-header">
           <div>
             <h2>{uiText(locale, "Contacts", "Contacts")}</h2>
-            <p>{normalizedContactSearch ? uiText(locale, `${filteredContacts.length} résultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`, `${filteredContacts.length} result${filteredContacts.length === 1 ? "" : "s"} across ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`) : uiText(locale, "Recherche par nom, rôle, courriel ou écurie.", "Search by name, role, email or barn.")}</p>
+            <p>{normalizedContactSearch ? uiText(locale, `${filteredContacts.length} résultat${filteredContacts.length === 1 ? "" : "s"} sur ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`, `${filteredContacts.length} result${filteredContacts.length === 1 ? "" : "s"} across ${contacts.length} contact${contacts.length === 1 ? "" : "s"}.`) : uiText(locale, "Recherche par nom, courriel ou écurie.", "Search by name, email or barn.")}</p>
           </div>
         </div>
         <label className="directory-search-field">
           <span>{uiText(locale, "Rechercher un contact", "Search contacts")}</span>
           <div>
             <Search size={16} />
-            <input placeholder={uiText(locale, "Nom, rôle, courriel, écurie...", "Name, role, email, barn...")} value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
+            <input placeholder={uiText(locale, "Nom, courriel, écurie...", "Name, email, barn...")} value={contactSearch} onChange={(event) => setContactSearch(event.target.value)} />
           </div>
         </label>
         <div className="horse-list directory-list">
           {normalizedContactSearch ? (
             <div className="horse-list-row horse-list-head">
               <span>{uiText(locale, "Contact", "Contact")}</span>
-              <span>{uiText(locale, "Rôles", "Roles")}</span>
               <span>{uiText(locale, "Courriel", "Email")}</span>
               <span>Action</span>
             </div>
@@ -283,17 +282,7 @@ function PeopleView({
               <div className="horse-list-row" key={contact.id}>
                 <div className="horse-list-identity">
                   <strong>{contactLabel(contact)}</strong>
-                  <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || uiText(locale, "Contact", "Contact")}</span>
-                </div>
-                <div className="horse-chip-row">
-                  {contactRoleSummary(contact, contactRoles)
-                    .split(" / ")
-                    .map((role) => (
-                      <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
-                        <span>{uiText(locale, "Rôle", "Role")}</span>
-                        <strong>{role}</strong>
-                      </span>
-                    ))}
+                  <span>{contact.barn_name || uiText(locale, "Contact", "Contact")}</span>
                 </div>
                 <div className="horse-chip-row">
                   <span className="horse-status-chip neutral">

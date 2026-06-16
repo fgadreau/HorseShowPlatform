@@ -31,7 +31,6 @@ function ContactForm({
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreated?: () => void;
 }) {
-  const [type, setType] = useState<Contact["type"]>(defaultType);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
@@ -40,8 +39,8 @@ function ContactForm({
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const externalMembershipFields = useMemo(
-    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements),
-    [externalOrganizations, membershipRequirements, type],
+    () => buildExternalMembershipFields(defaultType, externalOrganizations, membershipRequirements),
+    [defaultType, externalOrganizations, membershipRequirements],
   );
   const missingRequiredMembership = externalMembershipFields.some((field) => field.required && !membershipNumbers[field.organization.id]?.trim());
 
@@ -57,7 +56,7 @@ function ContactForm({
     try {
       await onCreateContact({
         organization_id: organization.id,
-        type,
+        type: defaultType,
         first_name: firstName,
         last_name: lastName,
         email,
@@ -71,7 +70,6 @@ function ContactForm({
           status: "unknown",
         })),
       });
-      setType(defaultType);
       setFirstName("");
       setLastName("");
       setEmail("");
@@ -93,16 +91,6 @@ function ContactForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Type
-          <select disabled={!organization} value={type} onChange={(event) => setType(event.target.value as Contact["type"])}>
-            <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
-            <option value="agent">Agent</option>
-            <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
-            <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
-            <option value="other">{uiText(locale, "Autre", "Other")}</option>
-          </select>
-        </label>
         <div className="form-grid">
           <label>
             {uiText(locale, "Prénom", "First name")}
