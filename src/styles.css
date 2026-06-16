@@ -962,26 +962,31 @@ button:focus-visible {
   margin: 5px 0 0;
 }
 
-.settings-section-header {
+.settings-section-header,
+.collapsible-panel-header {
   align-items: center;
   gap: 16px;
   margin-bottom: 0;
 }
 
-.settings-section.is-open .settings-section-header {
+.settings-section.is-open .settings-section-header,
+.collapsible-panel.is-open .collapsible-panel-header {
   margin-bottom: 16px;
 }
 
-.settings-section-header > div {
+.settings-section-header > div,
+.collapsible-panel-header > div {
   min-width: 0;
 }
 
-.settings-section-toggle {
+.settings-section-toggle,
+.collapsible-panel-toggle {
   color: #0f766e;
   flex: 0 0 auto;
 }
 
-.settings-section-body {
+.settings-section-body,
+.collapsible-panel-body {
   display: grid;
   gap: 16px;
 }

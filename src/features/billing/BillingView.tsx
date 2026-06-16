@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
-import { Download, FileText, Plus, Search, X } from "lucide-react";
+import type { FormEvent, ReactNode } from "react";
+import { ChevronDown, ChevronRight, Download, FileText, Plus, Search, X } from "lucide-react";
 import { EmptyState, Metric, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
@@ -8,6 +8,47 @@ import { cancelManualSale, createManualSale } from "../../services/supabaseServi
 import type { AppContext } from "../../services/supabaseServices";
 import type { Contact, Invoice, InvoiceLineItem, ManualSale, Organization, OrganizationProduct, Show } from "../../types/domain";
 import { uiText, formatInvoiceNumber } from "../dashboard/shared";
+
+function CollapsiblePanel({
+  children,
+  className = "panel span-2",
+  collapseLabel,
+  defaultOpen = false,
+  description,
+  expandLabel,
+  title,
+}: {
+  children: ReactNode;
+  className?: string;
+  collapseLabel: string;
+  defaultOpen?: boolean;
+  description?: ReactNode;
+  expandLabel: string;
+  title: string;
+}) {
+  const [isOpen, setIsOpen] = useState(defaultOpen);
+
+  return (
+    <section className={`${className} collapsible-panel ${isOpen ? "is-open" : "is-collapsed"}`}>
+      <div className="panel-header collapsible-panel-header">
+        <div>
+          <h2>{title}</h2>
+          {description ? <p>{description}</p> : null}
+        </div>
+        <button
+          aria-expanded={isOpen}
+          aria-label={`${isOpen ? collapseLabel : expandLabel} ${title}`}
+          className="icon-button collapsible-panel-toggle"
+          type="button"
+          onClick={() => setIsOpen((current) => !current)}
+        >
+          {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
+        </button>
+      </div>
+      {isOpen ? <div className="collapsible-panel-body">{children}</div> : null}
+    </section>
+  );
+}
 
 function BillingView({
   locale,
@@ -177,13 +218,12 @@ function BillingView({
       </section>
 
       {onCreateManualSale ? (
-        <section className="panel span-2">
-          <div className="panel-header">
-            <div>
-              <h2>{uiText(locale, "Nouvelle vente", "New sale")}</h2>
-              <p>{uiText(locale, "Vends un produit de l'association et crée automatiquement une facture draft.", "Sell an association product and automatically create a draft invoice.")}</p>
-            </div>
-          </div>
+        <CollapsiblePanel
+          collapseLabel={uiText(locale, "Replier", "Collapse")}
+          expandLabel={uiText(locale, "Ouvrir", "Open")}
+          title={uiText(locale, "Nouvelle vente", "New sale")}
+          description={uiText(locale, "Vends un produit de l'association et crée automatiquement une facture draft.", "Sell an association product and automatically create a draft invoice.")}
+        >
           <form className="stack" onSubmit={handleManualSaleSubmit}>
             <div className="form-grid">
               <label>
@@ -271,7 +311,7 @@ function BillingView({
               })}
             </div>
           ) : null}
-        </section>
+        </CollapsiblePanel>
       ) : null}
 
       {selectedInvoice ? (
