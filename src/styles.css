@@ -962,6 +962,30 @@ button:focus-visible {
   margin: 5px 0 0;
 }
 
+.settings-section-header {
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 0;
+}
+
+.settings-section.is-open .settings-section-header {
+  margin-bottom: 16px;
+}
+
+.settings-section-header > div {
+  min-width: 0;
+}
+
+.settings-section-toggle {
+  color: #0f766e;
+  flex: 0 0 auto;
+}
+
+.settings-section-body {
+  display: grid;
+  gap: 16px;
+}
+
 .action-list,
 .progress-stack,
 .timeline-list {
@@ -2718,6 +2742,41 @@ button:focus-visible {
   color: #687873;
   font-size: 12px;
   text-align: right;
+}
+
+.membership-type-row {
+  align-items: center;
+  background: #fbfdfc;
+  border: 1px solid #e3ebe8;
+  border-radius: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+}
+
+.membership-type-main {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.membership-type-main strong,
+.membership-type-main {
+  overflow-wrap: anywhere;
+}
+
+.membership-type-actions {
+  align-items: flex-end;
+  display: grid;
+  gap: 6px;
+  justify-items: end;
+}
+
+.membership-type-actions small {
+  color: #687873;
+  font-size: 12px;
 }
 
 .search-select {

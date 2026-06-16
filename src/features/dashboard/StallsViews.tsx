@@ -15,7 +15,7 @@ import {
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -67,6 +67,7 @@ export function StallsView({
   invoices,
   organization,
   profileId,
+  products,
   showDays,
   shows,
   stallOptions,
@@ -88,6 +89,7 @@ export function StallsView({
   invoices: Invoice[];
   organization: Organization | null;
   profileId: string;
+  products: OrganizationProduct[];
   showDays: ShowDay[];
   shows: Show[];
   stallOptions: StallOption[];
@@ -247,6 +249,7 @@ export function StallsView({
               <StallOptionForm
                 locale={locale}
                 organization={organization}
+                products={products}
                 showDays={showDays}
                 shows={shows}
                 onCreateStallOption={onCreateStallOption}
@@ -261,6 +264,7 @@ export function StallsView({
                 locale={locale}
                 currency={currency}
                 option={editingOption}
+                products={products}
                 showDays={showDays}
                 shows={shows}
                 onCancel={() => setEditingOption(null)}
@@ -633,6 +637,7 @@ function StallBookingsTable({
 function StallOptionForm({
   locale,
   organization,
+  products,
   showDays,
   shows,
   onCreateStallOption,
@@ -640,6 +645,7 @@ function StallOptionForm({
 }: {
   locale: Locale;
   organization: Organization | null;
+  products: OrganizationProduct[];
   showDays: ShowDay[];
   shows: Show[];
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
@@ -660,7 +666,9 @@ function StallOptionForm({
   const [startDayId, setStartDayId] = useState("");
   const [endDayId, setEndDayId] = useState("");
   const [notes, setNotes] = useState("");
+  const [productId, setProductId] = useState("");
   const [busy, setBusy] = useState(false);
+  const reservableProducts = products.filter((product) => product.is_active && ["stall_extra", "feed", "manual"].includes(product.category));
   const selectedShowId = showId || shows[0]?.id || "";
   const dayOptions = showDays.filter((day) => day.show_id === selectedShowId);
   const usesDailyReservations = reservationPeriodMode === "daily";
@@ -706,6 +714,7 @@ function StallOptionForm({
         requires_horse_assignment: optionRequiresHorseAssignment,
         limit_per_horse_stalls: optionRequiresHorseAssignment ? null : integerValue(limitPerHorseStalls, 0) || null,
         category,
+        product_id: productId || null,
         notes,
       });
       setName(stallPresets[0].name);
@@ -721,6 +730,7 @@ function StallOptionForm({
       setStartDayId("");
       setEndDayId("");
       setNotes("");
+      setProductId("");
       setPresetKey("stall");
       onCreated?.();
     } finally {
@@ -782,6 +792,17 @@ function StallOptionForm({
           <label>
             {uiText(locale, "Prix", "Price")}
             <input disabled={!canCreate} min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Produit lié", "Linked product")}
+            <select disabled={!canCreate} value={productId} onChange={(event) => setProductId(event.target.value)}>
+              <option value="">{uiText(locale, "Aucun", "None")}</option>
+              {reservableProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="form-grid">
@@ -890,6 +911,7 @@ function StallOptionEditForm({
   locale,
   currency,
   option,
+  products,
   showDays,
   shows,
   onCancel,
@@ -898,6 +920,7 @@ function StallOptionEditForm({
   locale: Locale;
   currency: string;
   option: StallOption;
+  products: OrganizationProduct[];
   showDays: ShowDay[];
   shows: Show[];
   onCancel: () => void;
@@ -916,7 +939,9 @@ function StallOptionEditForm({
   const [startDayId, setStartDayId] = useState(option.show_day_start_id ?? "");
   const [endDayId, setEndDayId] = useState(option.show_day_end_id ?? "");
   const [notes, setNotes] = useState(option.notes ?? "");
+  const [productId, setProductId] = useState(option.product_id ?? "");
   const [busy, setBusy] = useState(false);
+  const reservableProducts = products.filter((product) => product.is_active && ["stall_extra", "feed", "manual"].includes(product.category));
   const dayOptions = showDays.filter((day) => day.show_id === option.show_id);
   const usesDailyReservations = reservationPeriodMode === "daily";
   const selectedStartDayId = usesDailyReservations ? validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "" : "";
@@ -934,6 +959,7 @@ function StallOptionEditForm({
         name,
         description: description || null,
         category,
+        product_id: productId || null,
         price: numericValue(price) ?? option.price,
         total_quantity: total,
         available_quantity: Math.min(integerValue(availableQuantity, option.available_quantity), total),
@@ -977,6 +1003,17 @@ function StallOptionEditForm({
           <label>
             {uiText(locale, "Prix", "Price")}
             <input min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Produit lié", "Linked product")}
+            <select value={productId} onChange={(event) => setProductId(event.target.value)}>
+              <option value="">{uiText(locale, "Aucun", "None")}</option>
+              {reservableProducts.map((product) => (
+                <option key={product.id} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <div className="form-grid">

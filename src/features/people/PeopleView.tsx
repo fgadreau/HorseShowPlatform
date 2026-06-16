@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, formatDate, findById, horseLabel } from "../../lib/display";
+import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
+import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, contactRoleSummary, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -15,6 +15,7 @@ function PeopleView({
   locale,
   contacts,
   contactExternalMemberships,
+  contactOrganizationMemberships,
   contactRoles,
   canManageHealthDocuments,
   createdByUserId,
@@ -24,8 +25,10 @@ function PeopleView({
   horses,
   horseContacts,
   membershipRequirements,
+  organizationMembershipTypes,
   organization,
   onCreateContact,
+  onCreateContactOrganizationMembership,
   onCreateHorse,
   onCreateHorseHealthDocument,
   onDeleteContact,
@@ -38,6 +41,7 @@ function PeopleView({
   locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
+  contactOrganizationMemberships: ContactOrganizationMembership[];
   contactRoles: ContactRole[];
   canManageHealthDocuments: boolean;
   createdByUserId: string;
@@ -47,8 +51,10 @@ function PeopleView({
   horses: Horse[];
   horseContacts: HorseContact[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
+  organizationMembershipTypes: OrganizationMembershipType[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
@@ -64,6 +70,8 @@ function PeopleView({
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [horseSearch, setHorseSearch] = useState("");
+  const [membershipTypeByContact, setMembershipTypeByContact] = useState<Record<string, string>>({});
+  const [sellingMembershipContactId, setSellingMembershipContactId] = useState("");
   const normalizedContactSearch = normalizeDirectorySearch(contactSearch);
   const normalizedHorseSearch = normalizeDirectorySearch(horseSearch);
   const filteredContacts = normalizedContactSearch
@@ -72,6 +80,43 @@ function PeopleView({
   const filteredHorses = normalizedHorseSearch
     ? horses.filter((horse) => horseMatchesDirectorySearch(horse, contacts, horseExternalMemberships, externalOrganizations, normalizedHorseSearch))
     : [];
+  const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active);
+
+  function membershipsForContact(contactId: string) {
+    return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
+  }
+
+  function selectedMembershipTypeId(contactId: string) {
+    return membershipTypeByContact[contactId] ?? activeMembershipTypes[0]?.id ?? "";
+  }
+
+  function contactHasMembershipType(contactId: string, membershipTypeId: string) {
+    return membershipsForContact(contactId).some((membership) => membership.membership_type_id === membershipTypeId);
+  }
+
+  async function handleSellMembership(contact: Contact) {
+    const membershipTypeId = selectedMembershipTypeId(contact.id);
+
+    if (!organization || !membershipTypeId || !createdByUserId) {
+      return;
+    }
+
+    setSellingMembershipContactId(contact.id);
+
+    try {
+      await onCreateContactOrganizationMembership({
+        organization_id: organization.id,
+        contact_id: contact.id,
+        membership_type_id: membershipTypeId,
+        show_id: null,
+        payer_contact_id: contact.id,
+        status: "active",
+        sold_by_user_id: createdByUserId,
+      });
+    } finally {
+      setSellingMembershipContactId("");
+    }
+  }
 
   async function handleDeleteHorse(horse: Horse) {
     if (!window.confirm(`Supprimer ${horse.name} et les inscriptions/réservations liées?`)) {
@@ -226,38 +271,84 @@ function PeopleView({
               <span>Action</span>
             </div>
           ) : null}
-          {filteredContacts.map((contact) => (
-            <div className="horse-list-row" key={contact.id}>
-              <div className="horse-list-identity">
-                <strong>{contactLabel(contact)}</strong>
-                <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || uiText(locale, "Contact", "Contact")}</span>
+          {filteredContacts.map((contact) => {
+            const contactMemberships = membershipsForContact(contact.id);
+            const membershipTypeId = selectedMembershipTypeId(contact.id);
+            const selectedMembershipType = findById(activeMembershipTypes, membershipTypeId);
+            const alreadyHasSelectedMembership = membershipTypeId ? contactHasMembershipType(contact.id, membershipTypeId) : false;
+            const sellingMembership = sellingMembershipContactId === contact.id;
+            const canSellMembership = Boolean(organization && selectedMembershipType && !alreadyHasSelectedMembership && !sellingMembership);
+
+            return (
+              <div className="horse-list-row" key={contact.id}>
+                <div className="horse-list-identity">
+                  <strong>{contactLabel(contact)}</strong>
+                  <span>{[contact.type, contact.barn_name].filter(Boolean).join(" · ") || uiText(locale, "Contact", "Contact")}</span>
+                </div>
+                <div className="horse-chip-row">
+                  {contactRoleSummary(contact, contactRoles)
+                    .split(" / ")
+                    .map((role) => (
+                      <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
+                        <span>{uiText(locale, "Rôle", "Role")}</span>
+                        <strong>{role}</strong>
+                      </span>
+                    ))}
+                </div>
+                <div className="horse-chip-row">
+                  <span className="horse-status-chip neutral">
+                    <span>{uiText(locale, "Courriel", "Email")}</span>
+                    <strong>{contact.email || uiText(locale, "Aucun", "None")}</strong>
+                  </span>
+                  {contactMemberships.map((membership) => {
+                    const membershipType = findById(organizationMembershipTypes, membership.membership_type_id);
+                    return (
+                      <span className="horse-status-chip success" key={membership.id}>
+                        <span>{uiText(locale, "Carte", "Membership")}</span>
+                        <strong>{membershipType ? `${membershipType.code ?? membershipType.name} ${membership.season_year}` : membership.season_year}</strong>
+                      </span>
+                    );
+                  })}
+                </div>
+                <div className="row-actions horse-row-actions">
+                  {activeMembershipTypes.length ? (
+                    <>
+                      <select
+                        aria-label={uiText(locale, "Type de carte à vendre", "Membership type to sell")}
+                        disabled={sellingMembership}
+                        value={membershipTypeId}
+                        onChange={(event) =>
+                          setMembershipTypeByContact((current) => ({
+                            ...current,
+                            [contact.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        {activeMembershipTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {`${type.code ?? type.name} ${type.season_year} · ${formatCurrency(type.price, organization?.currency ?? "CAD")}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="text-button" disabled={!canSellMembership} type="button" onClick={() => void handleSellMembership(contact)}>
+                        {sellingMembership
+                          ? uiText(locale, "Vente...", "Selling...")
+                            : alreadyHasSelectedMembership
+                              ? uiText(locale, "Déjà vendue", "Already sold")
+                              : uiText(locale, "Vendre carte", "Sell membership")}
+                      </button>
+                    </>
+                  ) : null}
+                  <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
+                    {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
+                    {uiText(locale, "Supprimer", "Delete")}
+                  </button>
+                </div>
               </div>
-              <div className="horse-chip-row">
-                {contactRoleSummary(contact, contactRoles)
-                  .split(" / ")
-                  .map((role) => (
-                    <span className="horse-status-chip neutral" key={`${contact.id}-${role}`}>
-                      <span>{uiText(locale, "Rôle", "Role")}</span>
-                      <strong>{role}</strong>
-                    </span>
-                  ))}
-              </div>
-              <div className="horse-chip-row">
-                <span className="horse-status-chip neutral">
-                  <span>{uiText(locale, "Courriel", "Email")}</span>
-                  <strong>{contact.email || uiText(locale, "Aucun", "None")}</strong>
-                </span>
-              </div>
-              <div className="row-actions horse-row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                  {uiText(locale, "Modifier", "Edit")}
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
-                  {uiText(locale, "Supprimer", "Delete")}
-                </button>
-              </div>
-            </div>
-          ))}
+            );
+          })}
           {!normalizedContactSearch ? <EmptyState label={uiText(locale, "Lance une recherche pour afficher les contacts de l'association.", "Search to display association contacts.")} /> : null}
           {normalizedContactSearch && !filteredContacts.length ? <EmptyState label={uiText(locale, "Aucun contact ne correspond à cette recherche.", "No contact matches this search.")} /> : null}
         </div>

@@ -13,6 +13,8 @@ import type {
   Contact,
   ContactExternalMembership,
   ContactInput,
+  ContactOrganizationMembership,
+  ContactOrganizationMembershipInput,
   ContactOrganizationLink,
   ContactRole,
   ContactRoleName,
@@ -37,11 +39,19 @@ import type {
   ExternalOrganization,
   Invoice,
   InvoiceLineItem,
+  ManualSale,
+  ManualSaleInput,
   Organization,
   OrganizationBackNumber,
   OrganizationExternalMembershipRequirement,
   OrganizationInput,
+  OrganizationMembershipType,
+  OrganizationMembershipTypeInput,
+  OrganizationMembershipTypeUpdateInput,
   OrganizationMember,
+  OrganizationProduct,
+  OrganizationProductInput,
+  OrganizationProductUpdateInput,
   OrganizationSettingsInput,
   SanctioningBody,
   PayoutAward,
@@ -113,6 +123,10 @@ export type AppContext = {
   contactRoles: ContactRole[];
   externalOrganizations: ExternalOrganization[];
   organizationExternalMembershipRequirements: OrganizationExternalMembershipRequirement[];
+  organizationMembershipTypes: OrganizationMembershipType[];
+  contactOrganizationMemberships: ContactOrganizationMembership[];
+  organizationProducts: OrganizationProduct[];
+  manualSales: ManualSale[];
   contactExternalMemberships: ContactExternalMembership[];
   horseExternalMemberships: HorseExternalMembership[];
   horseHealthDocuments: HorseHealthDocument[];
@@ -211,6 +225,10 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contactRolesResult,
     externalOrganizationsResult,
     organizationExternalMembershipRequirementsResult,
+    organizationMembershipTypesResult,
+    contactOrganizationMembershipsResult,
+    organizationProductsResult,
+    manualSalesResult,
     contactExternalMembershipsResult,
     horseExternalMembershipsResult,
     horseHealthDocumentsResult,
@@ -249,6 +267,10 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(),
     client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
     client.from("organization_external_membership_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalMembershipRequirement[]>(),
+    client.from("organization_membership_types").select("*").order("season_year", { ascending: false }).order("name", { ascending: true }).returns<OrganizationMembershipType[]>(),
+    client.from("contact_organization_memberships").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationMembership[]>(),
+    client.from("organization_products").select("*").order("category", { ascending: true }).order("name", { ascending: true }).returns<OrganizationProduct[]>(),
+    client.from("manual_sales").select("*").order("created_at", { ascending: false }).returns<ManualSale[]>(),
     client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
     client.from("horse_external_memberships").select("*").order("created_at", { ascending: false }).returns<HorseExternalMembership[]>(),
     client.from("horse_health_documents").select("*").order("created_at", { ascending: false }).returns<HorseHealthDocument[]>(),
@@ -341,6 +363,46 @@ export async function loadAppContext(user: User): Promise<AppContext> {
 
   if (!organizationExternalMembershipRequirements) {
     throw organizationExternalMembershipRequirementsResult.error;
+  }
+
+  const organizationMembershipTypes = organizationMembershipTypesResult.error
+    ? isMissingSchemaError(organizationMembershipTypesResult.error, "organization_membership_types")
+      ? []
+      : null
+    : organizationMembershipTypesResult.data ?? [];
+
+  if (!organizationMembershipTypes) {
+    throw organizationMembershipTypesResult.error;
+  }
+
+  const contactOrganizationMemberships = contactOrganizationMembershipsResult.error
+    ? isMissingSchemaError(contactOrganizationMembershipsResult.error, "contact_organization_memberships")
+      ? []
+      : null
+    : contactOrganizationMembershipsResult.data ?? [];
+
+  if (!contactOrganizationMemberships) {
+    throw contactOrganizationMembershipsResult.error;
+  }
+
+  const organizationProducts = organizationProductsResult.error
+    ? isMissingSchemaError(organizationProductsResult.error, "organization_products")
+      ? []
+      : null
+    : organizationProductsResult.data ?? [];
+
+  if (!organizationProducts) {
+    throw organizationProductsResult.error;
+  }
+
+  const manualSales = manualSalesResult.error
+    ? isMissingSchemaError(manualSalesResult.error, "manual_sales")
+      ? []
+      : null
+    : manualSalesResult.data ?? [];
+
+  if (!manualSales) {
+    throw manualSalesResult.error;
   }
 
   const contactExternalMemberships = contactExternalMembershipsResult.error
@@ -539,6 +601,10 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contactRoles,
     externalOrganizations,
     organizationExternalMembershipRequirements,
+    organizationMembershipTypes,
+    contactOrganizationMemberships,
+    organizationProducts,
+    manualSales,
     contactExternalMemberships,
     horseExternalMemberships,
     horseHealthDocuments,
@@ -1126,6 +1192,228 @@ export async function setOrganizationExternalMembershipRequirement(input: {
   if (error) {
     throw error;
   }
+}
+
+function normalizeMembershipTypeCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized || null;
+}
+
+function normalizeOrganizationMembershipTypeInput(
+  input: OrganizationMembershipTypeInput,
+) {
+  return {
+    organization_id: input.organization_id,
+    name: input.name.trim(),
+    code: normalizeMembershipTypeCode(input.code),
+    description: input.description?.trim() || null,
+    season_year: Number(input.season_year),
+    price: Math.max(0, Number(input.price) || 0),
+    tax_applicable: input.tax_applicable ?? true,
+    valid_from: input.valid_from,
+    valid_until: input.valid_until,
+    is_active: input.is_active ?? true,
+  };
+}
+
+function normalizeOrganizationMembershipTypeUpdateInput(
+  input: OrganizationMembershipTypeUpdateInput,
+) {
+  const row: Record<string, unknown> = {};
+
+  if (input.name !== undefined) row.name = input.name.trim();
+  if (input.code !== undefined) row.code = normalizeMembershipTypeCode(input.code);
+  if (input.description !== undefined) {
+    row.description = input.description?.trim() || null;
+  }
+  if (input.season_year !== undefined) row.season_year = Number(input.season_year);
+  if (input.price !== undefined) row.price = Math.max(0, Number(input.price) || 0);
+  if (input.tax_applicable !== undefined) row.tax_applicable = input.tax_applicable;
+  if (input.valid_from !== undefined) row.valid_from = input.valid_from;
+  if (input.valid_until !== undefined) row.valid_until = input.valid_until;
+  if (input.is_active !== undefined) row.is_active = input.is_active;
+
+  return row;
+}
+
+export async function createOrganizationMembershipType(
+  input: OrganizationMembershipTypeInput,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_membership_types")
+    .insert(normalizeOrganizationMembershipTypeInput(input))
+    .select("*")
+    .single<OrganizationMembershipType>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateOrganizationMembershipType(
+  id: string,
+  input: OrganizationMembershipTypeUpdateInput,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_membership_types")
+    .update(normalizeOrganizationMembershipTypeUpdateInput(input))
+    .eq("id", id)
+    .select("*")
+    .single<OrganizationMembershipType>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+function normalizeContactOrganizationMembershipInput(input: ContactOrganizationMembershipInput) {
+  return {
+    organization_id: input.organization_id,
+    contact_id: input.contact_id,
+    membership_type_id: input.membership_type_id,
+    show_id: input.show_id ?? null,
+    payer_contact_id: input.payer_contact_id ?? input.contact_id,
+    membership_number: input.membership_number?.trim() || null,
+    status: input.status ?? "active",
+    notes: input.notes?.trim() || null,
+    sold_by_user_id: input.sold_by_user_id,
+  };
+}
+
+export async function createContactOrganizationMembership(
+  input: ContactOrganizationMembershipInput,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("contact_organization_memberships")
+    .insert(normalizeContactOrganizationMembershipInput(input))
+    .select("*")
+    .single<ContactOrganizationMembership>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+function normalizeProductCode(value: string | null | undefined) {
+  const normalized = String(value ?? "").trim().toUpperCase();
+  return normalized || null;
+}
+
+function normalizeOrganizationProductInput(input: OrganizationProductInput) {
+  return {
+    organization_id: input.organization_id,
+    name: input.name.trim(),
+    code: normalizeProductCode(input.code),
+    description: input.description?.trim() || null,
+    category: input.category,
+    default_price: Math.max(0, Number(input.default_price) || 0),
+    tax_applicable: input.tax_applicable ?? true,
+    is_active: input.is_active ?? true,
+  };
+}
+
+function normalizeOrganizationProductUpdateInput(input: OrganizationProductUpdateInput) {
+  const row: Record<string, unknown> = {};
+
+  if (input.name !== undefined) row.name = input.name.trim();
+  if (input.code !== undefined) row.code = normalizeProductCode(input.code);
+  if (input.description !== undefined) row.description = input.description?.trim() || null;
+  if (input.category !== undefined) row.category = input.category;
+  if (input.default_price !== undefined) row.default_price = Math.max(0, Number(input.default_price) || 0);
+  if (input.tax_applicable !== undefined) row.tax_applicable = input.tax_applicable;
+  if (input.is_active !== undefined) row.is_active = input.is_active;
+
+  return row;
+}
+
+export async function createOrganizationProduct(input: OrganizationProductInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_products")
+    .insert(normalizeOrganizationProductInput(input))
+    .select("*")
+    .single<OrganizationProduct>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateOrganizationProduct(
+  id: string,
+  input: OrganizationProductUpdateInput,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_products")
+    .update(normalizeOrganizationProductUpdateInput(input))
+    .eq("id", id)
+    .select("*")
+    .single<OrganizationProduct>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+function normalizeManualSaleInput(input: ManualSaleInput) {
+  return {
+    organization_id: input.organization_id,
+    product_id: input.product_id ?? null,
+    show_id: input.show_id ?? null,
+    payer_contact_id: input.payer_contact_id,
+    sold_by_user_id: input.sold_by_user_id,
+    status: input.status ?? "active",
+    description: input.description.trim(),
+    quantity: Math.max(0.01, Number(input.quantity) || 1),
+    unit_price: Math.max(0, Number(input.unit_price) || 0),
+    tax_applicable: input.tax_applicable ?? true,
+    source_payload: input.source_payload ?? {},
+  };
+}
+
+export async function createManualSale(input: ManualSaleInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("manual_sales")
+    .insert(normalizeManualSaleInput(input))
+    .select("*")
+    .single<ManualSale>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function cancelManualSale(id: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("manual_sales")
+    .update({ status: "cancelled" })
+    .eq("id", id)
+    .select("*")
+    .single<ManualSale>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
 }
 
 export async function createHorse(input: HorseInput) {
@@ -2927,6 +3215,7 @@ export async function createStallOption(input: StallOptionInput) {
       requires_horse_assignment: input.requires_horse_assignment ?? true,
       limit_per_horse_stalls: input.limit_per_horse_stalls ?? null,
       category: input.category || null,
+      product_id: input.product_id ?? null,
       notes: input.notes || null,
     })
     .select("*")

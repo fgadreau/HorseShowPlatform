@@ -40,16 +40,21 @@ import {
   assignBackNumber,
   assignNextBackNumber,
   claimHorseBackNumber,
+  cancelManualSale,
   createClass,
   createClassTemplate,
   createClassTemplateDivision,
   createBackNumberRange,
   createContact,
+  createContactOrganizationMembership,
+  createManualSale,
   createDivision,
   createEntry,
   createHorse,
   createUploadedHorseHealthDocument,
   createOrganization,
+  createOrganizationMembershipType,
+  createOrganizationProduct,
   createShow,
   createShowAnnouncement,
   deleteShowAnnouncement,
@@ -81,6 +86,8 @@ import {
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
+  updateOrganizationMembershipType,
+  updateOrganizationProduct,
   updatePayoutAwardPayee,
   updatePayoutCalculationStatus,
   updateShow,
@@ -98,6 +105,7 @@ import type {
   ClassTemplateDivision,
   Contact,
   ContactExternalMembership,
+  ContactOrganizationMembership,
   ContactRole,
   ContactRoleName,
   Division,
@@ -111,9 +119,12 @@ import type {
   HorseHealthDocument,
   Invoice,
   InvoiceLineItem,
+  ManualSale,
   Organization,
   OrganizationBackNumber,
   OrganizationExternalMembershipRequirement,
+  OrganizationMembershipType,
+  OrganizationProduct,
   PayoutScheduleType,
   SanctioningBody,
   ScheduleStartMode,
@@ -172,15 +183,20 @@ export function Dashboard({
   onReleaseBackNumber,
   onUpdateBackNumberStatus,
   onDeleteBackNumber,
+  onCancelManualSale,
   onCreateClass,
   onCreateClassTemplate,
   onCreateClassTemplateDivision,
   onCreateContact,
+  onCreateContactOrganizationMembership,
+  onCreateManualSale,
   onCreateDivision,
   onCreateEntry,
   onCreateHorse,
   onCreateHorseHealthDocument,
   onCreateOrganization,
+  onCreateOrganizationMembershipType,
+  onCreateOrganizationProduct,
   onCreateShow,
   onCreateShowAnnouncement,
   onDeleteShowAnnouncement,
@@ -213,6 +229,8 @@ export function Dashboard({
   onUpdateEntry,
   onUpdateHorse,
   onUpdateOrganizationHealthSettings,
+  onUpdateOrganizationMembershipType,
+  onUpdateOrganizationProduct,
   onUpdatePayoutAwardPayee,
   onUpdatePayoutCalculationStatus,
   onVerifyGvlCogginsDocument,
@@ -238,15 +256,20 @@ export function Dashboard({
   onReleaseBackNumber: (id: Parameters<typeof releaseBackNumber>[0]) => Promise<void>;
   onUpdateBackNumberStatus: (id: string, status: Parameters<typeof updateBackNumberStatus>[1]) => Promise<void>;
   onDeleteBackNumber: (id: Parameters<typeof deleteBackNumber>[0]) => Promise<void>;
+  onCancelManualSale: (id: Parameters<typeof cancelManualSale>[0]) => Promise<void>;
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
   onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
+  onCreateManualSale: (input: Parameters<typeof createManualSale>[0]) => Promise<ManualSale>;
   onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
+  onCreateOrganizationMembershipType: (input: Parameters<typeof createOrganizationMembershipType>[0]) => Promise<void>;
+  onCreateOrganizationProduct: (input: Parameters<typeof createOrganizationProduct>[0]) => Promise<void>;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
   onCreateShowAnnouncement: (input: Parameters<typeof createShowAnnouncement>[0]) => Promise<void>;
   onDeleteShowAnnouncement: (id: string) => Promise<void>;
@@ -279,6 +302,8 @@ export function Dashboard({
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
+  onUpdateOrganizationMembershipType: (id: string, input: Parameters<typeof updateOrganizationMembershipType>[1]) => Promise<void>;
+  onUpdateOrganizationProduct: (id: string, input: Parameters<typeof updateOrganizationProduct>[1]) => Promise<void>;
   onUpdatePayoutAwardPayee: (id: string, input: Parameters<typeof updatePayoutAwardPayee>[1]) => Promise<void>;
   onUpdatePayoutCalculationStatus: (id: string, status: Parameters<typeof updatePayoutCalculationStatus>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
@@ -308,6 +333,10 @@ export function Dashboard({
   const contactRoles = context?.contactRoles ?? [];
   const externalOrganizations = context?.externalOrganizations ?? [];
   const organizationExternalMembershipRequirements = context?.organizationExternalMembershipRequirements ?? [];
+  const organizationMembershipTypes = context?.organizationMembershipTypes ?? [];
+  const contactOrganizationMemberships = context?.contactOrganizationMemberships ?? [];
+  const organizationProducts = context?.organizationProducts ?? [];
+  const manualSales = context?.manualSales ?? [];
   const contactExternalMemberships = context?.contactExternalMemberships ?? [];
   const horseExternalMemberships = context?.horseExternalMemberships ?? [];
   const horseHealthDocuments = context?.horseHealthDocuments ?? [];
@@ -391,6 +420,18 @@ export function Dashboard({
   const selectedOrganizationMembershipRequirements = selectedOrganization
     ? organizationExternalMembershipRequirements.filter((requirement) => requirement.organization_id === selectedOrganization.id)
     : [];
+  const selectedOrganizationMembershipTypes = selectedOrganization
+    ? organizationMembershipTypes.filter((type: OrganizationMembershipType) => type.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationContactMemberships = selectedOrganization
+    ? contactOrganizationMemberships.filter((membership: ContactOrganizationMembership) => membership.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationProducts = selectedOrganization
+    ? organizationProducts.filter((product: OrganizationProduct) => product.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationManualSales = selectedOrganization
+    ? manualSales.filter((sale: ManualSale) => sale.organization_id === selectedOrganization.id)
+    : [];
   const selectedOrganizationHorses = selectedOrganization
     ? sortRecordsForOrganization(horses, selectedOrganizationHorseIds)
     : [];
@@ -463,12 +504,15 @@ export function Dashboard({
     ? selectedOrganizationStallBookings.filter((booking) => booking.show_id === selectedShow.id)
     : selectedOrganizationStallBookings;
   const selectedShowInvoices = selectedShow
-    ? selectedOrganizationInvoices.filter((invoice) => invoice.show_id === selectedShow.id)
+    ? selectedOrganizationInvoices.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
     : selectedOrganizationInvoices;
   const selectedShowInvoiceIds = new Set(selectedShowInvoices.map((invoice) => invoice.id));
   const selectedShowInvoiceLineItems = selectedShow
     ? selectedOrganizationInvoiceLineItems.filter((item) => selectedShowInvoiceIds.has(item.invoice_id))
     : selectedOrganizationInvoiceLineItems;
+  const selectedShowManualSales = selectedShow
+    ? selectedOrganizationManualSales.filter((sale) => !sale.show_id || sale.show_id === selectedShow.id)
+    : selectedOrganizationManualSales;
   const personalContacts = contacts.filter((contact) => contact.linked_user_id === context?.profile.id);
   const personalContactIds = new Set(personalContacts.map((contact) => contact.id));
   const personalHorseIdsFromContacts = new Set(
@@ -513,7 +557,7 @@ export function Dashboard({
     ? personalStallBookings.filter((booking) => booking.show_id === selectedShow.id)
     : personalStallBookings;
   const selectedShowPersonalInvoices = selectedShow
-    ? personalInvoices.filter((invoice) => invoice.show_id === selectedShow.id)
+    ? personalInvoices.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
     : personalInvoices;
   const selectedShowPersonalInvoiceIds = new Set(selectedShowPersonalInvoices.map((invoice) => invoice.id));
   const selectedShowPersonalInvoiceLineItems = selectedShow
@@ -749,6 +793,7 @@ export function Dashboard({
             locale={locale}
             contacts={selectedOrganizationContacts}
             contactExternalMemberships={contactExternalMemberships}
+            contactOrganizationMemberships={selectedOrganizationContactMemberships}
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
             externalOrganizations={externalOrganizations}
@@ -758,8 +803,10 @@ export function Dashboard({
             horses={selectedOrganizationHorses}
             horseContacts={selectedOrganizationHorseContacts}
             membershipRequirements={selectedOrganizationMembershipRequirements}
+            organizationMembershipTypes={selectedOrganizationMembershipTypes}
             organization={selectedOrganization}
             onCreateContact={onCreateContact}
+            onCreateContactOrganizationMembership={onCreateContactOrganizationMembership}
             onCreateHorse={onCreateHorse}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteContact={onDeleteContact}
@@ -884,6 +931,7 @@ export function Dashboard({
             invoices={selectedShowInvoices}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
+            products={selectedOrganizationProducts}
             showDays={selectedShowShowDays}
             shows={activeShowList}
             stallOptions={selectedShowStallOptions}
@@ -947,11 +995,19 @@ export function Dashboard({
             locale={locale}
             contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
+            entries={selectedShowEntries}
+            horseContacts={selectedOrganizationHorseContacts}
+            horses={selectedOrganizationHorses}
             invoices={selectedShowInvoices}
             lineItems={selectedShowInvoiceLineItems}
+            manualSales={selectedShowManualSales}
             organization={selectedOrganization}
+            products={selectedOrganizationProducts}
+            profileId={context?.profile.id ?? ""}
             shows={activeShowList}
             unpaidBalance={selectedShowUnpaidBalance}
+            onCancelManualSale={onCancelManualSale}
+            onCreateManualSale={onCreateManualSale}
           />
         ) : null}
 
@@ -1088,9 +1144,15 @@ export function Dashboard({
             locale={locale}
             contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
+            entries={selectedShowPersonalEntries}
+            horseContacts={selectedOrganizationHorseContacts}
+            horses={selectedOrganizationPersonalHorses}
             invoices={selectedShowPersonalInvoices}
             lineItems={selectedShowPersonalInvoiceLineItems}
+            manualSales={[]}
             organization={selectedOrganization}
+            products={[]}
+            profileId={context?.profile.id ?? ""}
             shows={activeShowList}
             unpaidBalance={selectedShowPersonalUnpaidBalance}
           />
@@ -1102,9 +1164,15 @@ export function Dashboard({
             context={context}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
+            membershipTypes={selectedOrganizationMembershipTypes}
             organization={selectedOrganization}
+            onCreateOrganizationMembershipType={onCreateOrganizationMembershipType}
+            onCreateOrganizationProduct={onCreateOrganizationProduct}
             onSetExternalMembershipRequirement={onSetExternalMembershipRequirement}
             onUpdateOrganizationHealthSettings={onUpdateOrganizationHealthSettings}
+            onUpdateOrganizationMembershipType={onUpdateOrganizationMembershipType}
+            onUpdateOrganizationProduct={onUpdateOrganizationProduct}
+            products={selectedOrganizationProducts}
           />
         ) : null}
 

@@ -1,36 +1,162 @@
-import { useState } from "react";
-import { Download, FileText, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { Download, FileText, Plus, Search, X } from "lucide-react";
 import { EmptyState, Metric, ViewIntro } from "../../components/ui";
-import { contactLabel, findById, formatCurrency, formatDate, numericValue, showLabel } from "../../lib/display";
+import { contactLabel, findById, formatCurrency, formatDate, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
+import { cancelManualSale, createManualSale } from "../../services/supabaseServices";
 import type { AppContext } from "../../services/supabaseServices";
-import type { Contact, Invoice, InvoiceLineItem, Organization, Show } from "../../types/domain";
+import type { Contact, Invoice, InvoiceLineItem, ManualSale, Organization, OrganizationProduct, Show } from "../../types/domain";
 import { uiText, formatInvoiceNumber } from "../dashboard/shared";
 
 function BillingView({
   locale,
   contacts,
   currency,
+  entries,
+  horseContacts,
+  horses,
   invoices,
   lineItems,
+  manualSales = [],
   organization,
+  products = [],
+  profileId = "",
   shows,
   unpaidBalance,
+  onCancelManualSale,
+  onCreateManualSale,
 }: {
   locale: Locale;
   contacts: AppContext["contacts"];
   currency: string;
+  entries: AppContext["entries"];
+  horseContacts: AppContext["horseContacts"];
+  horses: AppContext["horses"];
   invoices: AppContext["invoices"];
   lineItems: AppContext["invoiceLineItems"];
+  manualSales?: ManualSale[];
   organization: Organization | null;
+  products?: OrganizationProduct[];
+  profileId?: string;
   shows: AppContext["shows"];
   unpaidBalance: number;
+  onCancelManualSale?: (id: Parameters<typeof cancelManualSale>[0]) => Promise<void>;
+  onCreateManualSale?: (input: Parameters<typeof createManualSale>[0]) => Promise<ManualSale>;
 }) {
   const [selectedInvoiceId, setSelectedInvoiceId] = useState("");
+  const [invoiceSearch, setInvoiceSearch] = useState("");
+  const [saleBusyId, setSaleBusyId] = useState("");
+  const [saleProductId, setSaleProductId] = useState("");
+  const [salePayerContactId, setSalePayerContactId] = useState("");
+  const [saleShowId, setSaleShowId] = useState("");
+  const [saleDescription, setSaleDescription] = useState("");
+  const [saleQuantity, setSaleQuantity] = useState("1");
+  const [saleUnitPrice, setSaleUnitPrice] = useState("");
+  const [saleTaxApplicable, setSaleTaxApplicable] = useState(true);
+  const normalizedInvoiceSearch = normalizeSearchText(invoiceSearch);
+  const activeProducts = useMemo(() => products.filter((product) => product.is_active), [products]);
+  const selectedSaleProduct = findById(activeProducts, saleProductId) ?? activeProducts[0] ?? null;
+  const selectedSaleProductId = selectedSaleProduct?.id ?? "";
+  const activeManualSales = manualSales.filter((sale) => sale.status !== "cancelled");
+  const canCreateManualSale = Boolean(onCreateManualSale && organization && profileId && salePayerContactId && selectedSaleProduct);
+  const filteredInvoices = useMemo(
+    () =>
+      normalizedInvoiceSearch
+        ? invoices.filter((invoice) =>
+            invoiceMatchesSearch({
+              contacts,
+              entries,
+              horseContacts,
+              horses,
+              invoice,
+              lineItems,
+              normalizedSearch: normalizedInvoiceSearch,
+              shows,
+            }),
+          )
+        : invoices,
+    [contacts, entries, horseContacts, horses, invoices, lineItems, normalizedInvoiceSearch, shows],
+  );
   const selectedInvoice = findById(invoices, selectedInvoiceId) ?? null;
   const selectedInvoiceLineItems = selectedInvoice ? lineItems.filter((item) => item.invoice_id === selectedInvoice.id) : [];
   const selectedInvoiceShow = selectedInvoice ? findById(shows, selectedInvoice.show_id) : undefined;
   const selectedInvoicePayer = selectedInvoice ? findById(contacts, selectedInvoice.payer_contact_id) : undefined;
+
+  useEffect(() => {
+    if (saleProductId || !activeProducts.length) {
+      return;
+    }
+
+    const firstProduct = activeProducts[0];
+    setSaleProductId(firstProduct.id);
+    setSaleDescription(firstProduct.name);
+    setSaleUnitPrice(String(firstProduct.default_price ?? 0));
+    setSaleTaxApplicable(firstProduct.tax_applicable);
+  }, [activeProducts, saleProductId]);
+
+  function handleSaleProductChange(productId: string) {
+    const product = findById(activeProducts, productId);
+    setSaleProductId(productId);
+
+    if (!product) {
+      return;
+    }
+
+    setSaleDescription(product.name);
+    setSaleUnitPrice(String(product.default_price ?? 0));
+    setSaleTaxApplicable(product.tax_applicable);
+  }
+
+  async function handleManualSaleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!onCreateManualSale || !organization || !profileId || !selectedSaleProduct || !salePayerContactId) {
+      return;
+    }
+
+    setSaleBusyId("new");
+
+    try {
+      await onCreateManualSale({
+        organization_id: organization.id,
+        product_id: selectedSaleProduct.id,
+        show_id: saleShowId || null,
+        payer_contact_id: salePayerContactId,
+        sold_by_user_id: profileId,
+        status: "active",
+        description: saleDescription.trim() || selectedSaleProduct.name,
+        quantity: Math.max(0.01, numericValue(saleQuantity) ?? 1),
+        unit_price: numericValue(saleUnitPrice) ?? selectedSaleProduct.default_price,
+        tax_applicable: saleTaxApplicable,
+        source_payload: {
+          productCategory: selectedSaleProduct.category,
+          productCode: selectedSaleProduct.code,
+        },
+      });
+
+      setSaleDescription("");
+      setSaleQuantity("1");
+      setSaleUnitPrice("");
+      setSaleShowId("");
+    } finally {
+      setSaleBusyId("");
+    }
+  }
+
+  async function handleCancelManualSale(sale: ManualSale) {
+    if (!onCancelManualSale) {
+      return;
+    }
+
+    setSaleBusyId(sale.id);
+
+    try {
+      await onCancelManualSale(sale.id);
+    } finally {
+      setSaleBusyId("");
+    }
+  }
 
   return (
     <div className="content-grid">
@@ -50,6 +176,104 @@ function BillingView({
         <Metric label={uiText(locale, "Payées", "Paid")} value={String(invoices.filter((invoice) => invoice.status === "paid").length)} />
       </section>
 
+      {onCreateManualSale ? (
+        <section className="panel span-2">
+          <div className="panel-header">
+            <div>
+              <h2>{uiText(locale, "Nouvelle vente", "New sale")}</h2>
+              <p>{uiText(locale, "Vends un produit de l'association et crée automatiquement une facture draft.", "Sell an association product and automatically create a draft invoice.")}</p>
+            </div>
+          </div>
+          <form className="stack" onSubmit={handleManualSaleSubmit}>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Payeur", "Payer")}
+                <select disabled={!organization || saleBusyId === "new"} required value={salePayerContactId} onChange={(event) => setSalePayerContactId(event.target.value)}>
+                  <option value="">{uiText(locale, "Choisir un contact", "Choose a contact")}</option>
+                  {contacts.map((contact) => (
+                    <option key={contact.id} value={contact.id}>
+                      {contactLabel(contact)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {uiText(locale, "Produit", "Product")}
+                <select disabled={!organization || saleBusyId === "new" || !activeProducts.length} required value={selectedSaleProductId} onChange={(event) => handleSaleProductChange(event.target.value)}>
+                  {!activeProducts.length ? <option value="">{uiText(locale, "Aucun produit actif", "No active product")}</option> : null}
+                  {activeProducts.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {`${product.name} · ${formatCurrency(product.default_price, currency)}`}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                {uiText(locale, "Contexte", "Context")}
+                <select disabled={!organization || saleBusyId === "new"} value={saleShowId} onChange={(event) => setSaleShowId(event.target.value)}>
+                  <option value="">{uiText(locale, "Association / hors concours", "Association / outside show")}</option>
+                  {shows.map((show) => (
+                    <option key={show.id} value={show.id}>
+                      {show.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Description sur facture", "Invoice description")}
+                <input disabled={!organization || saleBusyId === "new"} value={saleDescription} placeholder={selectedSaleProduct?.name ?? ""} onChange={(event) => setSaleDescription(event.target.value)} />
+              </label>
+              <label>
+                {uiText(locale, "Quantité", "Quantity")}
+                <input disabled={!organization || saleBusyId === "new"} min="0.01" required step="0.01" type="number" value={saleQuantity} onChange={(event) => setSaleQuantity(event.target.value)} />
+              </label>
+              <label>
+                {uiText(locale, "Prix unitaire", "Unit price")}
+                <input disabled={!organization || saleBusyId === "new"} min="0" step="0.01" type="number" value={saleUnitPrice} placeholder={selectedSaleProduct ? String(selectedSaleProduct.default_price) : ""} onChange={(event) => setSaleUnitPrice(event.target.value)} />
+              </label>
+            </div>
+            <label className="requirement-row">
+              <input checked={saleTaxApplicable} disabled={!organization || saleBusyId === "new"} type="checkbox" onChange={(event) => setSaleTaxApplicable(event.target.checked)} />
+              <span>
+                <strong>{uiText(locale, "Taxable", "Taxable")}</strong>
+                {uiText(locale, "Appliquer les taxes de l'association ou du show lié.", "Apply the association or linked show taxes.")}
+              </span>
+            </label>
+            <button className="primary-button" disabled={!canCreateManualSale || saleBusyId === "new"} type="submit">
+              <Plus size={18} />
+              {saleBusyId === "new" ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Ajouter à une facture draft", "Add to draft invoice")}
+            </button>
+          </form>
+          {activeManualSales.length ? (
+            <div className="requirement-list">
+              {activeManualSales.slice(0, 8).map((sale) => {
+                const saleProduct = findById(products, sale.product_id);
+                const salePayer = findById(contacts, sale.payer_contact_id);
+                const saleShow = findById(shows, sale.show_id);
+                return (
+                  <div className="membership-type-row" key={sale.id}>
+                    <span className="membership-type-main">
+                      <strong>{sale.description}</strong>
+                      {`${contactLabel(salePayer)} · ${saleShow ? saleShow.name : uiText(locale, "Hors concours", "Outside show")} · ${sale.quantity} x ${formatCurrency(sale.unit_price, currency)}`}
+                    </span>
+                    <div className="membership-type-actions">
+                      <small>{saleProduct ? productCategoryLabel(saleProduct.category, locale) : uiText(locale, "Vente manuelle", "Manual sale")}</small>
+                      {onCancelManualSale ? (
+                        <button className="secondary-button" disabled={Boolean(saleBusyId)} type="button" onClick={() => void handleCancelManualSale(sale)}>
+                          {saleBusyId === sale.id ? uiText(locale, "Annulation...", "Cancelling...") : uiText(locale, "Annuler", "Cancel")}
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
       {selectedInvoice ? (
         <InvoiceDetailPanel
           locale={locale}
@@ -67,9 +291,24 @@ function BillingView({
         <div className="panel-header">
           <div>
             <h2>{uiText(locale, "Factures récentes", "Recent invoices")}</h2>
-            <p>{uiText(locale, "Brouillons, factures envoyées, paiements partiels et factures payées.", "Drafts, sent invoices, partial payments and paid invoices.")}</p>
+            <p>
+              {normalizedInvoiceSearch
+                ? uiText(locale, `${filteredInvoices.length} résultat${filteredInvoices.length === 1 ? "" : "s"} sur ${invoices.length} facture${invoices.length === 1 ? "" : "s"}.`, `${filteredInvoices.length} result${filteredInvoices.length === 1 ? "" : "s"} across ${invoices.length} invoice${invoices.length === 1 ? "" : "s"}.`)
+                : uiText(locale, "Recherche par cavalier, propriétaire, cheval, dossard, agent, payeur ou concours.", "Search by rider, owner, horse, back number, agent, payer or show.")}
+            </p>
           </div>
         </div>
+        <label className="directory-search-field">
+          <span>{uiText(locale, "Rechercher une facture", "Search invoices")}</span>
+          <div>
+            <Search size={16} />
+            <input
+              placeholder={uiText(locale, "Cavalier, owner, cheval, dossard, agent, show...", "Rider, owner, horse, back number, agent, show...")}
+              value={invoiceSearch}
+              onChange={(event) => setInvoiceSearch(event.target.value)}
+            />
+          </div>
+        </label>
         <div className="table">
           <div className="table-row table-head">
             <span>{uiText(locale, "Facture", "Invoice")}</span>
@@ -77,7 +316,7 @@ function BillingView({
             <span>Total</span>
             <span>{uiText(locale, "Solde", "Balance")}</span>
           </div>
-          {invoices.map((invoice) => {
+          {filteredInvoices.map((invoice) => {
             const invoiceLineItems = lineItems.filter((item) => item.invoice_id === invoice.id);
             const invoiceShow = findById(shows, invoice.show_id);
             const payerContact = findById(contacts, invoice.payer_contact_id);
@@ -88,7 +327,7 @@ function BillingView({
                     <FileText size={16} />
                     <span>
                       <strong>#{formatInvoiceNumber(invoice.invoice_number)}</strong>
-                      <small>{showLabel(invoiceShow)}</small>
+                      <small>{invoiceContextLabel(invoiceShow, locale)}</small>
                     </span>
                   </button>
                   <span className={`badge ${invoice.status}`}>{invoiceStatusLabel(invoice.status, locale)}</span>
@@ -113,6 +352,7 @@ function BillingView({
             );
           })}
           {!invoices.length ? <EmptyState label={uiText(locale, "Aucune facture pour l'instant. Les inscriptions et réservations créeront maintenant des brouillons de facture.", "No invoices yet. Entries and reservations will now create draft invoices.")} /> : null}
+          {invoices.length && !filteredInvoices.length ? <EmptyState label={uiText(locale, "Aucune facture ne correspond à cette recherche.", "No invoice matches this search.")} /> : null}
         </div>
       </section>
     </div>
@@ -177,7 +417,7 @@ function InvoiceDetailPanel({
 
         <section className="invoice-document-show">
           <div>
-            <span className="invoice-document-kicker">{uiText(locale, "Concours", "Show")}</span>
+            <span className="invoice-document-kicker">{uiText(locale, "Contexte", "Context")}</span>
             <strong>{invoiceDocument.showName}</strong>
             <span>{invoiceDocument.showDates}</span>
             {invoiceDocument.showLocation ? <span>{invoiceDocument.showLocation}</span> : null}
@@ -329,9 +569,9 @@ function buildInvoiceDocumentData({
     organizationTaxLines: organizationTaxLines(organization, locale),
     payerContactLines: compactLines([payerContact?.email, payerContact?.phone]),
     payerName: contactLabel(payerContact),
-    showDates: showDateRange(show, locale),
+    showDates: invoiceContextDateLine(show, locale),
     showLocation: showLocationLine(show),
-    showName: showLabel(show),
+    showName: invoiceContextLabel(show, locale),
     statusLabel: invoiceStatusLabel(invoice.status, locale),
     subtotal: formatCurrency(invoice.subtotal, currency),
     taxAmount: formatCurrency(invoice.tax_amount, currency),
@@ -353,6 +593,163 @@ function exportInvoicePdf(invoiceDocument: InvoiceDocumentData, locale: Locale) 
   printWindow.document.write(renderInvoicePrintHtml(invoiceDocument, locale));
   printWindow.document.close();
   printWindow.focus();
+}
+
+function invoiceMatchesSearch({
+  contacts,
+  entries,
+  horseContacts,
+  horses,
+  invoice,
+  lineItems,
+  normalizedSearch,
+  shows,
+}: {
+  contacts: AppContext["contacts"];
+  entries: AppContext["entries"];
+  horseContacts: AppContext["horseContacts"];
+  horses: AppContext["horses"];
+  invoice: Invoice;
+  lineItems: AppContext["invoiceLineItems"];
+  normalizedSearch: string;
+  shows: AppContext["shows"];
+}) {
+  const tokens = normalizedSearch.split(" ").filter(Boolean);
+
+  if (!tokens.length) {
+    return true;
+  }
+
+  const haystack = buildInvoiceSearchText({
+    contacts,
+    entries,
+    horseContacts,
+    horses,
+    invoice,
+    lineItems: lineItems.filter((item) => item.invoice_id === invoice.id),
+    shows,
+  });
+
+  return tokens.every((token) => haystack.includes(token));
+}
+
+function buildInvoiceSearchText({
+  contacts,
+  entries,
+  horseContacts,
+  horses,
+  invoice,
+  lineItems,
+  shows,
+}: {
+  contacts: AppContext["contacts"];
+  entries: AppContext["entries"];
+  horseContacts: AppContext["horseContacts"];
+  horses: AppContext["horses"];
+  invoice: Invoice;
+  lineItems: InvoiceLineItem[];
+  shows: AppContext["shows"];
+}) {
+  const values: Array<string | number | null | undefined> = [
+    invoice.invoice_number,
+    formatInvoiceNumber(invoice.invoice_number),
+    invoice.status,
+    invoice.issue_date,
+    invoice.due_date,
+    invoice.total_amount,
+    invoice.balance_due,
+  ];
+  const show = findById(shows, invoice.show_id);
+  const payerContact = findById(contacts, invoice.payer_contact_id);
+
+  values.push(...showSearchValues(show), ...contactSearchValues(payerContact));
+
+  for (const item of lineItems) {
+    values.push(item.description, item.item_type, item.quantity, item.unit_price, item.total_price);
+
+    if (item.item_type !== "entry" || !item.item_id) {
+      continue;
+    }
+
+    const entry = findById(entries, item.item_id);
+
+    if (!entry) {
+      continue;
+    }
+
+    const horse = findById(horses, entry.horse_id);
+    const owner = findById(contacts, entry.owner_contact_id);
+    const rider = entry.rider_contact_id ? findById(contacts, entry.rider_contact_id) : undefined;
+    const payer = findById(contacts, entry.payer_contact_id);
+    const agentContacts = horse ? contactsForHorseRole(horse.id, "agent", contacts, horseContacts) : [];
+
+    values.push(
+      entry.entry_number,
+      entry.status,
+      horse?.name,
+      horse?.registration_number,
+      ...contactSearchValues(owner),
+      ...contactSearchValues(rider),
+      ...contactSearchValues(payer),
+      ...agentContacts.flatMap(contactSearchValues),
+    );
+  }
+
+  return normalizeSearchText(values.filter((value) => value !== null && value !== undefined).join(" "));
+}
+
+function contactSearchValues(contact: Contact | undefined) {
+  return contact
+    ? [
+        contactLabel(contact),
+        contact.first_name,
+        contact.last_name,
+        contact.email,
+        contact.phone,
+        contact.barn_name,
+        contact.type,
+      ]
+    : [];
+}
+
+function showSearchValues(show: Show | undefined) {
+  return show
+    ? [
+        show.name,
+        show.slug,
+        show.venue,
+        show.location,
+        show.city,
+        show.state,
+        show.country,
+        show.start_date,
+        show.end_date,
+      ]
+    : [];
+}
+
+function contactsForHorseRole(
+  horseId: string,
+  role: "agent" | "owner" | "co-owner" | "rider" | "manager",
+  contacts: AppContext["contacts"],
+  horseContacts: AppContext["horseContacts"],
+) {
+  const contactIds = new Set(
+    horseContacts
+      .filter((horseContact) => horseContact.horse_id === horseId && horseContact.role === role)
+      .map((horseContact) => horseContact.contact_id),
+  );
+
+  return contacts.filter((contact) => contactIds.has(contact.id));
+}
+
+function normalizeSearchText(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9#]+/g, " ")
+    .trim();
 }
 
 function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData, locale: Locale) {
@@ -498,7 +895,7 @@ function renderInvoicePrintHtml(invoiceDocument: InvoiceDocumentData, locale: Lo
           </header>
           <section class="grid">
             <div class="block">
-              <span class="kicker">${escapeHtml(uiText(locale, "Concours", "Show"))}</span>
+              <span class="kicker">${escapeHtml(uiText(locale, "Contexte", "Context"))}</span>
               <h2>${escapeHtml(invoiceDocument.showName)}</h2>
               <p>${escapeHtml(invoiceDocument.showDates)}</p>
               ${invoiceDocument.showLocation ? `<p class="muted">${escapeHtml(invoiceDocument.showLocation)}</p>` : ""}
@@ -562,9 +959,17 @@ function organizationTaxLines(organization: Organization | null, locale: Locale 
   ]);
 }
 
-function showDateRange(show: Show | undefined, locale: Locale = "fr") {
+function invoiceContextLabel(show: Show | undefined, locale: Locale = "fr") {
   if (!show) {
-    return uiText(locale, "Concours non associé", "No linked show");
+    return uiText(locale, "Facture association", "Association invoice");
+  }
+
+  return show.name;
+}
+
+function invoiceContextDateLine(show: Show | undefined, locale: Locale = "fr") {
+  if (!show) {
+    return uiText(locale, "Hors concours", "Outside a show");
   }
 
   if (show.start_date === show.end_date) {
@@ -624,6 +1029,25 @@ function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"], locale: Locale
     case "tax":
       return uiText(locale, "Taxe", "Tax");
     case "manual":
+    default:
+      return uiText(locale, "Manuel", "Manual");
+  }
+}
+
+function productCategoryLabel(category: OrganizationProduct["category"], locale: Locale = "fr") {
+  switch (category) {
+    case "stall_extra":
+      return uiText(locale, "Extra de réservation", "Reservation extra");
+    case "feed":
+      return uiText(locale, "Foin / ripe", "Feed / bedding");
+    case "merch":
+      return uiText(locale, "Promo", "Merch");
+    case "ticket":
+      return uiText(locale, "Billet", "Ticket");
+    case "meal":
+      return uiText(locale, "Repas", "Meal");
+    case "admin_fee":
+      return uiText(locale, "Frais admin", "Admin fee");
     default:
       return uiText(locale, "Manuel", "Manual");
   }

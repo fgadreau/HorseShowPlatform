@@ -11,17 +11,22 @@ import { getInitialLocale, saveLocale, translations } from "./lib/i18n";
 import type { Locale } from "./lib/i18n";
 import { supabase } from "./lib/supabase";
 import {
+  cancelManualSale,
   createClass,
   createClassTemplate,
   createClassTemplateDivision,
   createBackNumberRange,
   claimHorseBackNumber,
   createContact,
+  createContactOrganizationMembership,
   createDivision,
   createEntry,
   createHorse,
   createUploadedHorseHealthDocument,
   createOrganization,
+  createOrganizationMembershipType,
+  createOrganizationProduct,
+  createManualSale,
   createShow,
   createShowAnnouncement,
   deleteShowAnnouncement,
@@ -57,6 +62,8 @@ import {
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
+  updateOrganizationMembershipType,
+  updateOrganizationProduct,
   updatePayoutAwardPayee,
   updatePayoutCalculationStatus,
   updateShow,
@@ -262,6 +269,11 @@ export default function App() {
         setNotice({ tone: "success", message: "Organization created." });
         await refreshContext();
       }}
+      onCreateOrganizationMembershipType={async (input) => {
+        await createOrganizationMembershipType(input);
+        setNotice({ tone: "success", message: "Carte de membre créée." });
+        await refreshContext();
+      }}
       onCreateShow={async (input) => {
         const show = await createShow(input);
         setNotice({ tone: "success", message: "Show created." });
@@ -288,6 +300,23 @@ export default function App() {
         setNotice({ tone: "success", message: "Contact created." });
         await refreshContext();
         return contact;
+      }}
+      onCreateContactOrganizationMembership={async (input) => {
+        const membership = await createContactOrganizationMembership(input);
+        setNotice({ tone: "success", message: "Carte de membre vendue et facture draft mise à jour." });
+        await refreshContext();
+        return membership;
+      }}
+      onCreateManualSale={async (input) => {
+        const sale = await createManualSale(input);
+        setNotice({ tone: "success", message: "Vente ajoutée et facture draft mise à jour." });
+        await refreshContext();
+        return sale;
+      }}
+      onCancelManualSale={async (id) => {
+        await cancelManualSale(id);
+        setNotice({ tone: "success", message: "Vente annulée et facture recalculée." });
+        await refreshContext();
       }}
       onDeleteContact={async (id) => {
         await deleteContact(id);
@@ -542,6 +571,21 @@ export default function App() {
       onUpdateOrganizationHealthSettings={async (id, input) => {
         await updateOrganizationHealthSettings(id, input);
         setNotice({ tone: "success", message: "Reglages de l'association mis a jour." });
+        await refreshContext();
+      }}
+      onCreateOrganizationProduct={async (input) => {
+        await createOrganizationProduct(input);
+        setNotice({ tone: "success", message: "Produit créé." });
+        await refreshContext();
+      }}
+      onUpdateOrganizationProduct={async (id, input) => {
+        await updateOrganizationProduct(id, input);
+        setNotice({ tone: "success", message: "Produit mis à jour." });
+        await refreshContext();
+      }}
+      onUpdateOrganizationMembershipType={async (id, input) => {
+        await updateOrganizationMembershipType(id, input);
+        setNotice({ tone: "success", message: "Carte de membre mise à jour." });
         await refreshContext();
       }}
       onUpdateShowScorePaidWarmup={async (id, input) => {

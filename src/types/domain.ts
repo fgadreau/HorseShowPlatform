@@ -104,7 +104,7 @@ export type OrganizationMember = {
 export type Invoice = {
   id: string;
   organization_id: string;
-  show_id: string;
+  show_id: string | null;
   invoice_number: string;
   payer_contact_id: string;
   status: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "void";
@@ -132,6 +132,40 @@ export type InvoiceLineItem = {
   tax_applicable: boolean;
   tax_amount: number;
   created_at: string;
+};
+
+export type ProductCategory = "stall_extra" | "feed" | "merch" | "ticket" | "meal" | "admin_fee" | "manual";
+
+export type OrganizationProduct = {
+  id: string;
+  organization_id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  category: ProductCategory;
+  default_price: number;
+  tax_applicable: boolean;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ManualSale = {
+  id: string;
+  organization_id: string;
+  product_id: string | null;
+  show_id: string | null;
+  payer_contact_id: string;
+  sold_by_user_id: string;
+  status: "draft" | "active" | "cancelled";
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_applicable: boolean;
+  invoice_id: string | null;
+  source_payload: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 };
 
 export type Contact = {
@@ -200,6 +234,42 @@ export type OrganizationExternalMembershipRequirement = {
   contact_type: Contact["type"];
   is_required: boolean;
   created_at: string;
+};
+
+export type OrganizationMembershipType = {
+  id: string;
+  organization_id: string;
+  name: string;
+  code: string | null;
+  description: string | null;
+  season_year: number;
+  price: number;
+  tax_applicable: boolean;
+  valid_from: string;
+  valid_until: string;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ContactOrganizationMembership = {
+  id: string;
+  organization_id: string;
+  contact_id: string;
+  membership_type_id: string;
+  show_id: string | null;
+  payer_contact_id: string | null;
+  season_year: number;
+  membership_number: string | null;
+  status: "draft" | "active" | "expired" | "cancelled";
+  valid_from: string;
+  valid_until: string;
+  invoice_id: string | null;
+  notes: string | null;
+  sold_by_user_id: string | null;
+  activated_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type ContactExternalMembership = {
@@ -680,6 +750,7 @@ export type StallOption = {
   requires_horse_assignment: boolean;
   limit_per_horse_stalls: number | null;
   category: "stall" | "camping" | "parking" | "extra" | null;
+  product_id: string | null;
   notes: string | null;
   created_at: string;
 };
@@ -838,6 +909,64 @@ export type ExternalMembershipInput = {
   membership_number: string;
   status?: ContactExternalMembership["status"];
   expires_on?: string | null;
+};
+
+export type OrganizationMembershipTypeInput = {
+  organization_id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  season_year: number;
+  price: number;
+  tax_applicable?: boolean;
+  valid_from: string;
+  valid_until: string;
+  is_active?: boolean;
+};
+
+export type OrganizationMembershipTypeUpdateInput = Partial<
+  Omit<OrganizationMembershipTypeInput, "organization_id">
+>;
+
+export type ContactOrganizationMembershipInput = {
+  organization_id: string;
+  contact_id: string;
+  membership_type_id: string;
+  show_id?: string | null;
+  payer_contact_id?: string | null;
+  membership_number?: string | null;
+  status?: ContactOrganizationMembership["status"];
+  notes?: string | null;
+  sold_by_user_id: string;
+};
+
+export type OrganizationProductInput = {
+  organization_id: string;
+  name: string;
+  code?: string | null;
+  description?: string | null;
+  category: ProductCategory;
+  default_price: number;
+  tax_applicable?: boolean;
+  is_active?: boolean;
+};
+
+export type OrganizationProductUpdateInput = Partial<
+  Omit<OrganizationProductInput, "organization_id">
+>;
+
+export type ManualSaleInput = {
+  organization_id: string;
+  product_id?: string | null;
+  show_id?: string | null;
+  payer_contact_id: string;
+  sold_by_user_id: string;
+  status?: ManualSale["status"];
+  description: string;
+  quantity: number;
+  unit_price: number;
+  tax_applicable?: boolean;
+  source_payload?: Record<string, unknown>;
 };
 
 export type ExternalHorseMembershipInput = {
@@ -1111,6 +1240,7 @@ export type StallOptionInput = {
   requires_horse_assignment?: boolean;
   limit_per_horse_stalls?: number | null;
   category?: StallOption["category"];
+  product_id?: string | null;
   notes?: string;
 };
 
@@ -1126,6 +1256,7 @@ export type StallOptionUpdateInput = {
   requires_horse_assignment?: boolean;
   limit_per_horse_stalls?: number | null;
   category?: StallOption["category"];
+  product_id?: string | null;
   notes?: string | null;
 };
 
