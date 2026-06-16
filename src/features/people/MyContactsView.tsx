@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, deleteContact, updateContact } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
+import type { Contact, ContactExternalMembership, ContactOrganizationLink, ContactOrganizationMembership, ContactRole, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, contactRoleSummary } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -13,11 +13,13 @@ function MyContactsView({
   locale,
   contacts,
   contactExternalMemberships,
+  contactOrganizationLinks,
   contactOrganizationMemberships,
   contactRoles,
   externalOrganizations,
   membershipRequirements,
   organizationMembershipTypes,
+  organizations,
   organization,
   profileId,
   onCreateContact,
@@ -28,11 +30,13 @@ function MyContactsView({
   locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
+  contactOrganizationLinks: ContactOrganizationLink[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   contactRoles: ContactRole[];
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
   organizationMembershipTypes: OrganizationMembershipType[];
+  organizations: Organization[];
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
@@ -42,8 +46,10 @@ function MyContactsView({
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
-  const [membershipTypeByContact, setMembershipTypeByContact] = useState<Record<string, string>>({});
-  const [buyingMembershipContactId, setBuyingMembershipContactId] = useState("");
+  const [membershipContact, setMembershipContact] = useState<Contact | null>(null);
+  const [membershipAssociationSearch, setMembershipAssociationSearch] = useState("");
+  const [selectedMembershipOrganizationId, setSelectedMembershipOrganizationId] = useState("");
+  const [buyingMembershipTypeId, setBuyingMembershipTypeId] = useState("");
   const canCreateLinkedContact = Boolean(organization && profileId);
   const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
   const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active);
@@ -52,35 +58,59 @@ function MyContactsView({
     return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
   }
 
-  function selectedMembershipTypeId(contactId: string) {
-    return membershipTypeByContact[contactId] ?? activeMembershipTypes[0]?.id ?? "";
+  function contactIsLinkedToOrganization(contact: Contact, organizationId: string) {
+    return (
+      contact.organization_id === organizationId
+      || contactOrganizationLinks.some((link) => link.contact_id === contact.id && link.organization_id === organizationId)
+    );
+  }
+
+  function membershipTypesForOrganization(organizationId: string) {
+    return activeMembershipTypes.filter((type) => type.organization_id === organizationId);
+  }
+
+  function membershipOrganizationsForContact(contact: Contact) {
+    return organizations.filter((candidate) => (
+      contactIsLinkedToOrganization(contact, candidate.id)
+      && membershipTypesForOrganization(candidate.id).length > 0
+    ));
   }
 
   function contactHasMembershipType(contactId: string, membershipTypeId: string) {
     return membershipsForContact(contactId).some((membership) => membership.membership_type_id === membershipTypeId);
   }
 
-  async function handleBuyMembership(contact: Contact) {
-    const membershipTypeId = selectedMembershipTypeId(contact.id);
+  function openMembershipModal(contact: Contact) {
+    const candidateOrganizations = membershipOrganizationsForContact(contact);
+    const defaultOrganizationId = organization && candidateOrganizations.some((candidate) => candidate.id === organization.id)
+      ? organization.id
+      : candidateOrganizations[0]?.id ?? "";
 
-    if (!organization || !membershipTypeId || !profileId) {
+    setMembershipAssociationSearch("");
+    setSelectedMembershipOrganizationId(defaultOrganizationId);
+    setMembershipContact(contact);
+  }
+
+  async function handleBuyMembership(membershipType: OrganizationMembershipType) {
+    if (!membershipContact || !profileId) {
       return;
     }
 
-    setBuyingMembershipContactId(contact.id);
+    setBuyingMembershipTypeId(membershipType.id);
 
     try {
       await onCreateContactOrganizationMembership({
-        organization_id: organization.id,
-        contact_id: contact.id,
-        membership_type_id: membershipTypeId,
+        organization_id: membershipType.organization_id,
+        contact_id: membershipContact.id,
+        membership_type_id: membershipType.id,
         show_id: null,
-        payer_contact_id: contact.id,
+        payer_contact_id: membershipContact.id,
         status: "active",
         sold_by_user_id: profileId,
       });
+      setMembershipContact(null);
     } finally {
-      setBuyingMembershipContactId("");
+      setBuyingMembershipTypeId("");
     }
   }
 
@@ -159,6 +189,96 @@ function MyContactsView({
         </ModalDialog>
       ) : null}
 
+      {membershipContact ? (
+        <ModalDialog description={contactLabel(membershipContact)} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Acheter une carte de membre", "Buy a membership")} onClose={() => setMembershipContact(null)}>
+          {(() => {
+            const availableOrganizations = membershipOrganizationsForContact(membershipContact);
+            const normalizedSearch = membershipAssociationSearch.trim().toLowerCase();
+            const filteredOrganizations = normalizedSearch
+              ? availableOrganizations.filter((candidate) =>
+                  [candidate.name, candidate.short_name, candidate.slug].filter(Boolean).join(" ").toLowerCase().includes(normalizedSearch),
+                )
+              : availableOrganizations;
+            const selectedOrganization = findById(availableOrganizations, selectedMembershipOrganizationId) ?? filteredOrganizations[0] ?? null;
+            const selectedTypes = selectedOrganization ? membershipTypesForOrganization(selectedOrganization.id) : [];
+
+            return (
+              <div className="content-grid">
+                <section className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <h2>{uiText(locale, "Association", "Association")}</h2>
+                      <p>{uiText(locale, "Recherche l'association qui vend la carte.", "Search the association selling the membership.")}</p>
+                    </div>
+                  </div>
+                  <label>
+                    {uiText(locale, "Rechercher", "Search")}
+                    <input
+                      placeholder={uiText(locale, "Nom de l'association", "Association name")}
+                      value={membershipAssociationSearch}
+                      onChange={(event) => setMembershipAssociationSearch(event.target.value)}
+                    />
+                  </label>
+                  <div className="table">
+                    {filteredOrganizations.map((candidate) => {
+                      const typeCount = membershipTypesForOrganization(candidate.id).length;
+                      return (
+                        <button
+                          className="text-button"
+                          key={candidate.id}
+                          type="button"
+                          onClick={() => setSelectedMembershipOrganizationId(candidate.id)}
+                        >
+                          {candidate.name}
+                          {candidate.id === selectedOrganization?.id ? ` · ${uiText(locale, "sélectionnée", "selected")}` : ""}
+                          {` · ${typeCount} ${uiText(locale, "carte", "membership")}${typeCount > 1 ? "s" : ""}`}
+                        </button>
+                      );
+                    })}
+                    {!filteredOrganizations.length ? <EmptyState label={uiText(locale, "Aucune association disponible pour ce cavalier.", "No association is available for this rider.")} /> : null}
+                  </div>
+                </section>
+
+                <section className="panel">
+                  <div className="panel-header">
+                    <div>
+                      <h2>{uiText(locale, "Cartes disponibles", "Available memberships")}</h2>
+                      <p>{selectedOrganization ? selectedOrganization.name : uiText(locale, "Choisis une association.", "Choose an association.")}</p>
+                    </div>
+                  </div>
+                  <div className="table">
+                    {selectedTypes.map((membershipType) => {
+                      const alreadyLinked = contactHasMembershipType(membershipContact.id, membershipType.id);
+                      const buying = buyingMembershipTypeId === membershipType.id;
+                      return (
+                        <div className="table-row" key={membershipType.id}>
+                          <div>
+                            <strong>{membershipType.name}</strong>
+                            <p className="muted-line">
+                              {membershipType.code ? `${membershipType.code} · ` : ""}
+                              {membershipType.season_year} · {formatDate(membershipType.valid_from)} - {formatDate(membershipType.valid_until)}
+                            </p>
+                          </div>
+                          <span>{formatCurrency(membershipType.price, selectedOrganization?.currency ?? "CAD")}</span>
+                          <button className="text-button" disabled={alreadyLinked || buying} type="button" onClick={() => void handleBuyMembership(membershipType)}>
+                            {buying
+                              ? uiText(locale, "Achat...", "Buying...")
+                              : alreadyLinked
+                                ? uiText(locale, "Déjà liée", "Already linked")
+                                : uiText(locale, "Acheter", "Buy")}
+                          </button>
+                        </div>
+                      );
+                    })}
+                    {!selectedTypes.length ? <EmptyState label={uiText(locale, "Aucune carte active pour cette association.", "No active membership for this association.")} /> : null}
+                  </div>
+                </section>
+              </div>
+            );
+          })()}
+        </ModalDialog>
+      ) : null}
+
       <section className="panel span-2">
         <div className="panel-header">
           <div>
@@ -175,11 +295,7 @@ function MyContactsView({
           </div>
           {contacts.map((contact) => {
             const contactMemberships = membershipsForContact(contact.id);
-            const membershipTypeId = selectedMembershipTypeId(contact.id);
-            const selectedMembershipType = findById(activeMembershipTypes, membershipTypeId);
-            const alreadyHasSelectedMembership = membershipTypeId ? contactHasMembershipType(contact.id, membershipTypeId) : false;
-            const buyingMembership = buyingMembershipContactId === contact.id;
-            const canBuyMembership = Boolean(organization && selectedMembershipType && !alreadyHasSelectedMembership && !buyingMembership);
+            const availableMembershipOrganizationCount = membershipOrganizationsForContact(contact).length;
 
             return (
               <div className="table-row" key={contact.id}>
@@ -191,9 +307,10 @@ function MyContactsView({
                 <div className="horse-chip-row">
                   {contactMemberships.map((membership) => {
                     const membershipType = findById(organizationMembershipTypes, membership.membership_type_id);
+                    const membershipOrganization = findById(organizations, membership.organization_id);
                     return (
                       <span className={membership.status === "active" ? "horse-status-chip success" : "horse-status-chip neutral"} key={membership.id}>
-                        <span>{uiText(locale, "Carte", "Membership")}</span>
+                        <span>{membershipOrganization?.short_name || membershipOrganization?.name || uiText(locale, "Carte", "Membership")}</span>
                         <strong>
                           {membershipType ? `${membershipType.code ?? membershipType.name} ${membership.season_year}` : membership.season_year}
                         </strong>
@@ -204,34 +321,9 @@ function MyContactsView({
                   {!contactMemberships.length ? <span className="muted-line">{uiText(locale, "Aucune carte", "No membership")}</span> : null}
                 </div>
                 <div className="row-actions">
-                  {activeMembershipTypes.length ? (
-                    <>
-                      <select
-                        aria-label={uiText(locale, "Type de carte à acheter", "Membership type to buy")}
-                        disabled={buyingMembership}
-                        value={membershipTypeId}
-                        onChange={(event) =>
-                          setMembershipTypeByContact((current) => ({
-                            ...current,
-                            [contact.id]: event.target.value,
-                          }))
-                        }
-                      >
-                        {activeMembershipTypes.map((type) => (
-                          <option key={type.id} value={type.id}>
-                            {`${type.code ?? type.name} ${type.season_year} · ${formatCurrency(type.price, organization?.currency ?? "CAD")}`}
-                          </option>
-                        ))}
-                      </select>
-                      <button className="text-button" disabled={!canBuyMembership} type="button" onClick={() => void handleBuyMembership(contact)}>
-                        {buyingMembership
-                          ? uiText(locale, "Achat...", "Buying...")
-                          : alreadyHasSelectedMembership
-                            ? uiText(locale, "Déjà liée", "Already linked")
-                            : uiText(locale, "Acheter carte", "Buy membership")}
-                      </button>
-                    </>
-                  ) : null}
+                  <button className="text-button" disabled={!availableMembershipOrganizationCount} type="button" onClick={() => openMembershipModal(contact)}>
+                    {uiText(locale, "Acheter une carte de membre", "Buy a membership")}
+                  </button>
                   <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                     {uiText(locale, "Modifier", "Edit")}
                   </button>

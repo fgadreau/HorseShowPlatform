@@ -522,13 +522,10 @@ export function Dashboard({
   );
   const personalHorses = horses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
+  const personalContactMemberships = contactOrganizationMemberships.filter((membership) => personalContactIds.has(membership.contact_id));
   const selectedOrganizationPersonalContacts = selectedOrganization
     ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id) || contact.organization_id === selectedOrganization.id)
     : personalContacts;
-  const selectedOrganizationPersonalContactIds = new Set(selectedOrganizationPersonalContacts.map((contact) => contact.id));
-  const selectedOrganizationPersonalContactMemberships = selectedOrganizationContactMemberships.filter((membership) =>
-    selectedOrganizationPersonalContactIds.has(membership.contact_id),
-  );
   const selectedOrganizationPersonalHorses = selectedOrganization
     ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id) || horse.organization_id === selectedOrganization.id)
     : personalHorses;
@@ -1070,13 +1067,15 @@ export function Dashboard({
         {effectiveView === "my-riders" ? (
           <MyContactsView
             locale={locale}
-            contacts={selectedOrganizationPersonalContacts}
+            contacts={personalContacts}
             contactExternalMemberships={contactExternalMemberships}
-            contactOrganizationMemberships={selectedOrganizationPersonalContactMemberships}
+            contactOrganizationLinks={contactOrganizationLinks}
+            contactOrganizationMemberships={personalContactMemberships}
             contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
-            organizationMembershipTypes={selectedOrganizationMembershipTypes}
+            organizationMembershipTypes={organizationMembershipTypes}
+            organizations={organizations}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
