@@ -4,8 +4,8 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, deleteContact, updateContact } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactOrganizationLink, ContactOrganizationMembership, ContactRole, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
-import { uiText, contactRoleSummary } from "../dashboard/shared";
+import type { Contact, ContactExternalMembership, ContactOrganizationLink, ContactOrganizationMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
+import { uiText } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
 
@@ -15,7 +15,6 @@ function MyContactsView({
   contactExternalMemberships,
   contactOrganizationLinks,
   contactOrganizationMemberships,
-  contactRoles,
   externalOrganizations,
   membershipRequirements,
   organizationMembershipTypes,
@@ -32,7 +31,6 @@ function MyContactsView({
   contactExternalMemberships: ContactExternalMembership[];
   contactOrganizationLinks: ContactOrganizationLink[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
-  contactRoles: ContactRole[];
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
   organizationMembershipTypes: OrganizationMembershipType[];
@@ -289,7 +287,6 @@ function MyContactsView({
         <div className="table">
           <div className="table-row table-head">
             <span>{uiText(locale, "Nom", "Name")}</span>
-            <span>{uiText(locale, "Rôles", "Roles")}</span>
             <span>{uiText(locale, "Cartes", "Memberships")}</span>
             <span>Action</span>
           </div>
@@ -303,7 +300,6 @@ function MyContactsView({
                   <strong>{contactLabel(contact)}</strong>
                   <p className="muted-line">{contact.email || uiText(locale, "Aucun courriel", "No email")}</p>
                 </div>
-                <span>{contactRoleSummary(contact, contactRoles, locale)}</span>
                 <div className="horse-chip-row">
                   {contactMemberships.map((membership) => {
                     const membershipType = findById(organizationMembershipTypes, membership.membership_type_id);

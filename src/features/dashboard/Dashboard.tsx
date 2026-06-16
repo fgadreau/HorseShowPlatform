@@ -1071,7 +1071,6 @@ export function Dashboard({
             contactExternalMemberships={contactExternalMemberships}
             contactOrganizationLinks={contactOrganizationLinks}
             contactOrganizationMemberships={personalContactMemberships}
-            contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organizationMembershipTypes={organizationMembershipTypes}
