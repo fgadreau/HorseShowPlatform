@@ -525,6 +525,10 @@ export function Dashboard({
   const selectedOrganizationPersonalContacts = selectedOrganization
     ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id) || contact.organization_id === selectedOrganization.id)
     : personalContacts;
+  const selectedOrganizationPersonalContactIds = new Set(selectedOrganizationPersonalContacts.map((contact) => contact.id));
+  const selectedOrganizationPersonalContactMemberships = selectedOrganizationContactMemberships.filter((membership) =>
+    selectedOrganizationPersonalContactIds.has(membership.contact_id),
+  );
   const selectedOrganizationPersonalHorses = selectedOrganization
     ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id) || horse.organization_id === selectedOrganization.id)
     : personalHorses;
@@ -1066,14 +1070,17 @@ export function Dashboard({
         {effectiveView === "my-riders" ? (
           <MyContactsView
             locale={locale}
-            contacts={personalContacts}
+            contacts={selectedOrganizationPersonalContacts}
             contactExternalMemberships={contactExternalMemberships}
+            contactOrganizationMemberships={selectedOrganizationPersonalContactMemberships}
             contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}
+            organizationMembershipTypes={selectedOrganizationMembershipTypes}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
+            onCreateContactOrganizationMembership={onCreateContactOrganizationMembership}
             onDeleteContact={onDeleteContact}
             onUpdateContact={onUpdateContact}
           />

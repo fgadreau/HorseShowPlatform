@@ -1,10 +1,10 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, findById } from "../../lib/display";
+import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, deleteContact, updateContact, setOrganizationExternalMembershipRequirement } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactRole, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
+import { createContact, createContactOrganizationMembership, deleteContact, updateContact } from "../../services/supabaseServices";
+import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, contactRoleSummary } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -13,31 +13,76 @@ function MyContactsView({
   locale,
   contacts,
   contactExternalMemberships,
+  contactOrganizationMemberships,
   contactRoles,
   externalOrganizations,
   membershipRequirements,
+  organizationMembershipTypes,
   organization,
   profileId,
   onCreateContact,
+  onCreateContactOrganizationMembership,
   onDeleteContact,
   onUpdateContact,
 }: {
   locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
+  contactOrganizationMemberships: ContactOrganizationMembership[];
   contactRoles: ContactRole[];
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
+  organizationMembershipTypes: OrganizationMembershipType[];
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [membershipTypeByContact, setMembershipTypeByContact] = useState<Record<string, string>>({});
+  const [buyingMembershipContactId, setBuyingMembershipContactId] = useState("");
   const canCreateLinkedContact = Boolean(organization && profileId);
   const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
+  const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active);
+
+  function membershipsForContact(contactId: string) {
+    return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
+  }
+
+  function selectedMembershipTypeId(contactId: string) {
+    return membershipTypeByContact[contactId] ?? activeMembershipTypes[0]?.id ?? "";
+  }
+
+  function contactHasMembershipType(contactId: string, membershipTypeId: string) {
+    return membershipsForContact(contactId).some((membership) => membership.membership_type_id === membershipTypeId);
+  }
+
+  async function handleBuyMembership(contact: Contact) {
+    const membershipTypeId = selectedMembershipTypeId(contact.id);
+
+    if (!organization || !membershipTypeId || !profileId) {
+      return;
+    }
+
+    setBuyingMembershipContactId(contact.id);
+
+    try {
+      await onCreateContactOrganizationMembership({
+        organization_id: organization.id,
+        contact_id: contact.id,
+        membership_type_id: membershipTypeId,
+        show_id: null,
+        payer_contact_id: contact.id,
+        status: "active",
+        sold_by_user_id: profileId,
+      });
+    } finally {
+      setBuyingMembershipContactId("");
+    }
+  }
 
   async function handleDeleteContact(contact: Contact) {
     const label = contactLabel(contact);
@@ -61,6 +106,7 @@ function MyContactsView({
         stats={[
           { label: "Contacts", value: String(contacts.length) },
           { label: uiText(locale, "Cavaliers", "Riders"), value: String(contacts.filter((contact) => contact.type === "rider").length) },
+          { label: uiText(locale, "Cartes", "Memberships"), value: String(contactOrganizationMemberships.filter((membership) => membership.status !== "cancelled").length) },
         ]}
       />
 
@@ -124,24 +170,78 @@ function MyContactsView({
           <div className="table-row table-head">
             <span>{uiText(locale, "Nom", "Name")}</span>
             <span>{uiText(locale, "Rôles", "Roles")}</span>
-            <span>{uiText(locale, "Courriel", "Email")}</span>
+            <span>{uiText(locale, "Cartes", "Memberships")}</span>
             <span>Action</span>
           </div>
-          {contacts.map((contact) => (
-            <div className="table-row" key={contact.id}>
-              <strong>{contactLabel(contact)}</strong>
-              <span>{contactRoleSummary(contact, contactRoles, locale)}</span>
-              <span>{contact.email || uiText(locale, "Aucun courriel", "No email")}</span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
-                  {uiText(locale, "Modifier", "Edit")}
-                </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
-                  {uiText(locale, "Supprimer", "Delete")}
-                </button>
+          {contacts.map((contact) => {
+            const contactMemberships = membershipsForContact(contact.id);
+            const membershipTypeId = selectedMembershipTypeId(contact.id);
+            const selectedMembershipType = findById(activeMembershipTypes, membershipTypeId);
+            const alreadyHasSelectedMembership = membershipTypeId ? contactHasMembershipType(contact.id, membershipTypeId) : false;
+            const buyingMembership = buyingMembershipContactId === contact.id;
+            const canBuyMembership = Boolean(organization && selectedMembershipType && !alreadyHasSelectedMembership && !buyingMembership);
+
+            return (
+              <div className="table-row" key={contact.id}>
+                <div>
+                  <strong>{contactLabel(contact)}</strong>
+                  <p className="muted-line">{contact.email || uiText(locale, "Aucun courriel", "No email")}</p>
+                </div>
+                <span>{contactRoleSummary(contact, contactRoles, locale)}</span>
+                <div className="horse-chip-row">
+                  {contactMemberships.map((membership) => {
+                    const membershipType = findById(organizationMembershipTypes, membership.membership_type_id);
+                    return (
+                      <span className={membership.status === "active" ? "horse-status-chip success" : "horse-status-chip neutral"} key={membership.id}>
+                        <span>{uiText(locale, "Carte", "Membership")}</span>
+                        <strong>
+                          {membershipType ? `${membershipType.code ?? membershipType.name} ${membership.season_year}` : membership.season_year}
+                        </strong>
+                        <span>{formatDate(membership.valid_until)}</span>
+                      </span>
+                    );
+                  })}
+                  {!contactMemberships.length ? <span className="muted-line">{uiText(locale, "Aucune carte", "No membership")}</span> : null}
+                </div>
+                <div className="row-actions">
+                  {activeMembershipTypes.length ? (
+                    <>
+                      <select
+                        aria-label={uiText(locale, "Type de carte à acheter", "Membership type to buy")}
+                        disabled={buyingMembership}
+                        value={membershipTypeId}
+                        onChange={(event) =>
+                          setMembershipTypeByContact((current) => ({
+                            ...current,
+                            [contact.id]: event.target.value,
+                          }))
+                        }
+                      >
+                        {activeMembershipTypes.map((type) => (
+                          <option key={type.id} value={type.id}>
+                            {`${type.code ?? type.name} ${type.season_year} · ${formatCurrency(type.price, organization?.currency ?? "CAD")}`}
+                          </option>
+                        ))}
+                      </select>
+                      <button className="text-button" disabled={!canBuyMembership} type="button" onClick={() => void handleBuyMembership(contact)}>
+                        {buyingMembership
+                          ? uiText(locale, "Achat...", "Buying...")
+                          : alreadyHasSelectedMembership
+                            ? uiText(locale, "Déjà liée", "Already linked")
+                            : uiText(locale, "Acheter carte", "Buy membership")}
+                      </button>
+                    </>
+                  ) : null}
+                  <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
+                    {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
+                    {uiText(locale, "Supprimer", "Delete")}
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
           {!contacts.length ? <EmptyState label={uiText(locale, "Crée ton premier contact pour commencer.", "Create your first contact to get started.")} /> : null}
         </div>
       </section>
