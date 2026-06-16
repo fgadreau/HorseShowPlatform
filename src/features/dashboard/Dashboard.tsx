@@ -1069,7 +1069,6 @@ export function Dashboard({
             locale={locale}
             contacts={personalContacts}
             contactExternalMemberships={contactExternalMemberships}
-            contactOrganizationLinks={contactOrganizationLinks}
             contactOrganizationMemberships={personalContactMemberships}
             externalOrganizations={externalOrganizations}
             membershipRequirements={selectedOrganizationMembershipRequirements}

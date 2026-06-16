@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, deleteContact, updateContact } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactOrganizationLink, ContactOrganizationMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
+import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -13,7 +13,6 @@ function MyContactsView({
   locale,
   contacts,
   contactExternalMemberships,
-  contactOrganizationLinks,
   contactOrganizationMemberships,
   externalOrganizations,
   membershipRequirements,
@@ -29,7 +28,6 @@ function MyContactsView({
   locale: Locale;
   contacts: Contact[];
   contactExternalMemberships: ContactExternalMembership[];
-  contactOrganizationLinks: ContactOrganizationLink[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
@@ -56,22 +54,12 @@ function MyContactsView({
     return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
   }
 
-  function contactIsLinkedToOrganization(contact: Contact, organizationId: string) {
-    return (
-      contact.organization_id === organizationId
-      || contactOrganizationLinks.some((link) => link.contact_id === contact.id && link.organization_id === organizationId)
-    );
-  }
-
   function membershipTypesForOrganization(organizationId: string) {
     return activeMembershipTypes.filter((type) => type.organization_id === organizationId);
   }
 
-  function membershipOrganizationsForContact(contact: Contact) {
-    return organizations.filter((candidate) => (
-      contactIsLinkedToOrganization(contact, candidate.id)
-      && membershipTypesForOrganization(candidate.id).length > 0
-    ));
+  function membershipOrganizations() {
+    return organizations.filter((candidate) => membershipTypesForOrganization(candidate.id).length > 0);
   }
 
   function contactHasMembershipType(contactId: string, membershipTypeId: string) {
@@ -79,7 +67,7 @@ function MyContactsView({
   }
 
   function openMembershipModal(contact: Contact) {
-    const candidateOrganizations = membershipOrganizationsForContact(contact);
+    const candidateOrganizations = membershipOrganizations();
     const defaultOrganizationId = organization && candidateOrganizations.some((candidate) => candidate.id === organization.id)
       ? organization.id
       : candidateOrganizations[0]?.id ?? "";
@@ -190,7 +178,7 @@ function MyContactsView({
       {membershipContact ? (
         <ModalDialog description={contactLabel(membershipContact)} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Acheter une carte de membre", "Buy a membership")} onClose={() => setMembershipContact(null)}>
           {(() => {
-            const availableOrganizations = membershipOrganizationsForContact(membershipContact);
+            const availableOrganizations = membershipOrganizations();
             const normalizedSearch = membershipAssociationSearch.trim().toLowerCase();
             const filteredOrganizations = normalizedSearch
               ? availableOrganizations.filter((candidate) =>
@@ -292,7 +280,7 @@ function MyContactsView({
           </div>
           {contacts.map((contact) => {
             const contactMemberships = membershipsForContact(contact.id);
-            const availableMembershipOrganizationCount = membershipOrganizationsForContact(contact).length;
+            const hasAvailableMemberships = activeMembershipTypes.length > 0;
 
             return (
               <div className="table-row" key={contact.id}>
@@ -317,8 +305,9 @@ function MyContactsView({
                   {!contactMemberships.length ? <span className="muted-line">{uiText(locale, "Aucune carte", "No membership")}</span> : null}
                 </div>
                 <div className="row-actions">
-                  <button className="text-button" disabled={!availableMembershipOrganizationCount} type="button" onClick={() => openMembershipModal(contact)}>
-                    {uiText(locale, "Acheter une carte de membre", "Buy a membership")}
+                  <button className="membership-buy-button" disabled={!hasAvailableMemberships} type="button" onClick={() => openMembershipModal(contact)}>
+                    <Plus size={16} />
+                    <span>{uiText(locale, "Acheter une carte", "Buy membership")}</span>
                   </button>
                   <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                     {uiText(locale, "Modifier", "Edit")}

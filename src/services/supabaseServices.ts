@@ -1290,9 +1290,27 @@ export async function createContactOrganizationMembership(
   input: ContactOrganizationMembershipInput,
 ) {
   const client = requireSupabase();
+  const normalizedInput = normalizeContactOrganizationMembershipInput(input);
+
+  await ensureContactOrganizationLink({
+    organization_id: normalizedInput.organization_id,
+    contact_id: normalizedInput.contact_id,
+    source: "claimed_account",
+    created_by_user_id: normalizedInput.sold_by_user_id,
+  });
+
+  if (normalizedInput.payer_contact_id && normalizedInput.payer_contact_id !== normalizedInput.contact_id) {
+    await ensureContactOrganizationLink({
+      organization_id: normalizedInput.organization_id,
+      contact_id: normalizedInput.payer_contact_id,
+      source: "claimed_account",
+      created_by_user_id: normalizedInput.sold_by_user_id,
+    });
+  }
+
   const { data, error } = await client
     .from("contact_organization_memberships")
-    .insert(normalizeContactOrganizationMembershipInput(input))
+    .insert(normalizedInput)
     .select("*")
     .single<ContactOrganizationMembership>();
 
