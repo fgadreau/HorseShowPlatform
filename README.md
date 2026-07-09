@@ -71,7 +71,7 @@ All three use `phase1-password`. If login fails after resetting the database, re
 ## Important Security Notes
 
 - `VITE_SUPABASE_PUBLISHABLE_KEY` is safe for browser use when RLS is correct. Legacy projects can still use `VITE_SUPABASE_ANON_KEY`.
-- `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET` and `RESEND_API_KEY` must never be used in frontend code.
+- `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` and `NRHA_API_KEY` must never be used in frontend code.
 - Stripe, invoice finalization, email sending and sensitive payment updates should be implemented as Supabase Edge Functions.
 
 ## Next Build Steps

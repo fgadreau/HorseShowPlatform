@@ -1639,6 +1639,50 @@ type GvlCogginsVerification = {
   payload?: Record<string, unknown>;
 };
 
+export type NrhaEligibilityReason = {
+  action?: string;
+  id?: number;
+  message?: string;
+  year?: number;
+};
+
+export type NrhaEligibilityVerification = {
+  error?: string;
+  status?: "eligible" | "ineligible";
+  eligible?: boolean;
+  parameters?: Record<string, unknown> | null;
+  reasons?: NrhaEligibilityReason[];
+  payload?: Record<string, unknown>;
+};
+
+export async function verifyNrhaEligibility(input: {
+  classCode: number;
+  competitionLicenseNumber: number;
+  countryId?: number | null;
+  date: string;
+  isEuroEvent?: boolean;
+  memberNumber: number;
+}) {
+  const client = requireSupabase();
+  const { data: verification, error: invokeError } = await client.functions.invoke<NrhaEligibilityVerification>("nrha-eligibility", {
+    body: input,
+  });
+
+  if (invokeError) {
+    throw new Error(`Validation NRHA impossible: ${invokeError.message}`);
+  }
+
+  if (!verification) {
+    throw new Error("Validation NRHA impossible: aucune reponse recue.");
+  }
+
+  if (verification.error) {
+    throw new Error(verification.error);
+  }
+
+  return verification;
+}
+
 export async function verifyGvlCogginsDocument(input: {
   organization_id: string;
   horse_id: string;

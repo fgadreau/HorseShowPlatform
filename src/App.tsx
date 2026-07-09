@@ -72,6 +72,7 @@ import {
   updateStallOption,
   updateUserProfile,
   verifyGvlCogginsDocument,
+  verifyNrhaEligibility,
   type AppContext,
 } from "./services/supabaseServices";
 import type { Notice, ViewKey } from "./types/ui";
@@ -365,6 +366,7 @@ export default function App() {
         await refreshContext();
         return document;
       }}
+      onVerifyNrhaEligibility={async (input) => verifyNrhaEligibility(input)}
       onDeleteHorse={async (id) => {
         await deleteHorse(id);
         setNotice({ tone: "success", message: "Horse and related test data deleted." });

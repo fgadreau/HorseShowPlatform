@@ -25,6 +25,12 @@ npx supabase link --project-ref YOUR_PROJECT_REF
 npx supabase db push
 ```
 
+Set Edge Function secrets:
+
+```bash
+npx supabase secrets set NRHA_API_KEY=your-nrha-api-key
+```
+
 Required frontend values:
 
 ```bash

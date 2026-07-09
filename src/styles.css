@@ -2554,6 +2554,17 @@ button:focus-visible {
   white-space: nowrap;
 }
 
+.entry-verification-row {
+  align-items: flex-start;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.entry-verification-row .inline-health-message {
+  flex: 1 1 260px;
+}
+
 .contact-create-inline {
   background: #f7faf9;
   border: 1px solid #dce5e1;

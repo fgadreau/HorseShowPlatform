@@ -17,6 +17,7 @@ SUPABASE_SERVICE_ROLE_KEY=
 STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 RESEND_API_KEY=
+NRHA_API_KEY=
 ```
 
 Keep server-only secrets in Supabase or Vercel secret storage. Do not prefix them with `VITE_`.

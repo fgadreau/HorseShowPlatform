@@ -96,6 +96,7 @@ import {
   updateStallOption,
   updateUserProfile,
   verifyGvlCogginsDocument,
+  verifyNrhaEligibility,
   type AppContext,
 } from "../../services/supabaseServices";
 import type {
@@ -234,6 +235,7 @@ export function Dashboard({
   onUpdatePayoutAwardPayee,
   onUpdatePayoutCalculationStatus,
   onVerifyGvlCogginsDocument,
+  onVerifyNrhaEligibility,
   onUpdateShow,
   onUpdateShowScorePaidWarmup,
   onUpdateStallBooking,
@@ -307,6 +309,7 @@ export function Dashboard({
   onUpdatePayoutAwardPayee: (id: string, input: Parameters<typeof updatePayoutAwardPayee>[1]) => Promise<void>;
   onUpdatePayoutCalculationStatus: (id: string, status: Parameters<typeof updatePayoutCalculationStatus>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
@@ -885,6 +888,7 @@ export function Dashboard({
             divisions={selectedShowDivisions}
             entries={selectedShowEntries}
             externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -898,6 +902,7 @@ export function Dashboard({
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaEligibility={onVerifyNrhaEligibility}
           />
         ) : null}
 
@@ -1093,6 +1098,7 @@ export function Dashboard({
             divisions={selectedShowDivisions}
             entries={selectedShowPersonalEntries}
             externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -1106,6 +1112,7 @@ export function Dashboard({
             onDeleteEntry={onDeleteEntry}
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaEligibility={onVerifyNrhaEligibility}
           />
         ) : null}
 
