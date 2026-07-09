@@ -975,6 +975,9 @@ export type ExternalHorseMembershipInput = {
   reference_number: string;
   status?: HorseExternalMembership["status"];
   expires_on?: string | null;
+  verified_at?: string | null;
+  verification_payload?: Record<string, unknown>;
+  verification_source?: string | null;
 };
 
 export type HorseInput = {

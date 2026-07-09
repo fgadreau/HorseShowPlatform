@@ -97,6 +97,7 @@ import {
   updateUserProfile,
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
+  verifyNrhaHorse,
   type AppContext,
 } from "../../services/supabaseServices";
 import type {
@@ -236,6 +237,7 @@ export function Dashboard({
   onUpdatePayoutCalculationStatus,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaHorse,
   onUpdateShow,
   onUpdateShowScorePaidWarmup,
   onUpdateStallBooking,
@@ -310,6 +312,7 @@ export function Dashboard({
   onUpdatePayoutCalculationStatus: (id: string, status: Parameters<typeof updatePayoutCalculationStatus>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
@@ -819,6 +822,7 @@ export function Dashboard({
             onUpdateContact={onUpdateContact}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 
@@ -903,6 +907,7 @@ export function Dashboard({
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 
@@ -1066,6 +1071,7 @@ export function Dashboard({
             onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 
@@ -1113,6 +1119,7 @@ export function Dashboard({
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 

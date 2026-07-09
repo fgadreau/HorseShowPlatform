@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility } from "../../services/supabaseServices";
+import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
@@ -34,6 +34,7 @@ function EntriesView({
   onUpdateEntry,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaHorse,
 }: {
   locale: Locale;
   classes: ClassRecord[];
@@ -58,6 +59,7 @@ function EntriesView({
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [creatingEntry, setCreatingEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
@@ -123,6 +125,7 @@ function EntriesView({
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
             onCreated={() => setCreatingEntry(false)}
           />
         </ModalDialog>

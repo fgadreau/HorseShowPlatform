@@ -1655,6 +1655,58 @@ export type NrhaEligibilityVerification = {
   payload?: Record<string, unknown>;
 };
 
+export type NrhaHorseLookupCheck = {
+  input: string;
+  matched: boolean;
+  official: string | null;
+};
+
+export type NrhaHorseLookupVerification = {
+  checks?: {
+    dateOfBirth?: NrhaHorseLookupCheck;
+    name?: NrhaHorseLookupCheck;
+    ownerName?: NrhaHorseLookupCheck;
+  };
+  error?: string;
+  horse?: Record<string, unknown> | null;
+  inputDateOfBirth?: string;
+  inputName?: string;
+  inputOwnerName?: string;
+  licenseNumber?: number;
+  matched?: boolean;
+  officialFoalDate?: string | null;
+  officialHorseName?: string | null;
+  officialOwnerName?: string | null;
+  payload?: Record<string, unknown> | unknown[];
+  status?: "verified" | "mismatch" | "not_found";
+};
+
+export async function verifyNrhaHorse(input: {
+  dateOfBirth: string;
+  licenseNumber: number;
+  name: string;
+  ownerName: string;
+}) {
+  const client = requireSupabase();
+  const { data: verification, error: invokeError, response } = await client.functions.invoke<NrhaHorseLookupVerification>("nrha-horse-lookup", {
+    body: input,
+  });
+
+  if (invokeError) {
+    throw new Error(await nrhaHorseLookupInvokeErrorMessage(invokeError, response));
+  }
+
+  if (!verification) {
+    throw new Error("Validation NRHA cheval impossible: aucune reponse recue.");
+  }
+
+  if (verification.error) {
+    throw new Error(verification.error);
+  }
+
+  return verification;
+}
+
 export async function verifyNrhaEligibility(input: {
   classCode: number;
   competitionLicenseNumber: number;
@@ -1681,6 +1733,37 @@ export async function verifyNrhaEligibility(input: {
   }
 
   return verification;
+}
+
+async function nrhaHorseLookupInvokeErrorMessage(invokeError: unknown, response?: Response) {
+  const fallbackMessage = invokeError instanceof Error ? invokeError.message : "Erreur inconnue.";
+  const responseStatus = response?.status;
+  const payload = response ? await readNrhaEligibilityErrorPayload(response) : null;
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const errorPayload = payload as NrhaEligibilityErrorPayload;
+    const edgeMessage = typeof errorPayload.error === "string" ? errorPayload.error : null;
+    const nrhaStatus = typeof errorPayload.nrha_status === "number" ? errorPayload.nrha_status : null;
+    const statusParts = [
+      responseStatus ? `code Edge Function ${responseStatus}` : null,
+      nrhaStatus ? `code NRHA ${nrhaStatus}` : null,
+    ].filter(Boolean);
+    const detailParts = [
+      statusParts.length ? statusParts.join(", ") : null,
+      edgeMessage,
+      nrhaPayloadSummary(errorPayload.payload),
+    ].filter(Boolean);
+
+    if (detailParts.length) {
+      return `Validation NRHA cheval impossible: ${detailParts.join(" - ")}`;
+    }
+  }
+
+  if (responseStatus) {
+    return `Validation NRHA cheval impossible: code Edge Function ${responseStatus} - ${fallbackMessage}`;
+  }
+
+  return `Validation NRHA cheval impossible: ${fallbackMessage}`;
 }
 
 type NrhaEligibilityErrorPayload = {
@@ -4857,6 +4940,9 @@ async function syncHorseExternalMemberships(horseId: string, memberships?: Exter
       reference_number: membership.reference_number.trim(),
       status: membership.status ?? "unknown",
       expires_on: membership.expires_on ?? null,
+      verified_at: membership.verified_at ?? null,
+      verification_source: membership.verification_source ?? null,
+      verification_payload: membership.verification_payload ?? {},
     }))
     .filter((membership) => membership.external_organization_id && membership.reference_number);
 

@@ -5,7 +5,7 @@ import { ContactPicker, ModalDialog, SearchSelect, ViewIntro } from "../../compo
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
-import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility } from "../../services/supabaseServices";
+import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist } from "../dashboard/shared";
 import { classEntriesAreClosed, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
@@ -35,6 +35,7 @@ function EntryForm({
   onCreateHorseHealthDocument,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaHorse,
   onCreated,
 }: {
   locale?: Locale;
@@ -58,6 +59,7 @@ function EntryForm({
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onCreated?: () => void;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
@@ -242,6 +244,7 @@ function EntryForm({
               onCreateHorse={onCreateHorse}
               onCreateHorseHealthDocument={onCreateHorseHealthDocument}
               onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+              onVerifyNrhaHorse={onVerifyNrhaHorse}
               onCreated={(horse) => {
                 setCreatedHorse(horse);
                 setHorseId(horse.id);

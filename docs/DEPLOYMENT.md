@@ -31,6 +31,13 @@ Set Edge Function secrets:
 npx supabase secrets set NRHA_API_KEY=your-nrha-api-key
 ```
 
+Deploy NRHA Edge Functions:
+
+```bash
+npx supabase functions deploy nrha-eligibility
+npx supabase functions deploy nrha-horse-lookup
+```
+
 Required frontend values:
 
 ```bash

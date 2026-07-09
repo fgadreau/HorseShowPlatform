@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization } from "../../types/domain";
 import { uiText, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel } from "../dashboard/shared";
 import { HorseForm } from "./HorseForm";
@@ -28,6 +28,7 @@ function MyHorsesView({
   onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
+  onVerifyNrhaHorse,
 }: {
   locale: Locale;
   contacts: Contact[];
@@ -47,6 +48,7 @@ function MyHorsesView({
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
@@ -100,6 +102,7 @@ function MyHorsesView({
             onCreateHorse={onCreateHorse}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
             onCreated={() => setCreatingHorse(false)}
           />
         </ModalDialog>

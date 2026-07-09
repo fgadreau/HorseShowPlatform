@@ -3,7 +3,7 @@ import { Plus, Search } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
@@ -37,6 +37,7 @@ function PeopleView({
   onUpdateContact,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
+  onVerifyNrhaHorse,
 }: {
   locale: Locale;
   contacts: Contact[];
@@ -63,6 +64,7 @@ function PeopleView({
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [creatingHorse, setCreatingHorse] = useState(false);
@@ -199,6 +201,7 @@ function PeopleView({
             onCreateHorse={onCreateHorse}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
             onCreated={() => setCreatingHorse(false)}
           />
         </ModalDialog>
