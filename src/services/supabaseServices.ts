@@ -1688,12 +1688,15 @@ export type NrhaHorseLookupVerification = {
     ownerName?: NrhaHorseLookupCheck;
   };
   error?: string;
+  attemptedNames?: string[];
   horse?: NrhaHorseRecord | null;
   inputDateOfBirth?: string | null;
   inputName?: string;
   inputOwnerName?: string | null;
   licenseNumber?: number;
+  lookupName?: string;
   matched?: boolean;
+  nrha_status?: number;
   officialFoalDate?: string | null;
   officialHorseName?: string | null;
   officialOwnerName?: string | null;
