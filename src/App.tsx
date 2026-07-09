@@ -98,6 +98,7 @@ export default function App() {
   const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
   const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const [contextLoadError, setContextLoadError] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const t = translations[locale];
@@ -152,6 +153,7 @@ export default function App() {
   useEffect(() => {
     if (!session?.user) {
       setContext(null);
+      setContextLoadError("");
       setSelectedOrganizationId("");
       return;
     }
@@ -180,8 +182,12 @@ export default function App() {
     try {
       const nextContext = await loadAppContext(activeSession.user);
       setContext(nextContext);
+      setContextLoadError("");
     } catch (error) {
-      setNotice({ tone: "error", message: errorMessage(error) });
+      const message = errorMessage(error);
+      setContext(null);
+      setContextLoadError(message);
+      setNotice({ tone: "error", message });
     } finally {
       setLoading(false);
     }
@@ -194,6 +200,7 @@ export default function App() {
 
     await supabase.auth.signOut();
     setContext(null);
+    setContextLoadError("");
     setSession(null);
   }
 
@@ -210,6 +217,17 @@ export default function App() {
       return <AuthScreen locale={locale} t={t} onLocaleChange={handleLocaleChange} onNotice={setNotice} notice={notice} />;
     }
     return <LandingPage onSignIn={() => setShowAuth(true)} />;
+  }
+
+  if (!loading && !context && contextLoadError) {
+    return (
+      <DataLoadErrorScreen
+        error={contextLoadError}
+        locale={locale}
+        onRetry={() => void refreshContext(session)}
+        onSignOut={() => void handleSignOut()}
+      />
+    );
   }
 
   return (
@@ -609,5 +627,40 @@ export default function App() {
       onViewChange={setActiveView}
     />
     </Suspense>
+  );
+}
+
+function DataLoadErrorScreen({
+  error,
+  locale,
+  onRetry,
+  onSignOut,
+}: {
+  error: string;
+  locale: Locale;
+  onRetry: () => void;
+  onSignOut: () => void;
+}) {
+  return (
+    <main className="setup-screen">
+      <section className="setup-panel">
+        <p className="eyebrow">Horse Show Platform</p>
+        <h1>{locale === "fr" ? "Données non chargées" : "Data did not load"}</h1>
+        <p>
+          {locale === "fr"
+            ? "L'app est ouverte, mais la lecture des données Supabase a échoué pour cette session."
+            : "The app opened, but Supabase data failed to load for this session."}
+        </p>
+        <pre>{error}</pre>
+        <div className="row-actions">
+          <button className="primary-button" type="button" onClick={onRetry}>
+            {locale === "fr" ? "Réessayer" : "Retry"}
+          </button>
+          <button className="ghost-button" type="button" onClick={onSignOut}>
+            {locale === "fr" ? "Déconnexion" : "Sign out"}
+          </button>
+        </div>
+      </section>
+    </main>
   );
 }
