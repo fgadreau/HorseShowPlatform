@@ -31,6 +31,14 @@ type NrhaHorseRecord = {
   state?: string;
 };
 
+type NrhaLookupAttemptSummary = {
+  bodyKeys?: string[];
+  method: "GET" | "POST";
+  path: string;
+  searchName: string;
+  status: number;
+};
+
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
     headers: {
@@ -125,7 +133,72 @@ function lookupNameCandidates(name: string) {
   );
 }
 
-async function fetchNrhaHorse(lookupUrl: URL, apiKey: string, licenseNumber: number, searchName: string) {
+function uniqueValues(values: string[]) {
+  return Array.from(new Set(values.filter(Boolean)));
+}
+
+function lookupPathCandidates(primaryPath: string) {
+  return uniqueValues([
+    primaryPath,
+    "/api/private/rs/horses",
+    "/api/private/third-party/tools/horse",
+    "/api/private/third-party/tools/horses",
+  ]);
+}
+
+function lookupPostBodies(searchName: string) {
+  return [
+    {
+      name: searchName,
+    },
+  ];
+}
+
+function lookupGetUrls(baseUrl: string, path: string, licenseNumber: number, searchName: string) {
+  const queryCandidates = [
+    {
+      licenseNumber: String(licenseNumber),
+      name: searchName,
+    },
+    {
+      "license-number": String(licenseNumber),
+      name: searchName,
+    },
+    {
+      "competition-license-number": String(licenseNumber),
+      name: searchName,
+    },
+  ];
+
+  return queryCandidates.map((query) => {
+    const url = new URL(`${baseUrl}${path.startsWith("/") ? path : `/${path}`}`);
+
+    Object.entries(query).forEach(([key, value]) => {
+      url.searchParams.set(key, value);
+    });
+
+    return url;
+  });
+}
+
+function attemptSummary(input: {
+  body?: Record<string, unknown>;
+  method: "GET" | "POST";
+  path: string;
+  searchName: string;
+  status: number;
+}): NrhaLookupAttemptSummary {
+  return {
+    bodyKeys: input.body ? Object.keys(input.body) : undefined,
+    method: input.method,
+    path: input.path,
+    searchName: input.searchName,
+    status: input.status,
+  };
+}
+
+async function fetchNrhaHorsePost(baseUrl: string, path: string, apiKey: string, searchName: string, body: Record<string, unknown>) {
+  const lookupUrl = new URL(`${baseUrl}${path.startsWith("/") ? path : `/${path}`}`);
   const response = await fetch(lookupUrl, {
     method: "POST",
     headers: {
@@ -133,32 +206,74 @@ async function fetchNrhaHorse(lookupUrl: URL, apiKey: string, licenseNumber: num
       Access: apiKey,
       "Content-Type": "application/json",
     },
-    body: JSON.stringify({
-      licenseNumber,
-      name: searchName,
-    }),
+    body: JSON.stringify(body),
   });
 
   return {
+    body,
+    method: "POST" as const,
+    path,
     payload: await responsePayload(response),
     response,
     searchName,
   };
 }
 
-async function lookupNrhaHorse(lookupUrl: URL, apiKey: string, licenseNumber: number, name: string) {
-  let latestAttempt: Awaited<ReturnType<typeof fetchNrhaHorse>> | null = null;
+async function fetchNrhaHorseGet(url: URL, path: string, apiKey: string, searchName: string) {
+  const response = await fetch(url, {
+    headers: {
+      Accept: "application/json",
+      Access: apiKey,
+    },
+  });
+
+  return {
+    method: "GET" as const,
+    path,
+    payload: await responsePayload(response),
+    response,
+    searchName,
+  };
+}
+
+async function lookupNrhaHorse(baseUrl: string, primaryPath: string, apiKey: string, licenseNumber: number, name: string) {
+  let latestAttempt: Awaited<ReturnType<typeof fetchNrhaHorsePost>> | Awaited<ReturnType<typeof fetchNrhaHorseGet>> | null = null;
+  let firstNon404Attempt: Awaited<ReturnType<typeof fetchNrhaHorsePost>> | Awaited<ReturnType<typeof fetchNrhaHorseGet>> | null = null;
+  const attemptSummaries: NrhaLookupAttemptSummary[] = [];
 
   for (const searchName of lookupNameCandidates(name)) {
-    const attempt = await fetchNrhaHorse(lookupUrl, apiKey, licenseNumber, searchName);
-    latestAttempt = attempt;
+    for (const path of lookupPathCandidates(primaryPath)) {
+      for (const body of lookupPostBodies(searchName)) {
+        const attempt = await fetchNrhaHorsePost(baseUrl, path, apiKey, searchName, body);
+        latestAttempt = attempt;
+        attemptSummaries.push(attemptSummary({ body, method: attempt.method, path, searchName, status: attempt.response.status }));
 
-    if (attempt.response.ok || attempt.response.status !== 404) {
-      return attempt;
+        if (!attempt.response.ok && attempt.response.status !== 404 && !firstNon404Attempt) {
+          firstNon404Attempt = attempt;
+        }
+
+        if (attempt.response.ok || [401, 403].includes(attempt.response.status)) {
+          return { attempt, attemptSummaries };
+        }
+      }
+
+      for (const url of lookupGetUrls(baseUrl, path, licenseNumber, searchName)) {
+        const attempt = await fetchNrhaHorseGet(url, path, apiKey, searchName);
+        latestAttempt = attempt;
+        attemptSummaries.push(attemptSummary({ method: attempt.method, path, searchName, status: attempt.response.status }));
+
+        if (!attempt.response.ok && attempt.response.status !== 404 && !firstNon404Attempt) {
+          firstNon404Attempt = attempt;
+        }
+
+        if (attempt.response.ok || [401, 403].includes(attempt.response.status)) {
+          return { attempt, attemptSummaries };
+        }
+      }
     }
   }
 
-  return latestAttempt;
+  return { attempt: firstNon404Attempt ?? latestAttempt, attemptSummaries };
 }
 
 function horseRecordsFromPayload(payload: unknown): NrhaHorseRecord[] {
@@ -175,6 +290,20 @@ function horseRecordsFromPayload(payload: unknown): NrhaHorseRecord[] {
   }
 
   return [];
+}
+
+function selectHorseRecord(records: NrhaHorseRecord[], licenseNumber: number) {
+  const matchingLicenseRecords = records.filter((record) => Number(record.licenseNumber) === licenseNumber);
+
+  if (!matchingLicenseRecords.length) {
+    return null;
+  }
+
+  return (
+    matchingLicenseRecords.find((record) => !normalizeDate(record.ownerEndDate)) ??
+    [...matchingLicenseRecords].sort((left, right) => normalizeDate(right.ownerStartDate).localeCompare(normalizeDate(left.ownerStartDate)))[0] ??
+    null
+  );
 }
 
 Deno.serve(async (request) => {
@@ -219,13 +348,12 @@ Deno.serve(async (request) => {
   }
 
   const baseUrl = (Deno.env.get("NRHA_API_BASE_URL") ?? "https://data.nrha.com").replace(/\/+$/, "");
-  const horseLookupPath = Deno.env.get("NRHA_HORSE_LOOKUP_PATH") ?? "/api/private/third-party/tools/horse";
-  const lookupUrl = new URL(`${baseUrl}${horseLookupPath.startsWith("/") ? horseLookupPath : `/${horseLookupPath}`}`);
+  const horseLookupPath = Deno.env.get("NRHA_HORSE_LOOKUP_PATH") ?? "/api/private/rs/horses";
   const attemptedNames = lookupNameCandidates(name);
-  let lookupAttempt: Awaited<ReturnType<typeof lookupNrhaHorse>>;
+  let lookupResult: Awaited<ReturnType<typeof lookupNrhaHorse>>;
 
   try {
-    lookupAttempt = await lookupNrhaHorse(lookupUrl, apiKey, licenseNumber, name);
+    lookupResult = await lookupNrhaHorse(baseUrl, horseLookupPath, apiKey, licenseNumber, name);
   } catch (error) {
     return jsonResponse(
       {
@@ -235,6 +363,9 @@ Deno.serve(async (request) => {
       502,
     );
   }
+
+  const lookupAttempt = lookupResult.attempt;
+  const attemptedLookups = lookupResult.attemptSummaries;
 
   if (!lookupAttempt) {
     return jsonResponse({ error: "NRHA horse lookup did not run." }, 500);
@@ -275,6 +406,7 @@ Deno.serve(async (request) => {
         horse: null,
         nrha_status: nrhaResponse.status,
         attemptedNames,
+        attemptedLookups,
         payload,
       });
     }
@@ -284,6 +416,7 @@ Deno.serve(async (request) => {
         error: `NRHA horse lookup returned status ${nrhaResponse.status}.`,
         nrha_status: nrhaResponse.status,
         attempted_names: attemptedNames,
+        attempted_lookups: attemptedLookups,
         payload,
       },
       502,
@@ -291,8 +424,7 @@ Deno.serve(async (request) => {
   }
 
   const records = horseRecordsFromPayload(payload);
-  const exactLicenseRecord = records.find((record) => Number(record.licenseNumber) === licenseNumber) ?? null;
-  const horse = exactLicenseRecord ?? (records.length === 1 ? records[0] : null);
+  const horse = selectHorseRecord(records, licenseNumber);
   const officialHorseName = horse?.horseName?.trim() ?? "";
   const officialFoalDate = normalizeDate(horse?.foalDate);
   const officialOwnerName = horse?.ownerName?.trim() ?? "";
@@ -334,6 +466,7 @@ Deno.serve(async (request) => {
     horse,
     lookupName: lookupAttempt.searchName,
     attemptedNames,
+    attemptedLookups,
     payload,
   });
 });
