@@ -161,6 +161,10 @@ h2 {
   box-shadow: 0 4px 12px rgba(24, 44, 38, 0.09);
 }
 
+.segmented-control.compact-segmented {
+  margin: 0;
+}
+
 .stack {
   display: grid;
   gap: 14px;
@@ -2686,6 +2690,39 @@ button:focus-visible {
 .panel form.stack .external-membership-fields label {
   background: #ffffff;
   border-color: #e4ebe8;
+}
+
+.nrha-import-preview,
+.nrha-import-owner-panel {
+  border-top: 1px solid #dce5e1;
+  display: grid;
+  gap: 10px;
+  padding-top: 12px;
+}
+
+.nrha-import-preview-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.nrha-import-preview-grid div {
+  background: #ffffff;
+  border: 1px solid #e4ebe8;
+  border-radius: 8px;
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 9px;
+}
+
+.nrha-import-preview-grid span {
+  color: #687873;
+  font-size: 12px;
+}
+
+.nrha-import-preview-grid strong {
+  overflow-wrap: anywhere;
 }
 
 .health-document-summary {

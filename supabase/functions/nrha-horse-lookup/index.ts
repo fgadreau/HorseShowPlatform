@@ -149,14 +149,18 @@ Deno.serve(async (request) => {
 
   let licenseNumber: number;
   let name: string;
-  let dateOfBirth: string;
-  let ownerName: string;
+  let dateOfBirth = "";
+  let ownerName = "";
+  const wantsIdentityValidation = Boolean(body.dateOfBirth || body.ownerName);
 
   try {
     licenseNumber = licenseParam(body.licenseNumber);
     name = nameParam(body.name);
-    dateOfBirth = dateParam(body.dateOfBirth);
-    ownerName = nameParam(body.ownerName);
+
+    if (wantsIdentityValidation) {
+      dateOfBirth = dateParam(body.dateOfBirth);
+      ownerName = nameParam(body.ownerName);
+    }
   } catch (error) {
     return jsonResponse({ error: error instanceof Error ? error.message : "Invalid horse lookup parameters." }, 400);
   }
@@ -214,8 +218,12 @@ Deno.serve(async (request) => {
       official: officialOwnerName || null,
     },
   };
-  const matched = Boolean(horse && checks.name.matched && checks.dateOfBirth.matched && checks.ownerName.matched);
-  const status = horse ? (matched ? "verified" : "mismatch") : "not_found";
+  const matched = Boolean(
+    horse &&
+      checks.name.matched &&
+      (!wantsIdentityValidation || (checks.dateOfBirth.matched && checks.ownerName.matched)),
+  );
+  const status = horse ? (wantsIdentityValidation ? (matched ? "verified" : "mismatch") : "found") : "not_found";
 
   return jsonResponse({
     status,

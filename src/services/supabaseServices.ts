@@ -1661,6 +1661,26 @@ export type NrhaHorseLookupCheck = {
   official: string | null;
 };
 
+export type NrhaHorseRecord = {
+  city?: string;
+  country?: string;
+  currentLease?: boolean;
+  damName?: string;
+  foalDate?: string;
+  horseName?: string;
+  leaseEndDate?: string;
+  leaseStartDate?: string;
+  leassee?: string;
+  licenseNumber?: number;
+  ownerEndDate?: string;
+  ownerMemberNumber?: number;
+  ownerName?: string;
+  ownerStartDate?: string;
+  sex?: string;
+  sireName?: string;
+  state?: string;
+};
+
 export type NrhaHorseLookupVerification = {
   checks?: {
     dateOfBirth?: NrhaHorseLookupCheck;
@@ -1668,24 +1688,24 @@ export type NrhaHorseLookupVerification = {
     ownerName?: NrhaHorseLookupCheck;
   };
   error?: string;
-  horse?: Record<string, unknown> | null;
-  inputDateOfBirth?: string;
+  horse?: NrhaHorseRecord | null;
+  inputDateOfBirth?: string | null;
   inputName?: string;
-  inputOwnerName?: string;
+  inputOwnerName?: string | null;
   licenseNumber?: number;
   matched?: boolean;
   officialFoalDate?: string | null;
   officialHorseName?: string | null;
   officialOwnerName?: string | null;
   payload?: Record<string, unknown> | unknown[];
-  status?: "verified" | "mismatch" | "not_found";
+  status?: "found" | "verified" | "mismatch" | "not_found";
 };
 
 export async function verifyNrhaHorse(input: {
-  dateOfBirth: string;
+  dateOfBirth?: string;
   licenseNumber: number;
   name: string;
-  ownerName: string;
+  ownerName?: string;
 }) {
   const client = requireSupabase();
   const { data: verification, error: invokeError, response } = await client.functions.invoke<NrhaHorseLookupVerification>("nrha-horse-lookup", {
