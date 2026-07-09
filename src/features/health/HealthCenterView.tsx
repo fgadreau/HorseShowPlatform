@@ -3,7 +3,7 @@ import { Plus, Search, X } from "lucide-react";
 import { EmptyState, Metric, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, errorMessage, findById, formatDate, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { getHorseHealthDocumentFileUrl, createContact, createHorse, createUploadedHorseHealthDocument, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import { getHorseHealthDocumentFileUrl, createContact, createHorse, createUploadedHorseHealthDocument, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
 import { organizationCogginsValidityMonths, organizationRequiresHealthVerification } from "../../lib/health";
 import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, Show } from "../../types/domain";
 import { uiText, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone, cogginsValidityMessage, healthDocumentDateLabel, healthDocumentDateValue, healthDocumentTypeLabel, healthVerificationSourceLabel, healthReviewNote, isVaccineHealthDocument, latestHorseHealthDocument, latestHorseVaccineDocument, horseHealthDisplay, horseExternalReferenceChips, InlineHealthMessage, horseHealthResultMessage, todayDateValue, buildHealthAlerts, horseHealthStatusLabel } from "../dashboard/shared";
@@ -28,6 +28,7 @@ function HealthCenterView({
   onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
+  onVerifyNrhaHorse,
 }: {
   locale: Locale;
   canManageHealthDocuments: boolean;
@@ -47,6 +48,7 @@ function HealthCenterView({
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [busyDocumentId, setBusyDocumentId] = useState("");
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
@@ -171,6 +173,7 @@ function HealthCenterView({
                 setEditingHorse(null);
               }}
               onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+              onVerifyNrhaHorse={onVerifyNrhaHorse}
             />
           </section>
         </div>

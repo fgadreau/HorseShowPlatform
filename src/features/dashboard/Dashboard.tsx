@@ -846,6 +846,7 @@ export function Dashboard({
             onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 

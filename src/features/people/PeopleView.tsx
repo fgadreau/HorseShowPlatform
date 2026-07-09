@@ -247,6 +247,7 @@ function PeopleView({
               setEditingHorse(null);
             }}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         </ModalDialog>
       ) : null}

@@ -131,6 +131,7 @@ function MyHorsesView({
               setEditingHorse(null);
             }}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         </ModalDialog>
       ) : null}

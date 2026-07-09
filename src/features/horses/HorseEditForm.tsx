@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { CheckCircle2, FileText, Plus } from "lucide-react";
+import { CheckCircle2, FileText, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
 import { contactLabel, errorMessage, findById, formatDate, horseLabel, numericValue } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
 import { getHorseCogginsValidity } from "../../lib/health";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createUploadedHorseHealthDocument, getHorseHealthDocumentFileUrl, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import { createContact, createUploadedHorseHealthDocument, getHorseHealthDocumentFileUrl, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization } from "../../types/domain";
 import { uiText, buildHorseExternalMembershipFields, horseHealthStatusLabel, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, healthDocumentDateLabel, healthDocumentDateValue, isVaccineHealthDocument, healthVerificationSourceLabel, healthReviewNote, latestHorseHealthDocument, latestHorseVaccineDocument, todayDateValue, birthYearFromDateValue, InlineHealthMessage, horseHealthResultMessage, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone, horseGenderLabel } from "../dashboard/shared";
+import { integerFromReference, nrhaHorseMismatchMessage, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
 
 function HorseEditForm({
   locale = "fr",
@@ -28,6 +29,7 @@ function HorseEditForm({
   onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
+  onVerifyNrhaHorse,
 }: {
   locale?: Locale;
   contacts: Contact[];
@@ -46,6 +48,7 @@ function HorseEditForm({
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
+  onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const currentAgentContactId = horseContacts.find((horseContact) => horseContact.horse_id === horse.id && horseContact.role === "agent")?.contact_id ?? "";
   const [name, setName] = useState(horse.name);
@@ -62,6 +65,9 @@ function HorseEditForm({
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>(() =>
     Object.fromEntries(horseExternalMemberships.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_organization_id, membership.reference_number])),
   );
+  const [nrhaHorseBusy, setNrhaHorseBusy] = useState(false);
+  const [nrhaHorseMessage, setNrhaHorseMessage] = useState<InlineHealthMessage | null>(null);
+  const [nrhaHorseVerification, setNrhaHorseVerification] = useState<NrhaHorseVerificationState | null>(null);
   const [busy, setBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
   const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
@@ -69,6 +75,7 @@ function HorseEditForm({
   const [fileErrorMessageByDocumentId, setFileErrorMessageByDocumentId] = useState<Record<string, string>>({});
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
+  const selectedOwnerContact = findById(contacts, ownerContactId) ?? null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
   const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
@@ -76,6 +83,17 @@ function HorseEditForm({
     () => buildHorseExternalMembershipFields(externalOrganizations, horseExternalMemberships.filter((membership) => membership.horse_id === horse.id)),
     [externalOrganizations, horse.id, horseExternalMemberships],
   );
+  const nrhaOrganizationId = externalReferenceFields.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA")?.id ?? null;
+  const currentNrhaReferenceNumber = nrhaOrganizationId ? externalReferenceNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
+  const verifiedNrhaHorse =
+    nrhaHorseVerification &&
+    nrhaHorseVerification.organizationId === nrhaOrganizationId &&
+    nrhaHorseVerification.referenceNumber === currentNrhaReferenceNumber &&
+    nrhaHorseVerification.name === name.trim() &&
+    nrhaHorseVerification.dateOfBirth === dateOfBirth &&
+    nrhaHorseVerification.ownerContactId === ownerContactId
+      ? nrhaHorseVerification
+      : null;
   const latestCoggins = useMemo(() => latestHorseHealthDocument(horse.id, horseHealthDocuments, "coggins_eia"), [horse.id, horseHealthDocuments]);
   const cogginsValidity = useMemo(
     () =>
@@ -106,15 +124,123 @@ function HorseEditForm({
         gender: gender || null,
         date_of_birth: dateOfBirth || null,
         registration_number: registrationNumber || null,
-        external_memberships: externalReferenceFields.map((organization) => ({
-          external_organization_id: organization.id,
-          reference_type: horseReferenceTypeForOrganization(organization),
-          reference_number: externalReferenceNumbers[organization.id] ?? "",
-          status: "unknown",
-        })),
+        external_memberships: externalReferenceFields.map((organization) => externalMembershipInputForOrganization(organization)),
       });
     } finally {
       setBusy(false);
+    }
+  }
+
+  function externalMembershipInputForOrganization(externalOrganization: ExternalOrganization) {
+    const referenceType = horseReferenceTypeForOrganization(externalOrganization);
+    const referenceNumber = externalReferenceNumbers[externalOrganization.id] ?? "";
+    const existingMembership =
+      horseExternalMemberships.find(
+        (membership) =>
+          membership.horse_id === horse.id &&
+          membership.external_organization_id === externalOrganization.id &&
+          membership.reference_type === referenceType,
+      ) ?? null;
+    const isNrha = externalOrganization.code.toUpperCase() === "NRHA";
+    const existingIdentityStillMatches =
+      !isNrha ||
+      (name.trim() === horse.name &&
+        dateOfBirth === (horse.date_of_birth ?? "") &&
+        ownerContactId === horse.primary_owner_contact_id);
+    const existingReferenceStillMatches = existingMembership?.reference_number.trim() === referenceNumber.trim();
+    const canPreserveExistingValidation = Boolean(existingMembership && existingReferenceStillMatches && existingIdentityStillMatches);
+
+    if (verifiedNrhaHorse && externalOrganization.id === verifiedNrhaHorse.organizationId) {
+      return {
+        external_organization_id: externalOrganization.id,
+        reference_type: referenceType,
+        reference_number: referenceNumber,
+        status: "active" as const,
+        verified_at: new Date().toISOString(),
+        verification_payload: verifiedNrhaHorse.payload,
+        verification_source: "nrha_api",
+      };
+    }
+
+    return {
+      external_organization_id: externalOrganization.id,
+      reference_type: referenceType,
+      reference_number: referenceNumber,
+      status: canPreserveExistingValidation ? existingMembership?.status ?? "unknown" : "unknown",
+      expires_on: canPreserveExistingValidation ? existingMembership?.expires_on ?? null : null,
+      verified_at: canPreserveExistingValidation ? existingMembership?.verified_at ?? null : null,
+      verification_payload: canPreserveExistingValidation ? existingMembership?.verification_payload ?? {} : undefined,
+      verification_source: canPreserveExistingValidation ? existingMembership?.verification_source ?? null : null,
+    };
+  }
+
+  function clearNrhaHorseValidation() {
+    setNrhaHorseMessage(null);
+    setNrhaHorseVerification(null);
+  }
+
+  async function handleVerifyNrhaHorse(externalOrganization: ExternalOrganization) {
+    const referenceNumber = externalReferenceNumbers[externalOrganization.id]?.trim() ?? "";
+    const licenseNumber = integerFromReference(referenceNumber);
+    const ownerName = selectedOwnerContact ? contactLabel(selectedOwnerContact) : "";
+
+    setNrhaHorseMessage(null);
+    setNrhaHorseVerification(null);
+
+    if (!licenseNumber) {
+      setNrhaHorseMessage({
+        tone: "error",
+        message: uiText(locale, "Entre un numéro de licence NRHA valide avant la validation.", "Enter a valid NRHA license number before validating."),
+      });
+      return;
+    }
+
+    if (!name.trim() || !dateOfBirth || !ownerName) {
+      setNrhaHorseMessage({
+        tone: "error",
+        message: uiText(locale, "Nom, date de naissance et propriétaire sont requis pour valider NRHA.", "Horse name, birth date and owner are required for NRHA validation."),
+      });
+      return;
+    }
+
+    setNrhaHorseBusy(true);
+
+    try {
+      const verification = await onVerifyNrhaHorse({
+        dateOfBirth,
+        licenseNumber,
+        name,
+        ownerName,
+      });
+
+      if (verification.status === "verified" && verification.matched) {
+        setNrhaHorseVerification({
+          dateOfBirth,
+          name: name.trim(),
+          organizationId: externalOrganization.id,
+          ownerContactId,
+          ownerName,
+          payload: verificationPayload(verification),
+          referenceNumber,
+        });
+        setNrhaHorseMessage({
+          tone: "success",
+          message: uiText(locale, "NRHA: licence confirmée avec nom, date de naissance et propriétaire.", "NRHA: license confirmed with name, birth date and owner."),
+        });
+        return;
+      }
+
+      setNrhaHorseMessage({
+        tone: "error",
+        message: nrhaHorseMismatchMessage(verification, locale),
+      });
+    } catch (error) {
+      setNrhaHorseMessage({
+        tone: "error",
+        message: errorMessage(error),
+      });
+    } finally {
+      setNrhaHorseBusy(false);
     }
   }
 
@@ -314,7 +440,14 @@ function HorseEditForm({
       <form className="stack" onSubmit={handleSubmit}>
         <label>
           {uiText(locale, "Nom du cheval", "Horse name")}
-          <input required value={name} onChange={(event) => setName(event.target.value)} />
+          <input
+            required
+            value={name}
+            onChange={(event) => {
+              setName(event.target.value);
+              clearNrhaHorseValidation();
+            }}
+          />
         </label>
         <ContactPicker
           contacts={contacts}
@@ -325,7 +458,10 @@ function HorseEditForm({
           organization={organization}
           role="owner"
           value={ownerContactId}
-          onChange={setOwnerContactId}
+          onChange={(value) => {
+            setOwnerContactId(value);
+            clearNrhaHorseValidation();
+          }}
           onCreateContact={onCreateContact}
         />
         <ContactPicker
@@ -358,7 +494,14 @@ function HorseEditForm({
         </div>
         <label>
           {uiText(locale, "Date de naissance", "Date of birth")}
-          <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+          <input
+            type="date"
+            value={dateOfBirth}
+            onChange={(event) => {
+              setDateOfBirth(event.target.value);
+              clearNrhaHorseValidation();
+            }}
+          />
         </label>
         <label>
           {uiText(locale, "Enregistrement", "Registration")}
@@ -505,15 +648,33 @@ function HorseEditForm({
                 {horseExternalReferenceLabel(externalOrganization)}
                 <input
                   value={externalReferenceNumbers[externalOrganization.id] ?? ""}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setExternalReferenceNumbers((current) => ({
                       ...current,
                       [externalOrganization.id]: event.target.value,
-                    }))
-                  }
+                    }));
+
+                    if (externalOrganization.code.toUpperCase() === "NRHA") {
+                      clearNrhaHorseValidation();
+                    }
+                  }}
                 />
+                {externalOrganization.code.toUpperCase() === "NRHA" ? (
+                  <div className="row-actions">
+                    <button
+                      className="ghost-button"
+                      disabled={busy || nrhaHorseBusy || !organization || !externalReferenceNumbers[externalOrganization.id]?.trim()}
+                      type="button"
+                      onClick={() => handleVerifyNrhaHorse(externalOrganization)}
+                    >
+                      <ShieldCheck size={18} />
+                      {nrhaHorseBusy ? uiText(locale, "Validation...", "Validating...") : uiText(locale, "Valider NRHA", "Validate NRHA")}
+                    </button>
+                  </div>
+                ) : null}
               </label>
             ))}
+            <InlineHealthMessage value={nrhaHorseMessage} />
           </div>
         ) : null}
         <FormActions busy={busy || !ownerContactId} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
