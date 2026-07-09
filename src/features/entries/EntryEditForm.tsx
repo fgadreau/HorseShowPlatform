@@ -1,13 +1,15 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
-import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
+import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
-import { createContact, createHorse, createUploadedHorseHealthDocument, updateEntry, verifyGvlCogginsDocument } from "../../services/supabaseServices";
+import { createContact, createHorse, createUploadedHorseHealthDocument, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText, InlineHealthMessage, ReadinessChecklist, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue } from "../dashboard/shared";
 import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
+import { NrhaEligibilityCheck } from "./NrhaEligibilityCheck";
+import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
 
 function EntryEditForm({
   locale = "fr",
@@ -19,6 +21,7 @@ function EntryEditForm({
   entries,
   entry,
   externalOrganizations,
+  horseExternalMemberships,
   horseHealthDocuments,
   horses,
   membershipRequirements,
@@ -28,6 +31,7 @@ function EntryEditForm({
   onCancel,
   onCreateContact,
   onUpdateEntry,
+  onVerifyNrhaEligibility,
 }: {
   locale?: Locale;
   classes: ClassRecord[];
@@ -38,6 +42,7 @@ function EntryEditForm({
   entries: Entry[];
   entry: Entry;
   externalOrganizations: ExternalOrganization[];
+  horseExternalMemberships: HorseExternalMembership[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
@@ -47,6 +52,7 @@ function EntryEditForm({
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
+  onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
 }) {
   const [horseId, setHorseId] = useState(entry.horse_id);
   const [divisionId, setDivisionId] = useState(entry.division_id);
@@ -56,12 +62,13 @@ function EntryEditForm({
   const [status, setStatus] = useState<Entry["status"]>(entry.status);
   const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
   const [busy, setBusy] = useState(false);
-  const selectedHorse = findById(horses, horseId);
-  const selectedDivision = findById(divisions, divisionId);
-  const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) : null;
+  const selectedHorse = findById(horses, horseId) ?? null;
+  const selectedDivision = findById(divisions, divisionId) ?? null;
+  const selectedClass = selectedDivision ? findById(classes, selectedDivision.class_id) ?? null : null;
   const selectedShow = findById(shows, entry.show_id) ?? null;
   const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
   const selectedRiderContact = findById(contacts, riderContactId) ?? null;
+  const selectedNrhaRiderContact = selectedRiderContact ?? selectedOwnerContact;
   const selectedPayerContact = findById(contacts, payerContactId) ?? null;
   const skipsEntryReadiness = ["cancelled", "scratched", "scratched_pending_refund"].includes(status);
   const selectedHealthValidity = selectedHorse
@@ -130,7 +137,7 @@ function EntryEditForm({
       <div className="panel-header">
         <div>
           <h2>{uiText(locale, "Modifier l'inscription", "Edit entry")}</h2>
-          <p>{entryReadiness.canProceed ? entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse) : entryReadiness.message}</p>
+          <p>{entryReadiness.canProceed ? entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse ?? undefined) : entryReadiness.message}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -175,8 +182,9 @@ function EntryEditForm({
 
               return {
                 id: division.id,
-                label: divisionLabel(division, classes),
+                label: entryDivisionLabel(division, locale),
                 detail: [
+                  entryDivisionBlockDetail(division, classes, locale),
                   effectiveEntryFee == null ? null : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
                   division.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(division.judge_fee, organization?.currency ?? "CAD")}`,
                 ]
@@ -217,6 +225,18 @@ function EntryEditForm({
             onCreateContact={onCreateContact}
           />
         </div>
+        <NrhaEligibilityCheck
+          classRecord={selectedClass}
+          contactExternalMemberships={contactExternalMemberships}
+          division={selectedDivision}
+          externalOrganizations={externalOrganizations}
+          horse={selectedHorse ?? null}
+          horseExternalMemberships={horseExternalMemberships}
+          locale={locale}
+          riderContact={selectedNrhaRiderContact}
+          show={selectedShow}
+          onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+        />
         <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
         <div className="form-grid">
           <label>

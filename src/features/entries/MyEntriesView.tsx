@@ -8,6 +8,7 @@ import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Divi
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
+import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
 
 function MyEntriesView({
   locale,
@@ -139,6 +140,7 @@ function MyEntriesView({
             entries={entries}
             entry={editingEntry}
             externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
             membershipRequirements={membershipRequirements}
@@ -147,6 +149,7 @@ function MyEntriesView({
             shows={shows}
             onCancel={() => setEditingEntry(null)}
             onCreateContact={onCreateContact}
+            onVerifyNrhaEligibility={onVerifyNrhaEligibility}
             onUpdateEntry={async (id, input) => {
               await onUpdateEntry(id, input);
               setEditingEntry(null);
@@ -173,7 +176,8 @@ function MyEntriesView({
             <div className="table-row" key={entry.id}>
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <div>
-                <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
+                <span>{entryDivisionLabel(findById(divisions, entry.division_id), locale)}</span>
+                <span className="muted-line">{entryDivisionBlockDetail(findById(divisions, entry.division_id), classes, locale)}</span>
                 {entry.is_late ? (
                   <span className="muted-line">
                     {uiText(locale, "Retard", "Late")} +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}

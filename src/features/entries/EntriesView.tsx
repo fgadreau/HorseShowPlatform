@@ -8,6 +8,7 @@ import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Divi
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
+import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
 
 function EntriesView({
   locale,
@@ -139,6 +140,7 @@ function EntriesView({
             entries={entries}
             entry={editingEntry}
             externalOrganizations={externalOrganizations}
+            horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
             membershipRequirements={membershipRequirements}
@@ -147,6 +149,7 @@ function EntriesView({
             shows={shows}
             onCancel={() => setEditingEntry(null)}
             onCreateContact={onCreateContact}
+            onVerifyNrhaEligibility={onVerifyNrhaEligibility}
             onUpdateEntry={async (id, input) => {
               await onUpdateEntry(id, input);
               setEditingEntry(null);
@@ -175,7 +178,10 @@ function EntriesView({
                 <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
                 <span className="muted-line">{uiText(locale, "Dossard", "Back number")}: {entry.entry_number ?? uiText(locale, "à assigner", "to assign")}</span>
               </div>
-              <span>{divisionLabel(findById(divisions, entry.division_id), classes)}</span>
+              <div>
+                <span>{entryDivisionLabel(findById(divisions, entry.division_id), locale)}</span>
+                <span className="muted-line">{entryDivisionBlockDetail(findById(divisions, entry.division_id), classes, locale)}</span>
+              </div>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
               <div className="row-actions">
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
