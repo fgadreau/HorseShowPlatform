@@ -1664,12 +1664,12 @@ export async function verifyNrhaEligibility(input: {
   memberNumber: number;
 }) {
   const client = requireSupabase();
-  const { data: verification, error: invokeError } = await client.functions.invoke<NrhaEligibilityVerification>("nrha-eligibility", {
+  const { data: verification, error: invokeError, response } = await client.functions.invoke<NrhaEligibilityVerification>("nrha-eligibility", {
     body: input,
   });
 
   if (invokeError) {
-    throw new Error(`Validation NRHA impossible: ${invokeError.message}`);
+    throw new Error(await nrhaEligibilityInvokeErrorMessage(invokeError, response));
   }
 
   if (!verification) {
@@ -1681,6 +1681,81 @@ export async function verifyNrhaEligibility(input: {
   }
 
   return verification;
+}
+
+type NrhaEligibilityErrorPayload = {
+  error?: unknown;
+  nrha_status?: unknown;
+  payload?: unknown;
+};
+
+async function nrhaEligibilityInvokeErrorMessage(invokeError: unknown, response?: Response) {
+  const fallbackMessage = invokeError instanceof Error ? invokeError.message : "Erreur inconnue.";
+  const responseStatus = response?.status;
+  const payload = response ? await readNrhaEligibilityErrorPayload(response) : null;
+
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const errorPayload = payload as NrhaEligibilityErrorPayload;
+    const edgeMessage = typeof errorPayload.error === "string" ? errorPayload.error : null;
+    const nrhaStatus = typeof errorPayload.nrha_status === "number" ? errorPayload.nrha_status : null;
+    const statusParts = [
+      responseStatus ? `code Edge Function ${responseStatus}` : null,
+      nrhaStatus ? `code NRHA ${nrhaStatus}` : null,
+    ].filter(Boolean);
+    const detailParts = [
+      statusParts.length ? statusParts.join(", ") : null,
+      edgeMessage,
+      nrhaPayloadSummary(errorPayload.payload),
+    ].filter(Boolean);
+
+    if (detailParts.length) {
+      return `Validation NRHA impossible: ${detailParts.join(" - ")}`;
+    }
+  }
+
+  if (responseStatus) {
+    return `Validation NRHA impossible: code Edge Function ${responseStatus} - ${fallbackMessage}`;
+  }
+
+  return `Validation NRHA impossible: ${fallbackMessage}`;
+}
+
+async function readNrhaEligibilityErrorPayload(response: Response) {
+  try {
+    const responseCopy = response.clone();
+    const contentType = responseCopy.headers.get("content-type") ?? "";
+
+    if (contentType.includes("application/json")) {
+      return await responseCopy.json();
+    }
+
+    return await responseCopy.text();
+  } catch {
+    return null;
+  }
+}
+
+function nrhaPayloadSummary(payload: unknown) {
+  if (!payload) {
+    return null;
+  }
+
+  if (typeof payload === "string") {
+    const trimmedPayload = payload.trim();
+    return trimmedPayload ? trimmedPayload.slice(0, 180) : null;
+  }
+
+  if (typeof payload === "object" && !Array.isArray(payload)) {
+    const message = (payload as { message?: unknown; error?: unknown; title?: unknown }).message
+      ?? (payload as { message?: unknown; error?: unknown; title?: unknown }).error
+      ?? (payload as { message?: unknown; error?: unknown; title?: unknown }).title;
+
+    if (typeof message === "string" && message.trim()) {
+      return message.trim().slice(0, 180);
+    }
+  }
+
+  return null;
 }
 
 export async function verifyGvlCogginsDocument(input: {
