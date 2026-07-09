@@ -162,7 +162,7 @@ Deno.serve(async (request) => {
   }
 
   const baseUrl = (Deno.env.get("NRHA_API_BASE_URL") ?? "https://data.nrha.com").replace(/\/+$/, "");
-  const horseLookupPath = Deno.env.get("NRHA_HORSE_LOOKUP_PATH") ?? "/api/private/third-party/tools/horses";
+  const horseLookupPath = Deno.env.get("NRHA_HORSE_LOOKUP_PATH") ?? "/api/private/third-party/tools/horse";
   const lookupUrl = new URL(`${baseUrl}${horseLookupPath.startsWith("/") ? horseLookupPath : `/${horseLookupPath}`}`);
 
   const nrhaResponse = await fetch(lookupUrl, {
