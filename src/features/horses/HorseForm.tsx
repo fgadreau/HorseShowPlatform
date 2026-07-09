@@ -140,54 +140,7 @@ function HorseForm({
         })),
       });
 
-      if (preparedGvlUrl || cogginsPdfFile || gvlCogginsUrl.trim()) {
-        try {
-          const sourceUrl = preparedGvlUrl || (await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl));
-
-          if (sourceUrl) {
-            const document = await onVerifyGvlCogginsDocument({
-              organization_id: organization.id,
-              horse_id: horse.id,
-              source_url: sourceUrl,
-              document_file: cogginsPdfFile,
-              horse_name: name,
-              horse_date_of_birth: dateOfBirth || null,
-              horse_birth_year: birthYearFromDateValue(dateOfBirth),
-              created_by_user_id: createdByUserId,
-            });
-            setHealthMessage(horseHealthResultMessage(document));
-          }
-        } catch (error) {
-          if (cogginsPdfFile) {
-            const document = await onCreateHorseHealthDocument({
-              organization_id: organization.id,
-              horse_id: horse.id,
-              document_type: "coggins_eia",
-              file: cogginsPdfFile,
-              source_url: normalizeGvlUrl(gvlCogginsUrl) ?? (gvlCogginsUrl.trim() || null),
-              created_by_user_id: createdByUserId,
-              review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
-            });
-            setHealthMessage(horseHealthResultMessage(document));
-          } else {
-            setHealthMessage({
-              tone: "error",
-              message: uiText(locale, `Cheval créé, mais Coggins GVL non valide: ${errorMessage(error)}`, `Horse created, but GVL Coggins is not valid: ${errorMessage(error)}`),
-            });
-          }
-        }
-      }
-
-      if (vaccineCertificateFile) {
-        await onCreateHorseHealthDocument({
-          organization_id: organization.id,
-          horse_id: horse.id,
-          document_type: "combo_vaccine",
-          file: vaccineCertificateFile,
-          test_or_administered_on: vaccineAdministeredOn || null,
-          created_by_user_id: createdByUserId,
-        });
-      }
+      await createInitialHealthDocuments(horse, name, dateOfBirth || null);
 
       setName("");
       setOwnerContactId("");
@@ -322,6 +275,7 @@ function HorseForm({
 
     setBusy(true);
     setNrhaImportMessage(null);
+    setHealthMessage(null);
 
     try {
       const importedHorse = nrhaImportResult.horse;
@@ -384,6 +338,8 @@ function HorseForm({
         })),
       });
 
+      await createInitialHealthDocuments(horse, importedName, importedFoalDate || null);
+
       resetHorseCreationState();
       onCreated?.(horse);
     } catch (error) {
@@ -393,6 +349,61 @@ function HorseForm({
       });
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function createInitialHealthDocuments(horse: Horse, horseName: string, horseDateOfBirth: string | null) {
+    if (!organization) {
+      return;
+    }
+
+    if (preparedGvlUrl || cogginsPdfFile || gvlCogginsUrl.trim()) {
+      try {
+        const sourceUrl = preparedGvlUrl || (await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl));
+
+        if (sourceUrl) {
+          const document = await onVerifyGvlCogginsDocument({
+            organization_id: organization.id,
+            horse_id: horse.id,
+            source_url: sourceUrl,
+            document_file: cogginsPdfFile,
+            horse_name: horseName,
+            horse_date_of_birth: horseDateOfBirth,
+            horse_birth_year: birthYearFromDateValue(horseDateOfBirth ?? ""),
+            created_by_user_id: createdByUserId,
+          });
+          setHealthMessage(horseHealthResultMessage(document));
+        }
+      } catch (error) {
+        if (cogginsPdfFile) {
+          const document = await onCreateHorseHealthDocument({
+            organization_id: organization.id,
+            horse_id: horse.id,
+            document_type: "coggins_eia",
+            file: cogginsPdfFile,
+            source_url: normalizeGvlUrl(gvlCogginsUrl) ?? (gvlCogginsUrl.trim() || null),
+            created_by_user_id: createdByUserId,
+            review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
+          });
+          setHealthMessage(horseHealthResultMessage(document));
+        } else {
+          setHealthMessage({
+            tone: "error",
+            message: uiText(locale, `Cheval créé, mais Coggins GVL non valide: ${errorMessage(error)}`, `Horse created, but GVL Coggins is not valid: ${errorMessage(error)}`),
+          });
+        }
+      }
+    }
+
+    if (vaccineCertificateFile) {
+      await onCreateHorseHealthDocument({
+        organization_id: organization.id,
+        horse_id: horse.id,
+        document_type: "combo_vaccine",
+        file: vaccineCertificateFile,
+        test_or_administered_on: vaccineAdministeredOn || null,
+        created_by_user_id: createdByUserId,
+      });
     }
   }
 
@@ -525,6 +536,47 @@ function HorseForm({
     }
   }
 
+  function renderInitialHealthDocumentFields(disabled = !organization) {
+    const controlsDisabled = disabled || !organization;
+
+    return (
+      <div className="external-membership-fields health-document-fields">
+        <div className="inline-form-header">
+          <strong>{uiText(locale, "Documents santé initiaux", "Initial health documents")}</strong>
+          <span>{uiText(locale, "Ajoute le Coggins GVL et le certificat de vaccin pendant la création du cheval.", "Add the GVL Coggins and vaccine certificate while creating the horse.")}</span>
+        </div>
+        <label>
+          PDF Coggins GVL
+          <input accept="application/pdf" disabled={controlsDisabled} type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
+          {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
+        </label>
+        <label>
+          {uiText(locale, "Lien GVL en secours", "Backup GVL link")}
+          <input disabled={controlsDisabled} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
+        </label>
+        <div className="row-actions">
+          <button className="primary-button" disabled={controlsDisabled || busy || (!cogginsPdfFile && !gvlCogginsUrl.trim())} type="button" onClick={handlePrepareCogginsUrl}>
+            <CheckCircle2 size={18} />
+            {uiText(locale, "Valider le lien GVL", "Validate GVL link")}
+          </button>
+          {preparedGvlUrl ? <span className="muted-line">{uiText(locale, "Lien détecté", "Detected link")}: {preparedGvlUrl}</span> : null}
+        </div>
+        <InlineHealthMessage value={healthMessage} />
+        <div className="health-document-actions">
+          <label>
+            {uiText(locale, "Certificat vaccin influenza/rhino", "Influenza/rhino vaccine certificate")}
+            <input accept="application/pdf,image/*" disabled={controlsDisabled} type="file" onChange={(event) => setVaccineCertificateFile(event.target.files?.[0] ?? null)} />
+            {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
+          </label>
+          <label>
+            {uiText(locale, "Date du vaccin", "Vaccine date")}
+            <input disabled={controlsDisabled} type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
+          </label>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section className="panel">
       <div className="panel-header">
@@ -596,9 +648,9 @@ function HorseForm({
                 {uiText(locale, "Sexe", "Sex")}
                 <select disabled={!organization} value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
                   <option value="">{uiText(locale, "Non défini", "Unset")}</option>
-                  <option value="M">M</option>
-                  <option value="F">F</option>
-                  <option value="G">G</option>
+                  <option value="M">{uiText(locale, "Mâle (Stallion / Colt)", "Male (Stallion / Colt)")}</option>
+                  <option value="F">{uiText(locale, "Femelle (Mare / Filly)", "Female (Mare / Filly)")}</option>
+                  <option value="G">{uiText(locale, "Hongre (Gelding)", "Gelding")}</option>
                 </select>
               </label>
             </div>
@@ -618,40 +670,7 @@ function HorseForm({
               {uiText(locale, "Enregistrement", "Registration")}
               <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
             </label>
-            <div className="external-membership-fields health-document-fields">
-              <div className="inline-form-header">
-                <strong>{uiText(locale, "Documents santé initiaux", "Initial health documents")}</strong>
-                <span>{uiText(locale, "Ajoute le Coggins GVL et le certificat de vaccin pendant la création du cheval.", "Add the GVL Coggins and vaccine certificate while creating the horse.")}</span>
-              </div>
-              <label>
-                PDF Coggins GVL
-                <input accept="application/pdf" disabled={!organization} type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
-                {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
-              </label>
-              <label>
-                {uiText(locale, "Lien GVL en secours", "Backup GVL link")}
-                <input disabled={!organization} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
-              </label>
-              <div className="row-actions">
-                <button className="primary-button" disabled={busy || !organization || (!cogginsPdfFile && !gvlCogginsUrl.trim())} type="button" onClick={handlePrepareCogginsUrl}>
-                  <CheckCircle2 size={18} />
-                  {uiText(locale, "Valider le lien GVL", "Validate GVL link")}
-                </button>
-                {preparedGvlUrl ? <span className="muted-line">{uiText(locale, "Lien détecté", "Detected link")}: {preparedGvlUrl}</span> : null}
-              </div>
-              <InlineHealthMessage value={healthMessage} />
-              <div className="health-document-actions">
-                <label>
-                  {uiText(locale, "Certificat vaccin influenza/rhino", "Influenza/rhino vaccine certificate")}
-                  <input accept="application/pdf,image/*" disabled={!organization} type="file" onChange={(event) => setVaccineCertificateFile(event.target.files?.[0] ?? null)} />
-                  {vaccineCertificateFile ? <span className="muted-line">{vaccineCertificateFile.name}</span> : null}
-                </label>
-                <label>
-                  {uiText(locale, "Date du vaccin", "Vaccine date")}
-                  <input disabled={!organization} type="date" value={vaccineAdministeredOn} onChange={(event) => setVaccineAdministeredOn(event.target.value)} />
-                </label>
-              </div>
-            </div>
+            {renderInitialHealthDocumentFields(!organization)}
             {externalReferenceFields.length ? (
               <div className="external-membership-fields">
                 <div className="inline-form-header">
@@ -758,7 +777,7 @@ function HorseForm({
                   </div>
                   <div>
                     <span>{uiText(locale, "Sexe", "Sex")}</span>
-                    <strong>{nrhaImportResult.horse.sex || uiText(locale, "Non défini", "Unset")}</strong>
+                    <strong>{formatImportedSex(nrhaImportResult.horse.sex, locale)}</strong>
                   </div>
                   <div>
                     <span>{uiText(locale, "Licence", "License")}</span>
@@ -823,6 +842,8 @@ function HorseForm({
                     </>
                   )}
                 </div>
+
+                {renderInitialHealthDocumentFields(!organization || busy)}
               </div>
             ) : null}
           </div>
@@ -865,21 +886,44 @@ function formatImportedDate(value: string | null | undefined, locale: Locale) {
 }
 
 function mapNrhaSex(value: string | null | undefined): "" | NonNullable<Horse["gender"]> {
-  const normalized = (value ?? "").trim().toUpperCase();
+  const normalized = (value ?? "").trim().toUpperCase().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
 
-  if (normalized.startsWith("M") || normalized === "STALLION" || normalized === "COLT") {
-    return "M";
-  }
-
-  if (normalized.startsWith("F") || normalized === "MARE" || normalized === "FILLY") {
+  if (["MARE", "FILLY", "FEMALE", "F"].includes(normalized)) {
     return "F";
   }
 
-  if (normalized.startsWith("G")) {
+  if (["GELDING", "G"].includes(normalized)) {
     return "G";
   }
 
+  if (["STALLION", "COLT", "MALE", "M"].includes(normalized)) {
+    return "M";
+  }
+
   return "";
+}
+
+function formatImportedSex(value: string | null | undefined, locale: Locale) {
+  const rawValue = value?.trim() ?? "";
+  const mappedSex = mapNrhaSex(value);
+
+  if (!rawValue) {
+    return uiText(locale, "Non défini", "Unset");
+  }
+
+  if (mappedSex === "F") {
+    return `${rawValue} -> ${uiText(locale, "Femelle", "Female")}`;
+  }
+
+  if (mappedSex === "M") {
+    return `${rawValue} -> ${uiText(locale, "Mâle", "Male")}`;
+  }
+
+  if (mappedSex === "G") {
+    return `${rawValue} -> ${uiText(locale, "Hongre", "Gelding")}`;
+  }
+
+  return rawValue;
 }
 
 function splitOwnerName(value: string) {

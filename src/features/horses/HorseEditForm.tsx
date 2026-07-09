@@ -486,9 +486,9 @@ function HorseEditForm({
             {uiText(locale, "Sexe", "Sex")}
             <select value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
               <option value="">{uiText(locale, "Non défini", "Unset")}</option>
-              <option value="M">M</option>
-              <option value="F">F</option>
-              <option value="G">G</option>
+              <option value="M">{uiText(locale, "Mâle (Stallion / Colt)", "Male (Stallion / Colt)")}</option>
+              <option value="F">{uiText(locale, "Femelle (Mare / Filly)", "Female (Mare / Filly)")}</option>
+              <option value="G">{uiText(locale, "Hongre (Gelding)", "Gelding")}</option>
             </select>
           </label>
         </div>
