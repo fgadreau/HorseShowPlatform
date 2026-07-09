@@ -1,6 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
 import type { Locale } from "../../lib/i18n";
+import type { ReadinessItem, ReadinessResult } from "../../lib/readiness";
 import { verifyNrhaEligibility } from "../../services/supabaseServices";
 import type { NrhaEligibilityVerification } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, Division, ExternalOrganization, Horse, HorseExternalMembership, Show } from "../../types/domain";
@@ -13,6 +14,15 @@ type NrhaEligibilityMessage = {
   tone: "success" | "info" | "error";
 };
 
+type NrhaEligibilityGate = {
+  applies: boolean;
+  canProceed: boolean;
+  eligible: boolean | null;
+  key: string;
+  message: NrhaEligibilityMessage | null;
+  verified: boolean;
+};
+
 function NrhaEligibilityCheck({
   classRecord,
   contactExternalMemberships,
@@ -21,8 +31,10 @@ function NrhaEligibilityCheck({
   horse,
   horseExternalMemberships,
   locale = "fr",
+  onStatusChange,
   riderContact,
   show,
+  skip = false,
   onVerifyNrhaEligibility,
 }: {
   classRecord: ClassRecord | null;
@@ -32,7 +44,9 @@ function NrhaEligibilityCheck({
   horse: Horse | null;
   horseExternalMemberships: HorseExternalMembership[];
   locale?: Locale;
+  onStatusChange?: (status: NrhaEligibilityGate) => void;
   riderContact: Contact | null;
+  skip?: boolean;
   show: Show | null;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
 }) {
@@ -76,6 +90,11 @@ function NrhaEligibilityCheck({
     show,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
+  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip);
+
+  useEffect(() => {
+    onStatusChange?.(gate);
+  }, [gate, onStatusChange]);
 
   async function handleVerify() {
     if (!context.request) {
@@ -98,7 +117,7 @@ function NrhaEligibilityCheck({
     }
   }
 
-  if (!context.applies) {
+  if (skip || !context.applies) {
     return null;
   }
 
@@ -110,6 +129,105 @@ function NrhaEligibilityCheck({
       </button>
       <InlineHealthMessage value={visibleResultMessage ?? context.message} />
     </div>
+  );
+}
+
+function buildNrhaEligibilityGate(
+  context: ReturnType<typeof buildNrhaEligibilityContext>,
+  resultMessage: NrhaEligibilityMessage | null,
+  locale: Locale,
+  skip: boolean,
+): NrhaEligibilityGate {
+  if (skip || !context.applies) {
+    return {
+      applies: false,
+      canProceed: true,
+      eligible: null,
+      key: context.key,
+      message: null,
+      verified: false,
+    };
+  }
+
+  if (!context.request) {
+    return {
+      applies: true,
+      canProceed: false,
+      eligible: null,
+      key: context.key,
+      message: context.message ? { key: context.key, ...context.message } : null,
+      verified: false,
+    };
+  }
+
+  if (!resultMessage) {
+    return {
+      applies: true,
+      canProceed: false,
+      eligible: null,
+      key: context.key,
+      message: {
+        key: context.key,
+        tone: "info",
+        message: uiText(locale, "Vérifie l'éligibilité NRHA avant de continuer.", "Check NRHA eligibility before continuing."),
+      },
+      verified: false,
+    };
+  }
+
+  const eligible = resultMessage.tone === "success";
+
+  return {
+    applies: true,
+    canProceed: eligible,
+    eligible,
+    key: context.key,
+    message: resultMessage,
+    verified: true,
+  };
+}
+
+function withNrhaEligibilityReadiness(
+  readiness: ReadinessResult,
+  gate: NrhaEligibilityGate | null,
+  locale: Locale,
+): ReadinessResult {
+  if (!gate?.applies) {
+    return readiness;
+  }
+
+  const nrhaItem: ReadinessItem = {
+    blocking: !gate.canProceed,
+    detail: gate.message?.message ?? uiText(locale, "Vérification NRHA requise.", "NRHA check required."),
+    key: `entry.nrha.${gate.key}`,
+    status: gate.canProceed ? "ready" : gate.message?.tone === "info" ? "pending" : "blocked",
+    title: uiText(locale, "Éligibilité NRHA", "NRHA eligibility"),
+  };
+  const items = [...readiness.items.filter((item) => !item.key.startsWith("entry.nrha.")), nrhaItem];
+  const blockingItems = items.filter((item) => item.blocking);
+  const hasBlocked = blockingItems.some((item) => item.status === "blocked");
+  const hasPending = blockingItems.some((item) => item.status === "pending");
+  const status = blockingItems.length ? (hasBlocked ? "blocked" : hasPending ? "pending" : "blocked") : "ready";
+
+  return {
+    ...readiness,
+    blockingItems,
+    canProceed: blockingItems.length === 0,
+    items,
+    message: blockingItems[0]?.detail ?? readiness.message,
+    status,
+  };
+}
+
+function sameNrhaEligibilityGate(a: NrhaEligibilityGate | null, b: NrhaEligibilityGate) {
+  return (
+    a?.applies === b.applies &&
+    a.canProceed === b.canProceed &&
+    a.eligible === b.eligible &&
+    a.key === b.key &&
+    a.verified === b.verified &&
+    a.message?.message === b.message?.message &&
+    a.message?.tone === b.message?.tone
   );
 }
 
@@ -276,4 +394,5 @@ function formatNrhaEligibilityMessage(
   };
 }
 
-export { NrhaEligibilityCheck };
+export { NrhaEligibilityCheck, sameNrhaEligibilityGate, withNrhaEligibilityReadiness };
+export type { NrhaEligibilityGate };

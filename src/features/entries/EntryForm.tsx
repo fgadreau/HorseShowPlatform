@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { ContactPicker, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
@@ -10,7 +10,7 @@ import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Divi
 import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist } from "../dashboard/shared";
 import { classEntriesAreClosed, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
 import { HorseForm } from "../horses/HorseForm";
-import { NrhaEligibilityCheck } from "./NrhaEligibilityCheck";
+import { NrhaEligibilityCheck, sameNrhaEligibilityGate, withNrhaEligibilityReadiness, type NrhaEligibilityGate } from "./NrhaEligibilityCheck";
 import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
 
 function EntryForm({
@@ -68,6 +68,7 @@ function EntryForm({
   const [payerContactId, setPayerContactId] = useState("");
   const [riderContactId, setRiderContactId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
+  const [nrhaEligibilityGate, setNrhaEligibilityGate] = useState<NrhaEligibilityGate | null>(null);
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const availableDivisions = selectedShowId ? divisions.filter((division) => division.show_id === selectedShowId) : divisions;
@@ -117,6 +118,12 @@ function EntryForm({
     ownerContact: selectedOwnerContact,
     riderContact: selectedRiderContact,
   });
+  const combinedEntryReadiness = withNrhaEligibilityReadiness(entryReadiness, nrhaEligibilityGate, locale);
+  const nrhaEligibilityCanProceed = nrhaEligibilityGate?.canProceed ?? false;
+  const nrhaEligibilityBlockingMessage =
+    nrhaEligibilityGate?.applies && !nrhaEligibilityGate.canProceed
+      ? nrhaEligibilityGate.message?.message ?? uiText(locale, "Vérification NRHA requise.", "NRHA check required.")
+      : null;
   const canCreate = Boolean(
     organization &&
       profileId &&
@@ -126,17 +133,23 @@ function EntryForm({
       selectedPayerId &&
       entryReadiness.canProceed &&
       entryDeadlineReadiness.canProceed &&
-      entryProgramLimitReadiness.canProceed,
+      entryProgramLimitReadiness.canProceed &&
+      nrhaEligibilityCanProceed,
   );
   const entryHeaderMessage = canCreate
     ? uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")
     : selectedHorse
       ? entryReadiness.canProceed
         ? entryDeadlineReadiness.canProceed
-          ? entryProgramLimitReadiness.message?.message ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
+          ? entryProgramLimitReadiness.canProceed
+            ? nrhaEligibilityBlockingMessage ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
+            : entryProgramLimitReadiness.message?.message ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
           : entryDeadlineReadiness.message?.message ?? uiText(locale, "Choisis une classe et un payeur.", "Choose a class and payer.")
         : entryReadiness.message
       : uiText(locale, "Ajoute un concours, un cheval et une classe d'abord.", "Add a show, horse and class first.");
+  const handleNrhaEligibilityStatusChange = useCallback((status: NrhaEligibilityGate) => {
+    setNrhaEligibilityGate((currentStatus) => (sameNrhaEligibilityGate(currentStatus, status) ? currentStatus : status));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -318,11 +331,12 @@ function EntryForm({
           horse={selectedHorse}
           horseExternalMemberships={horseExternalMemberships}
           locale={locale}
+          onStatusChange={handleNrhaEligibilityStatusChange}
           riderContact={selectedNrhaRiderContact}
           show={selectedShow}
           onVerifyNrhaEligibility={onVerifyNrhaEligibility}
         />
-        <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
+        <ReadinessChecklist readiness={selectedHorse ? combinedEntryReadiness : null} />
         <button className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
           {uiText(locale, "Créer le brouillon", "Create draft entry")}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
@@ -8,7 +8,7 @@ import { createContact, createHorse, createUploadedHorseHealthDocument, updateEn
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText, InlineHealthMessage, ReadinessChecklist, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue } from "../dashboard/shared";
 import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
-import { NrhaEligibilityCheck } from "./NrhaEligibilityCheck";
+import { NrhaEligibilityCheck, sameNrhaEligibilityGate, withNrhaEligibilityReadiness, type NrhaEligibilityGate } from "./NrhaEligibilityCheck";
 import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
 
 function EntryEditForm({
@@ -61,6 +61,7 @@ function EntryEditForm({
   const [entryNumber, setEntryNumber] = useState(entry.entry_number == null ? "" : String(entry.entry_number));
   const [status, setStatus] = useState<Entry["status"]>(entry.status);
   const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
+  const [nrhaEligibilityGate, setNrhaEligibilityGate] = useState<NrhaEligibilityGate | null>(null);
   const [busy, setBusy] = useState(false);
   const selectedHorse = findById(horses, horseId) ?? null;
   const selectedDivision = findById(divisions, divisionId) ?? null;
@@ -104,7 +105,21 @@ function EntryEditForm({
     skip: skipsEntryReadiness,
   });
   const effectiveFee = numericValue(baseFee) ?? selectedDivision?.entry_fee ?? selectedClass?.entry_fee ?? null;
-  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed);
+  const combinedEntryReadiness = withNrhaEligibilityReadiness(entryReadiness, nrhaEligibilityGate, locale);
+  const nrhaEligibilityCanProceed = skipsEntryReadiness ? true : nrhaEligibilityGate?.canProceed ?? false;
+  const nrhaEligibilityBlockingMessage =
+    nrhaEligibilityGate?.applies && !nrhaEligibilityGate.canProceed
+      ? nrhaEligibilityGate.message?.message ?? uiText(locale, "Vérification NRHA requise.", "NRHA check required.")
+      : null;
+  const canUpdate = Boolean(selectedHorse && selectedDivision && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed && nrhaEligibilityCanProceed);
+  const entryHeaderMessage = entryReadiness.canProceed
+    ? entryProgramLimitReadiness.canProceed
+      ? nrhaEligibilityBlockingMessage ?? horseLabel(selectedHorse ?? undefined)
+      : entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse ?? undefined)
+    : entryReadiness.message;
+  const handleNrhaEligibilityStatusChange = useCallback((gate: NrhaEligibilityGate) => {
+    setNrhaEligibilityGate((currentGate) => (sameNrhaEligibilityGate(currentGate, gate) ? currentGate : gate));
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -137,7 +152,7 @@ function EntryEditForm({
       <div className="panel-header">
         <div>
           <h2>{uiText(locale, "Modifier l'inscription", "Edit entry")}</h2>
-          <p>{entryReadiness.canProceed ? entryProgramLimitReadiness.message?.message ?? horseLabel(selectedHorse ?? undefined) : entryReadiness.message}</p>
+          <p>{entryHeaderMessage}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
@@ -233,11 +248,13 @@ function EntryEditForm({
           horse={selectedHorse ?? null}
           horseExternalMemberships={horseExternalMemberships}
           locale={locale}
+          onStatusChange={handleNrhaEligibilityStatusChange}
           riderContact={selectedNrhaRiderContact}
+          skip={skipsEntryReadiness}
           show={selectedShow}
           onVerifyNrhaEligibility={onVerifyNrhaEligibility}
         />
-        <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
+        <ReadinessChecklist readiness={selectedHorse ? combinedEntryReadiness : null} />
         <div className="form-grid">
           <label>
             {uiText(locale, "Statut", "Status")}
