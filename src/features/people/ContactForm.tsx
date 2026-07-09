@@ -36,6 +36,13 @@ function ContactForm({
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [barnName, setBarnName] = useState("");
+  const [address, setAddress] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [country, setCountry] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const externalMembershipFields = useMemo(
@@ -62,6 +69,13 @@ function ContactForm({
         email,
         phone,
         barn_name: barnName,
+        address,
+        address_line2: addressLine2,
+        city,
+        state,
+        zip_code: zipCode,
+        country,
+        date_of_birth: dateOfBirth,
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
         external_memberships: externalMembershipFields.map((field) => ({
@@ -75,6 +89,13 @@ function ContactForm({
       setEmail("");
       setPhone("");
       setBarnName("");
+      setAddress("");
+      setAddressLine2("");
+      setCity("");
+      setState("");
+      setZipCode("");
+      setCountry("");
+      setDateOfBirth("");
       setMembershipNumbers({});
       onCreated?.();
     } finally {
@@ -115,6 +136,38 @@ function ContactForm({
             <input disabled={!organization} value={barnName} onChange={(event) => setBarnName(event.target.value)} />
           </label>
         </div>
+        <label>
+          {uiText(locale, "Adresse", "Address")}
+          <input disabled={!organization} value={address} onChange={(event) => setAddress(event.target.value)} />
+        </label>
+        <label>
+          {uiText(locale, "Appartement, suite, unité", "Apartment, suite, unit")}
+          <input disabled={!organization} value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Ville", "City")}
+            <input disabled={!organization} value={city} onChange={(event) => setCity(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Province / État", "Province / State")}
+            <input disabled={!organization} value={state} onChange={(event) => setState(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Code postal", "Postal code")}
+            <input disabled={!organization} value={zipCode} onChange={(event) => setZipCode(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Pays", "Country")}
+            <input disabled={!organization} value={country} onChange={(event) => setCountry(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          {uiText(locale, "Date de naissance", "Date of birth")}
+          <input disabled={!organization} type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
+        </label>
         {externalMembershipFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">

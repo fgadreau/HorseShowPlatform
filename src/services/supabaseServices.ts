@@ -1060,6 +1060,13 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
     email: contactInput.email === undefined ? undefined : normalizeEmail(contactInput.email),
     phone: contactInput.phone === undefined ? undefined : contactInput.phone?.trim() || null,
     barn_name: contactInput.barn_name === undefined ? undefined : contactInput.barn_name?.trim() || null,
+    address: contactInput.address === undefined ? undefined : contactInput.address?.trim() || null,
+    address_line2: contactInput.address_line2 === undefined ? undefined : contactInput.address_line2?.trim() || null,
+    city: contactInput.city === undefined ? undefined : contactInput.city?.trim() || null,
+    state: contactInput.state === undefined ? undefined : contactInput.state?.trim() || null,
+    zip_code: contactInput.zip_code === undefined ? undefined : contactInput.zip_code?.trim() || null,
+    country: contactInput.country === undefined ? undefined : contactInput.country?.trim() || null,
+    date_of_birth: contactInput.date_of_birth === undefined ? undefined : contactInput.date_of_birth || null,
   };
   const { data, error } = await client
     .from("contacts")
@@ -5393,7 +5400,7 @@ async function reuseContactByEmail(input: ContactInput, normalizedEmail: string,
     throw error;
   }
 
-  return data;
+  return enrichExistingContact(data, input);
 }
 
 async function enrichExistingContact(existing: Contact, input: ContactInput) {
@@ -5402,6 +5409,12 @@ async function enrichExistingContact(existing: Contact, input: ContactInput) {
   const phone = input.phone?.trim();
   const barnName = input.barn_name?.trim();
   const normalizedEmail = normalizeEmail(input.email);
+  const address = input.address?.trim();
+  const addressLine2 = input.address_line2?.trim();
+  const city = input.city?.trim();
+  const state = input.state?.trim();
+  const zipCode = input.zip_code?.trim();
+  const country = input.country?.trim();
 
   if (!existing.email && normalizedEmail) {
     patch.email = normalizedEmail;
@@ -5413,6 +5426,34 @@ async function enrichExistingContact(existing: Contact, input: ContactInput) {
 
   if (!existing.barn_name && barnName) {
     patch.barn_name = barnName;
+  }
+
+  if (!existing.address && address) {
+    patch.address = address;
+  }
+
+  if (!existing.address_line2 && addressLine2) {
+    patch.address_line2 = addressLine2;
+  }
+
+  if (!existing.city && city) {
+    patch.city = city;
+  }
+
+  if (!existing.state && state) {
+    patch.state = state;
+  }
+
+  if (!existing.zip_code && zipCode) {
+    patch.zip_code = zipCode;
+  }
+
+  if (!existing.country && country) {
+    patch.country = country;
+  }
+
+  if (!existing.date_of_birth && input.date_of_birth) {
+    patch.date_of_birth = input.date_of_birth;
   }
 
   if (!existing.linked_user_id && input.linked_user_id) {

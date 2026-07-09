@@ -7,7 +7,7 @@ import { normalizeGvlUrl } from "../../lib/gvlUrl";
 import { getHorseCogginsValidity } from "../../lib/health";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createUploadedHorseHealthDocument, getHorseHealthDocumentFileUrl, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization } from "../../types/domain";
+import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
 import { uiText, buildHorseExternalMembershipFields, horseHealthStatusLabel, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, healthDocumentDateLabel, healthDocumentDateValue, isVaccineHealthDocument, healthVerificationSourceLabel, healthReviewNote, latestHorseHealthDocument, latestHorseVaccineDocument, todayDateValue, birthYearFromDateValue, InlineHealthMessage, horseHealthResultMessage, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone, horseGenderLabel } from "../dashboard/shared";
 import { integerFromReference, nrhaHorseMismatchMessage, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
 
@@ -18,6 +18,7 @@ function HorseEditForm({
   canManageHealthDocuments,
   createdByUserId,
   externalOrganizations = [],
+  membershipRequirements = [],
   horse,
   horseExternalMemberships = [],
   horseHealthDocuments = [],
@@ -37,6 +38,7 @@ function HorseEditForm({
   canManageHealthDocuments: boolean;
   createdByUserId?: string;
   externalOrganizations?: ExternalOrganization[];
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   horse: Horse;
   horseExternalMemberships?: HorseExternalMembership[];
   horseHealthDocuments?: HorseHealthDocument[];
@@ -453,8 +455,10 @@ function HorseEditForm({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
+          externalOrganizations={externalOrganizations}
           label={uiText(locale, "Propriétaire", "Owner")}
           locale={locale}
+          membershipRequirements={membershipRequirements}
           organization={organization}
           role="owner"
           value={ownerContactId}
@@ -469,8 +473,10 @@ function HorseEditForm({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
+          externalOrganizations={externalOrganizations}
           label="Agent"
           locale={locale}
+          membershipRequirements={membershipRequirements}
           organization={organization}
           role="agent"
           value={selectedAgentId}

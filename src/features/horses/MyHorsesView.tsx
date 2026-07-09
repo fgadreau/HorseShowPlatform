@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization } from "../../types/domain";
+import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
 import { uiText, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel } from "../dashboard/shared";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
@@ -15,6 +15,7 @@ function MyHorsesView({
   contactRoles,
   canManageHealthDocuments,
   externalOrganizations,
+  membershipRequirements = [],
   horses,
   horseExternalMemberships,
   horseHealthDocuments,
@@ -35,6 +36,7 @@ function MyHorsesView({
   contactRoles: ContactRole[];
   canManageHealthDocuments: boolean;
   externalOrganizations: ExternalOrganization[];
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   horses: Horse[];
   horseExternalMemberships: HorseExternalMembership[];
   horseHealthDocuments: HorseHealthDocument[];
@@ -97,6 +99,7 @@ function MyHorsesView({
             contactRoles={contactRoles}
             createdByUserId={profileId}
             externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
@@ -117,6 +120,7 @@ function MyHorsesView({
             canManageHealthDocuments={canManageHealthDocuments}
             createdByUserId={profileId}
             externalOrganizations={externalOrganizations}
+            membershipRequirements={membershipRequirements}
             horseExternalMemberships={horseExternalMemberships}
             horseHealthDocuments={horseHealthDocuments}
             horseContacts={horseContacts}

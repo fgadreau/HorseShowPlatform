@@ -30,6 +30,13 @@ function ContactEditForm({
   const [email, setEmail] = useState(contact.email ?? "");
   const [phone, setPhone] = useState(contact.phone ?? "");
   const [barnName, setBarnName] = useState(contact.barn_name ?? "");
+  const [address, setAddress] = useState(contact.address ?? "");
+  const [addressLine2, setAddressLine2] = useState(contact.address_line2 ?? "");
+  const [city, setCity] = useState(contact.city ?? "");
+  const [state, setState] = useState(contact.state ?? "");
+  const [zipCode, setZipCode] = useState(contact.zip_code ?? "");
+  const [country, setCountry] = useState(contact.country ?? "");
+  const [dateOfBirth, setDateOfBirth] = useState(contact.date_of_birth ?? "");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>(() =>
     Object.fromEntries((contactExternalMemberships ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_organization_id, membership.membership_number])),
   );
@@ -52,6 +59,13 @@ function ContactEditForm({
         email: email || null,
         phone: phone || null,
         barn_name: barnName || null,
+        address: address || null,
+        address_line2: addressLine2 || null,
+        city: city || null,
+        state: state || null,
+        zip_code: zipCode || null,
+        country: country || null,
+        date_of_birth: dateOfBirth || null,
         external_memberships: externalMembershipFields.map((field) => ({
           external_organization_id: field.organization.id,
           membership_number: membershipNumbers[field.organization.id] ?? "",
@@ -105,6 +119,38 @@ function ContactEditForm({
         <label>
           {uiText(locale, "Écurie", "Barn")}
           <input value={barnName} onChange={(event) => setBarnName(event.target.value)} />
+        </label>
+        <label>
+          {uiText(locale, "Adresse", "Address")}
+          <input value={address} onChange={(event) => setAddress(event.target.value)} />
+        </label>
+        <label>
+          {uiText(locale, "Appartement, suite, unité", "Apartment, suite, unit")}
+          <input value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} />
+        </label>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Ville", "City")}
+            <input value={city} onChange={(event) => setCity(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Province / État", "Province / State")}
+            <input value={state} onChange={(event) => setState(event.target.value)} />
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Code postal", "Postal code")}
+            <input value={zipCode} onChange={(event) => setZipCode(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Pays", "Country")}
+            <input value={country} onChange={(event) => setCountry(event.target.value)} />
+          </label>
+        </div>
+        <label>
+          {uiText(locale, "Date de naissance", "Date of birth")}
+          <input type="date" value={dateOfBirth} onChange={(event) => setDateOfBirth(event.target.value)} />
         </label>
         {externalMembershipFields.length ? (
           <div className="external-membership-fields">

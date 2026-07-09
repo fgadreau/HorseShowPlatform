@@ -1666,8 +1666,8 @@ button:focus-visible {
 }
 
 .contact-create-modal {
-  max-width: 620px;
-  width: min(100%, 620px);
+  max-width: 760px;
+  width: min(100%, 760px);
 }
 
 .health-horse-modal {

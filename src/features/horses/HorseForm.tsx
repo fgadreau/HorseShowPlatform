@@ -27,6 +27,7 @@ function HorseForm({
   contactRoles,
   createdByUserId,
   externalOrganizations = [],
+  membershipRequirements = [],
   organization,
   onCreateContact,
   onCreateHorse,
@@ -40,6 +41,7 @@ function HorseForm({
   contactRoles: ContactRole[];
   createdByUserId?: string;
   externalOrganizations?: ExternalOrganization[];
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
@@ -75,6 +77,16 @@ function HorseForm({
   const [importOwnerFirstName, setImportOwnerFirstName] = useState("");
   const [importOwnerLastName, setImportOwnerLastName] = useState("");
   const [importOwnerEmail, setImportOwnerEmail] = useState("");
+  const [importOwnerPhone, setImportOwnerPhone] = useState("");
+  const [importOwnerBarnName, setImportOwnerBarnName] = useState("");
+  const [importOwnerAddress, setImportOwnerAddress] = useState("");
+  const [importOwnerAddressLine2, setImportOwnerAddressLine2] = useState("");
+  const [importOwnerCity, setImportOwnerCity] = useState("");
+  const [importOwnerState, setImportOwnerState] = useState("");
+  const [importOwnerZipCode, setImportOwnerZipCode] = useState("");
+  const [importOwnerCountry, setImportOwnerCountry] = useState("");
+  const [importOwnerDateOfBirth, setImportOwnerDateOfBirth] = useState("");
+  const [importOwnerMembershipNumbers, setImportOwnerMembershipNumbers] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
@@ -85,6 +97,10 @@ function HorseForm({
   const externalReferenceFields = useMemo(() => buildHorseExternalMembershipFields(externalOrganizations), [externalOrganizations]);
   const nrhaExternalOrganization = externalReferenceFields.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null;
   const nrhaOrganizationId = nrhaExternalOrganization?.id ?? null;
+  const importOwnerExternalMembershipFields = useMemo(
+    () => buildExternalMembershipFields("owner", externalOrganizations, membershipRequirements),
+    [externalOrganizations, membershipRequirements],
+  );
   const currentNrhaReferenceNumber = nrhaOrganizationId ? externalReferenceNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
   const verifiedNrhaHorse =
     nrhaHorseVerification &&
@@ -99,7 +115,10 @@ function HorseForm({
     organization &&
       nrhaImportResult &&
       ((importOwnerMode === "existing" && importOwnerContactId) ||
-        (importOwnerMode === "new" && importOwnerFirstName.trim() && importOwnerLastName.trim())),
+        (importOwnerMode === "new" &&
+          importOwnerFirstName.trim() &&
+          importOwnerLastName.trim() &&
+          !importOwnerExternalMembershipFields.some((field) => field.required && !importOwnerMembershipNumbers[field.organization.id]?.trim()))),
   );
   const canCreateHorse = creationMode === "manual" ? Boolean(organization && selectedOwnerId) : canCreateImportedHorse;
 
@@ -238,6 +257,22 @@ function HorseForm({
       setImportOwnerFirstName(ownerParts.firstName);
       setImportOwnerLastName(ownerParts.lastName);
       setImportOwnerEmail("");
+      setImportOwnerPhone("");
+      setImportOwnerBarnName("");
+      setImportOwnerAddress("");
+      setImportOwnerAddressLine2("");
+      setImportOwnerCity(importedHorse.city?.trim() ?? "");
+      setImportOwnerState(importedHorse.state?.trim() ?? "");
+      setImportOwnerZipCode("");
+      setImportOwnerCountry(importedHorse.country?.trim() ?? "");
+      setImportOwnerDateOfBirth("");
+      setImportOwnerMembershipNumbers(
+        importedHorse.ownerMemberNumber && nrhaOrganizationId
+          ? {
+              [nrhaOrganizationId]: String(importedHorse.ownerMemberNumber),
+            }
+          : {},
+      );
       setNrhaImportMessage({
         tone: "success",
         message: uiText(locale, "Fiche NRHA trouvée. Choisis comment jumeler le propriétaire avant de créer le cheval.", "NRHA record found. Choose how to match the owner before creating the horse."),
@@ -273,6 +308,14 @@ function HorseForm({
       return;
     }
 
+    if (importOwnerMode === "new" && importOwnerExternalMembershipFields.some((field) => field.required && !importOwnerMembershipNumbers[field.organization.id]?.trim())) {
+      setNrhaImportMessage({
+        tone: "error",
+        message: uiText(locale, "Complète les numéros de membre obligatoires du propriétaire.", "Complete the owner's required membership numbers."),
+      });
+      return;
+    }
+
     setBusy(true);
     setNrhaImportMessage(null);
     setHealthMessage(null);
@@ -289,19 +332,21 @@ function HorseForm({
               first_name: importOwnerFirstName.trim(),
               last_name: importOwnerLastName.trim(),
               email: importOwnerEmail.trim(),
-              city: importedHorse.city?.trim() ?? "",
-              state: importedHorse.state?.trim() ?? "",
-              country: importedHorse.country?.trim() ?? "",
+              phone: importOwnerPhone.trim(),
+              barn_name: importOwnerBarnName.trim(),
+              address: importOwnerAddress.trim(),
+              address_line2: importOwnerAddressLine2.trim(),
+              city: importOwnerCity.trim(),
+              state: importOwnerState.trim(),
+              zip_code: importOwnerZipCode.trim(),
+              country: importOwnerCountry.trim(),
+              date_of_birth: importOwnerDateOfBirth,
               created_by_user_id: createdByUserId,
-              external_memberships: importedHorse.ownerMemberNumber
-                ? [
-                    {
-                      external_organization_id: nrhaOrganizationId,
-                      membership_number: String(importedHorse.ownerMemberNumber),
-                      status: "active",
-                    },
-                  ]
-                : [],
+              external_memberships: importOwnerExternalMembershipFields.map((field) => ({
+                external_organization_id: field.organization.id,
+                membership_number: importOwnerMembershipNumbers[field.organization.id] ?? "",
+                status: field.organization.id === nrhaOrganizationId && importedHorse.ownerMemberNumber ? "active" : "unknown",
+              })),
             });
       const ownerContactIdForImport = ownerContact?.id ?? importOwnerContactId;
 
@@ -432,6 +477,16 @@ function HorseForm({
     setImportOwnerFirstName("");
     setImportOwnerLastName("");
     setImportOwnerEmail("");
+    setImportOwnerPhone("");
+    setImportOwnerBarnName("");
+    setImportOwnerAddress("");
+    setImportOwnerAddressLine2("");
+    setImportOwnerCity("");
+    setImportOwnerState("");
+    setImportOwnerZipCode("");
+    setImportOwnerCountry("");
+    setImportOwnerDateOfBirth("");
+    setImportOwnerMembershipNumbers({});
   }
 
   function clearNrhaHorseValidation() {
@@ -614,8 +669,10 @@ function HorseForm({
               contactRoles={contactRoles}
               createdByUserId={createdByUserId}
               disabled={!organization}
+              externalOrganizations={externalOrganizations}
               label={uiText(locale, "Propriétaire", "Owner")}
               locale={locale}
+              membershipRequirements={membershipRequirements}
               organization={organization}
               role="owner"
               value={selectedOwnerId}
@@ -631,8 +688,10 @@ function HorseForm({
               contactRoles={contactRoles}
               createdByUserId={createdByUserId}
               disabled={!organization}
+              externalOrganizations={externalOrganizations}
               label="Agent"
               locale={locale}
+              membershipRequirements={membershipRequirements}
               organization={organization}
               role="agent"
               value={selectedAgentId}
@@ -839,6 +898,72 @@ function HorseForm({
                         {uiText(locale, "Courriel", "Email")}
                         <input disabled={!organization || busy} type="email" value={importOwnerEmail} onChange={(event) => setImportOwnerEmail(event.target.value)} />
                       </label>
+                      <div className="form-grid">
+                        <label>
+                          {uiText(locale, "Téléphone", "Phone")}
+                          <input disabled={!organization || busy} value={importOwnerPhone} onChange={(event) => setImportOwnerPhone(event.target.value)} />
+                        </label>
+                        <label>
+                          {uiText(locale, "Écurie", "Barn")}
+                          <input disabled={!organization || busy} value={importOwnerBarnName} onChange={(event) => setImportOwnerBarnName(event.target.value)} />
+                        </label>
+                      </div>
+                      <label>
+                        {uiText(locale, "Adresse", "Address")}
+                        <input disabled={!organization || busy} value={importOwnerAddress} onChange={(event) => setImportOwnerAddress(event.target.value)} />
+                      </label>
+                      <label>
+                        {uiText(locale, "Appartement, suite, unité", "Apartment, suite, unit")}
+                        <input disabled={!organization || busy} value={importOwnerAddressLine2} onChange={(event) => setImportOwnerAddressLine2(event.target.value)} />
+                      </label>
+                      <div className="form-grid">
+                        <label>
+                          {uiText(locale, "Ville", "City")}
+                          <input disabled={!organization || busy} value={importOwnerCity} onChange={(event) => setImportOwnerCity(event.target.value)} />
+                        </label>
+                        <label>
+                          {uiText(locale, "Province / État", "Province / State")}
+                          <input disabled={!organization || busy} value={importOwnerState} onChange={(event) => setImportOwnerState(event.target.value)} />
+                        </label>
+                      </div>
+                      <div className="form-grid">
+                        <label>
+                          {uiText(locale, "Code postal", "Postal code")}
+                          <input disabled={!organization || busy} value={importOwnerZipCode} onChange={(event) => setImportOwnerZipCode(event.target.value)} />
+                        </label>
+                        <label>
+                          {uiText(locale, "Pays", "Country")}
+                          <input disabled={!organization || busy} value={importOwnerCountry} onChange={(event) => setImportOwnerCountry(event.target.value)} />
+                        </label>
+                      </div>
+                      <label>
+                        {uiText(locale, "Date de naissance", "Date of birth")}
+                        <input disabled={!organization || busy} type="date" value={importOwnerDateOfBirth} onChange={(event) => setImportOwnerDateOfBirth(event.target.value)} />
+                      </label>
+                      {importOwnerExternalMembershipFields.length ? (
+                        <div className="external-membership-fields">
+                          <div className="inline-form-header">
+                            <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
+                            <span>{uiText(locale, "Les numéros connus de NRHA sont préremplis quand disponibles.", "Known NRHA numbers are prefilled when available.")}</span>
+                          </div>
+                          {importOwnerExternalMembershipFields.map((field) => (
+                            <label key={field.organization.id}>
+                              {field.organization.code} #
+                              <input
+                                disabled={!organization || busy}
+                                required={field.required}
+                                value={importOwnerMembershipNumbers[field.organization.id] ?? ""}
+                                onChange={(event) =>
+                                  setImportOwnerMembershipNumbers((current) => ({
+                                    ...current,
+                                    [field.organization.id]: event.target.value,
+                                  }))
+                                }
+                              />
+                            </label>
+                          ))}
+                        </div>
+                      ) : null}
                     </>
                   )}
                 </div>

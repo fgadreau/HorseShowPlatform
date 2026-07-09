@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Globe2, Lock, X } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import type { ComponentType, FormEvent, ReactNode } from "react";
 import type { Locale } from "../lib/i18n";
 import { contactLabel, findById, itemSearchLabel } from "../lib/display";
-import type { Contact, ContactInput, ContactRole, ContactRoleName, Organization, PlanTier } from "../types/domain";
+import type { Contact, ContactInput, ContactRole, ContactRoleName, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, PlanTier } from "../types/domain";
 import type { Notice } from "../types/ui";
 import { getPlanLabel } from "../utils/planFeatures";
+import { buildExternalMembershipFields } from "../features/dashboard/shared";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -235,9 +236,11 @@ export function ContactPicker({
   contactRoles = [],
   createdByUserId,
   disabled = false,
+  externalOrganizations = [],
   label,
   linkedUserId,
   locale = "fr",
+  membershipRequirements = [],
   organization,
   placeholder,
   role,
@@ -250,9 +253,11 @@ export function ContactPicker({
   contactRoles?: ContactRole[];
   createdByUserId?: string;
   disabled?: boolean;
+  externalOrganizations?: ExternalOrganization[];
   label: string;
   linkedUserId?: string;
   locale?: Locale;
+  membershipRequirements?: OrganizationExternalMembershipRequirement[];
   organization: Organization | null;
   placeholder?: string;
   role: ContactRoleName;
@@ -263,11 +268,20 @@ export function ContactPicker({
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
   const [createdContact, setCreatedContact] = useState<Contact | null>(null);
+  const [type, setType] = useState<Contact["type"]>(() => contactTypeForRole(role));
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [barnName, setBarnName] = useState("");
+  const [address, setAddress] = useState("");
+  const [addressLine2, setAddressLine2] = useState("");
+  const [city, setCity] = useState("");
+  const [state, setState] = useState("");
+  const [zipCode, setZipCode] = useState("");
+  const [country, setCountry] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
   const visibleContacts = useMemo(() => {
     if (!createdContact || contacts.some((contact) => contact.id === createdContact.id)) {
@@ -277,9 +291,33 @@ export function ContactPicker({
     return [createdContact, ...contacts];
   }, [contacts, createdContact]);
   const roleLabel = contactRoleLabel(role, locale);
+  const externalMembershipFields = useMemo(
+    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements),
+    [externalOrganizations, membershipRequirements, type],
+  );
+  const missingRequiredMembership = externalMembershipFields.some((field) => field.required && !membershipNumbers[field.organization.id]?.trim());
 
-  async function handleCreate() {
-    if (!organization || !firstName.trim() || !lastName.trim()) {
+  function resetCreateForm() {
+    setType(contactTypeForRole(role));
+    setFirstName("");
+    setLastName("");
+    setEmail("");
+    setPhone("");
+    setBarnName("");
+    setAddress("");
+    setAddressLine2("");
+    setCity("");
+    setState("");
+    setZipCode("");
+    setCountry("");
+    setDateOfBirth("");
+    setMembershipNumbers({});
+  }
+
+  async function handleCreate(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+
+    if (!organization || !firstName.trim() || !lastName.trim() || missingRequiredMembership) {
       return;
     }
 
@@ -289,23 +327,31 @@ export function ContactPicker({
     try {
       const contact = await onCreateContact({
         organization_id: organization.id,
-        type: contactTypeForRole(role),
+        type,
         roles: [role],
         first_name: firstName.trim(),
         last_name: lastName.trim(),
         email: email.trim(),
         phone: phone.trim(),
         barn_name: barnName.trim(),
+        address: address.trim(),
+        address_line2: addressLine2.trim(),
+        city: city.trim(),
+        state: state.trim(),
+        zip_code: zipCode.trim(),
+        country: country.trim(),
+        date_of_birth: dateOfBirth,
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
+        external_memberships: externalMembershipFields.map((field) => ({
+          external_organization_id: field.organization.id,
+          membership_number: membershipNumbers[field.organization.id] ?? "",
+          status: "unknown",
+        })),
       });
       setCreatedContact(contact);
       onChange(contact.id);
-      setFirstName("");
-      setLastName("");
-      setEmail("");
-      setPhone("");
-      setBarnName("");
+      resetCreateForm();
       setCreating(false);
     } catch (error) {
       setErrorMessage(contactCreateErrorMessage(error, locale));
@@ -338,6 +384,7 @@ export function ContactPicker({
             disabled={disabled || !organization}
             type="button"
             onClick={() => {
+              setType(contactTypeForRole(role));
               setCreating(true);
               setErrorMessage("");
             }}
@@ -360,7 +407,23 @@ export function ContactPicker({
             }
           }}
         >
-          <div className="contact-create-inline">
+          <form className="contact-create-inline" onSubmit={handleCreate}>
+            <label>
+              Type
+              <select
+                value={type}
+                onChange={(event) => {
+                  setType(event.target.value as Contact["type"]);
+                  setErrorMessage("");
+                }}
+              >
+                <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
+                <option value="agent">Agent</option>
+                <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
+                <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
+                <option value="other">{uiText(locale, "Autre", "Other")}</option>
+              </select>
+            </label>
             <div className="form-grid">
               <label>
                 {uiText(locale, "Prénom", "First name")}
@@ -418,11 +481,110 @@ export function ContactPicker({
                 }}
               />
             </label>
+            <label>
+              {uiText(locale, "Adresse", "Address")}
+              <input
+                value={address}
+                onChange={(event) => {
+                  setAddress(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
+            </label>
+            <label>
+              {uiText(locale, "Appartement, suite, unité", "Apartment, suite, unit")}
+              <input
+                value={addressLine2}
+                onChange={(event) => {
+                  setAddressLine2(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
+            </label>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Ville", "City")}
+                <input
+                  value={city}
+                  onChange={(event) => {
+                    setCity(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+              <label>
+                {uiText(locale, "Province / État", "Province / State")}
+                <input
+                  value={state}
+                  onChange={(event) => {
+                    setState(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Code postal", "Postal code")}
+                <input
+                  value={zipCode}
+                  onChange={(event) => {
+                    setZipCode(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+              <label>
+                {uiText(locale, "Pays", "Country")}
+                <input
+                  value={country}
+                  onChange={(event) => {
+                    setCountry(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+            </div>
+            <label>
+              {uiText(locale, "Date de naissance", "Date of birth")}
+              <input
+                type="date"
+                value={dateOfBirth}
+                onChange={(event) => {
+                  setDateOfBirth(event.target.value);
+                  setErrorMessage("");
+                }}
+              />
+            </label>
+            {externalMembershipFields.length ? (
+              <div className="external-membership-fields">
+                <div className="inline-form-header">
+                  <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
+                  <span>{uiText(locale, "Ajoute les numéros connus maintenant; les requis dépendent du type de contact.", "Add known numbers now; required fields depend on contact type.")}</span>
+                </div>
+                {externalMembershipFields.map((field) => (
+                  <label key={field.organization.id}>
+                    {field.organization.code} #
+                    <input
+                      required={field.required}
+                      value={membershipNumbers[field.organization.id] ?? ""}
+                      onChange={(event) => {
+                        setMembershipNumbers((current) => ({
+                          ...current,
+                          [field.organization.id]: event.target.value,
+                        }));
+                        setErrorMessage("");
+                      }}
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : null}
             {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
-            <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim()} type="button" onClick={handleCreate}>
+            <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim() || missingRequiredMembership} type="submit">
               {busy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer et sélectionner", "Create and select")}
             </button>
-          </div>
+          </form>
         </ModalDialog>
       ) : null}
     </div>

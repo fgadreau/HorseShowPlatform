@@ -1058,6 +1058,7 @@ export function Dashboard({
             contacts={personalContacts}
             contactRoles={contactRoles}
             externalOrganizations={externalOrganizations}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
             canManageHealthDocuments={canManageAssociation}
             horses={personalHorses}
             horseExternalMemberships={horseExternalMemberships}
