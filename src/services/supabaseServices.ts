@@ -1688,14 +1688,6 @@ export type NrhaHorseRecord = {
   state?: string;
 };
 
-export type NrhaHorseLookupAttempt = {
-  bodyKeys?: string[];
-  method: "GET" | "POST";
-  path: string;
-  searchName: string;
-  status: number;
-};
-
 export type NrhaHorseLookupVerification = {
   checks?: {
     dateOfBirth?: NrhaHorseLookupCheck;
@@ -1703,14 +1695,11 @@ export type NrhaHorseLookupVerification = {
     ownerName?: NrhaHorseLookupCheck;
   };
   error?: string;
-  attemptedLookups?: NrhaHorseLookupAttempt[];
-  attemptedNames?: string[];
   horse?: NrhaHorseRecord | null;
   inputDateOfBirth?: string | null;
   inputName?: string;
   inputOwnerName?: string | null;
   licenseNumber?: number;
-  lookupName?: string;
   matched?: boolean;
   nrha_status?: number;
   officialFoalDate?: string | null;
