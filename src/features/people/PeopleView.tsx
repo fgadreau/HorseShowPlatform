@@ -3,7 +3,7 @@ import { Plus, Search } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse, verifyNrhaMember } from "../../services/supabaseServices";
 import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
@@ -38,6 +38,7 @@ function PeopleView({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
+  onVerifyNrhaMember,
 }: {
   locale: Locale;
   contacts: Contact[];
@@ -65,6 +66,7 @@ function PeopleView({
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [creatingHorse, setCreatingHorse] = useState(false);
@@ -183,6 +185,7 @@ function PeopleView({
             membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={onCreateContact}
+            onVerifyNrhaMember={onVerifyNrhaMember}
             onCreated={() => setCreatingContact(false)}
           />
         </ModalDialog>
@@ -216,6 +219,7 @@ function PeopleView({
             externalOrganizations={externalOrganizations}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
+            onVerifyNrhaMember={onVerifyNrhaMember}
             onUpdateContact={async (id, input) => {
               await onUpdateContact(id, input);
               setEditingContact(null);

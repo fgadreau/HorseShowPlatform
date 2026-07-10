@@ -98,6 +98,7 @@ import {
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
   verifyNrhaHorse,
+  verifyNrhaMember,
   type AppContext,
 } from "../../services/supabaseServices";
 import type {
@@ -238,6 +239,7 @@ export function Dashboard({
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
+  onVerifyNrhaMember,
   onUpdateShow,
   onUpdateShowScorePaidWarmup,
   onUpdateStallBooking,
@@ -313,6 +315,7 @@ export function Dashboard({
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
@@ -823,6 +826,7 @@ export function Dashboard({
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+            onVerifyNrhaMember={onVerifyNrhaMember}
           />
         ) : null}
 
@@ -1093,6 +1097,7 @@ export function Dashboard({
             onCreateContactOrganizationMembership={onCreateContactOrganizationMembership}
             onDeleteContact={onDeleteContact}
             onUpdateContact={onUpdateContact}
+            onVerifyNrhaMember={onVerifyNrhaMember}
           />
         ) : null}
 

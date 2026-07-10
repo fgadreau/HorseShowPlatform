@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createContactOrganizationMembership, deleteContact, updateContact } from "../../services/supabaseServices";
+import { createContact, createContactOrganizationMembership, deleteContact, updateContact, verifyNrhaMember } from "../../services/supabaseServices";
 import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
@@ -24,6 +24,7 @@ function MyContactsView({
   onCreateContactOrganizationMembership,
   onDeleteContact,
   onUpdateContact,
+  onVerifyNrhaMember,
 }: {
   locale: Locale;
   contacts: Contact[];
@@ -39,6 +40,7 @@ function MyContactsView({
   onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
+  onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
@@ -153,6 +155,7 @@ function MyContactsView({
             title={contacts.length ? uiText(locale, "Ajouter un cavalier / contact", "Add rider / contact") : uiText(locale, "Créer mon premier contact", "Create my first contact")}
             description={contacts.length ? uiText(locale, "Ajoute autant de cavaliers ou contacts que nécessaire sous ce compte.", "Add as many riders or contacts as needed under this account.") : uiText(locale, "Crée d'abord le contact principal du compte.", "Create the account's primary contact first.")}
             onCreateContact={onCreateContact}
+            onVerifyNrhaMember={onVerifyNrhaMember}
             onCreated={() => setCreatingContact(false)}
           />
         </ModalDialog>
@@ -167,6 +170,7 @@ function MyContactsView({
             externalOrganizations={externalOrganizations}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
+            onVerifyNrhaMember={onVerifyNrhaMember}
             onUpdateContact={async (id, input) => {
               await onUpdateContact(id, input);
               setEditingContact(null);

@@ -911,6 +911,9 @@ export type ExternalMembershipInput = {
   membership_number: string;
   status?: ContactExternalMembership["status"];
   expires_on?: string | null;
+  verified_at?: string | null;
+  verification_payload?: Record<string, unknown>;
+  verification_source?: string | null;
 };
 
 export type OrganizationMembershipTypeInput = {
