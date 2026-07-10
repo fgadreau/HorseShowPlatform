@@ -84,7 +84,7 @@ function nrhaOfficialMemberValues(
     address: member?.line1?.trim() ?? "",
     addressLine2: member?.line2?.trim() ?? "",
     city: member?.city?.trim() ?? "",
-    country: member?.country?.trim() ?? "",
+    country: normalizeNrhaCountry(member?.country),
     email: member?.emailAddress?.trim() || verification.officialEmailAddress || "",
     expiresOn: normalizeNrhaDate(member?.memberExpirationDate ?? verification.officialExpirationDate ?? ""),
     firstName,
@@ -178,7 +178,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.country,
     official: values.country,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: sameCountry,
   });
 
   return rows;
@@ -295,6 +295,10 @@ function samePhone(current: string, official: string) {
   return Boolean(currentDigits && officialDigits && currentDigits === officialDigits) || sameText(current, official);
 }
 
+function sameCountry(current: string, official: string) {
+  return normalizeNrhaCountry(current) === normalizeNrhaCountry(official);
+}
+
 function sameText(current: string, official: string) {
   return normalizeText(current) === normalizeText(official);
 }
@@ -321,6 +325,49 @@ function contactNrhaLocalValues(contact: Contact, memberNumber: string): NrhaMem
     state: contact.state ?? "",
     zipCode: contact.zip_code ?? "",
   };
+}
+
+function normalizeNrhaCountry(value: string | null | undefined) {
+  const cleanValue = value?.trim() ?? "";
+
+  if (!cleanValue) {
+    return "";
+  }
+
+  const upperValue = cleanValue.toUpperCase();
+
+  if (/^[A-Z]{2}$/.test(upperValue)) {
+    return upperValue;
+  }
+
+  const normalizedName = upperValue
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+  const countryByName: Record<string, string> = {
+    AUSTRALIA: "AU",
+    AUSTRALIE: "AU",
+    BELGIQUE: "BE",
+    BELGIUM: "BE",
+    CAN: "CA",
+    CANADA: "CA",
+    FRANCE: "FR",
+    "GREAT BRITAIN": "GB",
+    MEXICO: "MX",
+    MEXIQUE: "MX",
+    "ROYAUME UNI": "GB",
+    SUISSE: "CH",
+    SWITZERLAND: "CH",
+    UK: "GB",
+    "UNITED KINGDOM": "GB",
+    "UNITED STATES": "US",
+    "UNITED STATES OF AMERICA": "US",
+    US: "US",
+    USA: "US",
+  };
+
+  return countryByName[normalizedName] ?? upperValue.slice(0, 2);
 }
 
 export {

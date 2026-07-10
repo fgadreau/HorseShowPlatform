@@ -987,7 +987,7 @@ export async function createContact(input: ContactInput) {
       city: input.city?.trim() || null,
       state: input.state?.trim() || null,
       zip_code: input.zip_code?.trim() || null,
-      country: input.country?.trim() || null,
+      country: normalizeCountry(input.country),
       date_of_birth: input.date_of_birth || null,
     })
     .select("*")
@@ -1065,7 +1065,7 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
     city: contactInput.city === undefined ? undefined : contactInput.city?.trim() || null,
     state: contactInput.state === undefined ? undefined : contactInput.state?.trim() || null,
     zip_code: contactInput.zip_code === undefined ? undefined : contactInput.zip_code?.trim() || null,
-    country: contactInput.country === undefined ? undefined : contactInput.country?.trim() || null,
+    country: normalizeCountry(contactInput.country),
     date_of_birth: contactInput.date_of_birth === undefined ? undefined : contactInput.date_of_birth || null,
   };
   const { data, error } = await client
@@ -5526,7 +5526,7 @@ async function enrichExistingContact(existing: Contact, input: ContactInput) {
   const city = input.city?.trim();
   const state = input.state?.trim();
   const zipCode = input.zip_code?.trim();
-  const country = input.country?.trim();
+  const country = normalizeCountry(input.country);
 
   if (!existing.email && normalizedEmail) {
     patch.email = normalizedEmail;
@@ -5773,7 +5773,46 @@ function normalizeCountry(value?: string | null) {
     return undefined;
   }
 
-  return value?.trim().toUpperCase().slice(0, 2) || null;
+  const cleanValue = value?.trim() ?? "";
+
+  if (!cleanValue) {
+    return null;
+  }
+
+  const upperValue = cleanValue.toUpperCase();
+
+  if (/^[A-Z]{2}$/.test(upperValue)) {
+    return upperValue;
+  }
+
+  const normalizedName = upperValue
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Z0-9]+/g, " ")
+    .trim();
+  const countryByName: Record<string, string> = {
+    AUSTRALIA: "AU",
+    AUSTRALIE: "AU",
+    BELGIQUE: "BE",
+    BELGIUM: "BE",
+    CAN: "CA",
+    CANADA: "CA",
+    FRANCE: "FR",
+    "GREAT BRITAIN": "GB",
+    MEXICO: "MX",
+    MEXIQUE: "MX",
+    "ROYAUME UNI": "GB",
+    SUISSE: "CH",
+    SWITZERLAND: "CH",
+    UK: "GB",
+    "UNITED KINGDOM": "GB",
+    "UNITED STATES": "US",
+    "UNITED STATES OF AMERICA": "US",
+    US: "US",
+    USA: "US",
+  };
+
+  return countryByName[normalizedName] ?? upperValue.slice(0, 2);
 }
 
 function normalizeState(value?: string | null) {
