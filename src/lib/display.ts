@@ -66,5 +66,32 @@ export function errorMessage(error: unknown) {
     return error.message;
   }
 
+  if (error && typeof error === "object") {
+    const errorRecord = error as {
+      code?: unknown;
+      details?: unknown;
+      error?: unknown;
+      error_description?: unknown;
+      hint?: unknown;
+      message?: unknown;
+    };
+    const messageParts = [
+      typeof errorRecord.message === "string" ? errorRecord.message : null,
+      typeof errorRecord.details === "string" ? errorRecord.details : null,
+      typeof errorRecord.hint === "string" ? errorRecord.hint : null,
+      typeof errorRecord.error_description === "string" ? errorRecord.error_description : null,
+      typeof errorRecord.error === "string" ? errorRecord.error : null,
+      typeof errorRecord.code === "string" ? `code ${errorRecord.code}` : null,
+    ].filter(Boolean);
+
+    if (messageParts.length) {
+      return messageParts.join(" - ");
+    }
+  }
+
+  if (typeof error === "string" && error.trim()) {
+    return error;
+  }
+
   return "Unexpected error.";
 }

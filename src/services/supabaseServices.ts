@@ -5042,6 +5042,19 @@ async function syncContactExternalMemberships(contactId: string, memberships?: E
         return;
       }
 
+      if (isMissingExternalMembershipVerificationColumn(error)) {
+        const basicMemberships = cleanMemberships.map(({ verified_at, verification_source, verification_payload, ...membership }) => membership);
+        const { error: fallbackError } = await client.from("contact_external_memberships").upsert(basicMemberships, {
+          onConflict: "contact_id,external_organization_id",
+        });
+
+        if (!fallbackError || isMissingSchemaError(fallbackError, "contact_external_memberships")) {
+          return;
+        }
+
+        throw fallbackError;
+      }
+
       throw error;
     }
   }
@@ -5810,6 +5823,14 @@ function isMissingColumnError(error: unknown, columnName: string) {
     ((message.includes("column") || message.includes("schema cache") || message.includes("could not find")) &&
       message.includes(normalizedColumn) &&
       (message.includes("does not exist") || message.includes("schema cache") || message.includes("could not find")))
+  );
+}
+
+function isMissingExternalMembershipVerificationColumn(error: unknown) {
+  return (
+    isMissingColumnError(error, "verified_at") ||
+    isMissingColumnError(error, "verification_source") ||
+    isMissingColumnError(error, "verification_payload")
   );
 }
 

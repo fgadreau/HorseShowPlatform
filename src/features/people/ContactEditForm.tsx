@@ -59,6 +59,7 @@ function ContactEditForm({
   const [nrhaMemberMessage, setNrhaMemberMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaMemberLookup, setNrhaMemberLookup] = useState<Awaited<ReturnType<typeof verifyNrhaMember>> | null>(null);
   const [nrhaMemberVerification, setNrhaMemberVerification] = useState<NrhaMemberVerificationState | null>(null);
+  const [saveMessage, setSaveMessage] = useState<InlineHealthMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const contactMemberships = useMemo(
     () => contactExternalMemberships?.filter((membership) => membership.contact_id === contact.id) ?? [],
@@ -125,6 +126,7 @@ function ContactEditForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    setSaveMessage(null);
     setBusy(true);
 
     try {
@@ -155,6 +157,11 @@ function ContactEditForm({
             verification_source: verifiedMembership ? "nrha_api" : null,
           };
         }),
+      });
+    } catch (error) {
+      setSaveMessage({
+        tone: "error",
+        message: errorMessage(error),
       });
     } finally {
       setBusy(false);
@@ -456,7 +463,16 @@ function ContactEditForm({
             ) : null}
           </div>
         ) : null}
-        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} disabled={missingRequiredMembership} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
+        <InlineHealthMessage value={saveMessage} />
+        {missingRequiredMembership ? (
+          <InlineHealthMessage
+            value={{
+              tone: "info",
+              message: uiText(locale, "Un numéro externe obligatoire est manquant.", "A required external membership number is missing."),
+            }}
+          />
+        ) : null}
+        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );
