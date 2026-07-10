@@ -72,6 +72,7 @@ import {
   deleteShowScorePaidWarmup,
   getHorseHealthDocumentFileUrl,
   releaseBackNumber,
+  replaceNrhaRiderRankings,
   reviewHorseHealthDocument,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
@@ -220,6 +221,7 @@ export function Dashboard({
   onSaveShowScorePaidWarmup,
   onDeleteShowScorePaidWarmup,
   onRefresh,
+  onReplaceNrhaRiderRankings,
   onReviewHorseHealthDocument,
   onSavePayoutCalculationDraft,
   onSignOut,
@@ -296,6 +298,7 @@ export function Dashboard({
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
+  onReplaceNrhaRiderRankings: (input: Parameters<typeof replaceNrhaRiderRankings>[0]) => Promise<void>;
   onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onSavePayoutCalculationDraft: (input: Parameters<typeof savePayoutCalculationDraft>[0]) => Promise<void>;
   onSignOut: () => void;
@@ -346,6 +349,7 @@ export function Dashboard({
   const contactOrganizationMemberships = context?.contactOrganizationMemberships ?? [];
   const organizationProducts = context?.organizationProducts ?? [];
   const manualSales = context?.manualSales ?? [];
+  const nrhaRiderRankings = context?.nrhaRiderRankings ?? [];
   const contactExternalMemberships = context?.contactExternalMemberships ?? [];
   const horseExternalMemberships = context?.horseExternalMemberships ?? [];
   const horseHealthDocuments = context?.horseHealthDocuments ?? [];
@@ -901,6 +905,7 @@ export function Dashboard({
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
+            nrhaRiderRankings={nrhaRiderRankings}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={activeShowList}
@@ -1115,6 +1120,7 @@ export function Dashboard({
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
+            nrhaRiderRankings={nrhaRiderRankings}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             shows={activeShowList}
@@ -1203,7 +1209,10 @@ export function Dashboard({
 
         {effectiveView === "platform-admin" && isPlatformAdmin ? (
           <PlatformAdminView
+            currentUserProfileId={context?.profile.id ?? null}
+            nrhaRiderRankings={nrhaRiderRankings}
             organizations={organizations}
+            onImportNrhaRiderRankings={onReplaceNrhaRiderRankings}
             onRefresh={onRefresh}
           />
         ) : null}

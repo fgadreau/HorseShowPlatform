@@ -82,6 +82,7 @@ function ContactEditForm({
     city,
     country,
     email,
+    expiresOn: existingNrhaMembership?.expires_on ?? "",
     firstName,
     lastName,
     memberNumber: currentNrhaMemberNumber,
@@ -92,7 +93,11 @@ function ContactEditForm({
   const existingNrhaRows = existingNrhaOfficialValues ? nrhaMemberDataImportRows(existingNrhaOfficialValues, currentNrhaLocalValues, locale) : [];
   const existingValidationStillCurrent =
     Boolean(existingNrhaMembership?.verification_source === "nrha_api" && existingNrhaLookup && existingNrhaRows.length === 0);
-  const stateNrhaRows = nrhaMemberVerification ? nrhaMemberDataImportRows(nrhaMemberVerification.officialValues, currentNrhaLocalValues, locale) : [];
+  const stateNrhaLocalValues: NrhaMemberLocalValues = {
+    ...currentNrhaLocalValues,
+    expiresOn: nrhaMemberVerification?.officialValues.expiresOn ?? currentNrhaLocalValues.expiresOn,
+  };
+  const stateNrhaRows = nrhaMemberVerification ? nrhaMemberDataImportRows(nrhaMemberVerification.officialValues, stateNrhaLocalValues, locale) : [];
   const stateValidationStillCurrent =
     Boolean(nrhaMemberVerification && nrhaMemberVerification.organizationId === nrhaOrganizationId && nrhaMemberVerification.memberNumber === currentNrhaMemberNumber && stateNrhaRows.length === 0);
   const verifiedNrhaMember: NrhaMemberVerificationState | null = stateValidationStillCurrent && nrhaMemberVerification
@@ -106,7 +111,11 @@ function ContactEditForm({
         }
       : null;
   const activeNrhaOfficialValues = nrhaMemberLookup ? nrhaOfficialMemberValues(nrhaMemberLookup, { memberNumber: currentNrhaMemberNumber }) : existingNrhaOfficialValues;
-  const nrhaMemberRows = activeNrhaOfficialValues ? nrhaMemberDataImportRows(activeNrhaOfficialValues, currentNrhaLocalValues, locale) : [];
+  const displayNrhaLocalValues: NrhaMemberLocalValues = {
+    ...currentNrhaLocalValues,
+    expiresOn: verifiedNrhaMember?.officialValues.expiresOn ?? currentNrhaLocalValues.expiresOn,
+  };
+  const nrhaMemberRows = activeNrhaOfficialValues ? nrhaMemberDataImportRows(activeNrhaOfficialValues, displayNrhaLocalValues, locale) : [];
   const nrhaValidationWillReset =
     Boolean(existingNrhaMembership?.verification_source === "nrha_api" && existingNrhaLookup && !verifiedNrhaMember);
   const displayedNrhaMemberMessage: InlineHealthMessage | null =

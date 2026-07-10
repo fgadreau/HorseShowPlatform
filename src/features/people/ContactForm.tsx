@@ -88,6 +88,7 @@ function ContactForm({
           city,
           country,
           email,
+          expiresOn: verifiedNrhaMember?.officialValues.expiresOn ?? "",
           firstName,
           lastName,
           memberNumber: currentNrhaMemberNumber,
@@ -239,7 +240,7 @@ function ContactForm({
         });
         setNrhaMemberMessage({
           tone: "success",
-          message: uiText(locale, "NRHA: membre confirmé.", "NRHA: member confirmed."),
+        message: uiText(locale, "NRHA: membre confirmé.", "NRHA: member confirmed."),
         });
         return;
       }

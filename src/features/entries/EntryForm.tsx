@@ -6,7 +6,7 @@ import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numeric
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
 import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
+import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist } from "../dashboard/shared";
 import { classEntriesAreClosed, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
 import { HorseForm } from "../horses/HorseForm";
@@ -26,6 +26,7 @@ function EntryForm({
   horseHealthDocuments,
   horses,
   membershipRequirements,
+  nrhaRiderRankings,
   organization,
   profileId,
   shows,
@@ -50,6 +51,7 @@ function EntryForm({
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
+  nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
   profileId: string;
   shows: Show[];
@@ -334,6 +336,7 @@ function EntryForm({
           horse={selectedHorse}
           horseExternalMemberships={horseExternalMemberships}
           locale={locale}
+          nrhaRiderRankings={nrhaRiderRankings}
           onStatusChange={handleNrhaEligibilityStatusChange}
           riderContact={selectedNrhaRiderContact}
           show={selectedShow}

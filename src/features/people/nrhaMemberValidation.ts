@@ -24,6 +24,7 @@ type NrhaMemberLocalValues = {
   city: string;
   country: string;
   email: string;
+  expiresOn: string;
   firstName: string;
   lastName: string;
   memberNumber: string;
@@ -107,6 +108,14 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     official: values.memberNumber,
     formatter: (value) => formatPlainValue(value, locale),
     compare: sameNumber,
+  });
+  maybePushRow(rows, {
+    key: "expiresOn",
+    label: uiText(locale, "Expiration NRHA", "NRHA expiration"),
+    current: current.expiresOn,
+    official: values.expiresOn,
+    formatter: (value) => formatPlainValue(value, locale),
+    compare: sameText,
   });
   maybePushRow(rows, {
     key: "firstName",
@@ -318,6 +327,7 @@ function contactNrhaLocalValues(contact: Contact, memberNumber: string): NrhaMem
     city: contact.city ?? "",
     country: contact.country ?? "",
     email: contact.email ?? "",
+    expiresOn: "",
     firstName: contact.first_name,
     lastName: contact.last_name,
     memberNumber,

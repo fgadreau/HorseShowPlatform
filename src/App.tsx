@@ -51,6 +51,7 @@ import {
   assignBackNumber,
   assignNextBackNumber,
   releaseBackNumber,
+  replaceNrhaRiderRankings,
   reviewHorseHealthDocument,
   setOrganizationExternalMembershipRequirement,
   updateClass,
@@ -583,6 +584,11 @@ export default function App() {
       onDeleteShowScorePaidWarmup={async (id) => {
         await deleteShowScorePaidWarmup(id);
         setNotice({ tone: "success", message: "Paid warm up supprimé." });
+        await refreshContext();
+      }}
+      onReplaceNrhaRiderRankings={async (input) => {
+        await replaceNrhaRiderRankings(input);
+        setNotice({ tone: "success", message: "Liste NRHA importée." });
         await refreshContext();
       }}
       onRefresh={() => refreshContext()}

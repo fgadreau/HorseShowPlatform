@@ -4,8 +4,8 @@ import type { Locale } from "../../lib/i18n";
 import type { ReadinessItem, ReadinessResult } from "../../lib/readiness";
 import { verifyNrhaEligibility } from "../../services/supabaseServices";
 import type { NrhaEligibilityVerification } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactExternalMembership, Division, ExternalOrganization, Horse, HorseExternalMembership, Show } from "../../types/domain";
-import { findNrhaApprovedClass } from "../classes/classUtils";
+import type { ClassRecord, Contact, ContactExternalMembership, Division, ExternalOrganization, Horse, HorseExternalMembership, NrhaRiderRanking, NrhaRiderRankingListType, Show } from "../../types/domain";
+import { findNrhaApprovedClass, nrhaClassTypeFromRules } from "../classes/classUtils";
 import { InlineHealthMessage, uiText } from "../dashboard/shared";
 
 type NrhaEligibilityMessage = {
@@ -31,6 +31,7 @@ function NrhaEligibilityCheck({
   horse,
   horseExternalMemberships,
   locale = "fr",
+  nrhaRiderRankings,
   onStatusChange,
   riderContact,
   show,
@@ -44,6 +45,7 @@ function NrhaEligibilityCheck({
   horse: Horse | null;
   horseExternalMemberships: HorseExternalMembership[];
   locale?: Locale;
+  nrhaRiderRankings: NrhaRiderRanking[];
   onStatusChange?: (status: NrhaEligibilityGate) => void;
   riderContact: Contact | null;
   skip?: boolean;
@@ -85,12 +87,23 @@ function NrhaEligibilityCheck({
     horse,
     horseReferenceNumber: horseNrhaReference?.reference_number ?? "",
     locale,
+    memberExpiresOn: riderNrhaMembership?.expires_on ?? null,
     memberNumber: riderNrhaMembership?.membership_number ?? "",
+    memberStatus: riderNrhaMembership?.status ?? null,
     riderContact,
     show,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
-  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip);
+  const category26RankingGate = buildNrhaCategory26RankingGate({
+    classRecord,
+    division,
+    key: context.key,
+    locale,
+    nrhaRiderRankings,
+    riderContact,
+    show,
+  });
+  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip, category26RankingGate);
 
   useEffect(() => {
     onStatusChange?.(gate);
@@ -127,7 +140,7 @@ function NrhaEligibilityCheck({
         <ShieldCheck size={18} />
         {busy ? uiText(locale, "Vérification...", "Checking...") : uiText(locale, "Vérifier NRHA", "Check NRHA")}
       </button>
-      <InlineHealthMessage value={visibleResultMessage ?? context.message} />
+      <InlineHealthMessage value={gate.message} />
     </div>
   );
 }
@@ -137,6 +150,7 @@ function buildNrhaEligibilityGate(
   resultMessage: NrhaEligibilityMessage | null,
   locale: Locale,
   skip: boolean,
+  category26RankingGate: NrhaCategory26RankingGate,
 ): NrhaEligibilityGate {
   if (skip || !context.applies) {
     return {
@@ -156,6 +170,17 @@ function buildNrhaEligibilityGate(
       eligible: null,
       key: context.key,
       message: context.message ? { key: context.key, ...context.message } : null,
+      verified: false,
+    };
+  }
+
+  if (category26RankingGate.applies && !category26RankingGate.canProceed) {
+    return {
+      applies: true,
+      canProceed: false,
+      eligible: false,
+      key: context.key,
+      message: category26RankingGate.message,
       verified: false,
     };
   }
@@ -237,11 +262,13 @@ function buildNrhaEligibilityContext(input: {
   horse: Horse | null;
   horseReferenceNumber: string;
   locale: Locale;
+  memberExpiresOn: string | null;
   memberNumber: string;
+  memberStatus: ContactExternalMembership["status"] | null;
   riderContact: Contact | null;
   show: Show | null;
 }) {
-  const classCode = integerFromExactReference(input.division?.code ?? input.classRecord?.code ?? "");
+  const classCode = nrhaClassCodeForEligibility(input.division, input.classRecord);
   const applies = nrhaApplies(input.division, input.classRecord, classCode);
   const competitionLicenseNumber = integerFromReference(input.horseReferenceNumber);
   const memberNumber = integerFromReference(input.memberNumber);
@@ -323,6 +350,20 @@ function buildNrhaEligibilityContext(input: {
     };
   }
 
+  if (input.memberStatus === "expired" || (input.memberExpiresOn && input.memberExpiresOn.slice(0, 10) < date)) {
+    const expiresOn = input.memberExpiresOn ? ` (${input.memberExpiresOn.slice(0, 10)})` : "";
+
+    return {
+      applies,
+      key,
+      message: {
+        tone: "error" as const,
+        message: uiText(input.locale, `Membre NRHA du cavalier expiré${expiresOn}; revalide le membre NRHA avant l'inscription.`, `Rider NRHA membership expired${expiresOn}; revalidate the NRHA member before entry.`),
+      },
+      request: null,
+    };
+  }
+
   return {
     applies,
     key,
@@ -334,6 +375,178 @@ function buildNrhaEligibilityContext(input: {
       memberNumber,
     },
   };
+}
+
+type NrhaCategory26RankingGate = {
+  applies: boolean;
+  canProceed: boolean;
+  message: NrhaEligibilityMessage | null;
+};
+
+const nrhaCategory26OpenClassLevels = new Map([
+  [2100, 4],
+  [6210, 4],
+  [2200, 3],
+  [6220, 3],
+  [2300, 2],
+  [6230, 2],
+  [2325, 1],
+  [6231, 1],
+]);
+
+const nrhaCategory26NonProClassLevels = new Map([
+  [2400, 4],
+  [6240, 4],
+  [2500, 3],
+  [6250, 3],
+  [2600, 2],
+  [6260, 2],
+  [2625, 1],
+  [6261, 1],
+]);
+
+function buildNrhaCategory26RankingGate(input: {
+  classRecord: ClassRecord | null;
+  division: Division | null;
+  key: string;
+  locale: Locale;
+  nrhaRiderRankings: NrhaRiderRanking[];
+  riderContact: Contact | null;
+  show: Show | null;
+}): NrhaCategory26RankingGate {
+  const classCode = nrhaClassCodeForEligibility(input.division, input.classRecord);
+  const classType = nrhaClassTypeForEligibility(input.division, input.classRecord, classCode);
+  const family = classCode && nrhaCategory26OpenClassLevels.has(classCode) ? "open" : classCode && nrhaCategory26NonProClassLevels.has(classCode) ? "non_pro" : null;
+  const classLevel = family === "open" && classCode ? nrhaCategory26OpenClassLevels.get(classCode) ?? null : family === "non_pro" && classCode ? nrhaCategory26NonProClassLevels.get(classCode) ?? null : null;
+  const applies = Boolean(classLevel && (classType === "category_2_aged_show" || classType === "category_6_closed_aged_show"));
+
+  if (!applies || !family || !classLevel || !input.show || !input.riderContact) {
+    return { applies, canProceed: true, message: null };
+  }
+
+  const eligibilityYear = eligibilityYearFromShow(input.show);
+  const riderMatchKeys = contactNrhaRiderNameMatchKeys(input.riderContact);
+
+  if (!eligibilityYear || !riderMatchKeys.length) {
+    return { applies, canProceed: true, message: null };
+  }
+
+  const sources: Array<{ listType: NrhaRiderRankingListType; rank: number }> = [];
+  let minimumLevel = 1;
+
+  if (family === "open") {
+    for (const listType of ["top_professional_riders", "top_200_lifetime_all_riders"] as const) {
+      const ranking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, listType, riderMatchKeys);
+
+      if (ranking) {
+        minimumLevel = Math.max(minimumLevel, nrhaCategory26RankLevel(ranking.rank));
+        sources.push({ listType, rank: ranking.rank });
+      }
+    }
+  } else {
+    const nonProRanking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, "top_200_non_pro_riders", riderMatchKeys);
+
+    if (nonProRanking) {
+      minimumLevel = Math.max(minimumLevel, nrhaCategory26RankLevel(nonProRanking.rank));
+      sources.push({ listType: "top_200_non_pro_riders", rank: nonProRanking.rank });
+    }
+
+    const lifetimeRanking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, "top_200_lifetime_all_riders", riderMatchKeys);
+
+    if (lifetimeRanking) {
+      minimumLevel = Math.max(minimumLevel, 2);
+      sources.push({ listType: "top_200_lifetime_all_riders", rank: lifetimeRanking.rank });
+    }
+  }
+
+  if (classLevel >= minimumLevel) {
+    return { applies, canProceed: true, message: null };
+  }
+
+  const sourceText = sources.length ? sources.map((source) => `${nrhaRankingListLabel(source.listType, input.locale)} #${source.rank}`).join(", ") : uiText(input.locale, "listes NRHA importées", "imported NRHA lists");
+  const minimumLevelText =
+    minimumLevel === 4
+      ? uiText(input.locale, "Level 4 seulement", "Level 4 only")
+      : uiText(input.locale, `Level ${minimumLevel} ou plus haut`, `Level ${minimumLevel} or higher`);
+
+  return {
+    applies,
+    canProceed: false,
+    message: {
+      key: input.key,
+      tone: "error",
+      message: uiText(
+        input.locale,
+        `NRHA Cat. 2/6: ${sourceText}. Niveau minimal déduit: ${minimumLevelText}; cette classe est Level ${classLevel}.`,
+        `NRHA Cat. 2/6: ${sourceText}. Deduced minimum level: ${minimumLevelText}; this class is Level ${classLevel}.`,
+      ),
+    },
+  };
+}
+
+function nrhaClassCodeForEligibility(division: Division | null, classRecord: ClassRecord | null) {
+  return integerFromExactReference(division?.code) ?? integerFromExactReference(classRecord?.code) ?? integerFromExactReference(classRecord?.nrha_slate_number);
+}
+
+function nrhaClassTypeForEligibility(division: Division | null, classRecord: ClassRecord | null, classCode: number | null) {
+  return nrhaClassTypeFromRules(division?.eligibility_rules) || nrhaClassTypeFromRules(classRecord?.eligibility_rules) || findNrhaApprovedClass(String(classCode ?? ""))?.nrhaClassType || "";
+}
+
+function findNrhaRiderRanking(
+  rankings: NrhaRiderRanking[],
+  eligibilityYear: number,
+  listType: NrhaRiderRankingListType,
+  riderMatchKeys: string[],
+) {
+  const matchKeys = new Set(riderMatchKeys);
+
+  return rankings.find(
+    (ranking) =>
+      ranking.eligibility_year === eligibilityYear &&
+      ranking.list_type === listType &&
+      matchKeys.has(ranking.rider_name_match_key),
+  );
+}
+
+function nrhaCategory26RankLevel(rank: number) {
+  if (rank <= 35) return 4;
+  if (rank <= 90) return 3;
+  if (rank <= 200) return 2;
+  return 1;
+}
+
+function nrhaRankingListLabel(listType: NrhaRiderRankingListType, locale: Locale) {
+  switch (listType) {
+    case "top_professional_riders":
+      return uiText(locale, "Top Pro Riders", "Top Pro Riders");
+    case "top_200_non_pro_riders":
+      return uiText(locale, "Top 200 Non Pro Riders", "Top 200 Non Pro Riders");
+    case "top_200_lifetime_all_riders":
+    default:
+      return uiText(locale, "Top 200 Lifetime All Riders", "Top 200 Lifetime All Riders");
+  }
+}
+
+function eligibilityYearFromShow(show: Show) {
+  const year = Number(show.start_date.slice(0, 4));
+  return Number.isInteger(year) && year > 0 ? year : null;
+}
+
+function contactNrhaRiderNameMatchKeys(contact: Contact) {
+  const fullNameKey = normalizeNrhaRiderName([contact.first_name, contact.last_name].filter(Boolean).join(" "));
+  const firstGivenName = contact.first_name.trim().split(/\s+/).filter(Boolean)[0] ?? "";
+  const firstNameLastNameKey = normalizeNrhaRiderName([firstGivenName, contact.last_name].filter(Boolean).join(" "));
+
+  return [...new Set([fullNameKey, firstNameLastNameKey].filter(Boolean))];
+}
+
+function normalizeNrhaRiderName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
 }
 
 function nrhaApplies(division: Division | null, classRecord: ClassRecord | null, classCode: number | null) {

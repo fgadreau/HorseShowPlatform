@@ -93,6 +93,7 @@ export function buildContactShowReadiness(input: {
   contactType: Contact["type"];
   externalOrganizations: ExternalOrganization[];
   membershipRequirements: OrganizationExternalMembershipRequirement[];
+  referenceDate?: string | null;
   roleLabel: string;
 }): ReadinessResult {
   const requiredOrganizationIds = input.membershipRequirements
@@ -120,6 +121,7 @@ export function buildContactShowReadiness(input: {
 
   const contact = input.contact;
   const memberships = input.contactExternalMemberships.filter((membership) => membership.contact_id === contact.id);
+  const referenceDate = dateReferenceValue(input.referenceDate);
   const items = requiredOrganizationIds.map((externalOrganizationId) => {
     const externalOrganization = input.externalOrganizations.find((organization) => organization.id === externalOrganizationId);
     const membership = memberships.find((candidate) => candidate.external_organization_id === externalOrganizationId);
@@ -136,19 +138,25 @@ export function buildContactShowReadiness(input: {
       };
     }
 
-    if (membership?.status === "expired") {
+    if (membershipIsExpired(membership, referenceDate)) {
+      const expiryDetail = membership?.expires_on
+        ? ` depuis le ${formatDate(membership.expires_on)}`
+        : "";
+
       return {
         blocking: true,
-        detail: `${organizationLabel} #${membershipNumber} est expire pour ${contactLabel(contact)}.`,
+        detail: `${organizationLabel} #${membershipNumber} est expire${expiryDetail} pour ${contactLabel(contact)}.`,
         key: `contact.${contact.id}.${externalOrganizationId}`,
         status: "blocked" as const,
         title: `${input.roleLabel} - ${organizationLabel}`,
       };
     }
 
+    const expirationDetail = membership?.expires_on ? ` valide jusqu'au ${formatDate(membership.expires_on)}` : "";
+
     return {
       blocking: false,
-      detail: `${organizationLabel} #${membershipNumber} en dossier pour ${contactLabel(contact)}.`,
+      detail: `${organizationLabel} #${membershipNumber}${expirationDetail} en dossier pour ${contactLabel(contact)}.`,
       key: `contact.${contact.id}.${externalOrganizationId}`,
       status: "ready" as const,
       title: `${input.roleLabel} - ${organizationLabel}`,
@@ -192,6 +200,7 @@ export function buildEntryShowReadiness(input: {
           contactType: "rider",
           externalOrganizations: input.externalOrganizations,
           membershipRequirements: input.membershipRequirements,
+          referenceDate: input.show?.start_date ?? null,
           roleLabel: "Cavalier",
         }),
       );
@@ -205,6 +214,7 @@ export function buildEntryShowReadiness(input: {
           contactType: "owner",
           externalOrganizations: input.externalOrganizations,
           membershipRequirements: input.membershipRequirements,
+          referenceDate: input.show?.start_date ?? null,
           roleLabel: "Proprietaire",
         }),
       );
@@ -218,6 +228,7 @@ export function buildEntryShowReadiness(input: {
           contactType: "payer",
           externalOrganizations: input.externalOrganizations,
           membershipRequirements: input.membershipRequirements,
+          referenceDate: input.show?.start_date ?? null,
           roleLabel: "Payeur",
         }),
       );
@@ -225,6 +236,22 @@ export function buildEntryShowReadiness(input: {
   }
 
   return summarizeReadiness([horseReadiness, ...contactResults].flatMap((result) => result.items), "Pret pour creer l'inscription.");
+}
+
+function membershipIsExpired(membership: ContactExternalMembership | null | undefined, referenceDate: string) {
+  if (!membership) {
+    return false;
+  }
+
+  if (membership.status === "expired") {
+    return true;
+  }
+
+  return Boolean(membership.expires_on && dateReferenceValue(membership.expires_on) < referenceDate);
+}
+
+function dateReferenceValue(value: string | null | undefined) {
+  return value?.slice(0, 10) || new Date().toISOString().slice(0, 10);
 }
 
 export function readinessTone(result: ReadinessResult): "success" | "info" | "error" {

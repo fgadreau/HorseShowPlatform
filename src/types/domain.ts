@@ -43,6 +43,26 @@ export type OrganizationModules = {
   show_score: boolean;
 };
 
+export type NrhaRiderRankingListType = "top_professional_riders" | "top_200_non_pro_riders" | "top_200_lifetime_all_riders";
+
+export type NrhaRiderRanking = {
+  id: string;
+  eligibility_year: number;
+  source_year: number | null;
+  list_type: NrhaRiderRankingListType;
+  rank: number;
+  rider_name: string;
+  rider_name_match_key: string;
+  rider_name_normalized: string;
+  earnings: number | null;
+  applies_to_categories: number[];
+  source_file_name: string | null;
+  source_payload: Record<string, unknown>;
+  imported_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type Show = {
   id: string;
   organization_id: string;

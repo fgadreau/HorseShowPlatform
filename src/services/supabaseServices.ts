@@ -41,6 +41,8 @@ import type {
   InvoiceLineItem,
   ManualSale,
   ManualSaleInput,
+  NrhaRiderRanking,
+  NrhaRiderRankingListType,
   Organization,
   OrganizationBackNumber,
   OrganizationExternalMembershipRequirement,
@@ -127,6 +129,7 @@ export type AppContext = {
   contactOrganizationMemberships: ContactOrganizationMembership[];
   organizationProducts: OrganizationProduct[];
   manualSales: ManualSale[];
+  nrhaRiderRankings: NrhaRiderRanking[];
   contactExternalMemberships: ContactExternalMembership[];
   horseExternalMemberships: HorseExternalMembership[];
   horseHealthDocuments: HorseHealthDocument[];
@@ -229,6 +232,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contactOrganizationMembershipsResult,
     organizationProductsResult,
     manualSalesResult,
+    nrhaRiderRankingsResult,
     contactExternalMembershipsResult,
     horseExternalMembershipsResult,
     horseHealthDocumentsResult,
@@ -271,6 +275,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     client.from("contact_organization_memberships").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationMembership[]>(),
     client.from("organization_products").select("*").order("category", { ascending: true }).order("name", { ascending: true }).returns<OrganizationProduct[]>(),
     client.from("manual_sales").select("*").order("created_at", { ascending: false }).returns<ManualSale[]>(),
+    client.from("nrha_rider_rankings").select("*").order("eligibility_year", { ascending: false }).order("list_type", { ascending: true }).order("rank", { ascending: true }).returns<NrhaRiderRanking[]>(),
     client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
     client.from("horse_external_memberships").select("*").order("created_at", { ascending: false }).returns<HorseExternalMembership[]>(),
     client.from("horse_health_documents").select("*").order("created_at", { ascending: false }).returns<HorseHealthDocument[]>(),
@@ -576,6 +581,11 @@ export async function loadAppContext(user: User): Promise<AppContext> {
       ? []
       : (() => { throw entryImportBatchesResult.error; })()
     : entryImportBatchesResult.data ?? [];
+  const nrhaRiderRankings = nrhaRiderRankingsResult.error
+    ? isMissingSchemaError(nrhaRiderRankingsResult.error, "nrha_rider_rankings")
+      ? []
+      : (() => { throw nrhaRiderRankingsResult.error; })()
+    : nrhaRiderRankingsResult.data ?? [];
 
   return {
     profile,
@@ -605,6 +615,7 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     contactOrganizationMemberships,
     organizationProducts,
     manualSales,
+    nrhaRiderRankings,
     contactExternalMemberships,
     horseExternalMemberships,
     horseHealthDocuments,
@@ -1664,6 +1675,75 @@ export type NrhaEligibilityVerification = {
   payload?: Record<string, unknown>;
 };
 
+export type NrhaEligibilityProfileSignal = {
+  actualAmount?: number | null;
+  classCode: number;
+  code: string;
+  globalBlock: boolean;
+  message: string;
+  scope: "all_nrha_classes" | "non_pro_classes" | "horse_novice_classes" | "rookie_classes" | "green_entry_level_classes" | "open_cap_classes" | "class_specific";
+  subject: "rider" | "horse" | "team" | "unknown";
+  thresholdAmount?: number | null;
+};
+
+export type NrhaEligibilityProfileQuestion = {
+  answer: string | null;
+  evidenceClassCodes: number[];
+  id: string;
+  label: string;
+  status: "unknown" | "answered" | "blocked";
+};
+
+export type NrhaEligibilityProfileAge = {
+  ageOnJan1: number | null;
+  birthYear: number | null;
+  dateOfBirth: string | null;
+  referenceDate: string;
+  rule: "actual_age_on_jan_1" | "horse_competition_age_on_jan_1";
+  source: "date_of_birth" | "birth_year" | "unavailable";
+};
+
+export type NrhaEligibilityProfileTest = {
+  classCode: number;
+  className: string;
+  eligible: boolean | null;
+  id: string;
+  payload?: unknown;
+  reasons: NrhaEligibilityReason[];
+  signals: NrhaEligibilityProfileSignal[];
+  status: "eligible" | "ineligible" | "error";
+};
+
+export type NrhaEligibilityProfileVerification = {
+  checkedAt?: string;
+  error?: string;
+  input?: Record<string, unknown>;
+  profile?: {
+    globalBlocks: NrhaEligibilityProfileSignal[];
+    horse: {
+      age: NrhaEligibilityProfileAge;
+      licenseStatus: string;
+      noviceHorseLevel: string;
+    };
+    rider: {
+      age: NrhaEligibilityProfileAge;
+      greenEntryLevel: string;
+      openCapStatus: string;
+      professionalStatus: string;
+      rookieLevel: string;
+    };
+  };
+  questions?: NrhaEligibilityProfileQuestion[];
+  status?: "complete" | "partial" | "blocked";
+  summary?: {
+    answeredQuestions: number;
+    blockedQuestions: number;
+    testedClassCount: number;
+    unfilledQuestions: string[];
+  };
+  tests?: NrhaEligibilityProfileTest[];
+};
+
 export type NrhaHorseLookupCheck = {
   input: string;
   matched: boolean;
@@ -1830,6 +1910,40 @@ export async function verifyNrhaEligibility(input: {
 
   if (!verification) {
     throw new Error("Validation NRHA impossible: aucune reponse recue.");
+  }
+
+  if (verification.error) {
+    throw new Error(verification.error);
+  }
+
+  return verification;
+}
+
+export async function verifyNrhaEligibilityProfile(input: {
+  classCodes?: Array<number | string>;
+  competitionLicenseNumber: number;
+  continueAfterGlobalBlock?: boolean;
+  countryId?: number | null;
+  date: string;
+  horseBirthYear?: number | string | null;
+  horseDateOfBirth?: string | null;
+  isEuroEvent?: boolean;
+  maxTests?: number;
+  memberNumber: number;
+  riderBirthYear?: number | string | null;
+  riderDateOfBirth?: string | null;
+}) {
+  const client = requireSupabase();
+  const { data: verification, error: invokeError, response } = await client.functions.invoke<NrhaEligibilityProfileVerification>("nrha-eligibility-profile", {
+    body: input,
+  });
+
+  if (invokeError) {
+    throw new Error(await nrhaEligibilityInvokeErrorMessage(invokeError, response));
+  }
+
+  if (!verification) {
+    throw new Error("Profil NRHA impossible: aucune reponse recue.");
   }
 
   if (verification.error) {
@@ -3417,6 +3531,7 @@ export async function createEntry(input: EntryInput) {
     owner_contact_id: input.owner_contact_id,
     payer_contact_id: input.payer_contact_id,
     rider_contact_id: input.rider_contact_id ?? null,
+    show_id: input.show_id,
   });
   await assertEntryProgramLimits({
     division_id: input.division_id,
@@ -3497,6 +3612,7 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
       owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
       payer_contact_id: input.payer_contact_id ?? existing.payer_contact_id,
       rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
+      show_id: existing.show_id,
     });
     await assertEntryProgramLimits({
       entry_id: id,
@@ -5203,9 +5319,11 @@ async function assertEntryShowLevelMembershipRequirements(input: {
   owner_contact_id: string | null | undefined;
   payer_contact_id: string | null | undefined;
   rider_contact_id: string | null | undefined;
+  show_id: string | null | undefined;
 }) {
   const requirements = await loadRequiredExternalMembershipRequirements(input.organization_id);
   const riderRequirementIds = membershipRequirementIdsForType(requirements, "rider");
+  const referenceDate = await entryMembershipReferenceDate(input.show_id);
 
   if (riderRequirementIds.length && !input.rider_contact_id) {
     throw new Error("Choisir un cavalier avant de creer l'inscription: cette association exige des numeros de membre pour les riders.");
@@ -5214,21 +5332,39 @@ async function assertEntryShowLevelMembershipRequirements(input: {
   await assertContactExternalMembershipRequirements({
     contact_id: input.owner_contact_id,
     contact_type: "owner",
+    reference_date: referenceDate,
     requirements,
     role_label: "Proprietaire",
   });
   await assertContactExternalMembershipRequirements({
     contact_id: input.rider_contact_id,
     contact_type: "rider",
+    reference_date: referenceDate,
     requirements,
     role_label: "Cavalier",
   });
   await assertContactExternalMembershipRequirements({
     contact_id: input.payer_contact_id,
     contact_type: "payer",
+    reference_date: referenceDate,
     requirements,
     role_label: "Payeur",
   });
+}
+
+async function entryMembershipReferenceDate(showId: string | null | undefined) {
+  if (!showId) {
+    return todayDateValue();
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client.from("shows").select("start_date").eq("id", showId).maybeSingle<Pick<Show, "start_date">>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data?.start_date?.slice(0, 10) || todayDateValue();
 }
 
 async function loadRequiredExternalMembershipRequirements(organizationId: string) {
@@ -5254,6 +5390,7 @@ async function loadRequiredExternalMembershipRequirements(organizationId: string
 async function assertContactExternalMembershipRequirements(input: {
   contact_id: string | null | undefined;
   contact_type: Contact["type"];
+  reference_date: string;
   requirements: Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>;
   role_label: string;
 }) {
@@ -5270,10 +5407,10 @@ async function assertContactExternalMembershipRequirements(input: {
   const client = requireSupabase();
   const { data, error } = await client
     .from("contact_external_memberships")
-    .select("external_organization_id,membership_number,status")
+    .select("external_organization_id,membership_number,status,expires_on")
     .eq("contact_id", input.contact_id)
     .in("external_organization_id", requiredOrganizationIds)
-    .returns<Array<Pick<ContactExternalMembership, "external_organization_id" | "membership_number" | "status">>>();
+    .returns<Array<Pick<ContactExternalMembership, "external_organization_id" | "membership_number" | "status" | "expires_on">>>();
 
   if (error) {
     if (isMissingSchemaError(error, "contact_external_memberships")) {
@@ -5285,7 +5422,7 @@ async function assertContactExternalMembershipRequirements(input: {
 
   const validOrganizationIds = new Set(
     (data ?? [])
-      .filter((membership) => membership.membership_number.trim() && membership.status !== "expired")
+      .filter((membership) => membership.membership_number.trim() && contactExternalMembershipIsValidForDate(membership, input.reference_date))
       .map((membership) => membership.external_organization_id),
   );
   const missingOrganizationIds = requiredOrganizationIds.filter((organizationId) => !validOrganizationIds.has(organizationId));
@@ -5296,6 +5433,21 @@ async function assertContactExternalMembershipRequirements(input: {
 
   const labels = await loadExternalOrganizationLabels(missingOrganizationIds);
   throw new Error(`${input.role_label}: numeros de membre obligatoires manquants ou expires (${labels.join(", ")}).`);
+}
+
+function contactExternalMembershipIsValidForDate(
+  membership: Pick<ContactExternalMembership, "expires_on" | "status">,
+  referenceDate: string,
+) {
+  if (membership.status === "expired") {
+    return false;
+  }
+
+  return !membership.expires_on || membership.expires_on.slice(0, 10) >= referenceDate;
+}
+
+function todayDateValue() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 async function loadExternalOrganizationLabels(ids: string[]) {
@@ -5905,6 +6057,85 @@ export async function setOrganizationPlan(input: {
   });
 
   if (error) throw error;
+}
+
+export type NrhaRiderRankingImportRow = {
+  earnings?: number | null;
+  rank: number;
+  riderName: string;
+  sourcePayload?: Record<string, unknown>;
+};
+
+export async function replaceNrhaRiderRankings(input: {
+  appliesToCategories?: number[];
+  eligibilityYear: number;
+  importedByUserId?: string | null;
+  listType: NrhaRiderRankingListType;
+  rows: NrhaRiderRankingImportRow[];
+  sourceFileName?: string | null;
+  sourceYear?: number | null;
+}) {
+  const client = requireSupabase();
+  const appliesToCategories = input.appliesToCategories?.length ? input.appliesToCategories : [2, 6];
+  const rows = input.rows
+    .filter((row) => Number.isInteger(row.rank) && row.rank > 0 && row.riderName.trim())
+    .map((row) => ({
+      applies_to_categories: appliesToCategories,
+      eligibility_year: input.eligibilityYear,
+      earnings: row.earnings ?? null,
+      imported_by_user_id: input.importedByUserId ?? null,
+      list_type: input.listType,
+      rank: row.rank,
+      rider_name: row.riderName.trim(),
+      rider_name_match_key: nrhaRiderNameMatchKey(row.riderName),
+      rider_name_normalized: normalizeNrhaRiderName(row.riderName),
+      source_file_name: input.sourceFileName ?? null,
+      source_payload: row.sourcePayload ?? {},
+      source_year: input.sourceYear ?? null,
+    }));
+
+  if (!rows.length) {
+    throw new Error("Aucun rider NRHA valide à importer.");
+  }
+
+  const { error: deleteError } = await client
+    .from("nrha_rider_rankings")
+    .delete()
+    .eq("eligibility_year", input.eligibilityYear)
+    .eq("list_type", input.listType);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const { error: insertError } = await client.from("nrha_rider_rankings").insert(rows);
+
+  if (insertError) {
+    throw insertError;
+  }
+}
+
+function normalizeNrhaRiderName(value: string) {
+  return value
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim();
+}
+
+function nrhaRiderNameMatchKey(value: string) {
+  const trimmed = value.trim();
+  const commaIndex = trimmed.indexOf(",");
+
+  if (commaIndex > 0) {
+    const lastName = trimmed.slice(0, commaIndex).trim();
+    const givenNames = trimmed.slice(commaIndex + 1).trim().split(/\s+/).filter(Boolean);
+    const firstName = givenNames[0] ?? "";
+    return normalizeNrhaRiderName([firstName, lastName].filter(Boolean).join(" "));
+  }
+
+  return normalizeNrhaRiderName(trimmed);
 }
 
 function isMissingRpcError(error: { code?: string; message?: string }, functionName: string) {
