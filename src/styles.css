@@ -2693,7 +2693,8 @@ button:focus-visible {
 }
 
 .nrha-import-preview,
-.nrha-import-owner-panel {
+.nrha-import-owner-panel,
+.nrha-data-import-panel {
   border-top: 1px solid #dce5e1;
   display: grid;
   gap: 10px;
@@ -2723,6 +2724,39 @@ button:focus-visible {
 
 .nrha-import-preview-grid strong {
   overflow-wrap: anywhere;
+}
+
+.nrha-data-import-list {
+  display: grid;
+  gap: 6px;
+}
+
+.nrha-data-import-row {
+  align-items: start;
+  background: #ffffff;
+  border: 1px solid #e4ebe8;
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(90px, 0.7fr) repeat(2, minmax(0, 1fr));
+  padding: 9px;
+}
+
+.nrha-data-import-row span {
+  color: #687873;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nrha-data-import-row strong {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 640px) {
+  .nrha-data-import-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .health-document-summary {

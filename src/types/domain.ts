@@ -335,6 +335,8 @@ export type Horse = {
   date_of_birth: string | null;
   birth_year: number | null;
   registration_number: string | null;
+  sire_name: string | null;
+  dam_name: string | null;
   primary_owner_contact_id: string;
   created_at: string;
 };
@@ -991,6 +993,8 @@ export type HorseInput = {
   date_of_birth?: string | null;
   birth_year?: number;
   registration_number?: string;
+  sire_name?: string;
+  dam_name?: string;
   created_by_user_id?: string;
   external_memberships?: ExternalHorseMembershipInput[];
 };
@@ -1005,6 +1009,8 @@ export type HorseUpdateInput = {
   date_of_birth?: string | null;
   birth_year?: number | null;
   registration_number?: string | null;
+  sire_name?: string | null;
+  dam_name?: string | null;
   external_memberships?: ExternalHorseMembershipInput[];
 };
 

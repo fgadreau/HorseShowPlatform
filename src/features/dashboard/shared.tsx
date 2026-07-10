@@ -1035,6 +1035,8 @@ export function horseMatchesDirectorySearch(
       horse.gender,
       horseGenderLabel(horse.gender),
       horse.registration_number,
+      horse.sire_name,
+      horse.dam_name,
       contactLabel(owner),
       owner?.email,
       owner?.barn_name,

@@ -1472,6 +1472,8 @@ export async function createHorse(input: HorseInput) {
       date_of_birth: input.date_of_birth || null,
       birth_year: birthYear || null,
       registration_number: input.registration_number || null,
+      sire_name: input.sire_name || null,
+      dam_name: input.dam_name || null,
       created_by_user_id: input.created_by_user_id || null,
     })
     .select("*")

@@ -9,7 +9,7 @@ import { createContact, createHorse, createUploadedHorseHealthDocument, reviewHo
 import type { NrhaHorseLookupVerification, NrhaHorseRecord } from "../../services/supabaseServices";
 import type { Contact, ContactExternalMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
 import { uiText, birthYearFromDateValue, buildHorseExternalMembershipFields, buildExternalMembershipFields, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, isVaccineHealthDocument, healthReviewNote, todayDateValue, InlineHealthMessage, horseHealthResultMessage, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone } from "../dashboard/shared";
-import { integerFromReference, nrhaHorseMismatchMessage, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
+import { formatImportedSex, integerFromReference, mapNrhaSex, normalizeNrhaDate, nrhaHorseDataImportRows, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
 
 type HorseCreationMode = "manual" | "import";
 type ImportOwnerMode = "existing" | "new";
@@ -58,6 +58,8 @@ function HorseForm({
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [registrationNumber, setRegistrationNumber] = useState("");
+  const [sireName, setSireName] = useState("");
+  const [damName, setDamName] = useState("");
   const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
   const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
   const [preparedGvlUrl, setPreparedGvlUrl] = useState("");
@@ -121,6 +123,21 @@ function HorseForm({
           !importOwnerExternalMembershipFields.some((field) => field.required && !importOwnerMembershipNumbers[field.organization.id]?.trim()))),
   );
   const canCreateHorse = creationMode === "manual" ? Boolean(organization && selectedOwnerId) : canCreateImportedHorse;
+  const nrhaHorseDataRows = verifiedNrhaHorse
+    ? nrhaHorseDataImportRows(
+        verifiedNrhaHorse.officialValues,
+        {
+          damName,
+          dateOfBirth,
+          gender,
+          name,
+          nrhaReferenceNumber: currentNrhaReferenceNumber,
+          registrationNumber,
+          sireName,
+        },
+        locale,
+      )
+    : [];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -147,6 +164,8 @@ function HorseForm({
         gender: gender || null,
         date_of_birth: dateOfBirth || null,
         registration_number: registrationNumber,
+        sire_name: sireName,
+        dam_name: damName,
         created_by_user_id: createdByUserId,
         external_memberships: externalReferenceFields.map((organization) => ({
           external_organization_id: organization.id,
@@ -168,6 +187,8 @@ function HorseForm({
       setGender("");
       setDateOfBirth("");
       setRegistrationNumber("");
+      setSireName("");
+      setDamName("");
       setGvlCogginsUrl("");
       setCogginsPdfFile(null);
       setPreparedGvlUrl("");
@@ -248,6 +269,8 @@ function HorseForm({
       setDateOfBirth(officialFoalDate);
       setGender(mapNrhaSex(importedHorse.sex));
       setRegistrationNumber(referenceNumber);
+      setSireName(importedHorse.sireName?.trim() ?? "");
+      setDamName(importedHorse.damName?.trim() ?? "");
       setExternalReferenceNumbers((current) => ({
         ...current,
         [nrhaExternalOrganization.id]: referenceNumber,
@@ -371,6 +394,8 @@ function HorseForm({
         gender: mapNrhaSex(importedHorse.sex) || null,
         date_of_birth: importedFoalDate || null,
         registration_number: importedReferenceNumber,
+        sire_name: importedHorse.sireName?.trim() ?? "",
+        dam_name: importedHorse.damName?.trim() ?? "",
         created_by_user_id: createdByUserId,
         external_memberships: externalReferenceFields.map((externalOrganization) => ({
           external_organization_id: externalOrganization.id,
@@ -460,6 +485,8 @@ function HorseForm({
     setGender("");
     setDateOfBirth("");
     setRegistrationNumber("");
+    setSireName("");
+    setDamName("");
     setGvlCogginsUrl("");
     setCogginsPdfFile(null);
     setPreparedGvlUrl("");
@@ -527,6 +554,7 @@ function HorseForm({
         name,
         ownerName,
       });
+      const officialValues = nrhaOfficialHorseValues(verification, { licenseNumber, name });
 
       if (verification.status === "verified" && verification.matched) {
         setNrhaHorseVerification({
@@ -535,6 +563,7 @@ function HorseForm({
           organizationId: externalOrganization.id,
           ownerContactId: selectedOwnerId,
           ownerName,
+          officialValues,
           payload: verificationPayload(verification),
           referenceNumber,
         });
@@ -557,6 +586,60 @@ function HorseForm({
     } finally {
       setNrhaHorseBusy(false);
     }
+  }
+
+  function handleApplyNrhaHorseData() {
+    if (!verifiedNrhaHorse) {
+      return;
+    }
+
+    const values = verifiedNrhaHorse.officialValues;
+
+    if (values.name) {
+      setName(values.name);
+    }
+
+    if (values.dateOfBirth) {
+      setDateOfBirth(values.dateOfBirth);
+    }
+
+    if (values.gender) {
+      setGender(values.gender);
+    }
+
+    if (values.registrationNumber) {
+      setRegistrationNumber(values.registrationNumber);
+
+      if (nrhaOrganizationId) {
+        setExternalReferenceNumbers((current) => ({
+          ...current,
+          [nrhaOrganizationId]: values.registrationNumber,
+        }));
+      }
+    }
+
+    if (values.sireName) {
+      setSireName(values.sireName);
+    }
+
+    if (values.damName) {
+      setDamName(values.damName);
+    }
+
+    setNrhaHorseVerification((current) =>
+      current
+        ? {
+            ...current,
+            dateOfBirth: values.dateOfBirth || current.dateOfBirth,
+            name: values.name || current.name,
+            referenceNumber: values.registrationNumber || current.referenceNumber,
+          }
+        : current,
+    );
+    setNrhaHorseMessage({
+      tone: "success",
+      message: uiText(locale, "Données NRHA importées dans la fiche cheval.", "NRHA data imported into the horse profile."),
+    });
   }
 
   async function handlePrepareCogginsUrl() {
@@ -729,6 +812,16 @@ function HorseForm({
               {uiText(locale, "Enregistrement", "Registration")}
               <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
             </label>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Père", "Sire")}
+                <input disabled={!organization} value={sireName} onChange={(event) => setSireName(event.target.value)} />
+              </label>
+              <label>
+                {uiText(locale, "Mère", "Dam")}
+                <input disabled={!organization} value={damName} onChange={(event) => setDamName(event.target.value)} />
+              </label>
+            </div>
             {renderInitialHealthDocumentFields(!organization)}
             {externalReferenceFields.length ? (
               <div className="external-membership-fields">
@@ -769,6 +862,27 @@ function HorseForm({
                   </label>
                 ))}
                 <InlineHealthMessage value={nrhaHorseMessage} />
+                {nrhaHorseDataRows.length ? (
+                  <div className="nrha-data-import-panel">
+                    <div className="inline-form-header">
+                      <strong>{uiText(locale, "Données NRHA disponibles", "Available NRHA data")}</strong>
+                      <span>{uiText(locale, "Choisis d'importer les valeurs officielles qui manquent ou qui ont changé dans HSP.", "Choose to import official values missing or changed in HSP.")}</span>
+                    </div>
+                    <div className="nrha-data-import-list">
+                      {nrhaHorseDataRows.map((row) => (
+                        <div className="nrha-data-import-row" key={row.key}>
+                          <span>{row.label}</span>
+                          <strong>HSP: {row.current}</strong>
+                          <strong>NRHA: {row.official}</strong>
+                        </div>
+                      ))}
+                    </div>
+                    <button className="ghost-button" type="button" onClick={handleApplyNrhaHorseData}>
+                      <Plus size={18} />
+                      {uiText(locale, "Importer les données NRHA", "Import NRHA data")}
+                    </button>
+                  </div>
+                ) : null}
               </div>
             ) : null}
           </>
@@ -849,6 +963,14 @@ function HorseForm({
                   <div>
                     <span>{uiText(locale, "Membre propriétaire", "Owner member")}</span>
                     <strong>{nrhaImportResult.horse.ownerMemberNumber || uiText(locale, "Non fourni", "Not provided")}</strong>
+                  </div>
+                  <div>
+                    <span>{uiText(locale, "Père", "Sire")}</span>
+                    <strong>{nrhaImportResult.horse.sireName || uiText(locale, "Non fourni", "Not provided")}</strong>
+                  </div>
+                  <div>
+                    <span>{uiText(locale, "Mère", "Dam")}</span>
+                    <strong>{nrhaImportResult.horse.damName || uiText(locale, "Non fourni", "Not provided")}</strong>
                   </div>
                 </div>
 
@@ -983,72 +1105,9 @@ function HorseForm({
   );
 }
 
-function normalizeNrhaDate(value: string | null | undefined) {
-  const cleanValue = value?.trim() ?? "";
-
-  if (!cleanValue) {
-    return "";
-  }
-
-  const isoMatch = cleanValue.match(/^(\d{4})-(\d{2})-(\d{2})/);
-
-  if (isoMatch) {
-    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`;
-  }
-
-  const usMatch = cleanValue.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-
-  if (usMatch) {
-    return `${usMatch[3]}-${usMatch[1].padStart(2, "0")}-${usMatch[2].padStart(2, "0")}`;
-  }
-
-  return cleanValue;
-}
-
 function formatImportedDate(value: string | null | undefined, locale: Locale) {
   const normalized = normalizeNrhaDate(value);
   return normalized ? formatDate(normalized) : uiText(locale, "Non fourni", "Not provided");
-}
-
-function mapNrhaSex(value: string | null | undefined): "" | NonNullable<Horse["gender"]> {
-  const normalized = (value ?? "").trim().toUpperCase().replace(/[._-]+/g, " ").replace(/\s+/g, " ");
-
-  if (["MARE", "FILLY", "FEMALE", "F"].includes(normalized)) {
-    return "F";
-  }
-
-  if (["GELDING", "G"].includes(normalized)) {
-    return "G";
-  }
-
-  if (["STALLION", "COLT", "MALE", "M"].includes(normalized)) {
-    return "M";
-  }
-
-  return "";
-}
-
-function formatImportedSex(value: string | null | undefined, locale: Locale) {
-  const rawValue = value?.trim() ?? "";
-  const mappedSex = mapNrhaSex(value);
-
-  if (!rawValue) {
-    return uiText(locale, "Non défini", "Unset");
-  }
-
-  if (mappedSex === "F") {
-    return `${rawValue} -> ${uiText(locale, "Femelle", "Female")}`;
-  }
-
-  if (mappedSex === "M") {
-    return `${rawValue} -> ${uiText(locale, "Mâle", "Male")}`;
-  }
-
-  if (mappedSex === "G") {
-    return `${rawValue} -> ${uiText(locale, "Hongre", "Gelding")}`;
-  }
-
-  return rawValue;
 }
 
 function splitOwnerName(value: string) {

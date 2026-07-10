@@ -165,6 +165,11 @@ function MyHorsesView({
                   <span>
                     {contactLabel(findById(contacts, horse.primary_owner_contact_id))} · {horseGenderLabel(horse.gender)}
                   </span>
+                  {horse.sire_name || horse.dam_name ? (
+                    <span>
+                      {[horse.sire_name ? `${uiText(locale, "Père", "Sire")}: ${horse.sire_name}` : null, horse.dam_name ? `${uiText(locale, "Mère", "Dam")}: ${horse.dam_name}` : null].filter(Boolean).join(" · ")}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="horse-list-status">
                   <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
