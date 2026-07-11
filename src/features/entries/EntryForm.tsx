@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, ModalDialog, SearchSelect } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel } from "../../lib/display";
@@ -28,6 +28,14 @@ type DivisionEvaluation = {
 type ShowbillBlock = {
   classRecord: ClassRecord;
   evaluations: DivisionEvaluation[];
+};
+
+type NrhaBulkSummary = {
+  blocked: number;
+  eligible: number;
+  message?: string;
+  requested: number;
+  status: "checking" | "complete" | "error";
 };
 
 function EntryForm({
@@ -94,9 +102,11 @@ function EntryForm({
   const [selectedDivisionIds, setSelectedDivisionIds] = useState<string[]>([]);
   const [nrhaResults, setNrhaResults] = useState<Record<string, NrhaEligibilityMessage>>({});
   const [nrhaVerifyBusy, setNrhaVerifyBusy] = useState(false);
+  const [nrhaBulkSummary, setNrhaBulkSummary] = useState<NrhaBulkSummary | null>(null);
   const [preauthAccepted, setPreauthAccepted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<InlineHealthMessage | null>(null);
   const [busy, setBusy] = useState(false);
+  const nrhaAutoLastAttemptSignature = useRef("");
 
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
@@ -175,6 +185,8 @@ function EntryForm({
     () => buildShowbillBlocks({ classes, evaluations: showbillEvaluations, showDayId: effectiveActiveDayId === "unscheduled" ? null : effectiveActiveDayId }),
     [classes, effectiveActiveDayId, showbillEvaluations],
   );
+  const allNrhaPending = useMemo(() => uniqueDivisionEvaluations(showbillEvaluations.filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)), [showbillEvaluations]);
+  const nrhaAutoSignature = allNrhaPending.map((evaluation) => evaluation.nrhaKey).join("|");
   const selectedEvaluations = selectedDivisionIds.map((divisionId) => evaluationByDivisionId.get(divisionId)).filter((evaluation): evaluation is DivisionEvaluation => Boolean(evaluation));
   const selectedTotal = selectedEvaluations.reduce((total, evaluation) => total + (evaluation.fee ?? 0), 0);
   const selectedNrhaPending = selectedEvaluations.filter((evaluation) => evaluation.nrhaRequiresVerification);
@@ -205,18 +217,101 @@ function EntryForm({
       ? uiText(locale, "Choisis les classes dans le showbill par journée.", "Choose classes from the day-by-day showbill.")
       : uiText(locale, "Commence par choisir le cheval, le cavalier et le payeur.", "Start by choosing the horse, rider and payer.");
 
+  useEffect(() => {
+    if (!teamIsDefined || !nrhaAutoSignature || nrhaAutoLastAttemptSignature.current === nrhaAutoSignature) {
+      return;
+    }
+
+    let cancelled = false;
+    const pendingEvaluations = allNrhaPending;
+    nrhaAutoLastAttemptSignature.current = nrhaAutoSignature;
+    setNrhaVerifyBusy(true);
+    setNrhaBulkSummary({
+      blocked: 0,
+      eligible: 0,
+      requested: pendingEvaluations.length,
+      status: "checking",
+    });
+
+    async function verifyBulk() {
+      try {
+        const nextResults: Record<string, NrhaEligibilityMessage> = {};
+
+        for (const evaluation of pendingEvaluations) {
+          if (cancelled || !evaluation.nrhaRequest) {
+            continue;
+          }
+
+          const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
+
+          if (cancelled) {
+            return;
+          }
+
+          nextResults[evaluation.division.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
+        }
+
+        if (cancelled) {
+          return;
+        }
+
+        setNrhaResults((current) => ({ ...current, ...nextResults }));
+        const resultMessages = Object.values(nextResults);
+        setNrhaBulkSummary({
+          blocked: resultMessages.filter((message) => message.tone === "error").length,
+          eligible: resultMessages.filter((message) => message.tone === "success").length,
+          requested: pendingEvaluations.length,
+          status: "complete",
+        });
+      } catch (error) {
+        if (cancelled) {
+          return;
+        }
+
+        setNrhaBulkSummary({
+          blocked: 0,
+          eligible: 0,
+          message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA automatique impossible.", "Automatic NRHA validation unavailable."),
+          requested: pendingEvaluations.length,
+          status: "error",
+        });
+      } finally {
+        if (!cancelled) {
+          setNrhaVerifyBusy(false);
+        }
+      }
+    }
+
+    void verifyBulk();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [allNrhaPending, locale, nrhaAutoSignature, onVerifyNrhaEligibility, teamIsDefined]);
+
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     setActiveDayId("");
     setSelectedDivisionIds([]);
     setNrhaResults({});
+    setNrhaBulkSummary(null);
+    nrhaAutoLastAttemptSignature.current = "";
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
 
-  function handleTeamChange(updater: () => void) {
+  function handleEligibilityTeamChange(updater: () => void) {
     updater();
+    setSelectedDivisionIds([]);
     setNrhaResults({});
+    setNrhaBulkSummary(null);
+    nrhaAutoLastAttemptSignature.current = "";
+    setPreauthAccepted(false);
+    setSubmitMessage(null);
+  }
+
+  function handlePayerChange(updater: () => void) {
+    updater();
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
@@ -232,37 +327,6 @@ function EntryForm({
     setSelectedDivisionIds((current) => (current.includes(divisionId) ? current.filter((id) => id !== divisionId) : [...current, divisionId]));
     setPreauthAccepted(false);
     setSubmitMessage(null);
-  }
-
-  async function handleVerifySelectedNrha() {
-    if (!selectedNrhaPending.length) {
-      return;
-    }
-
-    setNrhaVerifyBusy(true);
-    setSubmitMessage(null);
-
-    try {
-      const nextResults: Record<string, NrhaEligibilityMessage> = {};
-
-      for (const evaluation of selectedNrhaPending) {
-        if (!evaluation.nrhaRequest) {
-          continue;
-        }
-
-        const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
-        nextResults[evaluation.division.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
-      }
-
-      setNrhaResults((current) => ({ ...current, ...nextResults }));
-    } catch (error) {
-      setSubmitMessage({
-        tone: "error",
-        message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA impossible pour les classes sélectionnées.", "Unable to validate selected NRHA classes."),
-      });
-    } finally {
-      setNrhaVerifyBusy(false);
-    }
   }
 
   async function handleSubmit() {
@@ -354,7 +418,7 @@ function EntryForm({
                 })}
                 placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
                 value={selectedHorse?.id ?? ""}
-                onChange={(nextHorseId) => handleTeamChange(() => setHorseId(nextHorseId))}
+                onChange={(nextHorseId) => handleEligibilityTeamChange(() => setHorseId(nextHorseId))}
               />
               <button className="ghost-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
                 {uiText(locale, "+ Cheval", "+ Horse")}
@@ -377,7 +441,7 @@ function EntryForm({
                 onVerifyNrhaHorse={onVerifyNrhaHorse}
                 onCreated={(horse) => {
                   setCreatedHorse(horse);
-                  handleTeamChange(() => setHorseId(horse.id));
+                  handleEligibilityTeamChange(() => setHorseId(horse.id));
                   setCreatingHorse(false);
                 }}
               />
@@ -394,7 +458,7 @@ function EntryForm({
               organization={organization}
               role="rider"
               value={riderContactId}
-              onChange={(nextContactId) => handleTeamChange(() => setRiderContactId(nextContactId))}
+              onChange={(nextContactId) => handleEligibilityTeamChange(() => setRiderContactId(nextContactId))}
               onCreateContact={onCreateContact}
             />
             <ContactPicker
@@ -407,7 +471,7 @@ function EntryForm({
               organization={organization}
               role="payer"
               value={selectedPayerId}
-              onChange={(nextContactId) => handleTeamChange(() => setPayerContactId(nextContactId))}
+              onChange={(nextContactId) => handlePayerChange(() => setPayerContactId(nextContactId))}
               onCreateContact={onCreateContact}
             />
           </div>
@@ -480,6 +544,7 @@ function EntryForm({
               <ChevronRight size={18} />
             </button>
           </div>
+          <NrhaBulkSummaryLine locale={locale} summary={nrhaBulkSummary} />
           <div className="entry-showbill-list">
             {dayBlocks.map((block) => (
               <section className="entry-showbill-block" key={block.classRecord.id}>
@@ -492,11 +557,12 @@ function EntryForm({
                 <div className="entry-showbill-class-list">
                   {block.evaluations.map((evaluation) => {
                     const selected = selectedDivisionIds.includes(evaluation.division.id);
-                    const Icon = evaluation.canSelect ? CheckCircle2 : AlertCircle;
+                    const pendingNrha = !evaluation.canSelect && evaluation.nrhaRequiresVerification;
+                    const Icon = pendingNrha ? ShieldCheck : evaluation.canSelect ? CheckCircle2 : AlertCircle;
 
                     return (
                       <button
-                        className={`entry-showbill-class${selected ? " selected" : ""}${evaluation.canSelect ? "" : " disabled"}`}
+                        className={`entry-showbill-class${selected ? " selected" : ""}${evaluation.canSelect ? "" : pendingNrha ? " pending" : " disabled"}`}
                         disabled={!evaluation.canSelect && !selected}
                         key={evaluation.division.id}
                         type="button"
@@ -508,8 +574,9 @@ function EntryForm({
                           <small>{evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, organization?.currency ?? "CAD")}</small>
                         </span>
                         {evaluation.nrhaResult ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
+                        {!evaluation.nrhaResult && pendingNrha && nrhaVerifyBusy ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA automatique en cours...", "Automatic NRHA check in progress...")}</small> : null}
                         {!evaluation.nrhaResult && evaluation.message ? <small className={`entry-class-status ${evaluation.message.tone}`}>{evaluation.message.message}</small> : null}
-                        {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
+                        {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage && !(pendingNrha && nrhaVerifyBusy) ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
                       </button>
                     );
                   })}
@@ -580,12 +647,6 @@ function EntryForm({
           ) : (
             <p className="muted-line">{uiText(locale, "Aucune classe sélectionnée.", "No selected classes.")}</p>
           )}
-          {selectedNrhaPending.length ? (
-            <button className="ghost-button" disabled={nrhaVerifyBusy} type="button" onClick={handleVerifySelectedNrha}>
-              <ShieldCheck size={18} />
-              {nrhaVerifyBusy ? uiText(locale, "Validation NRHA...", "Checking NRHA...") : uiText(locale, "Vérifier les classes NRHA sélectionnées", "Check selected NRHA classes")}
-            </button>
-          ) : null}
           <InlineHealthMessage value={submitMessage} />
           {selectedBlocked.length ? (
             <InlineHealthMessage
@@ -699,7 +760,7 @@ function evaluateDivision({
       deadlineReadiness.canProceed &&
       programLimitReadiness.canProceed &&
       (!nrhaGate.applies || Boolean(nrhaGate.request)) &&
-      (!nrhaGate.applies || nrhaGate.canProceed || nrhaRequiresVerification),
+      (!nrhaGate.applies || nrhaGate.canProceed),
   );
 
   return {
@@ -743,6 +804,49 @@ function compareShowDays(a: ShowDay, b: ShowDay) {
 
 function compareDivisionEvaluations(a: DivisionEvaluation, b: DivisionEvaluation) {
   return (a.division.code ?? "").localeCompare(b.division.code ?? "") || a.division.name.localeCompare(b.division.name);
+}
+
+function uniqueDivisionEvaluations(evaluations: DivisionEvaluation[]) {
+  const seen = new Set<string>();
+
+  return evaluations.filter((evaluation) => {
+    if (seen.has(evaluation.division.id)) {
+      return false;
+    }
+
+    seen.add(evaluation.division.id);
+    return true;
+  });
+}
+
+function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: NrhaBulkSummary | null }) {
+  if (!summary) {
+    return null;
+  }
+
+  const statusLabel =
+    summary.status === "checking"
+      ? uiText(locale, "Profil NRHA en préparation", "Preparing NRHA profile")
+      : summary.status === "error"
+        ? uiText(locale, "Profil NRHA incomplet", "NRHA profile incomplete")
+        : uiText(locale, "Profil NRHA prêt", "NRHA profile ready");
+  const resultLabel =
+    summary.status === "complete"
+      ? uiText(
+          locale,
+          `${summary.eligible} admissible${summary.eligible === 1 ? "" : "s"}, ${summary.blocked} bloquée${summary.blocked === 1 ? "" : "s"}`,
+          `${summary.eligible} eligible, ${summary.blocked} blocked`,
+        )
+      : summary.message ?? uiText(locale, "validation automatique en cours", "automatic validation in progress");
+
+  return (
+    <p className={`entry-nrha-summary ${summary.status}`}>
+      <ShieldCheck size={14} />
+      <span>
+        {statusLabel}: {summary.requested} {uiText(locale, "requête", "request")}{summary.requested === 1 ? "" : "s"} NRHA · {resultLabel}
+      </span>
+    </p>
+  );
 }
 
 type EntryCheckoutLine = {

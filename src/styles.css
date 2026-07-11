@@ -1753,6 +1753,12 @@ button:focus-visible {
   box-shadow: inset 0 0 0 1px #32a06f;
 }
 
+.entry-showbill-class.pending {
+  background: #eef6ff;
+  border-color: #b9d7ff;
+  color: #155bb5;
+}
+
 .entry-showbill-class.disabled {
   background: #f8f2f1;
   border-color: #f2c7c3;
@@ -1798,6 +1804,24 @@ button:focus-visible {
 .entry-checkout-preview {
   display: grid;
   gap: 10px;
+}
+
+.entry-nrha-summary {
+  align-items: center;
+  color: #65746f;
+  display: inline-flex;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 6px;
+  margin: 0;
+}
+
+.entry-nrha-summary.complete {
+  color: #116b3a;
+}
+
+.entry-nrha-summary.error {
+  color: #b42318;
 }
 
 .entry-checkout-lines {
