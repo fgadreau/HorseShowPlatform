@@ -36,6 +36,7 @@ type TestDefinition = {
   category:
     | "gate"
     | "non_pro"
+    | "non_pro_novice_horse"
     | "novice_horse"
     | "rookie"
     | "green_ride_slide"
@@ -111,11 +112,11 @@ type EligibilityProfile = {
 
 const strategicTests: TestDefinition[] = [
   {
-    category: "gate",
-    classCode: 1100,
-    className: "Open",
-    id: "general_open_gate",
-    questionIds: ["global_nrha_access"],
+    category: "non_pro_novice_horse",
+    classCode: 1800,
+    className: "Novice Horse Non Pro Level 1",
+    id: "novice_horse_non_pro_level_1_combo",
+    questionIds: ["global_nrha_access", "rider_professional_status", "horse_novice_level"],
   },
   {
     category: "non_pro",
@@ -125,10 +126,17 @@ const strategicTests: TestDefinition[] = [
     questionIds: ["rider_professional_status"],
   },
   {
+    category: "gate",
+    classCode: 1100,
+    className: "Open",
+    id: "general_open_gate",
+    questionIds: ["global_nrha_access"],
+  },
+  {
     category: "novice_horse",
-    classCode: 1775,
-    className: "Novice Horse Open Level 3",
-    id: "novice_horse_level_3",
+    classCode: 1700,
+    className: "Novice Horse Open Level 1",
+    id: "novice_horse_level_1",
     questionIds: ["horse_novice_level"],
   },
   {
@@ -140,17 +148,10 @@ const strategicTests: TestDefinition[] = [
   },
   {
     category: "novice_horse",
-    classCode: 1700,
-    className: "Novice Horse Open Level 1",
-    id: "novice_horse_level_1",
+    classCode: 1775,
+    className: "Novice Horse Open Level 3",
+    id: "novice_horse_level_3",
     questionIds: ["horse_novice_level"],
-  },
-  {
-    category: "rookie",
-    classCode: 5310,
-    className: "Rookie Level 2",
-    id: "rookie_level_2",
-    questionIds: ["rider_rookie_level"],
   },
   {
     category: "rookie",
@@ -160,11 +161,11 @@ const strategicTests: TestDefinition[] = [
     questionIds: ["rider_rookie_level"],
   },
   {
-    category: "green_ride_slide",
-    classCode: 10200,
-    className: "Ride & Slide Open Level 2",
-    id: "ride_slide_open_level_2",
-    questionIds: ["green_entry_level"],
+    category: "rookie",
+    classCode: 5310,
+    className: "Rookie Level 2",
+    id: "rookie_level_2",
+    questionIds: ["rider_rookie_level"],
   },
   {
     category: "green_ride_slide",
@@ -175,9 +176,9 @@ const strategicTests: TestDefinition[] = [
   },
   {
     category: "green_ride_slide",
-    classCode: 10001,
-    className: "Green Reiner Level 2",
-    id: "green_reiner_level_2",
+    classCode: 10200,
+    className: "Ride & Slide Open Level 2",
+    id: "ride_slide_open_level_2",
     questionIds: ["green_entry_level"],
   },
   {
@@ -185,6 +186,13 @@ const strategicTests: TestDefinition[] = [
     classCode: 10002,
     className: "Green Reiner Level 1",
     id: "green_reiner_level_1",
+    questionIds: ["green_entry_level"],
+  },
+  {
+    category: "green_ride_slide",
+    classCode: 10001,
+    className: "Green Reiner Level 2",
+    id: "green_reiner_level_2",
     questionIds: ["green_entry_level"],
   },
   {
@@ -209,6 +217,29 @@ const strategicTests: TestDefinition[] = [
     questionIds: ["open_rider_caps"],
   },
 ];
+
+const allQuestionIds: QuestionId[] = [
+  "global_nrha_access",
+  "rider_professional_status",
+  "horse_novice_level",
+  "rider_rookie_level",
+  "green_entry_level",
+  "open_rider_caps",
+];
+
+const nonProQuestionClassCodes = new Set([
+  1400, 1500, 1600, 1650, 1660, 1800, 1850, 1875,
+  2400, 2500, 2600, 2621, 2625, 2650, 2700, 2720, 2730, 2940, 2950, 2960,
+  4690, 4691, 4692, 4693, 4694, 4695,
+  5270, 5300, 5301, 5310,
+  6234, 6240, 6250, 6260, 6261, 6265, 6266, 6267, 6700, 6720, 6730,
+  9200, 9400, 10101, 10102, 10201, 10202, 111400,
+]);
+
+const noviceHorseQuestionClassCodes = new Set([1700, 1750, 1775, 1800, 1850, 1875]);
+const rookieQuestionClassCodes = new Set([5300, 5301, 5310]);
+const greenQuestionClassCodes = new Set([10001, 10002, 10100, 10101, 10102, 10200, 10201, 10202]);
+const openCapQuestionClassCodes = new Set([1200, 1301, 1350]);
 
 function jsonResponse(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -618,21 +649,21 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
     return;
   }
 
-  if (definition.category === "gate" && result.eligible) {
+  if (definition.questionIds.includes("global_nrha_access") && result.status !== "error") {
     updateQuestion(questions, "global_nrha_access", {
-      answer: "Aucun blocage global détecté avec le test Open.",
+      answer: `Aucun blocage global détecté avec le test ${definition.className}.`,
       classCode: result.classCode,
     });
   }
 
-  if (definition.category === "non_pro") {
+  if (definition.questionIds.includes("rider_professional_status")) {
     if (result.signals.some((signal) => signal.code === "RIDER_IS_PROFESSIONAL")) {
       profile.rider.professionalStatus = "professional";
       updateQuestion(questions, "rider_professional_status", {
         answer: "Cavalier détecté comme professionnel pour les classes Non Pro.",
         classCode: result.classCode,
       });
-    } else if (result.eligible) {
+    } else if (result.eligible || result.signals.some((signal) => signal.scope === "horse_novice_classes" || signal.subject === "horse")) {
       profile.rider.professionalStatus = "non_pro_eligible";
       updateQuestion(questions, "rider_professional_status", {
         answer: "Cavalier admissible au test Non Pro.",
@@ -641,12 +672,12 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
     }
   }
 
-  if (definition.category === "novice_horse") {
+  if (definition.questionIds.includes("horse_novice_level")) {
     const horseEarningsSignal = result.signals.find((signal) => signal.code === "HORSE_EARNINGS_EXCEED" && typeof signal.actualAmount === "number");
+    const testedLevel = noviceHorseLevelForClass(result.classCode);
 
-    if (result.eligible) {
-      profile.horse.noviceHorseLevel =
-        result.classCode === 1700 ? "level_1_or_higher" : result.classCode === 1750 ? "level_2_or_higher" : "level_3_or_higher";
+    if (result.eligible && testedLevel !== null) {
+      profile.horse.noviceHorseLevel = testedLevel === 1 ? "level_1_or_higher" : testedLevel === 2 ? "level_2_or_higher" : "level_3_or_higher";
       updateQuestion(questions, "horse_novice_level", {
         answer: `Cheval admissible au test ${definition.className}.`,
         classCode: result.classCode,
@@ -659,10 +690,10 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
         answer: `Cheval avec gains détectés à ${actualAmount}; niveau Novice déduit: ${profile.horse.noviceHorseLevel}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 1700 && result.status === "ineligible") {
+    } else if (testedLevel === 3 && result.status === "ineligible") {
       profile.horse.noviceHorseLevel = "not_eligible";
       updateQuestion(questions, "horse_novice_level", {
-        answer: "Cheval non admissible jusqu'au test Novice Horse Level 1.",
+        answer: "Cheval non admissible jusqu'au test Novice Horse Level 3.",
         classCode: result.classCode,
       });
     }
@@ -675,7 +706,7 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
         answer: `Cavalier admissible au test ${definition.className}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 5300 && result.status === "ineligible") {
+    } else if (result.classCode === 5310 && result.status === "ineligible") {
       profile.rider.rookieLevel = "not_eligible";
       updateQuestion(questions, "rider_rookie_level", {
         answer: "Cavalier non admissible aux tests Rookie Level 1 et 2.",
@@ -685,23 +716,24 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
   }
 
   if (definition.category === "green_ride_slide") {
+    const pointsCapSignal = result.signals.find((signal) => signal.code === "POINTS_CAP_EXCEED" && typeof signal.actualAmount === "number");
+
     if (result.eligible) {
-      profile.rider.greenEntryLevel =
-        result.classCode === 10100
-          ? "ride_slide_level_1_or_higher"
-          : result.classCode === 10200
-            ? "ride_slide_level_2_or_higher"
-            : result.classCode === 10002
-              ? "green_reiner_level_1_or_higher"
-              : "green_reiner_level_2_or_higher";
+      profile.rider.greenEntryLevel = greenEntryLevelForClass(result.classCode) ?? profile.rider.greenEntryLevel;
       updateQuestion(questions, "green_entry_level", {
         answer: `Équipe admissible au test ${definition.className}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 10002 && result.status === "ineligible") {
+    } else if (pointsCapSignal?.actualAmount != null) {
+      profile.rider.greenEntryLevel = greenEntryLevelFromAmount(pointsCapSignal.actualAmount);
+      updateQuestion(questions, "green_entry_level", {
+        answer: `Équipe avec gains/points détectés à ${pointsCapSignal.actualAmount}; niveau Green/Ride & Slide déduit: ${profile.rider.greenEntryLevel}.`,
+        classCode: result.classCode,
+      });
+    } else if (result.classCode === 10001 && result.status === "ineligible") {
       profile.rider.greenEntryLevel = "not_eligible";
       updateQuestion(questions, "green_entry_level", {
-        answer: "Équipe non admissible jusqu'au test Green Reiner Level 1.",
+        answer: "Équipe non admissible jusqu'au test Green Reiner Level 2.",
         classCode: result.classCode,
       });
     }
@@ -725,8 +757,69 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
   }
 }
 
-function availableStrategicTests(_classCodes: number[] | null) {
-  return strategicTests;
+function noviceHorseLevelForClass(classCode: number) {
+  if (classCode === 1700 || classCode === 1800) return 1;
+  if (classCode === 1750 || classCode === 1850) return 2;
+  if (classCode === 1775 || classCode === 1875) return 3;
+  return null;
+}
+
+function greenEntryLevelForClass(classCode: number): EligibilityProfile["rider"]["greenEntryLevel"] | null {
+  if (classCode === 10100 || classCode === 10101 || classCode === 10102) return "ride_slide_level_1_or_higher";
+  if (classCode === 10200 || classCode === 10201 || classCode === 10202) return "ride_slide_level_2_or_higher";
+  if (classCode === 10002) return "green_reiner_level_1_or_higher";
+  if (classCode === 10001) return "green_reiner_level_2_or_higher";
+  return null;
+}
+
+function greenEntryLevelFromAmount(amount: number): EligibilityProfile["rider"]["greenEntryLevel"] {
+  if (amount <= 75) return "ride_slide_level_1_or_higher";
+  if (amount <= 150) return "ride_slide_level_2_or_higher";
+  if (amount <= 200) return "green_reiner_level_1_or_higher";
+  if (amount <= 350) return "green_reiner_level_2_or_higher";
+  return "not_eligible";
+}
+
+function availableStrategicTests(classCodes: number[] | null) {
+  const neededQuestions = neededQuestionsForClassCodes(classCodes);
+
+  return strategicTests.filter((definition) => {
+    if (definition.category === "non_pro_novice_horse") {
+      return neededQuestions.has("rider_professional_status") && neededQuestions.has("horse_novice_level");
+    }
+
+    return definition.questionIds.some((questionId) => neededQuestions.has(questionId));
+  });
+}
+
+function neededQuestionsForClassCodes(classCodes: number[] | null) {
+  if (!classCodes?.length) {
+    return new Set(allQuestionIds);
+  }
+
+  const neededQuestions = new Set<QuestionId>(["global_nrha_access"]);
+
+  if (classCodes.some((classCode) => nonProQuestionClassCodes.has(classCode))) {
+    neededQuestions.add("rider_professional_status");
+  }
+
+  if (classCodes.some((classCode) => noviceHorseQuestionClassCodes.has(classCode))) {
+    neededQuestions.add("horse_novice_level");
+  }
+
+  if (classCodes.some((classCode) => rookieQuestionClassCodes.has(classCode))) {
+    neededQuestions.add("rider_rookie_level");
+  }
+
+  if (classCodes.some((classCode) => greenQuestionClassCodes.has(classCode))) {
+    neededQuestions.add("green_entry_level");
+  }
+
+  if (classCodes.some((classCode) => openCapQuestionClassCodes.has(classCode))) {
+    neededQuestions.add("open_rider_caps");
+  }
+
+  return neededQuestions;
 }
 
 async function fetchEligibility(input: {
@@ -823,7 +916,8 @@ Deno.serve(async (request) => {
   const baseUrl = (Deno.env.get("NRHA_API_BASE_URL") ?? "https://data.nrha.com").replace(/\/+$/, "");
   const horseAge = buildHorseAgeSnapshot({ birthYear: horseBirthYear, dateOfBirth: horseDateOfBirth, showDate: date });
   const riderAge = buildRiderAgeSnapshot({ birthYear: riderBirthYear, dateOfBirth: riderDateOfBirth, showDate: date });
-  const questions = initialQuestions();
+  const neededQuestions = neededQuestionsForClassCodes(classCodes);
+  const questions = initialQuestions().filter((question) => neededQuestions.has(question.id));
   const profile = initialProfile({ horseAge, riderAge });
   const tests: TestResult[] = [];
   const orderedTests = availableStrategicTests(classCodes);

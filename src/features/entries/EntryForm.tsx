@@ -264,7 +264,6 @@ function EntryForm({
       date,
       horseBirthYear: selectedHorse.birth_year ?? null,
       horseDateOfBirth: selectedHorse.date_of_birth ?? null,
-      maxTests: 14,
       memberNumber,
       riderBirthYear: birthYearFromDateValue(selectedRiderContact.date_of_birth),
       riderDateOfBirth: selectedRiderContact.date_of_birth ?? null,
@@ -1193,7 +1192,7 @@ function nrhaNoviceHorseDecision({
 
   const actualLevel = noviceHorseLevel === "level_3_or_higher" ? 3 : noviceHorseLevel === "level_2_or_higher" ? 2 : noviceHorseLevel === "level_1_or_higher" ? 1 : 0;
 
-  if (actualLevel >= requiredLevel) {
+  if (actualLevel > 0 && actualLevel <= requiredLevel) {
     return null;
   }
 
@@ -1221,7 +1220,7 @@ function nrhaRookieDecision({
 
   const actualLevel = rookieLevel === "rookie_level_2_or_higher" ? 2 : rookieLevel === "rookie_level_1_or_higher" ? 1 : 0;
 
-  if (actualLevel >= requiredLevel) {
+  if (actualLevel > 0 && actualLevel <= requiredLevel) {
     return null;
   }
 
@@ -1255,22 +1254,14 @@ function nrhaGreenDecision({
     };
   }
 
-  const actual =
-    greenEntryLevel === "green_reiner_level_2_or_higher"
-      ? { family: "green_reiner" as const, level: 2 }
-      : greenEntryLevel === "green_reiner_level_1_or_higher"
-        ? { family: "green_reiner" as const, level: 1 }
-        : greenEntryLevel === "ride_slide_level_2_or_higher"
-          ? { family: "ride_slide" as const, level: 2 }
-          : greenEntryLevel === "ride_slide_level_1_or_higher"
-            ? { family: "ride_slide" as const, level: 1 }
-            : null;
+  const actualCap = greenEntryCapForStatus(greenEntryLevel);
+  const requiredCap = greenEntryCapForRequirement(requirement);
 
-  if (!actual || actual.family !== requirement.family) {
+  if (actualCap === null || requiredCap === null) {
     return null;
   }
 
-  if (actual.level >= requirement.level) {
+  if (actualCap <= requiredCap) {
     return null;
   }
 
@@ -1279,6 +1270,29 @@ function nrhaGreenDecision({
     message: { tone: "error", message: uiText(locale, `Profil NRHA: niveau ${requirement.family === "green_reiner" ? "Green Reiner" : "Ride & Slide"} insuffisant pour Level ${requirement.level}.`, `NRHA profile: ${requirement.family === "green_reiner" ? "Green Reiner" : "Ride & Slide"} level is too low for Level ${requirement.level}.`) },
     pending: false,
   };
+}
+
+function greenEntryCapForStatus(status: string) {
+  switch (status) {
+    case "ride_slide_level_1_or_higher":
+      return 75;
+    case "ride_slide_level_2_or_higher":
+      return 150;
+    case "green_reiner_level_1_or_higher":
+      return 200;
+    case "green_reiner_level_2_or_higher":
+      return 350;
+    default:
+      return null;
+  }
+}
+
+function greenEntryCapForRequirement(requirement: { family: "green_reiner" | "ride_slide"; level: number }) {
+  if (requirement.family === "ride_slide") {
+    return requirement.level === 1 ? 75 : 150;
+  }
+
+  return requirement.level === 1 ? 200 : 350;
 }
 
 function nrhaOpenCapDecision({
