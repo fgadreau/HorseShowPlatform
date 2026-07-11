@@ -283,7 +283,7 @@ function formatContactName(contact: Contact | undefined) {
     return "";
   }
 
-  return [contact.first_name, contact.last_name].filter(Boolean).join(" ").trim();
+  return [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" ").trim();
 }
 
 function divisionDisplayName(division: Division) {

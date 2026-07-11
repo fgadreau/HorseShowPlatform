@@ -292,7 +292,7 @@ function ClientDashboardView({
                     <div className="client-entry-row" key={entry.id}>
                       <div className="client-entry-row-main">
                         <span className="client-entry-horse">{horse?.name ?? "—"}</span>
-                        {rider ? <span className="client-entry-rider">{rider.first_name} {rider.last_name}</span> : null}
+                        {rider ? <span className="client-entry-rider">{[rider.first_name, rider.middle_name, rider.last_name].filter(Boolean).join(" ")}</span> : null}
                         <span className="client-entry-division">{division?.name ?? "—"}</span>
                       </div>
                       <span className={`client-status-badge status-${tone}`}>{entryStatusLabel(entry.status, locale)}</span>

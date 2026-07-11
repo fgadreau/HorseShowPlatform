@@ -13,6 +13,7 @@ type NrhaOfficialMemberValues = {
   firstName: string;
   fullName: string;
   lastName: string;
+  middleName: string;
   memberNumber: string;
   phone: string;
   state: string;
@@ -21,12 +22,14 @@ type NrhaOfficialMemberValues = {
 
 type NrhaMemberLocalValues = {
   address: string;
+  addressLine2: string;
   city: string;
   country: string;
   email: string;
   expiresOn: string;
   firstName: string;
   lastName: string;
+  middleName: string;
   memberNumber: string;
   phone: string;
   state: string;
@@ -79,6 +82,7 @@ function nrhaOfficialMemberValues(
   const firstName = member?.firstName?.trim() || verification.officialFirstName || "";
   const lastName = member?.lastName?.trim() || verification.officialLastName || "";
   const fullName = member?.fullName?.trim() || verification.officialFullName || [firstName, lastName].filter(Boolean).join(" ");
+  const middleName = member?.middleName?.trim() || deriveMiddleName(fullName, firstName, lastName);
   const memberNumber = member?.memberNumber ?? verification.memberNumber ?? fallback.memberNumber ?? null;
 
   return {
@@ -91,6 +95,7 @@ function nrhaOfficialMemberValues(
     firstName,
     fullName,
     lastName,
+    middleName,
     memberNumber: memberNumber ? String(memberNumber) : "",
     phone: member?.phoneNumber?.trim() ?? "",
     state: member?.state?.trim() ?? "",
@@ -126,6 +131,14 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     compare: sameText,
   });
   maybePushRow(rows, {
+    key: "middleName",
+    label: uiText(locale, "Deuxième prénom", "Middle name"),
+    current: current.middleName,
+    official: values.middleName,
+    formatter: (value) => formatPlainValue(value, locale),
+    compare: sameText,
+  });
+  maybePushRow(rows, {
     key: "lastName",
     label: uiText(locale, "Nom", "Last name"),
     current: current.lastName,
@@ -154,6 +167,14 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     label: uiText(locale, "Adresse", "Address"),
     current: current.address,
     official: values.address,
+    formatter: (value) => formatPlainValue(value, locale),
+    compare: sameText,
+  });
+  maybePushRow(rows, {
+    key: "addressLine2",
+    label: uiText(locale, "Adresse 2", "Address 2"),
+    current: current.addressLine2,
+    official: values.addressLine2,
     formatter: (value) => formatPlainValue(value, locale),
     compare: sameText,
   });
@@ -312,6 +333,25 @@ function sameText(current: string, official: string) {
   return normalizeText(current) === normalizeText(official);
 }
 
+function deriveMiddleName(fullName: string, firstName: string, lastName: string) {
+  const fullParts = fullName.trim().split(/\s+/).filter(Boolean);
+  const firstParts = firstName.trim().split(/\s+/).filter(Boolean);
+  const lastParts = lastName.trim().split(/\s+/).filter(Boolean);
+
+  if (!fullParts.length || !firstParts.length || !lastParts.length) {
+    return "";
+  }
+
+  const start = firstParts.length;
+  const end = fullParts.length - lastParts.length;
+
+  if (end <= start) {
+    return "";
+  }
+
+  return fullParts.slice(start, end).join(" ");
+}
+
 function normalizeText(value: string | null | undefined) {
   return (value ?? "")
     .normalize("NFKD")
@@ -324,12 +364,14 @@ function normalizeText(value: string | null | undefined) {
 function contactNrhaLocalValues(contact: Contact, memberNumber: string): NrhaMemberLocalValues {
   return {
     address: contact.address ?? "",
+    addressLine2: contact.address_line2 ?? "",
     city: contact.city ?? "",
     country: contact.country ?? "",
     email: contact.email ?? "",
     expiresOn: "",
     firstName: contact.first_name,
     lastName: contact.last_name,
+    middleName: contact.middle_name ?? "",
     memberNumber,
     phone: contact.phone ?? "",
     state: contact.state ?? "",

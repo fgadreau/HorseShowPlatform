@@ -2738,7 +2738,7 @@ button:focus-visible {
   border-radius: 8px;
   display: grid;
   gap: 6px;
-  grid-template-columns: minmax(90px, 0.7fr) repeat(2, minmax(0, 1fr));
+  grid-template-columns: minmax(90px, 0.7fr) repeat(2, minmax(0, 1fr)) auto;
   padding: 9px;
 }
 
@@ -2751,6 +2751,20 @@ button:focus-visible {
 .nrha-data-import-row strong {
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+
+.nrha-data-import-choice {
+  align-items: center;
+  color: #0f766e;
+  display: flex;
+  font-size: 13px;
+  font-weight: 700;
+  gap: 7px;
+  white-space: nowrap;
+}
+
+.nrha-data-import-choice input {
+  width: auto;
 }
 
 @media (max-width: 640px) {

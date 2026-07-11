@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Plus, Search, ShieldCheck } from "lucide-react";
 import { errorMessage } from "../../lib/display";
@@ -45,6 +45,7 @@ function ContactForm({
 }) {
   const [creationMode, setCreationMode] = useState<ContactCreationMode>("manual");
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -90,11 +91,13 @@ function ContactForm({
           email,
           expiresOn: verifiedNrhaMember?.officialValues.expiresOn ?? "",
           firstName,
+          middleName,
           lastName,
           memberNumber: currentNrhaMemberNumber,
           phone,
           state,
           zipCode,
+          addressLine2,
         },
         locale,
       )
@@ -122,6 +125,7 @@ function ContactForm({
         organization_id: organization.id,
         type: defaultType,
         first_name: firstName,
+        middle_name: middleName,
         last_name: lastName,
         email,
         phone,
@@ -154,6 +158,7 @@ function ContactForm({
 
   function resetForm() {
     setFirstName("");
+    setMiddleName("");
     setLastName("");
     setEmail("");
     setPhone("");
@@ -215,7 +220,7 @@ function ContactForm({
       const verification = await onVerifyNrhaMember({
         emailAddress: email,
         firstName,
-        fullName: [firstName, lastName].filter(Boolean).join(" "),
+        fullName: [firstName, middleName, lastName].filter(Boolean).join(" "),
         lastName,
         memberNumber,
       });
@@ -328,6 +333,7 @@ function ContactForm({
         organization_id: organization.id,
         type: defaultType,
         first_name: values.firstName || nameParts.firstName || values.fullName || "NRHA",
+        middle_name: values.middleName || nameParts.middleName,
         last_name: values.lastName || nameParts.lastName || values.fullName || "Member",
         email: values.email,
         phone: values.phone,
@@ -363,36 +369,50 @@ function ContactForm({
     }
   }
 
-  function handleApplyNrhaMemberData() {
+  function handleApplyNrhaMemberData(keys: NrhaMemberDataImportRow["key"][]) {
     if (!activeNrhaLookupValues || !nrhaOrganizationId || !nrhaMemberLookup) {
       return;
     }
 
-    applyMemberValues(activeNrhaLookupValues);
-    setNrhaMemberVerification({
-      memberNumber: activeNrhaLookupValues.memberNumber || currentNrhaMemberNumber,
-      officialValues: activeNrhaLookupValues,
-      organizationId: nrhaOrganizationId,
-      payload: nrhaMemberVerificationPayload(nrhaMemberLookup),
-    });
+    const selectedKeys = new Set(keys);
+    applyMemberValues(activeNrhaLookupValues, selectedKeys);
+
+    if (nrhaMemberRows.every((row) => selectedKeys.has(row.key))) {
+      setNrhaMemberVerification({
+        memberNumber: activeNrhaLookupValues.memberNumber || currentNrhaMemberNumber,
+        officialValues: activeNrhaLookupValues,
+        organizationId: nrhaOrganizationId,
+        payload: nrhaMemberVerificationPayload(nrhaMemberLookup),
+      });
+      setNrhaMemberMessage({
+        tone: "success",
+        message: uiText(locale, "Données NRHA importées et prêtes à enregistrer comme validées.", "NRHA data imported and ready to save as verified."),
+      });
+      return;
+    }
+
+    setNrhaMemberVerification(null);
     setNrhaMemberMessage({
-      tone: "success",
-      message: uiText(locale, "Données NRHA importées et prêtes à enregistrer comme validées.", "NRHA data imported and ready to save as verified."),
+      tone: "info",
+      message: uiText(locale, "Champs NRHA sélectionnés importés. Les différences restantes devront être résolues avant d'enregistrer comme validé.", "Selected NRHA fields imported. Remaining differences must be resolved before saving as verified."),
     });
   }
 
-  function applyMemberValues(values: ReturnType<typeof nrhaOfficialMemberValues>) {
-    if (values.firstName) setFirstName(values.firstName);
-    if (values.lastName) setLastName(values.lastName);
-    if (values.email) setEmail(values.email);
-    if (values.phone) setPhone(values.phone);
-    if (values.address) setAddress(values.address);
-    if (values.addressLine2) setAddressLine2(values.addressLine2);
-    if (values.city) setCity(values.city);
-    if (values.state) setState(values.state);
-    if (values.zipCode) setZipCode(values.zipCode);
-    if (values.country) setCountry(values.country);
-    if (values.memberNumber && nrhaOrganizationId) {
+  function applyMemberValues(values: ReturnType<typeof nrhaOfficialMemberValues>, selectedKeys?: Set<NrhaMemberDataImportRow["key"]>) {
+    const shouldApply = (key: NrhaMemberDataImportRow["key"]) => !selectedKeys || selectedKeys.has(key);
+
+    if (values.firstName && shouldApply("firstName")) setFirstName(values.firstName);
+    if (values.middleName && shouldApply("middleName")) setMiddleName(values.middleName);
+    if (values.lastName && shouldApply("lastName")) setLastName(values.lastName);
+    if (values.email && shouldApply("email")) setEmail(values.email);
+    if (values.phone && shouldApply("phone")) setPhone(values.phone);
+    if (values.address && shouldApply("address")) setAddress(values.address);
+    if (values.addressLine2 && shouldApply("addressLine2")) setAddressLine2(values.addressLine2);
+    if (values.city && shouldApply("city")) setCity(values.city);
+    if (values.state && shouldApply("state")) setState(values.state);
+    if (values.zipCode && shouldApply("zipCode")) setZipCode(values.zipCode);
+    if (values.country && shouldApply("country")) setCountry(values.country);
+    if (values.memberNumber && nrhaOrganizationId && shouldApply("memberNumber")) {
       setMembershipNumbers((current) => ({
         ...current,
         [nrhaOrganizationId]: values.memberNumber,
@@ -429,6 +449,17 @@ function ContactForm({
                   value={firstName}
                   onChange={(event) => {
                     setFirstName(event.target.value);
+                    clearNrhaMemberValidation();
+                  }}
+                />
+              </label>
+              <label>
+                {uiText(locale, "Deuxième prénom", "Middle name")}
+                <input
+                  disabled={!organization}
+                  value={middleName}
+                  onChange={(event) => {
+                    setMiddleName(event.target.value);
                     clearNrhaMemberValidation();
                   }}
                 />
@@ -488,7 +519,14 @@ function ContactForm({
             </label>
             <label>
               {uiText(locale, "Appartement, suite, unité", "Apartment, suite, unit")}
-              <input disabled={!organization} value={addressLine2} onChange={(event) => setAddressLine2(event.target.value)} />
+              <input
+                disabled={!organization}
+                value={addressLine2}
+                onChange={(event) => {
+                  setAddressLine2(event.target.value);
+                  clearNrhaMemberValidation();
+                }}
+              />
             </label>
             <div className="form-grid">
               <label>
@@ -631,8 +669,29 @@ function NrhaMemberDataPanel({
 }: {
   locale: Locale;
   rows: NrhaMemberDataImportRow[];
-  onApply: () => void;
+  onApply: (keys: NrhaMemberDataImportRow["key"][]) => void;
 }) {
+  const [selectedKeys, setSelectedKeys] = useState<Set<NrhaMemberDataImportRow["key"]>>(() => new Set(rows.map((row) => row.key)));
+  const rowSelectionSignature = rows.map((row) => `${row.key}:${row.current}:${row.official}`).join("|");
+
+  useEffect(() => {
+    setSelectedKeys(new Set(rows.map((row) => row.key)));
+  }, [rowSelectionSignature]);
+
+  function toggleKey(key: NrhaMemberDataImportRow["key"]) {
+    setSelectedKeys((current) => {
+      const next = new Set(current);
+
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+
+      return next;
+    });
+  }
+
   return (
     <div className="nrha-data-import-panel">
       <div className="inline-form-header">
@@ -645,12 +704,16 @@ function NrhaMemberDataPanel({
             <span>{row.label}</span>
             <strong>HSP: {row.current}</strong>
             <strong>NRHA: {row.official}</strong>
+            <label className="nrha-data-import-choice">
+              <input checked={selectedKeys.has(row.key)} type="checkbox" onChange={() => toggleKey(row.key)} />
+              {uiText(locale, "Utiliser NRHA", "Use NRHA")}
+            </label>
           </div>
         ))}
       </div>
-      <button className="ghost-button" type="button" onClick={onApply}>
+      <button className="ghost-button" disabled={!selectedKeys.size} type="button" onClick={() => onApply(Array.from(selectedKeys))}>
         <Plus size={18} />
-        {uiText(locale, "Importer les données NRHA", "Import NRHA data")}
+        {uiText(locale, "Importer les champs sélectionnés", "Import selected fields")}
       </button>
     </div>
   );
@@ -723,15 +786,16 @@ function splitFullName(value: string) {
   const parts = value.trim().split(/\s+/).filter(Boolean);
 
   if (!parts.length) {
-    return { firstName: "", lastName: "" };
+    return { firstName: "", middleName: "", lastName: "" };
   }
 
   if (parts.length === 1) {
-    return { firstName: parts[0], lastName: "" };
+    return { firstName: parts[0], middleName: "", lastName: "" };
   }
 
   return {
-    firstName: parts.slice(0, -1).join(" "),
+    firstName: parts[0] ?? "",
+    middleName: parts.slice(1, -1).join(" "),
     lastName: parts[parts.length - 1] ?? "",
   };
 }

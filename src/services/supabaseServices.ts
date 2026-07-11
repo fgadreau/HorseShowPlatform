@@ -987,6 +987,7 @@ export async function createContact(input: ContactInput) {
       organization_id: input.organization_id,
       type: input.type,
       first_name: input.first_name.trim(),
+      middle_name: input.middle_name?.trim() || null,
       last_name: input.last_name.trim(),
       email: normalizedEmail,
       phone: input.phone?.trim() || null,
@@ -1067,6 +1068,7 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
   const payload = {
     ...contactInput,
     first_name: contactInput.first_name?.trim(),
+    middle_name: contactInput.middle_name === undefined ? undefined : contactInput.middle_name?.trim() || null,
     last_name: contactInput.last_name?.trim(),
     email: contactInput.email === undefined ? undefined : normalizeEmail(contactInput.email),
     phone: contactInput.phone === undefined ? undefined : contactInput.phone?.trim() || null,
@@ -1808,6 +1810,7 @@ export type NrhaMemberRecord = {
   line2?: string;
   memberExpirationDate?: string;
   memberNumber?: number;
+  middleName?: string;
   phoneNumber?: string;
   state?: string;
   zip?: string;
@@ -4737,8 +4740,8 @@ function normalizeRunTechnicalSnapshot(value: unknown): RunTechnicalSnapshot {
 function findContactByName(contacts: Contact[], name: string) {
   const targetKey = normalizeNameKey(name);
   return contacts.find((contact) => {
-    const fullName = `${contact.first_name} ${contact.last_name}`.trim();
-    const reversedName = `${contact.last_name} ${contact.first_name}`.trim();
+    const fullName = [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" ").trim();
+    const reversedName = [contact.last_name, contact.middle_name, contact.first_name].filter(Boolean).join(" ").trim();
     return normalizeNameKey(fullName) === targetKey || normalizeNameKey(reversedName) === targetKey;
   });
 }
@@ -5672,6 +5675,7 @@ async function enrichExistingContact(existing: Contact, input: ContactInput) {
   const patch: Record<string, unknown> = {};
   const phone = input.phone?.trim();
   const barnName = input.barn_name?.trim();
+  const middleName = input.middle_name?.trim();
   const normalizedEmail = normalizeEmail(input.email);
   const address = input.address?.trim();
   const addressLine2 = input.address_line2?.trim();
@@ -5690,6 +5694,10 @@ async function enrichExistingContact(existing: Contact, input: ContactInput) {
 
   if (!existing.barn_name && barnName) {
     patch.barn_name = barnName;
+  }
+
+  if (!existing.middle_name && middleName) {
+    patch.middle_name = middleName;
   }
 
   if (!existing.address && address) {

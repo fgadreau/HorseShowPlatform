@@ -23,6 +23,7 @@ type NrhaMemberRecord = {
   line2?: string;
   memberExpirationDate?: string;
   memberNumber?: number;
+  middleName?: string;
   phoneNumber?: string;
   state?: string;
   zip?: string;

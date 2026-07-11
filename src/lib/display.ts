@@ -13,7 +13,7 @@ export function contactLabel(contact: Contact | undefined) {
     return "Unknown contact";
   }
 
-  return `${contact.first_name} ${contact.last_name}`.trim();
+  return [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" ").trim();
 }
 
 export function horseLabel(horse: Horse | undefined) {

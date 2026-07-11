@@ -270,6 +270,7 @@ export function ContactPicker({
   const [createdContact, setCreatedContact] = useState<Contact | null>(null);
   const [type, setType] = useState<Contact["type"]>(() => contactTypeForRole(role));
   const [firstName, setFirstName] = useState("");
+  const [middleName, setMiddleName] = useState("");
   const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -300,6 +301,7 @@ export function ContactPicker({
   function resetCreateForm() {
     setType(contactTypeForRole(role));
     setFirstName("");
+    setMiddleName("");
     setLastName("");
     setEmail("");
     setPhone("");
@@ -330,6 +332,7 @@ export function ContactPicker({
         type,
         roles: [role],
         first_name: firstName.trim(),
+        middle_name: middleName.trim(),
         last_name: lastName.trim(),
         email: email.trim(),
         phone: phone.trim(),
@@ -432,6 +435,16 @@ export function ContactPicker({
                   value={firstName}
                   onChange={(event) => {
                     setFirstName(event.target.value);
+                    setErrorMessage("");
+                  }}
+                />
+              </label>
+              <label>
+                {uiText(locale, "Deuxième prénom", "Middle name")}
+                <input
+                  value={middleName}
+                  onChange={(event) => {
+                    setMiddleName(event.target.value);
                     setErrorMessage("");
                   }}
                 />

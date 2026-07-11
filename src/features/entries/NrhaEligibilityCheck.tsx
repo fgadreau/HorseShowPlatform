@@ -533,7 +533,7 @@ function eligibilityYearFromShow(show: Show) {
 }
 
 function contactNrhaRiderNameMatchKeys(contact: Contact) {
-  const fullNameKey = normalizeNrhaRiderName([contact.first_name, contact.last_name].filter(Boolean).join(" "));
+  const fullNameKey = normalizeNrhaRiderName([contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" "));
   const firstGivenName = contact.first_name.trim().split(/\s+/).filter(Boolean)[0] ?? "";
   const firstNameLastNameKey = normalizeNrhaRiderName([firstGivenName, contact.last_name].filter(Boolean).join(" "));
 

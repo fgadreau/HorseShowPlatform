@@ -743,6 +743,7 @@ function contactSearchValues(contact: Contact | undefined) {
     ? [
         contactLabel(contact),
         contact.first_name,
+        contact.middle_name,
         contact.last_name,
         contact.email,
         contact.phone,

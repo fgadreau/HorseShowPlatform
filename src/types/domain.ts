@@ -193,6 +193,7 @@ export type Contact = {
   organization_id: string;
   type: "owner" | "agent" | "rider" | "payer" | "other";
   first_name: string;
+  middle_name: string | null;
   last_name: string;
   email: string | null;
   phone: string | null;
@@ -893,6 +894,7 @@ export type ContactInput = {
   type: Contact["type"];
   roles?: ContactRoleName[];
   first_name: string;
+  middle_name?: string;
   last_name: string;
   email?: string;
   phone?: string;
@@ -912,6 +914,7 @@ export type ContactInput = {
 export type ContactUpdateInput = {
   type?: Contact["type"];
   first_name?: string;
+  middle_name?: string | null;
   last_name?: string;
   email?: string | null;
   phone?: string | null;
