@@ -126,9 +126,9 @@ const strategicTests: TestDefinition[] = [
   },
   {
     category: "novice_horse",
-    classCode: 1700,
-    className: "Novice Horse Open Level 1",
-    id: "novice_horse_level_1",
+    classCode: 1775,
+    className: "Novice Horse Open Level 3",
+    id: "novice_horse_level_3",
     questionIds: ["horse_novice_level"],
   },
   {
@@ -140,17 +140,10 @@ const strategicTests: TestDefinition[] = [
   },
   {
     category: "novice_horse",
-    classCode: 1775,
-    className: "Novice Horse Open Level 3",
-    id: "novice_horse_level_3",
+    classCode: 1700,
+    className: "Novice Horse Open Level 1",
+    id: "novice_horse_level_1",
     questionIds: ["horse_novice_level"],
-  },
-  {
-    category: "rookie",
-    classCode: 5300,
-    className: "Rookie Level 1",
-    id: "rookie_level_1",
-    questionIds: ["rider_rookie_level"],
   },
   {
     category: "rookie",
@@ -160,11 +153,11 @@ const strategicTests: TestDefinition[] = [
     questionIds: ["rider_rookie_level"],
   },
   {
-    category: "green_ride_slide",
-    classCode: 10100,
-    className: "Ride & Slide Open Level 1",
-    id: "ride_slide_open_level_1",
-    questionIds: ["green_entry_level"],
+    category: "rookie",
+    classCode: 5300,
+    className: "Rookie Level 1",
+    id: "rookie_level_1",
+    questionIds: ["rider_rookie_level"],
   },
   {
     category: "green_ride_slide",
@@ -175,9 +168,9 @@ const strategicTests: TestDefinition[] = [
   },
   {
     category: "green_ride_slide",
-    classCode: 10002,
-    className: "Green Reiner Level 1",
-    id: "green_reiner_level_1",
+    classCode: 10100,
+    className: "Ride & Slide Open Level 1",
+    id: "ride_slide_open_level_1",
     questionIds: ["green_entry_level"],
   },
   {
@@ -185,6 +178,13 @@ const strategicTests: TestDefinition[] = [
     classCode: 10001,
     className: "Green Reiner Level 2",
     id: "green_reiner_level_2",
+    questionIds: ["green_entry_level"],
+  },
+  {
+    category: "green_ride_slide",
+    classCode: 10002,
+    className: "Green Reiner Level 1",
+    id: "green_reiner_level_1",
     questionIds: ["green_entry_level"],
   },
   {
@@ -659,10 +659,10 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
         answer: `Cheval avec gains détectés à ${actualAmount}; niveau Novice déduit: ${profile.horse.noviceHorseLevel}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 1775 && result.status === "ineligible") {
+    } else if (result.classCode === 1700 && result.status === "ineligible") {
       profile.horse.noviceHorseLevel = "not_eligible";
       updateQuestion(questions, "horse_novice_level", {
-        answer: "Cheval non admissible jusqu'au test Novice Horse Level 3.",
+        answer: "Cheval non admissible jusqu'au test Novice Horse Level 1.",
         classCode: result.classCode,
       });
     }
@@ -675,7 +675,7 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
         answer: `Cavalier admissible au test ${definition.className}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 5310 && result.status === "ineligible") {
+    } else if (result.classCode === 5300 && result.status === "ineligible") {
       profile.rider.rookieLevel = "not_eligible";
       updateQuestion(questions, "rider_rookie_level", {
         answer: "Cavalier non admissible aux tests Rookie Level 1 et 2.",
@@ -698,10 +698,10 @@ function applyTestResult(definition: TestDefinition, result: TestResult, profile
         answer: `Équipe admissible au test ${definition.className}.`,
         classCode: result.classCode,
       });
-    } else if (result.classCode === 10001 && result.status === "ineligible") {
+    } else if (result.classCode === 10002 && result.status === "ineligible") {
       profile.rider.greenEntryLevel = "not_eligible";
       updateQuestion(questions, "green_entry_level", {
-        answer: "Équipe non admissible jusqu'au test Green Reiner Level 2.",
+        answer: "Équipe non admissible jusqu'au test Green Reiner Level 1.",
         classCode: result.classCode,
       });
     }

@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
+import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaEligibilityProfile, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
@@ -36,6 +36,7 @@ function MyEntriesView({
   onUpdateEntry,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaEligibilityProfile,
   onVerifyNrhaHorse,
 }: {
   locale: Locale;
@@ -63,6 +64,7 @@ function MyEntriesView({
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaEligibilityProfile: (input: Parameters<typeof verifyNrhaEligibilityProfile>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibilityProfile>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [creatingEntry, setCreatingEntry] = useState(false);
@@ -131,6 +133,7 @@ function MyEntriesView({
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaEligibilityProfile={onVerifyNrhaEligibilityProfile}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
             onCreated={() => setCreatingEntry(false)}
           />

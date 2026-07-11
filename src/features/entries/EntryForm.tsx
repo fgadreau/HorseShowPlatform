@@ -4,10 +4,11 @@ import { ContactPicker, ModalDialog, SearchSelect } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
-import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
+import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaEligibilityProfile, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { NrhaEligibilityProfileVerification } from "../../services/supabaseServices";
 import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
-import { classEntriesCloseDate, classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, showDayLabel } from "../classes/classUtils";
-import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist } from "../dashboard/shared";
+import { classEntriesCloseDate, classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, findNrhaApprovedClass, nrhaClassTypeFromRules, showDayLabel } from "../classes/classUtils";
+import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist, birthYearFromDateValue } from "../dashboard/shared";
 import { HorseForm } from "../horses/HorseForm";
 import { buildNrhaEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
 import { entryDivisionLabel } from "./entryDisplay";
@@ -20,6 +21,7 @@ type DivisionEvaluation = {
   message: InlineHealthMessage | null;
   nrhaMessage: InlineHealthMessage | null;
   nrhaKey: string;
+  nrhaProfilePending: boolean;
   nrhaResult: NrhaEligibilityMessage | null;
   nrhaRequiresVerification: boolean;
   nrhaRequest: Parameters<typeof verifyNrhaEligibility>[0] | null;
@@ -37,6 +39,84 @@ type NrhaBulkSummary = {
   requested: number;
   status: "checking" | "complete" | "error";
 };
+
+type NrhaProfileDecision = {
+  canProceed: boolean;
+  message: InlineHealthMessage | null;
+  pending: boolean;
+};
+
+const nrhaYouthAgeRules = new Map<number, { max?: number; min?: number }>([
+  [3100, { max: 13 }],
+  [3200, { min: 14, max: 18 }],
+  [3300, { max: 18 }],
+  [3400, { max: 18 }],
+  [3500, { max: 10 }],
+  [2700, { max: 18 }],
+  [2720, { max: 13 }],
+  [2730, { min: 14, max: 18 }],
+  [4692, { max: 18 }],
+  [4693, { max: 13 }],
+  [4694, { min: 14, max: 18 }],
+  [6700, { max: 18 }],
+  [6720, { max: 13 }],
+  [6730, { min: 14, max: 18 }],
+  [9400, { max: 18 }],
+  [10102, { max: 18 }],
+  [10202, { max: 18 }],
+]);
+
+const nrhaHorseAgeRules = new Map<number, { exact?: number; max?: number; min?: number }>([
+  [2900, { exact: 3 }],
+  [2940, { exact: 3 }],
+  [2920, { max: 4 }],
+  [2950, { max: 4 }],
+  [2930, { max: 5 }],
+  [2960, { max: 5 }],
+  [4680, { max: 5 }],
+  [4681, { min: 6 }],
+]);
+
+const nrhaNonProClassCodes = new Set([
+  1400, 1500, 1600, 1650, 1660, 1800, 1850, 1875,
+  2400, 2500, 2600, 2621, 2625, 2650, 2700, 2720, 2730, 2940, 2950, 2960,
+  4690, 4691, 4692, 4693, 4694, 4695,
+  5270, 5300, 5301, 5310,
+  6234, 6240, 6250, 6260, 6261, 6265, 6266, 6267, 6700, 6720, 6730,
+  9200, 9400, 10101, 10102, 10201, 10202, 111400,
+]);
+
+const nrhaNoviceHorseLevelRequirements = new Map<number, number>([
+  [1700, 1],
+  [1800, 1],
+  [1750, 2],
+  [1850, 2],
+  [1775, 3],
+  [1875, 3],
+]);
+
+const nrhaRookieLevelRequirements = new Map<number, number>([
+  [5300, 1],
+  [5301, 1],
+  [5310, 2],
+]);
+
+const nrhaGreenLevelRequirements = new Map<number, { family: "green_reiner" | "ride_slide"; level: number }>([
+  [10002, { family: "green_reiner", level: 1 }],
+  [10001, { family: "green_reiner", level: 2 }],
+  [10100, { family: "ride_slide", level: 1 }],
+  [10101, { family: "ride_slide", level: 1 }],
+  [10102, { family: "ride_slide", level: 1 }],
+  [10200, { family: "ride_slide", level: 2 }],
+  [10201, { family: "ride_slide", level: 2 }],
+  [10202, { family: "ride_slide", level: 2 }],
+]);
+
+const nrhaOpenCapRequirements = new Map<number, number>([
+  [1350, 1],
+  [1301, 2],
+  [1200, 3],
+]);
 
 function EntryForm({
   locale = "fr",
@@ -62,6 +142,7 @@ function EntryForm({
   onCreateHorseHealthDocument,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaEligibilityProfile,
   onVerifyNrhaHorse,
   onCreated,
 }: {
@@ -88,6 +169,7 @@ function EntryForm({
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaEligibilityProfile: (input: Parameters<typeof verifyNrhaEligibilityProfile>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibilityProfile>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onCreated?: () => void;
 }) {
@@ -100,13 +182,14 @@ function EntryForm({
   const [entryNumber, setEntryNumber] = useState("");
   const [activeDayId, setActiveDayId] = useState("");
   const [selectedDivisionIds, setSelectedDivisionIds] = useState<string[]>([]);
+  const [nrhaProfile, setNrhaProfile] = useState<NrhaEligibilityProfileVerification | null>(null);
   const [nrhaResults, setNrhaResults] = useState<Record<string, NrhaEligibilityMessage>>({});
   const [nrhaVerifyBusy, setNrhaVerifyBusy] = useState(false);
   const [nrhaBulkSummary, setNrhaBulkSummary] = useState<NrhaBulkSummary | null>(null);
   const [preauthAccepted, setPreauthAccepted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<InlineHealthMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  const nrhaAutoLastAttemptSignature = useRef("");
+  const nrhaProfileLastAttemptSignature = useRef("");
 
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
@@ -130,6 +213,8 @@ function EntryForm({
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
   const selectedPayerContact = findById(contacts, selectedPayerId) ?? null;
   const teamIsDefined = Boolean(selectedShow && selectedHorse && selectedRiderContact && selectedPayerContact);
+  const selectedHorseAgeOnJan1 = horseAgeOnJan1ForShow(selectedHorse, selectedShow);
+  const selectedRiderAgeOnJan1 = riderAgeOnJan1ForShow(selectedRiderContact, selectedShow);
   const selectedHealthValidity = selectedHorse
     ? getHorseHealthValidity({
         documents: horseHealthDocuments,
@@ -157,6 +242,50 @@ function EntryForm({
   const riderNrhaMembership = selectedNrhaOrganization && selectedRiderContact
     ? contactExternalMemberships.find((membership) => membership.contact_id === selectedRiderContact.id && membership.external_organization_id === selectedNrhaOrganization.id) ?? null
     : null;
+  const showbillNrhaClassCodes = useMemo(() => {
+    const codes = divisions
+      .map((division) => divisionNrhaClassCode(division, findById(classes, division.class_id) ?? null))
+      .filter((code): code is number => typeof code === "number");
+
+    return [...new Set(codes)].sort((a, b) => a - b);
+  }, [classes, divisions]);
+  const nrhaProfileRequest = useMemo(() => {
+    const competitionLicenseNumber = integerFromReference(horseNrhaReference?.reference_number);
+    const memberNumber = integerFromReference(riderNrhaMembership?.membership_number);
+    const date = selectedShow?.start_date?.slice(0, 10) ?? "";
+
+    if (!selectedShow || !selectedHorse || !selectedRiderContact || !showbillNrhaClassCodes.length || competitionLicenseNumber === null || memberNumber === null || !date) {
+      return null;
+    }
+
+    return {
+      classCodes: showbillNrhaClassCodes,
+      competitionLicenseNumber,
+      date,
+      horseBirthYear: selectedHorse.birth_year ?? null,
+      horseDateOfBirth: selectedHorse.date_of_birth ?? null,
+      maxTests: 14,
+      memberNumber,
+      riderBirthYear: birthYearFromDateValue(selectedRiderContact.date_of_birth),
+      riderDateOfBirth: selectedRiderContact.date_of_birth ?? null,
+    };
+  }, [horseNrhaReference?.reference_number, riderNrhaMembership?.membership_number, selectedHorse, selectedRiderContact, selectedShow, showbillNrhaClassCodes]);
+  const nrhaProfileSignature = useMemo(() => {
+    if (!nrhaProfileRequest) {
+      return "";
+    }
+
+    return [
+      nrhaProfileRequest.competitionLicenseNumber,
+      nrhaProfileRequest.memberNumber,
+      nrhaProfileRequest.date,
+      nrhaProfileRequest.horseBirthYear ?? "",
+      nrhaProfileRequest.horseDateOfBirth ?? "",
+      nrhaProfileRequest.riderBirthYear ?? "",
+      nrhaProfileRequest.riderDateOfBirth ?? "",
+      nrhaProfileRequest.classCodes?.join(",") ?? "",
+    ].join("|");
+  }, [nrhaProfileRequest]);
   const showbillEvaluations = useMemo(
     () =>
       divisions.map((division) =>
@@ -171,6 +300,8 @@ function EntryForm({
           horse: selectedHorse,
           horseExternalMemberships,
           locale,
+          nrhaProfile,
+          nrhaProfileBusy: nrhaVerifyBusy,
           nrhaResult: nrhaResults[division.id] ?? null,
           nrhaRiderRankings,
           organization,
@@ -178,18 +309,16 @@ function EntryForm({
           selectedShow,
         }),
       ),
-    [classes, contactExternalMemberships, divisions, selectedRiderContact, entries, entryReadiness.canProceed, externalOrganizations, horseExternalMemberships, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow],
+    [classes, contactExternalMemberships, divisions, selectedRiderContact, entries, entryReadiness.canProceed, externalOrganizations, horseExternalMemberships, locale, nrhaProfile, nrhaResults, nrhaRiderRankings, nrhaVerifyBusy, organization, selectedHorse, selectedShow],
   );
   const evaluationByDivisionId = useMemo(() => new Map(showbillEvaluations.map((evaluation) => [evaluation.division.id, evaluation])), [showbillEvaluations]);
   const dayBlocks = useMemo(
     () => buildShowbillBlocks({ classes, evaluations: showbillEvaluations, showDayId: effectiveActiveDayId === "unscheduled" ? null : effectiveActiveDayId }),
     [classes, effectiveActiveDayId, showbillEvaluations],
   );
-  const allNrhaPending = useMemo(() => uniqueDivisionEvaluations(showbillEvaluations.filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)), [showbillEvaluations]);
-  const nrhaAutoSignature = allNrhaPending.map((evaluation) => evaluation.nrhaKey).join("|");
   const selectedEvaluations = selectedDivisionIds.map((divisionId) => evaluationByDivisionId.get(divisionId)).filter((evaluation): evaluation is DivisionEvaluation => Boolean(evaluation));
   const selectedTotal = selectedEvaluations.reduce((total, evaluation) => total + (evaluation.fee ?? 0), 0);
-  const selectedNrhaPending = selectedEvaluations.filter((evaluation) => evaluation.nrhaRequiresVerification);
+  const selectedNrhaFinalChecks = selectedEvaluations.filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest);
   const selectedBlocked = selectedEvaluations.filter((evaluation) => !evaluation.canSelect);
   const checkoutPreview = buildEntryCheckoutPreview({
     evaluations: selectedEvaluations,
@@ -208,7 +337,6 @@ function EntryForm({
       selectedDivisionIds.length &&
       entryReadiness.canProceed &&
       !selectedBlocked.length &&
-      !selectedNrhaPending.length &&
       (!requiresPreauthAcceptance || preauthAccepted),
   );
   const entryHeaderMessage = selectedDivisionIds.length
@@ -218,50 +346,39 @@ function EntryForm({
       : uiText(locale, "Commence par choisir le cheval, le cavalier et le payeur.", "Start by choosing the horse, rider and payer.");
 
   useEffect(() => {
-    if (!teamIsDefined || !nrhaAutoSignature || nrhaAutoLastAttemptSignature.current === nrhaAutoSignature) {
+    if (!nrhaProfileRequest || !nrhaProfileSignature || nrhaProfileLastAttemptSignature.current === nrhaProfileSignature) {
       return;
     }
 
     let cancelled = false;
-    const pendingEvaluations = allNrhaPending;
-    nrhaAutoLastAttemptSignature.current = nrhaAutoSignature;
+    const profileRequest = nrhaProfileRequest;
+    nrhaProfileLastAttemptSignature.current = nrhaProfileSignature;
     setNrhaVerifyBusy(true);
+    setNrhaProfile(null);
     setNrhaBulkSummary({
       blocked: 0,
       eligible: 0,
-      requested: pendingEvaluations.length,
+      requested: 0,
       status: "checking",
     });
 
-    async function verifyBulk() {
+    async function verifyProfile() {
       try {
-        const nextResults: Record<string, NrhaEligibilityMessage> = {};
-
-        for (const evaluation of pendingEvaluations) {
-          if (cancelled || !evaluation.nrhaRequest) {
-            continue;
-          }
-
-          const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
-
-          if (cancelled) {
-            return;
-          }
-
-          nextResults[evaluation.division.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
-        }
+        const verification = await onVerifyNrhaEligibilityProfile(profileRequest);
 
         if (cancelled) {
           return;
         }
 
-        setNrhaResults((current) => ({ ...current, ...nextResults }));
-        const resultMessages = Object.values(nextResults);
+        const questions = verification.questions ?? [];
+        const globalBlock = verification.profile?.globalBlocks?.[0]?.message ?? null;
+        setNrhaProfile(verification);
         setNrhaBulkSummary({
-          blocked: resultMessages.filter((message) => message.tone === "error").length,
-          eligible: resultMessages.filter((message) => message.tone === "success").length,
-          requested: pendingEvaluations.length,
-          status: "complete",
+          blocked: verification.summary?.blockedQuestions ?? questions.filter((question) => question.status === "blocked").length,
+          eligible: verification.summary?.answeredQuestions ?? questions.filter((question) => question.status === "answered").length,
+          message: globalBlock ?? undefined,
+          requested: verification.summary?.testedClassCount ?? verification.tests?.length ?? 0,
+          status: verification.status === "blocked" ? "error" : "complete",
         });
       } catch (error) {
         if (cancelled) {
@@ -271,8 +388,8 @@ function EntryForm({
         setNrhaBulkSummary({
           blocked: 0,
           eligible: 0,
-          message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA automatique impossible.", "Automatic NRHA validation unavailable."),
-          requested: pendingEvaluations.length,
+          message: error instanceof Error ? error.message : uiText(locale, "Profil NRHA impossible à préparer.", "Unable to prepare NRHA profile."),
+          requested: 0,
           status: "error",
         });
       } finally {
@@ -282,20 +399,21 @@ function EntryForm({
       }
     }
 
-    void verifyBulk();
+    void verifyProfile();
 
     return () => {
       cancelled = true;
     };
-  }, [allNrhaPending, locale, nrhaAutoSignature, onVerifyNrhaEligibility, teamIsDefined]);
+  }, [locale, nrhaProfileRequest, nrhaProfileSignature, onVerifyNrhaEligibilityProfile]);
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     setActiveDayId("");
     setSelectedDivisionIds([]);
+    setNrhaProfile(null);
     setNrhaResults({});
     setNrhaBulkSummary(null);
-    nrhaAutoLastAttemptSignature.current = "";
+    nrhaProfileLastAttemptSignature.current = "";
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
@@ -303,9 +421,10 @@ function EntryForm({
   function handleEligibilityTeamChange(updater: () => void) {
     updater();
     setSelectedDivisionIds([]);
+    setNrhaProfile(null);
     setNrhaResults({});
     setNrhaBulkSummary(null);
-    nrhaAutoLastAttemptSignature.current = "";
+    nrhaProfileLastAttemptSignature.current = "";
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
@@ -338,6 +457,32 @@ function EntryForm({
     setSubmitMessage(null);
 
     try {
+      if (selectedNrhaFinalChecks.length) {
+        setNrhaVerifyBusy(true);
+        const nextResults: Record<string, NrhaEligibilityMessage> = {};
+
+        for (const evaluation of selectedNrhaFinalChecks) {
+          if (!evaluation.nrhaRequest) {
+            continue;
+          }
+
+          const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
+          const message = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
+          nextResults[evaluation.division.id] = message;
+
+          if (message.tone === "error") {
+            setNrhaResults((current) => ({ ...current, ...nextResults }));
+            setSubmitMessage({
+              tone: "error",
+              message: uiText(locale, `Validation finale NRHA refusée: ${message.message}`, `Final NRHA validation refused: ${message.message}`),
+            });
+            return;
+          }
+        }
+
+        setNrhaResults((current) => ({ ...current, ...nextResults }));
+      }
+
       for (const evaluation of selectedEvaluations) {
         await onCreateEntry({
           organization_id: organization.id,
@@ -366,6 +511,7 @@ function EntryForm({
         message: error instanceof Error ? error.message : uiText(locale, "Impossible de créer les inscriptions sélectionnées.", "Unable to create selected entries."),
       });
     } finally {
+      setNrhaVerifyBusy(false);
       setBusy(false);
     }
   }
@@ -497,6 +643,8 @@ function EntryForm({
             <ProfileFact label={uiText(locale, "Cavalier", "Rider")} value={selectedRiderContact ? contactLabel(selectedRiderContact) : uiText(locale, "À choisir", "Choose one")} />
             <ProfileFact label="NRHA cheval" value={horseNrhaReference?.reference_number || uiText(locale, "Non validé", "Not validated")} />
             <ProfileFact label="NRHA cavalier" value={riderNrhaMembership ? `${riderNrhaMembership.membership_number}${riderNrhaMembership.expires_on ? ` · ${uiText(locale, "expire", "expires")} ${riderNrhaMembership.expires_on}` : ""}` : uiText(locale, "Non validé", "Not validated")} />
+            <ProfileFact label={uiText(locale, "Âge cheval", "Horse age")} value={selectedHorseAgeOnJan1 === null ? uiText(locale, "Non disponible", "Unavailable") : uiText(locale, `${selectedHorseAgeOnJan1} au 1er janv.`, `${selectedHorseAgeOnJan1} on Jan. 1`)} />
+            <ProfileFact label={uiText(locale, "Âge cavalier", "Rider age")} value={selectedRiderAgeOnJan1 === null ? uiText(locale, "Non disponible", "Unavailable") : uiText(locale, `${selectedRiderAgeOnJan1} au 1er janv.`, `${selectedRiderAgeOnJan1} on Jan. 1`)} />
             <ProfileFact label={uiText(locale, "Santé", "Health")} value={selectedHealthValidity ? horseHealthValidityMessage(selectedHealthValidity) : uiText(locale, "Cheval requis", "Horse required")} />
             <ProfileFact label={uiText(locale, "Sélection", "Selection")} value={`${selectedDivisionIds.length} · ${formatCurrency(selectedTotal, organization?.currency ?? "CAD")}`} />
           </div>
@@ -557,7 +705,7 @@ function EntryForm({
                 <div className="entry-showbill-class-list">
                   {block.evaluations.map((evaluation) => {
                     const selected = selectedDivisionIds.includes(evaluation.division.id);
-                    const pendingNrha = !evaluation.canSelect && evaluation.nrhaRequiresVerification;
+                    const pendingNrha = evaluation.nrhaProfilePending;
                     const Icon = pendingNrha ? ShieldCheck : evaluation.canSelect ? CheckCircle2 : AlertCircle;
 
                     return (
@@ -574,9 +722,9 @@ function EntryForm({
                           <small>{evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, organization?.currency ?? "CAD")}</small>
                         </span>
                         {evaluation.nrhaResult ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
-                        {!evaluation.nrhaResult && pendingNrha && nrhaVerifyBusy ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA automatique en cours...", "Automatic NRHA check in progress...")}</small> : null}
+                        {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Profil NRHA en préparation...", "Preparing NRHA profile...")}</small> : null}
                         {!evaluation.nrhaResult && evaluation.message ? <small className={`entry-class-status ${evaluation.message.tone}`}>{evaluation.message.message}</small> : null}
-                        {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage && !(pendingNrha && nrhaVerifyBusy) ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
+                        {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage && !pendingNrha ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
                       </button>
                     );
                   })}
@@ -656,11 +804,11 @@ function EntryForm({
               }}
             />
           ) : null}
-          {selectedNrhaPending.length ? (
+          {selectedNrhaFinalChecks.length ? (
             <InlineHealthMessage
               value={{
                 tone: "info",
-                message: uiText(locale, "Certaines classes NRHA sélectionnées doivent être vérifiées avant de créer les brouillons.", "Some selected NRHA classes must be checked before draft entries can be created."),
+                message: uiText(locale, "Les classes NRHA sélectionnées seront confirmées directement avec NRHA à l'enregistrement.", "Selected NRHA classes will be confirmed directly with NRHA on save."),
               }}
             />
           ) : null}
@@ -675,7 +823,9 @@ function EntryForm({
           <button className="primary-button" disabled={busy || !canCreate} type="button" onClick={handleSubmit}>
             <Plus size={18} />
             {busy
-              ? uiText(locale, "Création...", "Creating...")
+              ? nrhaVerifyBusy
+                ? uiText(locale, "Validation NRHA...", "Checking NRHA...")
+                : uiText(locale, "Création...", "Creating...")
               : uiText(locale, selectedDivisionIds.length > 1 ? "Créer les brouillons et la facture" : "Créer le brouillon et la facture", selectedDivisionIds.length > 1 ? "Create draft entries and invoice" : "Create draft entry and invoice")}
           </button>
         </section>
@@ -695,6 +845,8 @@ function evaluateDivision({
   horse,
   horseExternalMemberships,
   locale,
+  nrhaProfile,
+  nrhaProfileBusy,
   nrhaResult,
   nrhaRiderRankings,
   organization,
@@ -711,6 +863,8 @@ function evaluateDivision({
   horse: Horse | null;
   horseExternalMemberships: HorseExternalMembership[];
   locale: Locale;
+  nrhaProfile: NrhaEligibilityProfileVerification | null;
+  nrhaProfileBusy: boolean;
   nrhaResult: NrhaEligibilityMessage | null;
   nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
@@ -741,6 +895,17 @@ function evaluateDivision({
     riderContact,
     show: selectedShow,
   });
+  const nrhaProfileDecision = buildNrhaProfileDecision({
+    classCode: divisionNrhaClassCode(division, classRecord),
+    classRecord,
+    classType: divisionNrhaClassType(division, classRecord),
+    gate: nrhaGate,
+    horseAgeOnJan1: horseAgeOnJan1ForShow(horse, selectedShow),
+    locale,
+    profile: nrhaProfile,
+    profileBusy: nrhaProfileBusy,
+    riderAgeOnJan1: riderAgeOnJan1ForShow(riderContact, selectedShow),
+  });
   const message = !entryReadinessCanProceed
     ? { tone: "info" as const, message: uiText(locale, "Complète l'équipe avant de choisir cette classe.", "Complete the team before choosing this class.") }
     : !riderContact
@@ -751,8 +916,11 @@ function evaluateDivision({
         ? programLimitReadiness.message
         : nrhaGate.message && !nrhaGate.canProceed && nrhaGate.message.tone === "error"
           ? nrhaGate.message
+          : nrhaProfileDecision.message && !nrhaProfileDecision.canProceed && nrhaProfileDecision.message.tone === "error"
+            ? nrhaProfileDecision.message
           : null;
-  const nrhaRequiresVerification = Boolean(nrhaGate.applies && nrhaGate.request && !nrhaGate.verified);
+  const nrhaGateAllowsSelection = !nrhaGate.applies || nrhaGate.canProceed || nrhaGate.message?.tone === "info";
+  const nrhaRequiresVerification = Boolean(nrhaGate.applies && nrhaGate.request && nrhaResult?.tone !== "success");
   const canSelect = Boolean(
     horse &&
       riderContact &&
@@ -760,7 +928,8 @@ function evaluateDivision({
       deadlineReadiness.canProceed &&
       programLimitReadiness.canProceed &&
       (!nrhaGate.applies || Boolean(nrhaGate.request)) &&
-      (!nrhaGate.applies || nrhaGate.canProceed),
+      nrhaGateAllowsSelection &&
+      nrhaProfileDecision.canProceed,
   );
 
   return {
@@ -769,8 +938,9 @@ function evaluateDivision({
     division,
     fee,
     message,
-    nrhaMessage: nrhaGate.message,
+    nrhaMessage: nrhaProfileDecision.message ?? (nrhaGate.message?.tone === "error" ? nrhaGate.message : null),
     nrhaKey: nrhaGate.key,
+    nrhaProfilePending: nrhaProfileDecision.pending,
     nrhaRequest: nrhaGate.request ?? null,
     nrhaRequiresVerification,
     nrhaResult,
@@ -806,17 +976,412 @@ function compareDivisionEvaluations(a: DivisionEvaluation, b: DivisionEvaluation
   return (a.division.code ?? "").localeCompare(b.division.code ?? "") || a.division.name.localeCompare(b.division.name);
 }
 
-function uniqueDivisionEvaluations(evaluations: DivisionEvaluation[]) {
-  const seen = new Set<string>();
+function buildNrhaProfileDecision({
+  classCode,
+  classRecord,
+  classType,
+  gate,
+  horseAgeOnJan1,
+  locale,
+  profile,
+  profileBusy,
+  riderAgeOnJan1,
+}: {
+  classCode: number | null;
+  classRecord: ClassRecord | null;
+  classType: string;
+  gate: ReturnType<typeof buildNrhaEligibilityGateForEntry>;
+  horseAgeOnJan1: number | null;
+  locale: Locale;
+  profile: NrhaEligibilityProfileVerification | null;
+  profileBusy: boolean;
+  riderAgeOnJan1: number | null;
+}): NrhaProfileDecision {
+  if (!gate.applies) {
+    return nrhaProfileAllowed();
+  }
 
-  return evaluations.filter((evaluation) => {
-    if (seen.has(evaluation.division.id)) {
-      return false;
-    }
+  if (!gate.request) {
+    return {
+      canProceed: false,
+      message: gate.message ? { tone: gate.message.tone, message: gate.message.message } : { tone: "info", message: uiText(locale, "Infos NRHA requises.", "NRHA details required.") },
+      pending: false,
+    };
+  }
 
-    seen.add(evaluation.division.id);
-    return true;
-  });
+  if (gate.verified) {
+    return gate.canProceed
+      ? nrhaProfileAllowed()
+      : {
+          canProceed: false,
+          message: gate.message ? { tone: gate.message.tone, message: gate.message.message } : { tone: "error", message: uiText(locale, "Validation NRHA refusée.", "NRHA validation refused.") },
+          pending: false,
+        };
+  }
+
+  if (!gate.canProceed && gate.message?.tone === "error") {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: gate.message.message },
+      pending: false,
+    };
+  }
+
+  if (profileBusy && !profile?.profile) {
+    return {
+      canProceed: false,
+      message: { tone: "info", message: uiText(locale, "Profil NRHA en préparation.", "Preparing NRHA profile.") },
+      pending: true,
+    };
+  }
+
+  const profileData = profile?.profile ?? null;
+
+  if (profileData?.globalBlocks?.length) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: profileData.globalBlocks[0].message },
+      pending: false,
+    };
+  }
+
+  const localDecisions = [
+    nrhaYouthAgeDecision({ classCode, classType, locale, riderAgeOnJan1: profileData?.rider.age.ageOnJan1 ?? riderAgeOnJan1 }),
+    nrhaHorseAgeDecision({ classCode, locale, horseAgeOnJan1: profileData?.horse.age.ageOnJan1 ?? horseAgeOnJan1 }),
+    nrhaNonProDecision({ classCode, locale, professionalStatus: profileData?.rider.professionalStatus ?? "unknown" }),
+    nrhaNoviceHorseDecision({ classCode, locale, noviceHorseLevel: profileData?.horse.noviceHorseLevel ?? "unknown" }),
+    nrhaRookieDecision({ classCode, locale, rookieLevel: profileData?.rider.rookieLevel ?? "unknown" }),
+    nrhaGreenDecision({ classCode, locale, greenEntryLevel: profileData?.rider.greenEntryLevel ?? "unknown" }),
+    nrhaOpenCapDecision({ classCode, classRecord, locale, openCapStatus: profileData?.rider.openCapStatus ?? "unknown" }),
+  ];
+
+  return localDecisions.find((decision): decision is NrhaProfileDecision => Boolean(decision)) ?? nrhaProfileAllowed();
+}
+
+function nrhaProfileAllowed(): NrhaProfileDecision {
+  return { canProceed: true, message: null, pending: false };
+}
+
+function nrhaYouthAgeDecision({
+  classCode,
+  classType,
+  locale,
+  riderAgeOnJan1,
+}: {
+  classCode: number | null;
+  classType: string;
+  locale: Locale;
+  riderAgeOnJan1: number | null;
+}): NrhaProfileDecision | null {
+  const rule = (classCode ? nrhaYouthAgeRules.get(classCode) : null) ?? (classType === "category_3_youth" ? { max: 18 } : null);
+
+  if (!rule) {
+    return null;
+  }
+
+  if (riderAgeOnJan1 === null) {
+    return {
+      canProceed: false,
+      message: { tone: "info", message: uiText(locale, "Date de naissance du cavalier requise pour les classes Youth.", "Rider date of birth is required for Youth classes.") },
+      pending: false,
+    };
+  }
+
+  if (rule.min != null && riderAgeOnJan1 < rule.min) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, `Youth: âge au 1er janvier ${riderAgeOnJan1}; minimum ${rule.min}.`, `Youth: age on January 1 is ${riderAgeOnJan1}; minimum ${rule.min}.`) },
+      pending: false,
+    };
+  }
+
+  if (rule.max != null && riderAgeOnJan1 > rule.max) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, `Youth: âge au 1er janvier ${riderAgeOnJan1}; maximum ${rule.max}.`, `Youth: age on January 1 is ${riderAgeOnJan1}; maximum ${rule.max}.`) },
+      pending: false,
+    };
+  }
+
+  return null;
+}
+
+function nrhaHorseAgeDecision({
+  classCode,
+  horseAgeOnJan1,
+  locale,
+}: {
+  classCode: number | null;
+  horseAgeOnJan1: number | null;
+  locale: Locale;
+}): NrhaProfileDecision | null {
+  const rule = classCode ? nrhaHorseAgeRules.get(classCode) : null;
+
+  if (!rule) {
+    return null;
+  }
+
+  if (horseAgeOnJan1 === null) {
+    return {
+      canProceed: false,
+      message: { tone: "info", message: uiText(locale, "Date ou année de naissance du cheval requise pour cette classe.", "Horse birth date or birth year is required for this class.") },
+      pending: false,
+    };
+  }
+
+  if (rule.exact != null && horseAgeOnJan1 !== rule.exact) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, `Âge cheval au 1er janvier: ${horseAgeOnJan1}; requis: ${rule.exact}.`, `Horse age on January 1: ${horseAgeOnJan1}; required: ${rule.exact}.`) },
+      pending: false,
+    };
+  }
+
+  if (rule.min != null && horseAgeOnJan1 < rule.min) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, `Âge cheval au 1er janvier: ${horseAgeOnJan1}; minimum ${rule.min}.`, `Horse age on January 1: ${horseAgeOnJan1}; minimum ${rule.min}.`) },
+      pending: false,
+    };
+  }
+
+  if (rule.max != null && horseAgeOnJan1 > rule.max) {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, `Âge cheval au 1er janvier: ${horseAgeOnJan1}; maximum ${rule.max}.`, `Horse age on January 1: ${horseAgeOnJan1}; maximum ${rule.max}.`) },
+      pending: false,
+    };
+  }
+
+  return null;
+}
+
+function nrhaNonProDecision({
+  classCode,
+  locale,
+  professionalStatus,
+}: {
+  classCode: number | null;
+  locale: Locale;
+  professionalStatus: string;
+}): NrhaProfileDecision | null {
+  if (!classCode || !nrhaNonProClassCodes.has(classCode) || professionalStatus !== "professional") {
+    return null;
+  }
+
+  return {
+    canProceed: false,
+    message: { tone: "error", message: uiText(locale, "Profil NRHA: cavalier détecté professionnel; classes Non Pro indisponibles.", "NRHA profile: rider is detected as professional; Non Pro classes are unavailable.") },
+    pending: false,
+  };
+}
+
+function nrhaNoviceHorseDecision({
+  classCode,
+  locale,
+  noviceHorseLevel,
+}: {
+  classCode: number | null;
+  locale: Locale;
+  noviceHorseLevel: string;
+}): NrhaProfileDecision | null {
+  const requiredLevel = classCode ? nrhaNoviceHorseLevelRequirements.get(classCode) : null;
+
+  if (!requiredLevel || noviceHorseLevel === "unknown") {
+    return null;
+  }
+
+  const actualLevel = noviceHorseLevel === "level_3_or_higher" ? 3 : noviceHorseLevel === "level_2_or_higher" ? 2 : noviceHorseLevel === "level_1_or_higher" ? 1 : 0;
+
+  if (actualLevel >= requiredLevel) {
+    return null;
+  }
+
+  return {
+    canProceed: false,
+    message: { tone: "error", message: uiText(locale, `Profil NRHA: cheval non admissible Novice Horse Level ${requiredLevel}.`, `NRHA profile: horse is not eligible for Novice Horse Level ${requiredLevel}.`) },
+    pending: false,
+  };
+}
+
+function nrhaRookieDecision({
+  classCode,
+  locale,
+  rookieLevel,
+}: {
+  classCode: number | null;
+  locale: Locale;
+  rookieLevel: string;
+}): NrhaProfileDecision | null {
+  const requiredLevel = classCode ? nrhaRookieLevelRequirements.get(classCode) : null;
+
+  if (!requiredLevel || rookieLevel === "unknown") {
+    return null;
+  }
+
+  const actualLevel = rookieLevel === "rookie_level_2_or_higher" ? 2 : rookieLevel === "rookie_level_1_or_higher" ? 1 : 0;
+
+  if (actualLevel >= requiredLevel) {
+    return null;
+  }
+
+  return {
+    canProceed: false,
+    message: { tone: "error", message: uiText(locale, `Profil NRHA: cavalier non admissible Rookie Level ${requiredLevel}.`, `NRHA profile: rider is not eligible for Rookie Level ${requiredLevel}.`) },
+    pending: false,
+  };
+}
+
+function nrhaGreenDecision({
+  classCode,
+  greenEntryLevel,
+  locale,
+}: {
+  classCode: number | null;
+  greenEntryLevel: string;
+  locale: Locale;
+}): NrhaProfileDecision | null {
+  const requirement = classCode ? nrhaGreenLevelRequirements.get(classCode) : null;
+
+  if (!requirement || greenEntryLevel === "unknown") {
+    return null;
+  }
+
+  if (greenEntryLevel === "not_eligible") {
+    return {
+      canProceed: false,
+      message: { tone: "error", message: uiText(locale, "Profil NRHA: équipe non admissible aux classes Green / Ride & Slide.", "NRHA profile: team is not eligible for Green / Ride & Slide classes.") },
+      pending: false,
+    };
+  }
+
+  const actual =
+    greenEntryLevel === "green_reiner_level_2_or_higher"
+      ? { family: "green_reiner" as const, level: 2 }
+      : greenEntryLevel === "green_reiner_level_1_or_higher"
+        ? { family: "green_reiner" as const, level: 1 }
+        : greenEntryLevel === "ride_slide_level_2_or_higher"
+          ? { family: "ride_slide" as const, level: 2 }
+          : greenEntryLevel === "ride_slide_level_1_or_higher"
+            ? { family: "ride_slide" as const, level: 1 }
+            : null;
+
+  if (!actual || actual.family !== requirement.family) {
+    return null;
+  }
+
+  if (actual.level >= requirement.level) {
+    return null;
+  }
+
+  return {
+    canProceed: false,
+    message: { tone: "error", message: uiText(locale, `Profil NRHA: niveau ${requirement.family === "green_reiner" ? "Green Reiner" : "Ride & Slide"} insuffisant pour Level ${requirement.level}.`, `NRHA profile: ${requirement.family === "green_reiner" ? "Green Reiner" : "Ride & Slide"} level is too low for Level ${requirement.level}.`) },
+    pending: false,
+  };
+}
+
+function nrhaOpenCapDecision({
+  classCode,
+  classRecord,
+  locale,
+  openCapStatus,
+}: {
+  classCode: number | null;
+  classRecord: ClassRecord | null;
+  locale: Locale;
+  openCapStatus: string;
+}): NrhaProfileDecision | null {
+  const requiredCap = classCode ? nrhaOpenCapRequirements.get(classCode) : null;
+
+  if (!requiredCap || openCapStatus === "unknown") {
+    return null;
+  }
+
+  const actualCap = openCapStatus === "under_rookie_professional_cap" ? 1 : openCapStatus === "under_limited_open_cap" ? 2 : openCapStatus === "under_intermediate_open_cap" ? 3 : 4;
+
+  if (actualCap <= requiredCap) {
+    return null;
+  }
+
+  return {
+    canProceed: false,
+    message: { tone: "error", message: uiText(locale, `Profil NRHA: seuil de gains Open trop élevé pour ${classRecord?.name ?? "cette classe"}.`, `NRHA profile: Open earnings cap is too high for ${classRecord?.name ?? "this class"}.`) },
+    pending: false,
+  };
+}
+
+function divisionNrhaClassCode(division: Division | null, classRecord: ClassRecord | null) {
+  return integerFromExactReference(division?.code) ?? integerFromExactReference(classRecord?.code) ?? integerFromExactReference(classRecord?.nrha_slate_number);
+}
+
+function divisionNrhaClassType(division: Division | null, classRecord: ClassRecord | null) {
+  const classCode = divisionNrhaClassCode(division, classRecord);
+  return nrhaClassTypeFromRules(division?.eligibility_rules) || nrhaClassTypeFromRules(classRecord?.eligibility_rules) || findNrhaApprovedClass(String(classCode ?? ""))?.nrhaClassType || "";
+}
+
+function integerFromReference(value: string | number | null | undefined) {
+  const digits = String(value ?? "").replace(/\D/g, "");
+  const numberValue = Number(digits);
+
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function integerFromExactReference(value: string | number | null | undefined) {
+  if (value === null || value === undefined || value === "") {
+    return null;
+  }
+
+  const text = String(value).trim();
+
+  if (!/^\d+$/.test(text)) {
+    return null;
+  }
+
+  const numberValue = Number(text);
+  return Number.isInteger(numberValue) && numberValue > 0 ? numberValue : null;
+}
+
+function riderAgeOnJan1ForShow(contact: Contact | null, show: Show | null) {
+  return ageOnJan1FromDate(contact?.date_of_birth ?? null, show?.start_date ?? null);
+}
+
+function horseAgeOnJan1ForShow(horse: Horse | null, show: Show | null) {
+  if (!horse || !show?.start_date) {
+    return null;
+  }
+
+  const showYear = Number(show.start_date.slice(0, 4));
+  const birthYear = horse.birth_year ?? birthYearFromDateValue(horse.date_of_birth);
+
+  if (!Number.isInteger(showYear) || !birthYear) {
+    return null;
+  }
+
+  const age = showYear - birthYear;
+  return age >= 0 ? age : null;
+}
+
+function ageOnJan1FromDate(dateOfBirth: string | null, showDate: string | null) {
+  if (!dateOfBirth || !showDate) {
+    return null;
+  }
+
+  const referenceDate = `${showDate.slice(0, 4)}-01-01`;
+  const [birthYear, birthMonth, birthDay] = dateOfBirth.split("-").map(Number);
+  const [referenceYear, referenceMonth, referenceDay] = referenceDate.split("-").map(Number);
+
+  if (![birthYear, birthMonth, birthDay, referenceYear, referenceMonth, referenceDay].every(Number.isFinite)) {
+    return null;
+  }
+
+  let age = referenceYear - birthYear;
+
+  if (referenceMonth < birthMonth || (referenceMonth === birthMonth && referenceDay < birthDay)) {
+    age -= 1;
+  }
+
+  return age >= 0 ? age : null;
 }
 
 function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: NrhaBulkSummary | null }) {
@@ -834,8 +1399,8 @@ function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: Nrh
     summary.status === "complete"
       ? uiText(
           locale,
-          `${summary.eligible} admissible${summary.eligible === 1 ? "" : "s"}, ${summary.blocked} bloquée${summary.blocked === 1 ? "" : "s"}`,
-          `${summary.eligible} eligible, ${summary.blocked} blocked`,
+          `${summary.eligible} question${summary.eligible === 1 ? "" : "s"} déduite${summary.eligible === 1 ? "" : "s"}, ${summary.blocked} blocage${summary.blocked === 1 ? "" : "s"}`,
+          `${summary.eligible} answered question${summary.eligible === 1 ? "" : "s"}, ${summary.blocked} block${summary.blocked === 1 ? "" : "s"}`,
         )
       : summary.message ?? uiText(locale, "validation automatique en cours", "automatic validation in progress");
 
@@ -843,7 +1408,7 @@ function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: Nrh
     <p className={`entry-nrha-summary ${summary.status}`}>
       <ShieldCheck size={14} />
       <span>
-        {statusLabel}: {summary.requested} {uiText(locale, "requête", "request")}{summary.requested === 1 ? "" : "s"} NRHA · {resultLabel}
+        {statusLabel}: {summary.requested} {uiText(locale, "test ciblé", "targeted test")}{summary.requested === 1 ? "" : "s"} NRHA · {resultLabel}
       </span>
     </p>
   );

@@ -74,6 +74,7 @@ import {
   updateUserProfile,
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
+  verifyNrhaEligibilityProfile,
   verifyNrhaHorse,
   verifyNrhaMember,
   type AppContext,
@@ -388,6 +389,7 @@ export default function App() {
         return document;
       }}
       onVerifyNrhaEligibility={async (input) => verifyNrhaEligibility(input)}
+      onVerifyNrhaEligibilityProfile={async (input) => verifyNrhaEligibilityProfile(input)}
       onVerifyNrhaHorse={async (input) => verifyNrhaHorse(input)}
       onVerifyNrhaMember={async (input) => verifyNrhaMember(input)}
       onDeleteHorse={async (id) => {

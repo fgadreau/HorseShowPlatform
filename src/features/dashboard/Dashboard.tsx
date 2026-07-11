@@ -98,6 +98,7 @@ import {
   updateUserProfile,
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
+  verifyNrhaEligibilityProfile,
   verifyNrhaHorse,
   verifyNrhaMember,
   type AppContext,
@@ -240,6 +241,7 @@ export function Dashboard({
   onUpdatePayoutCalculationStatus,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
+  onVerifyNrhaEligibilityProfile,
   onVerifyNrhaHorse,
   onVerifyNrhaMember,
   onUpdateShow,
@@ -317,6 +319,7 @@ export function Dashboard({
   onUpdatePayoutCalculationStatus: (id: string, status: Parameters<typeof updatePayoutCalculationStatus>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
+  onVerifyNrhaEligibilityProfile: (input: Parameters<typeof verifyNrhaEligibilityProfile>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibilityProfile>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
@@ -918,6 +921,7 @@ export function Dashboard({
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaEligibilityProfile={onVerifyNrhaEligibilityProfile}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
@@ -1134,6 +1138,7 @@ export function Dashboard({
             onUpdateEntry={onUpdateEntry}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaEligibilityProfile={onVerifyNrhaEligibilityProfile}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
