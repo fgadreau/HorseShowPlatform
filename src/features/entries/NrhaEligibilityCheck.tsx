@@ -20,6 +20,7 @@ type NrhaEligibilityGate = {
   eligible: boolean | null;
   key: string;
   message: NrhaEligibilityMessage | null;
+  request?: Parameters<typeof verifyNrhaEligibility>[0] | null;
   verified: boolean;
 };
 
@@ -143,6 +144,81 @@ function NrhaEligibilityCheck({
       <InlineHealthMessage value={gate.message} />
     </div>
   );
+}
+
+function buildNrhaEligibilityGateForEntry({
+  classRecord,
+  contactExternalMemberships,
+  division,
+  externalOrganizations,
+  horse,
+  horseExternalMemberships,
+  locale = "fr",
+  nrhaRiderRankings,
+  resultMessage,
+  riderContact,
+  show,
+  skip = false,
+}: {
+  classRecord: ClassRecord | null;
+  contactExternalMemberships: ContactExternalMembership[];
+  division: Division | null;
+  externalOrganizations: ExternalOrganization[];
+  horse: Horse | null;
+  horseExternalMemberships: HorseExternalMembership[];
+  locale?: Locale;
+  nrhaRiderRankings: NrhaRiderRanking[];
+  resultMessage?: NrhaEligibilityMessage | null;
+  riderContact: Contact | null;
+  show: Show | null;
+  skip?: boolean;
+}): NrhaEligibilityGate {
+  const nrhaOrganization = externalOrganizations.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null;
+  const horseNrhaReference =
+    nrhaOrganization && horse
+      ? horseExternalMemberships.find(
+          (membership) =>
+            membership.horse_id === horse.id &&
+            membership.external_organization_id === nrhaOrganization.id &&
+            membership.reference_type === "competition_license",
+        ) ?? null
+      : null;
+  const riderNrhaMembership =
+    nrhaOrganization && riderContact
+      ? contactExternalMemberships.find(
+          (membership) =>
+            membership.contact_id === riderContact.id &&
+            membership.external_organization_id === nrhaOrganization.id,
+        ) ?? null
+      : null;
+  const context = buildNrhaEligibilityContext({
+    classRecord,
+    division,
+    horse,
+    horseReferenceNumber: horseNrhaReference?.reference_number ?? "",
+    locale,
+    memberExpiresOn: riderNrhaMembership?.expires_on ?? null,
+    memberNumber: riderNrhaMembership?.membership_number ?? "",
+    memberStatus: riderNrhaMembership?.status ?? null,
+    riderContact,
+    show,
+  });
+  const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
+  const category26RankingGate = buildNrhaCategory26RankingGate({
+    classRecord,
+    division,
+    key: context.key,
+    locale,
+    nrhaRiderRankings,
+    riderContact,
+    show,
+  });
+  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip, category26RankingGate);
+
+  return {
+    ...gate,
+    request: context.request,
+  };
 }
 
 function buildNrhaEligibilityGate(
@@ -608,4 +684,5 @@ function formatNrhaEligibilityMessage(
 }
 
 export { NrhaEligibilityCheck, sameNrhaEligibilityGate, withNrhaEligibilityReadiness };
-export type { NrhaEligibilityGate };
+export { buildNrhaEligibilityGateForEntry, formatNrhaEligibilityMessage };
+export type { NrhaEligibilityGate, NrhaEligibilityMessage };

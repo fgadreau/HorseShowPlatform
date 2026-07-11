@@ -26,6 +26,7 @@ function EntriesView({
   nrhaRiderRankings,
   organization,
   profileId,
+  showDays,
   shows,
   onCreateContact,
   onCreateEntry,
@@ -52,6 +53,7 @@ function EntriesView({
   nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
   profileId: string;
+  showDays: ShowDay[];
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
@@ -121,6 +123,7 @@ function EntriesView({
             nrhaRiderRankings={nrhaRiderRankings}
             organization={organization}
             profileId={profileId}
+            showDays={showDays}
             shows={shows}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}

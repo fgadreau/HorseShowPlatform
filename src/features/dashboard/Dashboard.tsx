@@ -908,6 +908,7 @@ export function Dashboard({
             nrhaRiderRankings={nrhaRiderRankings}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
+            showDays={selectedShowShowDays}
             shows={activeShowList}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
@@ -1123,6 +1124,7 @@ export function Dashboard({
             nrhaRiderRankings={nrhaRiderRankings}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
+            showDays={selectedShowShowDays}
             shows={activeShowList}
             onCreateContact={onCreateContact}
             onCreateEntry={onCreateEntry}
