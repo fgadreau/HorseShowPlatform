@@ -1,5 +1,4 @@
 import { useMemo, useState } from "react";
-import type { FormEvent } from "react";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, ModalDialog, SearchSelect } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel } from "../../lib/display";
@@ -266,9 +265,7 @@ function EntryForm({
     }
   }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
+  async function handleSubmit() {
     if (!canCreate || !organization || !profileId || !selectedHorse || !selectedOwnerContact || !selectedRiderContact || !selectedShow || !selectedPayerId) {
       return;
     }
@@ -317,7 +314,7 @@ function EntryForm({
           <p>{entryHeaderMessage}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <div className="stack">
         <section className="entry-flow-section">
           <div className="entry-flow-section-header">
             <span>1</span>
@@ -614,14 +611,14 @@ function EntryForm({
               }}
             />
           ) : null}
-          <button className="primary-button" disabled={busy || !canCreate} type="submit">
+          <button className="primary-button" disabled={busy || !canCreate} type="button" onClick={handleSubmit}>
             <Plus size={18} />
             {busy
               ? uiText(locale, "Création...", "Creating...")
               : uiText(locale, selectedDivisionIds.length > 1 ? "Créer les brouillons et la facture" : "Créer le brouillon et la facture", selectedDivisionIds.length > 1 ? "Create draft entries and invoice" : "Create draft entry and invoice")}
           </button>
         </section>
-      </form>
+      </div>
     </section>
   );
 }
