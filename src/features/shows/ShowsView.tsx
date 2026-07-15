@@ -5,7 +5,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { formatDate, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createShow, createShowAnnouncement, deleteShowAnnouncement, updateShow } from "../../services/supabaseServices";
-import type { ClassRecord, Division, Entry, Invoice, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreClassSetup, StallOption } from "../../types/domain";
+import type { Block, ClassRecord, Entry, Invoice, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { uiText } from "../dashboard/shared";
 import { showPaymentSummary } from "../classes/classUtils";
@@ -14,8 +14,8 @@ import { ShowEditForm } from "./ShowEditForm";
 
 function ShowsView({
   locale,
+  blocks,
   classes,
-  divisions,
   entries,
   invoices,
   organization,
@@ -31,14 +31,14 @@ function ShowsView({
   onViewChange,
 }: {
   locale: Locale;
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
   entries: Entry[];
   invoices: Invoice[];
   organization: Organization | null;
   showAnnouncements: ShowAnnouncement[];
   showDays: ShowDay[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   shows: Show[];
   stallOptions: StallOption[];
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
@@ -229,8 +229,8 @@ function ShowsView({
       {assistantOpen ? (
         <ShowAssistant
           locale={locale}
+          blocks={blocks}
           classes={classes}
-          divisions={divisions}
           entries={entries}
           initialShow={assistantShow}
           invoices={invoices}

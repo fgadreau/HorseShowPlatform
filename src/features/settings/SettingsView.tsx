@@ -6,9 +6,8 @@ import { canadianProvinceOptions, countryOptions, currencyOptions, taxPresetById
 import { errorMessage, formatCurrency, formatDate, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { AppContext } from "../../services/supabaseServices";
-import { createOrganizationMembershipType, createOrganizationProduct, setOrganizationExternalMembershipRequirement, updateOrganizationHealthSettings, updateOrganizationMembershipType, updateOrganizationProduct } from "../../services/supabaseServices";
-import { organizationCogginsValidityMonths, organizationRequiresHealthVerification } from "../../lib/health";
-import type { ExternalOrganization, Organization, OrganizationBackNumber, OrganizationExternalMembershipRequirement, OrganizationMembershipType, OrganizationProduct, ProductCategory, SanctioningBody } from "../../types/domain";
+import { createOrganizationMembershipType, createOrganizationProduct, setOrganizationExternalCredentialRequirement, setOrganizationHealthPolicy, updateOrganizationHealthSettings, updateOrganizationMembershipType, updateOrganizationProduct } from "../../services/supabaseServices";
+import type { CogginsValidityRule, ExternalCredentialIssuer, HealthIdentityValidationRequirement, HealthPolicyEnforcementMode, Organization, OrganizationBackNumber, OrganizationExternalCredentialRequirement, OrganizationHealthPolicy, OrganizationMembershipType, OrganizationProduct, ProductCategory, SanctioningBody } from "../../types/domain";
 import { uiText, organizationBackNumberMode } from "../dashboard/shared";
 import { backNumberPolicyLabel } from "../classes/classUtils";
 
@@ -60,6 +59,21 @@ type ProductFormState = {
   isActive: boolean;
 };
 
+type HealthPolicyFormState = {
+  effectiveFrom: string;
+  cogginsRequired: boolean;
+  cogginsValidityRule: CogginsValidityRule;
+  cogginsValidityMonths: string;
+  influenzaRequired: boolean;
+  rhinoRequired: boolean;
+  comboVaccineAccepted: boolean;
+  vaccineValidityMonths: string;
+  identityValidationRequirement: HealthIdentityValidationRequirement;
+  associationReviewRequired: boolean;
+  enforcementMode: HealthPolicyEnforcementMode;
+  notes: string;
+};
+
 const productCategoryOptions: ProductCategory[] = ["stall_extra", "feed", "merch", "ticket", "meal", "admin_fee", "manual"];
 
 function currentSeasonYear() {
@@ -101,6 +115,28 @@ function productFormState(product?: OrganizationProduct | null): ProductFormStat
     taxApplicable: product?.tax_applicable ?? true,
     isActive: product?.is_active ?? true,
   };
+}
+
+function healthPolicyFormState(policy?: OrganizationHealthPolicy | null): HealthPolicyFormState {
+  return {
+    effectiveFrom: new Date().toISOString().slice(0, 10),
+    cogginsRequired: policy?.coggins_required ?? true,
+    cogginsValidityRule: policy?.coggins_validity_rule ?? "rolling_months",
+    cogginsValidityMonths: String(policy?.coggins_validity_months ?? 12),
+    influenzaRequired: policy?.influenza_required ?? true,
+    rhinoRequired: policy?.rhino_required ?? true,
+    comboVaccineAccepted: policy?.combo_vaccine_accepted ?? true,
+    vaccineValidityMonths: String(policy?.vaccine_validity_months ?? 6),
+    identityValidationRequirement: policy?.identity_validation_requirement ?? "identified",
+    associationReviewRequired: policy?.association_review_required ?? false,
+    enforcementMode: policy?.enforcement_mode ?? "blocking",
+    notes: policy?.notes ?? "",
+  };
+}
+
+function boundedHealthMonths(value: string, fallback: number) {
+  const parsed = Math.round(Number(value));
+  return Number.isFinite(parsed) ? Math.min(36, Math.max(1, parsed)) : fallback;
 }
 
 function organizationBillingFormState(organization: Organization | null): OrganizationBillingFormState {
@@ -198,13 +234,16 @@ function SettingsSection({
 function SettingsView({
   locale = "fr",
   context,
-  externalOrganizations,
+  externalCredentialIssuers,
+  healthPolicy,
+  healthPolicies,
   membershipRequirements,
   membershipTypes,
   organization,
   onCreateOrganizationMembershipType,
   onCreateOrganizationProduct,
   onSetExternalMembershipRequirement,
+  onSetOrganizationHealthPolicy,
   onUpdateOrganizationHealthSettings,
   onUpdateOrganizationMembershipType,
   onUpdateOrganizationProduct,
@@ -212,13 +251,16 @@ function SettingsView({
 }: {
   locale?: Locale;
   context: AppContext | null;
-  externalOrganizations: ExternalOrganization[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  healthPolicy: OrganizationHealthPolicy | null;
+  healthPolicies: OrganizationHealthPolicy[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   membershipTypes: OrganizationMembershipType[];
   organization: Organization | null;
   onCreateOrganizationMembershipType: (input: Parameters<typeof createOrganizationMembershipType>[0]) => Promise<void>;
   onCreateOrganizationProduct: (input: Parameters<typeof createOrganizationProduct>[0]) => Promise<void>;
-  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
+  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalCredentialRequirement>[0]) => Promise<void>;
+  onSetOrganizationHealthPolicy: (input: Parameters<typeof setOrganizationHealthPolicy>[0]) => Promise<void>;
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
   onUpdateOrganizationMembershipType: (id: string, input: Parameters<typeof updateOrganizationMembershipType>[1]) => Promise<void>;
   onUpdateOrganizationProduct: (id: string, input: Parameters<typeof updateOrganizationProduct>[1]) => Promise<void>;
@@ -233,15 +275,14 @@ function SettingsView({
   const [productForm, setProductForm] = useState<ProductFormState>(() => productFormState());
   const [healthBusy, setHealthBusy] = useState(false);
   const [backNumberPolicy, setBackNumberPolicy] = useState<OrganizationBackNumber["assignment_mode"]>(organizationBackNumberMode(organization));
-  const [healthRequired, setHealthRequired] = useState(organizationRequiresHealthVerification(organization));
-  const [cogginsValidityMonths, setCogginsValidityMonths] = useState<6 | 12>(organizationCogginsValidityMonths(organization));
+  const [healthPolicyForm, setHealthPolicyForm] = useState<HealthPolicyFormState>(() => healthPolicyFormState(healthPolicy));
   const isCanadaBillingAddress = billingForm.country === "CA";
   const availableTaxPresets = taxPresetsForLocation(billingForm.country, billingForm.state);
   const selectedTaxPresetId = availableTaxPresets.some((preset) => preset.id === billingForm.taxPresetId) ? billingForm.taxPresetId : "manual";
   const riderRequirementIds = new Set(
     membershipRequirements
       .filter((requirement) => requirement.contact_type === "rider" && requirement.is_required)
-      .map((requirement) => requirement.external_organization_id),
+      .map((requirement) => requirement.external_credential_issuer_id),
   );
   const sortedMembershipTypes = [...membershipTypes].sort((left, right) => {
     if (left.season_year !== right.season_year) {
@@ -265,9 +306,8 @@ function SettingsView({
     setMembershipTypeForm(membershipTypeFormState());
     setProductForm(productFormState());
     setBackNumberPolicy(organizationBackNumberMode(organization));
-    setHealthRequired(organizationRequiresHealthVerification(organization));
-    setCogginsValidityMonths(organizationCogginsValidityMonths(organization));
-  }, [organization]);
+    setHealthPolicyForm(healthPolicyFormState(healthPolicy));
+  }, [healthPolicy, organization]);
 
   function handleBillingFieldChange(field: keyof OrganizationBillingFormState, value: string) {
     setBillingForm((current) => {
@@ -415,18 +455,20 @@ function SettingsView({
     }
   }
 
-  async function handleRequirementToggle(externalOrganizationId: string, isRequired: boolean) {
+  async function handleRequirementToggle(externalCredentialIssuer: ExternalCredentialIssuer, isRequired: boolean) {
     if (!organization) {
       return;
     }
 
-    setBusyRequirementId(externalOrganizationId);
+    setBusyRequirementId(externalCredentialIssuer.id);
 
     try {
       await onSetExternalMembershipRequirement({
         organization_id: organization.id,
-        external_organization_id: externalOrganizationId,
+        external_credential_issuer_id: externalCredentialIssuer.id,
         contact_type: "rider",
+        requirement_group_code: externalCredentialIssuer.issuer_type === "provincial_territorial_sport_organization" ? "opts" : null,
+        match_rule: externalCredentialIssuer.issuer_type === "provincial_territorial_sport_organization" ? "at_least_one" : "all",
         is_required: isRequired,
       });
     } finally {
@@ -437,7 +479,7 @@ function SettingsView({
   async function handleHealthSettingsSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!organization) {
+    if (!organization || !healthPolicyForm.effectiveFrom) {
       return;
     }
 
@@ -446,8 +488,23 @@ function SettingsView({
     try {
       await onUpdateOrganizationHealthSettings(organization.id, {
         back_number_policy: backNumberPolicy,
-        health_verification_required: healthRequired,
-        coggins_validity_months: cogginsValidityMonths,
+      });
+      await onSetOrganizationHealthPolicy({
+        organization_id: organization.id,
+        effective_from: healthPolicyForm.effectiveFrom,
+        policy: {
+          coggins_required: healthPolicyForm.cogginsRequired,
+          coggins_validity_rule: healthPolicyForm.cogginsValidityRule,
+          coggins_validity_months: boundedHealthMonths(healthPolicyForm.cogginsValidityMonths, 12),
+          influenza_required: healthPolicyForm.influenzaRequired,
+          rhino_required: healthPolicyForm.rhinoRequired,
+          combo_vaccine_accepted: healthPolicyForm.comboVaccineAccepted,
+          vaccine_validity_months: boundedHealthMonths(healthPolicyForm.vaccineValidityMonths, 6),
+          identity_validation_requirement: healthPolicyForm.identityValidationRequirement,
+          association_review_required: healthPolicyForm.associationReviewRequired,
+          enforcement_mode: healthPolicyForm.enforcementMode,
+          notes: healthPolicyForm.notes,
+        },
       });
     } finally {
       setHealthBusy(false);
@@ -853,25 +910,29 @@ function SettingsView({
         description={uiText(locale, "Exigences appliquées aux fiches de cavalier de cette association.", "Requirements applied to rider records for this association.")}
       >
         <div className="requirement-list">
-          {externalOrganizations.map((externalOrganization) => {
-            const checked = riderRequirementIds.has(externalOrganization.id);
+          {externalCredentialIssuers.map((externalCredentialIssuer) => {
+            const checked = riderRequirementIds.has(externalCredentialIssuer.id);
             return (
-              <label className="requirement-row" key={externalOrganization.id}>
+              <label className="requirement-row" key={externalCredentialIssuer.id}>
                 <input
                   checked={checked}
-                  disabled={!organization || busyRequirementId === externalOrganization.id}
+                  disabled={!organization || busyRequirementId === externalCredentialIssuer.id}
                   type="checkbox"
-                  onChange={(event) => void handleRequirementToggle(externalOrganization.id, event.target.checked)}
+                  onChange={(event) => void handleRequirementToggle(externalCredentialIssuer, event.target.checked)}
                 />
                 <span>
-                  <strong>{externalOrganization.code}</strong>
-                  {externalOrganization.name}
+                  <strong>{externalCredentialIssuer.code}</strong>
+                  {externalCredentialIssuer.name}
                 </span>
-                <small>{externalOrganization.verification_enabled ? uiText(locale, "Validation externe prête", "External validation ready") : uiText(locale, "Validation manuelle", "Manual validation")}</small>
+                <small>
+                  {externalCredentialIssuer.issuer_type === "provincial_territorial_sport_organization"
+                    ? uiText(locale, `OPTS${externalCredentialIssuer.subdivision_code ? ` · ${externalCredentialIssuer.subdivision_code}` : ""}`, `PTSO${externalCredentialIssuer.subdivision_code ? ` · ${externalCredentialIssuer.subdivision_code}` : ""}`)
+                    : uiText(locale, "Validation manuelle ou par source liée", "Manual or linked-source validation")}
+                </small>
               </label>
             );
           })}
-          {!externalOrganizations.length ? <EmptyState label={uiText(locale, "Aucune organisation externe configurée.", "No external organization configured.")} /> : null}
+          {!externalCredentialIssuers.length ? <EmptyState label={uiText(locale, "Aucun émetteur externe configuré.", "No external credential issuer configured.")} /> : null}
         </div>
       </SettingsSection>
 
@@ -890,24 +951,170 @@ function SettingsView({
             </select>
             <span className="input-help">{uiText(locale, "Les utilisateurs ne choisissent pas ce mode: l'app applique automatiquement la politique de l'association active.", "Users do not choose this mode: the app automatically applies the active association policy.")}</span>
           </label>
-          <label className="requirement-row">
-            <input checked={healthRequired} disabled={!organization || healthBusy} type="checkbox" onChange={(event) => setHealthRequired(event.target.checked)} />
-            <span>
-              <strong>{uiText(locale, "Exiger les documents santé valides", "Require valid health documents")}</strong>
-              {uiText(locale, "Bloque les inscriptions et les stalls rattachés à un cheval si le Coggins ou le vaccin influenza/rhino ne couvre pas la date du concours.", "Blocks entries and stalls linked to a horse if the Coggins or influenza/rhino vaccine does not cover the show date.")}
-            </span>
-            <small>{healthRequired ? uiText(locale, "Validation obligatoire", "Validation required") : uiText(locale, "Validation non exigée", "Validation not required")}</small>
-          </label>
+          <div className="inline-form-header">
+            <strong>{uiText(locale, "Politique de santé de l’association", "Association health policy")}</strong>
+            <span>{uiText(locale, "Cette politique s’applique à l’association complète, indépendamment de la discipline ou du répertoire du cheval.", "This policy applies to the entire association, independently of the horse's discipline or directory.")}</span>
+          </div>
           <label>
-            {uiText(locale, "Durée de validité des documents santé", "Health document validity period")}
-            <select disabled={!organization || healthBusy || !healthRequired} value={cogginsValidityMonths} onChange={(event) => setCogginsValidityMonths(Number(event.target.value) === 6 ? 6 : 12)}>
-              <option value={6}>6 mois</option>
-              <option value={12}>12 mois</option>
+            {uiText(locale, "Date d’effet", "Effective date")}
+            <input
+              disabled={!organization || healthBusy}
+              type="date"
+              value={healthPolicyForm.effectiveFrom}
+              onChange={(event) => setHealthPolicyForm((current) => ({ ...current, effectiveFrom: event.target.value }))}
+            />
+            <span className="input-help">{uiText(locale, "Une nouvelle date conserve l’ancienne politique dans l’historique.", "A new date preserves the prior policy in history.")}</span>
+          </label>
+          <div className="form-grid">
+            <label className="requirement-row">
+              <input
+                checked={healthPolicyForm.cogginsRequired}
+                disabled={!organization || healthBusy}
+                type="checkbox"
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, cogginsRequired: event.target.checked }))}
+              />
+              <span><strong>{uiText(locale, "Coggins / EIA requis", "Coggins / EIA required")}</strong></span>
+            </label>
+            <label>
+              {uiText(locale, "Règle de validité du Coggins", "Coggins validity rule")}
+              <select
+                disabled={!organization || healthBusy || !healthPolicyForm.cogginsRequired}
+                value={healthPolicyForm.cogginsValidityRule}
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, cogginsValidityRule: event.target.value as CogginsValidityRule }))}
+              >
+                <option value="rolling_months">{uiText(locale, "Durée en mois", "Rolling number of months")}</option>
+                <option value="calendar_year">{uiText(locale, "Test de l’année du concours", "Test from the show calendar year")}</option>
+              </select>
+            </label>
+            {healthPolicyForm.cogginsValidityRule === "rolling_months" ? (
+              <label>
+                {uiText(locale, "Validité du Coggins (mois)", "Coggins validity (months)")}
+                <input
+                  disabled={!organization || healthBusy || !healthPolicyForm.cogginsRequired}
+                  min={1}
+                  max={36}
+                  type="number"
+                  value={healthPolicyForm.cogginsValidityMonths}
+                  onChange={(event) => setHealthPolicyForm((current) => ({ ...current, cogginsValidityMonths: event.target.value }))}
+                />
+              </label>
+            ) : (
+              <span className="input-help">
+                {uiText(locale, "Le test doit avoir été effectué entre le 1er janvier et la date du concours.", "The test must have been performed between January 1 and the show date.")}
+              </span>
+            )}
+            <label className="requirement-row">
+              <input
+                checked={healthPolicyForm.influenzaRequired}
+                disabled={!organization || healthBusy}
+                type="checkbox"
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, influenzaRequired: event.target.checked }))}
+              />
+              <span><strong>{uiText(locale, "Vaccin influenza requis", "Influenza vaccine required")}</strong></span>
+            </label>
+            <label className="requirement-row">
+              <input
+                checked={healthPolicyForm.rhinoRequired}
+                disabled={!organization || healthBusy}
+                type="checkbox"
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, rhinoRequired: event.target.checked }))}
+              />
+              <span><strong>{uiText(locale, "Vaccin rhino requis", "Rhino vaccine required")}</strong></span>
+            </label>
+            <label className="requirement-row">
+              <input
+                checked={healthPolicyForm.comboVaccineAccepted}
+                disabled={!organization || healthBusy || (!healthPolicyForm.influenzaRequired && !healthPolicyForm.rhinoRequired)}
+                type="checkbox"
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, comboVaccineAccepted: event.target.checked }))}
+              />
+              <span><strong>{uiText(locale, "Certificat combiné accepté", "Combined certificate accepted")}</strong></span>
+            </label>
+            <label>
+              {uiText(locale, "Validité des vaccins (mois)", "Vaccine validity (months)")}
+              <input
+                disabled={!organization || healthBusy || (!healthPolicyForm.influenzaRequired && !healthPolicyForm.rhinoRequired)}
+                min={1}
+                max={36}
+                type="number"
+                value={healthPolicyForm.vaccineValidityMonths}
+                onChange={(event) => setHealthPolicyForm((current) => ({ ...current, vaccineValidityMonths: event.target.value }))}
+              />
+            </label>
+          </div>
+          <label>
+            {uiText(locale, "Identification minimale du document", "Minimum document identification")}
+            <select
+              disabled={!organization || healthBusy}
+              value={healthPolicyForm.identityValidationRequirement}
+              onChange={(event) => setHealthPolicyForm((current) => ({ ...current, identityValidationRequirement: event.target.value as HealthIdentityValidationRequirement }))}
+            >
+              <option value="none">{uiText(locale, "Aucune concordance exigée", "No identity match required")}</option>
+              <option value="identified">{uiText(locale, "Cheval identifié — concordance possible", "Horse identified — possible match")}</option>
+              <option value="verified">{uiText(locale, "Cheval vérifié — concordance confirmée", "Horse verified — confirmed match")}</option>
             </select>
           </label>
-          <button className="primary-button" disabled={!organization || healthBusy} type="submit">
+          <label className="requirement-row">
+            <input
+              checked={healthPolicyForm.associationReviewRequired}
+              disabled={!organization || healthBusy}
+              type="checkbox"
+              onChange={(event) => setHealthPolicyForm((current) => ({ ...current, associationReviewRequired: event.target.checked }))}
+            />
+            <span>
+              <strong>{uiText(locale, "Révision propre à l’association requise", "Association-specific review required")}</strong>
+              {uiText(locale, "L’approbation de cette association ne modifiera pas le document global ni la décision d’une autre association.", "This association's approval will not alter the global document or another association's decision.")}
+            </span>
+          </label>
+          <label>
+            {uiText(locale, "Comportement si une exigence n’est pas satisfaite", "Behavior when a requirement is not satisfied")}
+            <select
+              disabled={!organization || healthBusy}
+              value={healthPolicyForm.enforcementMode}
+              onChange={(event) => setHealthPolicyForm((current) => ({ ...current, enforcementMode: event.target.value as HealthPolicyEnforcementMode }))}
+            >
+              <option value="warning">{uiText(locale, "Avertissement — permettre de continuer", "Warning — allow continuing")}</option>
+              <option value="blocking">{uiText(locale, "Blocage — empêcher de continuer", "Blocking — prevent continuing")}</option>
+            </select>
+          </label>
+          <label>
+            {uiText(locale, "Notes affichées avec la politique", "Policy notes")}
+            <textarea
+              disabled={!organization || healthBusy}
+              value={healthPolicyForm.notes}
+              onChange={(event) => setHealthPolicyForm((current) => ({ ...current, notes: event.target.value }))}
+            />
+          </label>
+          <button className="primary-button" disabled={!organization || healthBusy || !healthPolicyForm.effectiveFrom} type="submit">
             {healthBusy ? uiText(locale, "Enregistrement...", "Saving...") : uiText(locale, "Enregistrer les règles", "Save rules")}
           </button>
+          {healthPolicies.length ? (
+            <details className="health-document-summary">
+              <summary>{uiText(locale, "Historique des politiques de santé", "Health policy history")} ({healthPolicies.length})</summary>
+              <div className="stack compact-stack">
+                {healthPolicies.map((policy) => (
+                  <div key={policy.id}>
+                    <strong>
+                      {formatDate(policy.effective_from)}
+                      {policy.effective_until ? ` — ${formatDate(policy.effective_until)}` : ` — ${uiText(locale, "en cours", "current")}`}
+                    </strong>
+                    <span className="muted-line">
+                      {[
+                        policy.coggins_required
+                          ? policy.coggins_validity_rule === "calendar_year"
+                            ? uiText(locale, "Coggins année du concours", "Coggins show year")
+                            : `Coggins ${policy.coggins_validity_months}m`
+                          : null,
+                        policy.influenza_required ? uiText(locale, "Influenza", "Influenza") : null,
+                        policy.rhino_required ? uiText(locale, "Rhino", "Rhino") : null,
+                        policy.enforcement_mode === "blocking" ? uiText(locale, "bloquant", "blocking") : uiText(locale, "avertissement", "warning"),
+                      ].filter(Boolean).join(" · ")}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </details>
+          ) : null}
         </form>
       </SettingsSection>
     </div>

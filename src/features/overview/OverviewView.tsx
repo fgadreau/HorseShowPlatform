@@ -6,7 +6,7 @@ import { contactLabel, errorMessage, formatCurrency, formatDate, showLabel } fro
 import type { Locale } from "../../lib/i18n";
 import type { AppContext } from "../../services/supabaseServices";
 import { createOrganization, slugify } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, Entry, Horse, Invoice, Organization, Show, StallBooking, StallOption } from "../../types/domain";
+import type { Block, Contact, Entry, Horse, Invoice, Organization, Show, StallBooking, StallOption } from "../../types/domain";
 import { uiText, showStatusLabel } from "../dashboard/shared";
 
 function OverviewView({
@@ -16,7 +16,7 @@ function OverviewView({
   shows,
   contacts,
   horses,
-  classes,
+  blocks,
   entries,
   stallOptions,
   stallBookings,
@@ -30,7 +30,7 @@ function OverviewView({
   shows: Show[];
   contacts: Contact[];
   horses: Horse[];
-  classes: ClassRecord[];
+  blocks: Block[];
   entries: Entry[];
   stallOptions: AppContext["stallOptions"];
   stallBookings: AppContext["stallBookings"];
@@ -50,7 +50,7 @@ function OverviewView({
   const activeShowId = upcomingShow?.id ?? "";
   const currency = organization?.currency ?? "CAD";
   const showEntries = activeShowId ? entries.filter((entry) => entry.show_id === activeShowId) : entries;
-  const showClasses = activeShowId ? classes.filter((classRecord) => classRecord.show_id === activeShowId) : classes;
+  const showClasses = activeShowId ? blocks.filter((block) => block.show_id === activeShowId) : blocks;
   const showStallOptions = activeShowId ? stallOptions.filter((option) => option.show_id === activeShowId) : stallOptions;
   const showStallBookings = activeShowId ? stallBookings.filter((booking) => booking.show_id === activeShowId) : stallBookings;
   const showInvoices = activeShowId ? invoices.filter((invoice) => invoice.show_id === activeShowId) : invoices;

@@ -2,18 +2,18 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { FormActions, SearchSelect } from "../../components/ui";
-import { contactLabel, divisionLabel, findById, horseLabel, numericValue } from "../../lib/display";
+import { contactLabel, classLabel, findById, horseLabel, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { ClassRecord, Contact, Division, Entry, Horse, Organization, ScheduleStartMode, Show, ShowDay, ShowScorePaidWarmup, ShowScorePaidWarmupInput, ShowScorePaidWarmupUpdateInput } from "../../types/domain";
+import type { Block, Contact, ClassRecord, Entry, Horse, Organization, ScheduleStartMode, Show, ShowDay, ShowScorePaidWarmup, ShowScorePaidWarmupInput, ShowScorePaidWarmupUpdateInput } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showDayLabel } from "./classUtils";
 
 type PaidWarmupFormProps = {
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
   defaultShowDayId?: string;
   defaultShowId?: string;
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
   horses: Horse[];
   locale: Locale;
@@ -29,11 +29,11 @@ type PaidWarmupFormProps = {
 };
 
 function PaidWarmupForm({
-  classes,
+  blocks,
   contacts,
   defaultShowDayId,
   defaultShowId,
-  divisions,
+  classes,
   entries,
   horses,
   locale,
@@ -147,7 +147,7 @@ function PaidWarmupForm({
         active_entry_id: warmup?.active_entry_id ?? null,
         active_started_at: warmup?.active_started_at ?? null,
         entries: paidWarmupEntries,
-        sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, classes, showScorePaidWarmups),
+        sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, blocks, showScorePaidWarmups),
         legacy_payload: {
           source: "hsp_paid_warmup",
         },
@@ -243,7 +243,7 @@ function PaidWarmupForm({
                   <input checked={selected} type="checkbox" onChange={() => toggleEntry(entry.id)} />
                   <span>
                     <strong>{entryDisplayName(entry, contacts, horses)}</strong>
-                    <span className="muted-line">{entryDetail(entry, contacts, horses, divisions, classes)}</span>
+                    <span className="muted-line">{entryDetail(entry, contacts, horses, classes, blocks)}</span>
                   </span>
                 </label>
               );
@@ -263,7 +263,7 @@ function PaidWarmupForm({
                 <strong>#{index + 1}</strong>
                 <span>
                   {entryDisplayName(entry, contacts, horses)}
-                  <span className="muted-line">{entryDetail(entry, contacts, horses, divisions, classes)}</span>
+                  <span className="muted-line">{entryDetail(entry, contacts, horses, classes, blocks)}</span>
                 </span>
                 <div className="row-actions">
                   <button className="icon-button" disabled={index === 0} title={uiText(locale, "Monter", "Move up")} type="button" onClick={() => moveEntry(entry.id, -1)}>
@@ -301,11 +301,11 @@ function entryDisplayName(entry: Entry, contacts: Contact[], horses: Horse[]) {
   return [backNumber, rider, horse].filter(Boolean).join(" - ");
 }
 
-function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], divisions: Division[], classes: ClassRecord[]) {
-  const division = findById(divisions, entry.division_id);
+function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], classes: ClassRecord[], blocks: Block[]) {
+  const classRecord = findById(classes, entry.class_id);
   const owner = contactLabel(findById(contacts, entry.owner_contact_id));
   return [
-    divisionLabel(division, classes),
+    classLabel(classRecord, blocks),
     owner ? `Owner: ${owner}` : null,
     entry.status,
   ]
@@ -313,8 +313,8 @@ function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], divisio
     .join(" - ");
 }
 
-function nextWarmupSortOrder(showDayId: string, classes: ClassRecord[], warmups: ShowScorePaidWarmup[]) {
-  const classOrders = classes.filter((classRecord) => classRecord.show_day_id === showDayId).map((classRecord) => classRecord.sort_order);
+function nextWarmupSortOrder(showDayId: string, blocks: Block[], warmups: ShowScorePaidWarmup[]) {
+  const classOrders = blocks.filter((block) => block.show_day_id === showDayId).map((block) => block.sort_order);
   const warmupOrders = warmups.filter((warmup) => warmup.show_day_id === showDayId).map((warmup) => warmup.sort_order);
   return Math.max(0, ...classOrders, ...warmupOrders) + 10;
 }

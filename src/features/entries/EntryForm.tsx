@@ -5,17 +5,18 @@ import { contactLabel, findById, formatCurrency, formatDate, horseLabel } from "
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
 import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
-import { classEntriesCloseDate, classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, showDayLabel } from "../classes/classUtils";
-import { uiText, getHorseHealthValidity, horseHealthValidityMessage, horseHealthValidityTone, entryNumberValue, InlineHealthMessage, ReadinessChecklist, birthYearFromDateValue } from "../dashboard/shared";
+import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
+import { classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, showDayLabel } from "../classes/classUtils";
+import { uiText, entryNumberValue, InlineHealthMessage, ReadinessChecklist, birthYearFromDateValue } from "../dashboard/shared";
+import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "../horses/HorseForm";
-import { buildNrhaEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
-import { entryDivisionLabel } from "./entryDisplay";
+import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
+import { entryClassLabel } from "./entryDisplay";
 
-type DivisionEvaluation = {
+type ClassEvaluation = {
   canSelect: boolean;
-  classRecord: ClassRecord | null;
-  division: Division;
+  block: Block | null;
+  classRecord: ClassRecord;
   fee: number | null;
   message: InlineHealthMessage | null;
   nrhaMessage: InlineHealthMessage | null;
@@ -24,11 +25,12 @@ type DivisionEvaluation = {
   nrhaResult: NrhaEligibilityMessage | null;
   nrhaRequiresVerification: boolean;
   nrhaRequest: Parameters<typeof verifyNrhaEligibility>[0] | null;
+  show: Show | null;
 };
 
 type ShowbillBlock = {
-  classRecord: ClassRecord;
-  evaluations: DivisionEvaluation[];
+  block: Block;
+  evaluations: ClassEvaluation[];
 };
 
 type NrhaBulkSummary = {
@@ -41,14 +43,14 @@ type NrhaBulkSummary = {
 
 function EntryForm({
   locale = "fr",
-  classes,
+  blocks,
   contacts,
-  contactExternalMemberships,
+  contactExternalIdentifiers,
   contactRoles,
-  divisions,
+  classes,
   entries,
-  externalOrganizations,
-  horseExternalMemberships,
+  externalCredentialIssuers,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horses,
   membershipRequirements,
@@ -67,17 +69,17 @@ function EntryForm({
   onCreated,
 }: {
   locale?: Locale;
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contactRoles: ContactRole[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
-  externalOrganizations: ExternalOrganization[];
-  horseExternalMemberships: HorseExternalMembership[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
   profileId: string;
@@ -100,7 +102,7 @@ function EntryForm({
   const [riderContactId, setRiderContactId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
   const [activeDayId, setActiveDayId] = useState("");
-  const [selectedDivisionIds, setSelectedDivisionIds] = useState<string[]>([]);
+  const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [nrhaResults, setNrhaResults] = useState<Record<string, NrhaEligibilityMessage>>({});
   const [nrhaVerifyBusy, setNrhaVerifyBusy] = useState(false);
   const [nrhaBulkSummary, setNrhaBulkSummary] = useState<NrhaBulkSummary | null>(null);
@@ -133,67 +135,71 @@ function EntryForm({
   const teamIsDefined = Boolean(selectedShow && selectedHorse && selectedRiderContact && selectedPayerContact);
   const selectedHorseAgeOnJan1 = horseAgeOnJan1ForShow(selectedHorse, selectedShow);
   const selectedRiderAgeOnJan1 = riderAgeOnJan1ForShow(selectedRiderContact, selectedShow);
-  const selectedHealthValidity = selectedHorse
-    ? getHorseHealthValidity({
-        documents: horseHealthDocuments,
-        horseId: selectedHorse.id,
-        organization,
-        referenceDate: selectedShow?.start_date ?? null,
-      })
-    : null;
+  const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
+  const healthComplianceOverview = useHorseHealthComplianceOverview({
+    horseIds: selectedShow && organization ? visibleHorses.map((horse) => horse.id) : [],
+    organizationId: selectedShow ? organization?.id : undefined,
+    referenceDate: selectedShow?.start_date ?? "1970-01-01",
+    refreshToken: healthComplianceRevision,
+  });
+  const healthComplianceByHorseId = useMemo(
+    () => new Map(healthComplianceOverview.results.map((result) => [result.horse_id, result])),
+    [healthComplianceOverview.results],
+  );
+  const selectedHealthCompliance = selectedHorse ? healthComplianceByHorseId.get(selectedHorse.id) ?? null : null;
   const entryReadiness = buildEntryShowReadiness({
-    contactExternalMemberships,
-    documents: horseHealthDocuments,
-    externalOrganizations,
+    contactExternalIdentifiers,
+    externalCredentialIssuers,
+    healthCompliance: selectedHorse ? selectedHealthCompliance : undefined,
+    healthComplianceLoading: Boolean(selectedHorse && healthComplianceOverview.loading),
     horse: selectedHorse,
     membershipRequirements,
-    organization,
     ownerContact: selectedOwnerContact,
     payerContact: selectedPayerContact,
     riderContact: selectedRiderContact,
     show: selectedShow,
   });
-  const selectedNrhaOrganization = externalOrganizations.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null;
+  const selectedNrhaOrganization = externalCredentialIssuers.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA") ?? null;
   const horseNrhaReference = selectedNrhaOrganization && selectedHorse
-    ? horseExternalMemberships.find((membership) => membership.horse_id === selectedHorse.id && membership.external_organization_id === selectedNrhaOrganization.id && membership.reference_type === "competition_license") ?? null
+    ? horseExternalIdentifiers.find((membership) => membership.horse_id === selectedHorse.id && membership.external_credential_issuer_id === selectedNrhaOrganization.id && membership.identifier_type === "competition_license") ?? null
     : null;
   const riderNrhaMembership = selectedNrhaOrganization && selectedRiderContact
-    ? contactExternalMemberships.find((membership) => membership.contact_id === selectedRiderContact.id && membership.external_organization_id === selectedNrhaOrganization.id) ?? null
+    ? contactExternalIdentifiers.find((membership) => membership.contact_id === selectedRiderContact.id && membership.external_credential_issuer_id === selectedNrhaOrganization.id) ?? null
     : null;
   const showbillEvaluations = useMemo(
     () =>
-      divisions.map((division) =>
-        evaluateDivision({
+      classes.map((classRecord) =>
+        evaluateClass({
+          blocks,
+          contactExternalIdentifiers,
+          classRecord,
           classes,
-          contactExternalMemberships,
-          division,
-          divisions,
           entries,
           entryReadinessCanProceed: entryReadiness.canProceed,
-          externalOrganizations,
+          externalCredentialIssuers,
           horse: selectedHorse,
-          horseExternalMemberships,
+          horseExternalIdentifiers,
           locale,
-          nrhaResult: nrhaResults[division.id] ?? null,
+          nrhaResult: nrhaResults[classRecord.id] ?? null,
           nrhaRiderRankings,
           organization,
           riderContact: selectedRiderContact,
           selectedShow,
         }),
       ),
-    [classes, contactExternalMemberships, divisions, selectedRiderContact, entries, entryReadiness.canProceed, externalOrganizations, horseExternalMemberships, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow],
+    [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow],
   );
-  const evaluationByDivisionId = useMemo(() => new Map(showbillEvaluations.map((evaluation) => [evaluation.division.id, evaluation])), [showbillEvaluations]);
+  const evaluationByClassId = useMemo(() => new Map(showbillEvaluations.map((evaluation) => [evaluation.classRecord.id, evaluation])), [showbillEvaluations]);
   const dayBlocks = useMemo(
-    () => buildShowbillBlocks({ classes, evaluations: showbillEvaluations, showDayId: effectiveActiveDayId === "unscheduled" ? null : effectiveActiveDayId }),
-    [classes, effectiveActiveDayId, showbillEvaluations],
+    () => buildShowbillBlocks({ blocks, evaluations: showbillEvaluations, showDayId: effectiveActiveDayId === "unscheduled" ? null : effectiveActiveDayId }),
+    [blocks, effectiveActiveDayId, showbillEvaluations],
   );
   const activeDayNrhaPending = useMemo(
-    () => uniqueDivisionEvaluations(dayBlocks.flatMap((block) => block.evaluations).filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)),
+    () => uniqueClassEvaluations(dayBlocks.flatMap((block) => block.evaluations).filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)),
     [dayBlocks],
   );
-  const activeDayNrhaSignature = activeDayNrhaPending.map((evaluation) => `${evaluation.division.id}:${evaluation.nrhaKey}`).join("|");
-  const selectedEvaluations = selectedDivisionIds.map((divisionId) => evaluationByDivisionId.get(divisionId)).filter((evaluation): evaluation is DivisionEvaluation => Boolean(evaluation));
+  const activeDayNrhaSignature = activeDayNrhaPending.map((evaluation) => `${evaluation.classRecord.id}:${evaluation.nrhaKey}`).join("|");
+  const selectedEvaluations = selectedClassIds.map((classId) => evaluationByClassId.get(classId)).filter((evaluation): evaluation is ClassEvaluation => Boolean(evaluation));
   const selectedTotal = selectedEvaluations.reduce((total, evaluation) => total + (evaluation.fee ?? 0), 0);
   const selectedNrhaFinalChecks = selectedEvaluations.filter((evaluation) => evaluation.nrhaRequest);
   const selectedBlocked = selectedEvaluations.filter((evaluation) => !evaluation.canSelect);
@@ -202,7 +208,7 @@ function EntryForm({
     organization,
     show: selectedShow,
   });
-  const requiresPreauthAcceptance = checkoutPreview.preauthRequired && selectedDivisionIds.length > 0;
+  const requiresPreauthAcceptance = checkoutPreview.preauthRequired && selectedClassIds.length > 0;
   const canCreate = Boolean(
     organization &&
       profileId &&
@@ -211,15 +217,15 @@ function EntryForm({
       selectedOwnerContact &&
       selectedRiderContact &&
       selectedPayerId &&
-      selectedDivisionIds.length &&
+      selectedClassIds.length &&
       entryReadiness.canProceed &&
       !selectedBlocked.length &&
       (!requiresPreauthAcceptance || preauthAccepted),
   );
-  const entryHeaderMessage = selectedDivisionIds.length
-    ? uiText(locale, `${selectedDivisionIds.length} classe${selectedDivisionIds.length === 1 ? "" : "s"} sélectionnée${selectedDivisionIds.length === 1 ? "" : "s"}.`, `${selectedDivisionIds.length} class${selectedDivisionIds.length === 1 ? "" : "es"} selected.`)
+  const entryHeaderMessage = selectedClassIds.length
+    ? uiText(locale, `${selectedClassIds.length} classe${selectedClassIds.length === 1 ? "" : "s"} sélectionnée${selectedClassIds.length === 1 ? "" : "s"}.`, `${selectedClassIds.length} class${selectedClassIds.length === 1 ? "" : "es"} selected.`)
     : teamIsDefined
-      ? uiText(locale, "Choisis les classes dans le showbill par journée.", "Choose classes from the day-by-day showbill.")
+      ? uiText(locale, "Choisis les blocks dans le showbill par journée.", "Choose blocks from the day-by-day showbill.")
       : uiText(locale, "Commence par choisir le cheval, le cavalier et le payeur.", "Start by choosing the horse, rider and payer.");
 
   useEffect(() => {
@@ -253,7 +259,7 @@ function EntryForm({
             return;
           }
 
-          nextResults[evaluation.division.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
+          nextResults[evaluation.classRecord.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
         }
 
         if (cancelled) {
@@ -276,7 +282,7 @@ function EntryForm({
         setNrhaBulkSummary({
           blocked: 0,
           eligible: 0,
-          message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA de la journée impossible.", "Unable to check this day's NRHA classes."),
+          message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA de la journée impossible.", "Unable to check this day's NRHA blocks."),
           requested: pendingEvaluations.length,
           status: "error",
         });
@@ -297,7 +303,7 @@ function EntryForm({
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     setActiveDayId("");
-    setSelectedDivisionIds([]);
+    setSelectedClassIds([]);
     setNrhaResults({});
     setNrhaBulkSummary(null);
     nrhaDayLastAttemptSignature.current = "";
@@ -307,7 +313,7 @@ function EntryForm({
 
   function handleEligibilityTeamChange(updater: () => void) {
     updater();
-    setSelectedDivisionIds([]);
+    setSelectedClassIds([]);
     setNrhaResults({});
     setNrhaBulkSummary(null);
     nrhaDayLastAttemptSignature.current = "";
@@ -328,15 +334,15 @@ function EntryForm({
     setSubmitMessage(null);
   }
 
-  function toggleDivision(divisionId: string) {
-    const evaluation = evaluationByDivisionId.get(divisionId);
-    const alreadySelected = selectedDivisionIds.includes(divisionId);
+  function toggleClass(classId: string) {
+    const evaluation = evaluationByClassId.get(classId);
+    const alreadySelected = selectedClassIds.includes(classId);
 
     if (!alreadySelected && !evaluation?.canSelect) {
       return;
     }
 
-    setSelectedDivisionIds((current) => (current.includes(divisionId) ? current.filter((id) => id !== divisionId) : [...current, divisionId]));
+    setSelectedClassIds((current) => (current.includes(classId) ? current.filter((id) => id !== classId) : [...current, classId]));
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
@@ -361,7 +367,7 @@ function EntryForm({
 
           const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
           const message = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
-          nextResults[evaluation.division.id] = message;
+          nextResults[evaluation.classRecord.id] = message;
 
           if (message.tone === "error") {
             setNrhaResults((current) => ({ ...current, ...nextResults }));
@@ -381,7 +387,7 @@ function EntryForm({
           organization_id: organization.id,
           show_id: selectedShow.id,
           horse_id: selectedHorse.id,
-          division_id: evaluation.division.id,
+          class_id: evaluation.classRecord.id,
           created_by_user_id: profileId,
           owner_contact_id: selectedHorse.primary_owner_contact_id,
           rider_contact_id: selectedRiderContact.id,
@@ -394,7 +400,7 @@ function EntryForm({
       setEntryNumber("");
       setRiderContactId("");
       setPayerContactId("");
-      setSelectedDivisionIds([]);
+      setSelectedClassIds([]);
       setNrhaResults({});
       setPreauthAccepted(false);
       onCreated?.();
@@ -423,7 +429,7 @@ function EntryForm({
             <span>1</span>
             <div>
               <strong>{uiText(locale, "Équipe", "Team")}</strong>
-              <p>{uiText(locale, "Définis le cheval, le cavalier et le payeur avant de choisir les classes.", "Set the horse, rider and payer before choosing classes.")}</p>
+              <p>{uiText(locale, "Définis le cheval, le cavalier et le payeur avant de choisir les blocks.", "Set the horse, rider and payer before choosing blocks.")}</p>
             </div>
           </div>
           <label>
@@ -442,17 +448,18 @@ function EntryForm({
               <SearchSelect
                 disabled={!visibleHorses.length}
                 items={visibleHorses.map((horse) => {
-                  const validity = getHorseHealthValidity({
-                    documents: horseHealthDocuments,
-                    horseId: horse.id,
-                    organization,
-                    referenceDate: selectedShow?.start_date ?? null,
-                  });
+                  const compliance = healthComplianceByHorseId.get(horse.id);
 
                   return {
                     id: horse.id,
                     label: horse.name,
-                    detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${horseHealthValidityMessage(validity)}`,
+                    detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${
+                      compliance
+                        ? `${healthComplianceStatusLabel(compliance.compliance_status, locale)} · ${healthComplianceReasonSummary(compliance, locale)}`
+                        : healthComplianceOverview.loading
+                          ? uiText(locale, "Vérification santé…", "Checking health…")
+                          : uiText(locale, "Conformité santé indisponible", "Health compliance unavailable")
+                    }`,
                   };
                 })}
                 placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
@@ -471,7 +478,7 @@ function EntryForm({
                 contacts={contacts}
                 contactRoles={contactRoles}
                 createdByUserId={profileId}
-                externalOrganizations={externalOrganizations}
+                externalCredentialIssuers={externalCredentialIssuers}
                 organization={organization}
                 onCreateContact={onCreateContact}
                 onCreateHorse={onCreateHorse}
@@ -518,7 +525,7 @@ function EntryForm({
             <label>
               {uiText(locale, "Numéro de dossard", "Back number")}
               <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
-              <span className="input-help">{uiText(locale, "Le même dossard sera proposé pour les classes sélectionnées.", "The same back number will be used for selected classes.")}</span>
+              <span className="input-help">{uiText(locale, "Le même dossard sera proposé pour les blocks sélectionnées.", "The same back number will be used for selected blocks.")}</span>
             </label>
           </div>
         </section>
@@ -528,27 +535,31 @@ function EntryForm({
             <span>2</span>
             <div>
               <strong>{uiText(locale, "Profil déduit", "Deduced profile")}</strong>
-              <p>{uiText(locale, "HSP résume les données qui influencent la sélection des classes.", "HSP summarizes the details that affect class selection.")}</p>
+              <p>{uiText(locale, "HSP résume les données qui influencent la sélection des blocks.", "HSP summarizes the details that affect class selection.")}</p>
             </div>
           </div>
           <div className="entry-team-profile">
             <ProfileFact label={uiText(locale, "Cheval", "Horse")} value={selectedHorse ? horseLabel(selectedHorse) : uiText(locale, "À choisir", "Choose one")} />
             <ProfileFact label={uiText(locale, "Cavalier", "Rider")} value={selectedRiderContact ? contactLabel(selectedRiderContact) : uiText(locale, "À choisir", "Choose one")} />
-            <ProfileFact label="NRHA cheval" value={horseNrhaReference?.reference_number || uiText(locale, "Non validé", "Not validated")} />
-            <ProfileFact label="NRHA cavalier" value={riderNrhaMembership ? `${riderNrhaMembership.membership_number}${riderNrhaMembership.expires_on ? ` · ${uiText(locale, "expire", "expires")} ${riderNrhaMembership.expires_on}` : ""}` : uiText(locale, "Non validé", "Not validated")} />
+            <ProfileFact label="NRHA cheval" value={horseNrhaReference?.identifier_value || uiText(locale, "Non validé", "Not validated")} />
+            <ProfileFact label="NRHA cavalier" value={riderNrhaMembership ? `${riderNrhaMembership.identifier_value}${riderNrhaMembership.expires_on ? ` · ${uiText(locale, "expire", "expires")} ${riderNrhaMembership.expires_on}` : ""}` : uiText(locale, "Non validé", "Not validated")} />
             <ProfileFact label={uiText(locale, "Âge cheval", "Horse age")} value={selectedHorseAgeOnJan1 === null ? uiText(locale, "Non disponible", "Unavailable") : uiText(locale, `${selectedHorseAgeOnJan1} au 1er janv.`, `${selectedHorseAgeOnJan1} on Jan. 1`)} />
             <ProfileFact label={uiText(locale, "Âge cavalier", "Rider age")} value={selectedRiderAgeOnJan1 === null ? uiText(locale, "Non disponible", "Unavailable") : uiText(locale, `${selectedRiderAgeOnJan1} au 1er janv.`, `${selectedRiderAgeOnJan1} on Jan. 1`)} />
-            <ProfileFact label={uiText(locale, "Santé", "Health")} value={selectedHealthValidity ? horseHealthValidityMessage(selectedHealthValidity) : uiText(locale, "Cheval requis", "Horse required")} />
-            <ProfileFact label={uiText(locale, "Sélection", "Selection")} value={`${selectedDivisionIds.length} · ${formatCurrency(selectedTotal, organization?.currency ?? "CAD")}`} />
+            <ProfileFact label={uiText(locale, "Santé", "Health")} value={selectedHealthCompliance ? healthComplianceStatusLabel(selectedHealthCompliance.compliance_status, locale) : uiText(locale, "Cheval requis", "Horse required")} />
+            <ProfileFact label={uiText(locale, "Sélection", "Selection")} value={`${selectedClassIds.length} · ${formatCurrency(selectedTotal, organization?.currency ?? "CAD")}`} />
           </div>
           <InlineHealthMessage
             value={
-              selectedHealthValidity
+              selectedHealthCompliance
                 ? {
-                    tone: horseHealthValidityTone(selectedHealthValidity),
-                    message: `${horseHealthValidityMessage(selectedHealthValidity)} ${uiText(locale, "Référence", "Reference")}: ${selectedShow ? formatDate(selectedShow.start_date) : uiText(locale, "concours", "show")}.`,
+                    tone: healthComplianceTone(selectedHealthCompliance.compliance_status) === "success" ? "success" : selectedHealthCompliance.can_proceed ? "info" : "error",
+                    message: `${healthComplianceReasonSummary(selectedHealthCompliance, locale)} ${uiText(locale, "Référence", "Reference")}: ${selectedShow ? formatDate(selectedShow.start_date) : uiText(locale, "concours", "show")}.`,
                   }
-                : null
+                : healthComplianceOverview.error
+                  ? { tone: "error", message: healthComplianceOverview.error }
+                  : healthComplianceOverview.loading && selectedHorse
+                    ? { tone: "info", message: uiText(locale, "Calcul de la conformité santé…", "Calculating health compliance…") }
+                    : null
             }
           />
           <ReadinessChecklist readiness={selectedHorse ? entryReadiness : null} />
@@ -559,7 +570,7 @@ function EntryForm({
             <span>3</span>
             <div>
               <strong>{uiText(locale, "Showbill", "Showbill")}</strong>
-              <p>{uiText(locale, "Avance journée par journée et sélectionne les classes admissibles.", "Move day by day and choose eligible classes.")}</p>
+              <p>{uiText(locale, "Avance journée par journée et sélectionne les blocks admissibles.", "Move day by day and choose eligible blocks.")}</p>
             </div>
           </div>
           <div className="entry-day-tabs">
@@ -588,16 +599,16 @@ function EntryForm({
           <NrhaBulkSummaryLine locale={locale} summary={nrhaBulkSummary} />
           <div className="entry-showbill-list">
             {dayBlocks.map((block) => (
-              <section className="entry-showbill-block" key={block.classRecord.id}>
+              <section className="entry-showbill-block" key={block.block.id}>
                 <div className="entry-showbill-block-header">
                   <div>
-                    <strong>{block.classRecord.block_label || block.classRecord.name}</strong>
-                    <span>{[classScheduleStartLabel(block.classRecord, locale), block.classRecord.arena].filter(Boolean).join(" · ")}</span>
+                    <strong>{block.block.display_label || block.block.name}</strong>
+                    <span>{[classScheduleStartLabel(block.block, locale), block.block.arena].filter(Boolean).join(" · ")}</span>
                   </div>
                 </div>
                 <div className="entry-showbill-class-list">
                   {block.evaluations.map((evaluation) => {
-                    const selected = selectedDivisionIds.includes(evaluation.division.id);
+                    const selected = selectedClassIds.includes(evaluation.classRecord.id);
                     const pendingNrha = evaluation.nrhaPending;
                     const Icon = pendingNrha ? ShieldCheck : evaluation.canSelect ? CheckCircle2 : AlertCircle;
 
@@ -605,17 +616,17 @@ function EntryForm({
                       <button
                         className={`entry-showbill-class${selected ? " selected" : ""}${evaluation.canSelect ? "" : pendingNrha ? " pending" : " disabled"}`}
                         disabled={!evaluation.canSelect && !selected}
-                        key={evaluation.division.id}
+                        key={evaluation.classRecord.id}
                         type="button"
-                        onClick={() => toggleDivision(evaluation.division.id)}
+                        onClick={() => toggleClass(evaluation.classRecord.id)}
                       >
                         <Icon size={18} />
                         <span>
-                          <strong>{entryDivisionLabel(evaluation.division, locale)}</strong>
+                          <strong>{entryClassLabel(evaluation.classRecord, locale)}</strong>
                           <small>{evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, organization?.currency ?? "CAD")}</small>
                         </span>
                         {evaluation.nrhaResult ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
-                        {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA de la journée en cours...", "Checking this day's NRHA classes...")}</small> : null}
+                        {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA de la journée en cours...", "Checking this day's NRHA blocks...")}</small> : null}
                         {!evaluation.nrhaResult && evaluation.message ? <small className={`entry-class-status ${evaluation.message.tone}`}>{evaluation.message.message}</small> : null}
                         {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage && !pendingNrha ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
                       </button>
@@ -640,10 +651,10 @@ function EntryForm({
             <div className="entry-checkout-preview">
               <div className="entry-checkout-lines">
                 {checkoutPreview.lines.map((line) => (
-                  <div className="entry-checkout-line" key={line.evaluation.division.id}>
+                  <div className="entry-checkout-line" key={line.evaluation.classRecord.id}>
                     <div>
-                      <strong>{entryDivisionLabel(line.evaluation.division, locale)}</strong>
-                      <span>{line.evaluation.classRecord?.block_label || line.evaluation.classRecord?.name || uiText(locale, "Bloc", "Block")}</span>
+                      <strong>{entryClassLabel(line.evaluation.classRecord, locale)}</strong>
+                      <span>{line.evaluation.block?.display_label || line.evaluation.block?.name || uiText(locale, "Bloc", "Block")}</span>
                       {line.fee.isLate ? (
                         <small>
                           {uiText(locale, "Inscription tardive", "Late entry")} +{line.fee.lateFeePercent}%
@@ -686,7 +697,7 @@ function EntryForm({
               </div>
             </div>
           ) : (
-            <p className="muted-line">{uiText(locale, "Aucune classe sélectionnée.", "No selected classes.")}</p>
+            <p className="muted-line">{uiText(locale, "Aucune classe sélectionnée.", "No selected blocks.")}</p>
           )}
           <InlineHealthMessage value={submitMessage} />
           {selectedBlocked.length ? (
@@ -701,7 +712,7 @@ function EntryForm({
             <InlineHealthMessage
               value={{
                 tone: "info",
-                message: uiText(locale, "Les classes NRHA sélectionnées seront confirmées directement avec NRHA à l'enregistrement.", "Selected NRHA classes will be confirmed directly with NRHA on save."),
+                message: uiText(locale, "Les blocks NRHA sélectionnées seront confirmées directement avec NRHA à l'enregistrement.", "Selected NRHA blocks will be confirmed directly with NRHA on save."),
               }}
             />
           ) : null}
@@ -719,7 +730,7 @@ function EntryForm({
               ? nrhaVerifyBusy
                 ? uiText(locale, "Validation NRHA...", "Checking NRHA...")
                 : uiText(locale, "Création...", "Creating...")
-              : uiText(locale, selectedDivisionIds.length > 1 ? "Créer les brouillons et la facture" : "Créer le brouillon et la facture", selectedDivisionIds.length > 1 ? "Create draft entries and invoice" : "Create draft entry and invoice")}
+              : uiText(locale, selectedClassIds.length > 1 ? "Créer les brouillons et la facture" : "Créer le brouillon et la facture", selectedClassIds.length > 1 ? "Create draft entries and invoice" : "Create draft entry and invoice")}
           </button>
         </section>
       </div>
@@ -727,16 +738,16 @@ function EntryForm({
   );
 }
 
-function evaluateDivision({
+function evaluateClass({
+  blocks,
+  contactExternalIdentifiers,
+  classRecord,
   classes,
-  contactExternalMemberships,
-  division,
-  divisions,
   entries,
   entryReadinessCanProceed,
-  externalOrganizations,
+  externalCredentialIssuers,
   horse,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   locale,
   nrhaResult,
   nrhaRiderRankings,
@@ -744,42 +755,43 @@ function evaluateDivision({
   riderContact,
   selectedShow,
 }: {
+  blocks: Block[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
+  classRecord: ClassRecord;
   classes: ClassRecord[];
-  contactExternalMemberships: ContactExternalMembership[];
-  division: Division;
-  divisions: Division[];
   entries: Entry[];
   entryReadinessCanProceed: boolean;
-  externalOrganizations: ExternalOrganization[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   horse: Horse | null;
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   locale: Locale;
   nrhaResult: NrhaEligibilityMessage | null;
   nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
   riderContact: Contact | null;
   selectedShow: Show | null;
-}): DivisionEvaluation {
-  const classRecord = findById(classes, division.class_id) ?? null;
-  const fee = division.entry_fee ?? classRecord?.entry_fee ?? null;
-  const deadlineReadiness = buildEntryDeadlineReadiness(classRecord, fee, organization?.currency ?? "CAD");
+}): ClassEvaluation {
+  const block = findById(blocks, classRecord.block_id) ?? null;
+  const fee = classRecord.entry_fee ?? null;
+  const deadlineReadiness = buildEntryDeadlineReadiness(block, selectedShow, fee, organization?.currency ?? "CAD");
   const programLimitReadiness = buildEntryProgramLimitReadiness({
-    division,
-    divisions,
+    classRecord,
+    classes,
     entries,
     horse,
     ownerContact: horse ? null : null,
     riderContact,
   });
-  const nrhaGate = buildNrhaEligibilityGateForEntry({
+  const nrhaGate = buildClassEligibilityGateForEntry({
+    block,
+    contactExternalIdentifiers,
     classRecord,
-    contactExternalMemberships,
-    division,
-    externalOrganizations,
+    externalCredentialIssuers,
     horse,
-    horseExternalMemberships,
+    horseExternalIdentifiers,
     locale,
     nrhaRiderRankings,
+    organization,
     resultMessage: nrhaResult,
     riderContact,
     show: selectedShow,
@@ -808,8 +820,8 @@ function evaluateDivision({
 
   return {
     canSelect,
+    block,
     classRecord,
-    division,
     fee,
     message,
     nrhaMessage: nrhaGate.message,
@@ -818,26 +830,27 @@ function evaluateDivision({
     nrhaRequest: nrhaGate.request ?? null,
     nrhaRequiresVerification,
     nrhaResult,
+    show: selectedShow,
   };
 }
 
 function buildShowbillBlocks({
-  classes,
+  blocks,
   evaluations,
   showDayId,
 }: {
-  classes: ClassRecord[];
-  evaluations: DivisionEvaluation[];
+  blocks: Block[];
+  evaluations: ClassEvaluation[];
   showDayId: string | null;
 }): ShowbillBlock[] {
-  const blockClasses = classes
-    .filter((classRecord) => classRecord.show_day_id === showDayId && !classRecord.is_event_block)
+  const blockClasses = blocks
+    .filter((block) => block.show_day_id === showDayId && block.block_type === "competition")
     .sort(compareScheduleClasses);
 
   return blockClasses
-    .map((classRecord) => ({
-      classRecord,
-      evaluations: evaluations.filter((evaluation) => evaluation.division.class_id === classRecord.id).sort(compareDivisionEvaluations),
+    .map((block) => ({
+      block,
+      evaluations: evaluations.filter((evaluation) => evaluation.classRecord.block_id === block.id).sort(compareClassEvaluations),
     }))
     .filter((block) => block.evaluations.length);
 }
@@ -846,19 +859,19 @@ function compareShowDays(a: ShowDay, b: ShowDay) {
   return a.sort_order - b.sort_order || a.day_date.localeCompare(b.day_date) || (a.day_number ?? 0) - (b.day_number ?? 0);
 }
 
-function compareDivisionEvaluations(a: DivisionEvaluation, b: DivisionEvaluation) {
-  return (a.division.code ?? "").localeCompare(b.division.code ?? "") || a.division.name.localeCompare(b.division.name);
+function compareClassEvaluations(a: ClassEvaluation, b: ClassEvaluation) {
+  return (a.classRecord.code ?? "").localeCompare(b.classRecord.code ?? "") || a.classRecord.name.localeCompare(b.classRecord.name);
 }
 
-function uniqueDivisionEvaluations(evaluations: DivisionEvaluation[]) {
+function uniqueClassEvaluations(evaluations: ClassEvaluation[]) {
   const seen = new Set<string>();
 
   return evaluations.filter((evaluation) => {
-    if (seen.has(evaluation.division.id)) {
+    if (seen.has(evaluation.classRecord.id)) {
       return false;
     }
 
-    seen.add(evaluation.division.id);
+    seen.add(evaluation.classRecord.id);
     return true;
   });
 }
@@ -912,7 +925,7 @@ function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: Nrh
 
   const statusLabel =
     summary.status === "checking"
-      ? uiText(locale, "Validation NRHA de la journée", "Checking this day's NRHA classes")
+      ? uiText(locale, "Validation NRHA de la journée", "Checking this day's NRHA blocks")
       : summary.status === "error"
         ? uiText(locale, "Validation NRHA incomplète", "NRHA validation incomplete")
         : uiText(locale, "Validation NRHA de la journée prête", "This day's NRHA validation is ready");
@@ -936,7 +949,7 @@ function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: Nrh
 }
 
 type EntryCheckoutLine = {
-  evaluation: DivisionEvaluation;
+  evaluation: ClassEvaluation;
   fee: {
     base: number;
     isLate: boolean;
@@ -966,7 +979,7 @@ function buildEntryCheckoutPreview({
   organization,
   show,
 }: {
-  evaluations: DivisionEvaluation[];
+  evaluations: ClassEvaluation[];
   organization: Organization | null;
   show: Show | null;
 }): EntryCheckoutPreview {
@@ -1003,11 +1016,14 @@ function buildEntryCheckoutPreview({
   };
 }
 
-function entryFeePreview(evaluation: DivisionEvaluation): EntryCheckoutLine["fee"] {
+function entryFeePreview(evaluation: ClassEvaluation): EntryCheckoutLine["fee"] {
   const base = evaluation.fee ?? 0;
-  const closeDate = classEntriesCloseDate(evaluation.classRecord);
+  const closeValue = evaluation.show?.entry_deadline_mode === "show"
+    ? evaluation.show.entries_close_at
+    : evaluation.block?.entries_close_at;
+  const closeDate = closeValue ? new Date(closeValue) : null;
   const isLate = Boolean(closeDate && Date.now() > closeDate.getTime());
-  const lateFeePercent = isLate ? evaluation.classRecord?.late_entry_fee_percent ?? 50 : 0;
+  const lateFeePercent = isLate ? evaluation.show?.late_entry_fee_percent ?? 50 : 0;
   const lateFee = isLate ? roundMoney(base * (lateFeePercent / 100)) : 0;
 
   return {
@@ -1023,22 +1039,22 @@ function buildJudgeFeePreviewLines(lines: EntryCheckoutLine[]) {
   const groups = new Map<string, EntryCheckoutLine[]>();
 
   for (const line of lines) {
-    if (!line.evaluation.classRecord) {
+    if (!line.evaluation.block) {
       continue;
     }
 
-    const current = groups.get(line.evaluation.classRecord.id) ?? [];
+    const current = groups.get(line.evaluation.block.id) ?? [];
     current.push(line);
-    groups.set(line.evaluation.classRecord.id, current);
+    groups.set(line.evaluation.block.id, current);
   }
 
   return [...groups.values()]
     .map((group) =>
-      [...group].sort((a, b) => b.fee.base - a.fee.base || a.evaluation.division.name.localeCompare(b.evaluation.division.name))[0],
+      [...group].sort((a, b) => b.fee.base - a.fee.base || a.evaluation.classRecord.name.localeCompare(b.evaluation.classRecord.name))[0],
     )
-    .filter((line): line is EntryCheckoutLine => Boolean(line && (line.evaluation.division.judge_fee ?? 0) > 0))
+    .filter((line): line is EntryCheckoutLine => Boolean(line && (line.evaluation.classRecord.judge_fee ?? 0) > 0))
     .map((line) => ({
-      amount: line.evaluation.division.judge_fee ?? 0,
+      amount: line.evaluation.classRecord.judge_fee ?? 0,
       line,
     }));
 }

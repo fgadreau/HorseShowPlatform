@@ -1,6 +1,21 @@
 import type { Locale } from "../../lib/i18n";
+import {
+  buildExternalImportFields,
+  buildExternalImportProposal,
+  decideExternalImport,
+  withExternalImportDecision,
+  type ExternalImportChangeType,
+} from "../../lib/externalImportProposal";
+import {
+  compareExternalContactIdentity,
+  identityEmailEqual,
+  identityIdentifierEqual,
+  identityPhoneEqual,
+  identityTextEqual,
+  type IdentityComparison,
+} from "../../lib/identityComparison";
 import type { NrhaMemberLookupCheck, NrhaMemberLookupVerification } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 
 type NrhaOfficialMemberValues = {
@@ -41,6 +56,9 @@ type NrhaMemberDataImportRow = {
   label: string;
   current: string;
   official: string;
+  currentValue: string;
+  proposedValue: string;
+  changeType: ExternalImportChangeType;
 };
 
 type NrhaMemberVerificationState = {
@@ -61,10 +79,32 @@ function integerFromMembershipNumber(value: string) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function nrhaMemberVerificationPayload(verification: NrhaMemberLookupVerification): Record<string, unknown> {
+function nrhaMemberVerificationPayload(verification: NrhaMemberLookupVerification, identityComparison?: IdentityComparison): Record<string, unknown> {
   return {
     nrhaMemberLookup: verification as unknown,
+    ...(identityComparison ? { identityComparison } : {}),
   };
+}
+
+function nrhaMemberImportDecisionPayload(
+  verification: NrhaMemberLookupVerification,
+  rows: NrhaMemberDataImportRow[],
+  acceptedKeys: Iterable<NrhaMemberDataImportRow["key"]>,
+  identityComparison?: IdentityComparison,
+) {
+  const values = nrhaOfficialMemberValues(verification);
+  const proposal = buildExternalImportProposal({
+    subjectType: "contact",
+    sourceCode: "NRHA_MEMBER_LOOKUP",
+    sourceRecordKey: values.memberNumber,
+    comparison: identityComparison,
+    fields: rows.map(({ key, currentValue, proposedValue, changeType }) => ({ key, currentValue, proposedValue, changeType })),
+  });
+
+  return withExternalImportDecision(
+    nrhaMemberVerificationPayload(verification, identityComparison),
+    decideExternalImport(proposal, acceptedKeys),
+  );
 }
 
 function nrhaMemberVerificationFromPayload(payload: Record<string, unknown> | null | undefined): NrhaMemberLookupVerification | null {
@@ -112,7 +152,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.memberNumber,
     official: values.memberNumber,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameNumber,
+    compare: identityIdentifierEqual,
   });
   maybePushRow(rows, {
     key: "expiresOn",
@@ -120,7 +160,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.expiresOn,
     official: values.expiresOn,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "firstName",
@@ -128,7 +168,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.firstName,
     official: values.firstName,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "middleName",
@@ -136,7 +176,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.middleName,
     official: values.middleName,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "lastName",
@@ -144,7 +184,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.lastName,
     official: values.lastName,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "email",
@@ -152,7 +192,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.email,
     official: values.email,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: (currentValue, officialValue) => currentValue.trim().toLowerCase() === officialValue.trim().toLowerCase(),
+    compare: identityEmailEqual,
   });
   maybePushRow(rows, {
     key: "phone",
@@ -160,7 +200,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.phone,
     official: values.phone,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: samePhone,
+    compare: identityPhoneEqual,
   });
   maybePushRow(rows, {
     key: "address",
@@ -168,7 +208,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.address,
     official: values.address,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "addressLine2",
@@ -176,7 +216,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.addressLine2,
     official: values.addressLine2,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "city",
@@ -184,7 +224,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.city,
     official: values.city,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "state",
@@ -192,7 +232,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.state,
     official: values.state,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "zipCode",
@@ -200,7 +240,7 @@ function nrhaMemberDataImportRows(values: NrhaOfficialMemberValues, current: Nrh
     current: current.zipCode,
     official: values.zipCode,
     formatter: (value) => formatPlainValue(value, locale),
-    compare: sameText,
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "country",
@@ -225,33 +265,34 @@ function maybePushRow(
     compare?: (current: string, official: string) => boolean;
   },
 ) {
-  const officialValue = input.official.trim();
+  const field = buildExternalImportFields([{
+    key: input.key,
+    currentValue: input.current,
+    proposedValue: input.official,
+    equals: input.compare,
+  }])[0];
 
-  if (!officialValue) {
-    return;
-  }
-
-  const currentValue = input.current.trim();
-  const matches = input.compare ? input.compare(currentValue, officialValue) : currentValue === officialValue;
-
-  if (matches) {
+  if (!field) {
     return;
   }
 
   rows.push({
-    key: input.key,
+    ...field,
     label: input.label,
-    current: input.formatter(currentValue),
-    official: input.formatter(officialValue),
+    current: input.formatter(field.currentValue),
+    official: input.formatter(field.proposedValue),
   });
 }
 
-function nrhaMemberMismatchMessage(verification: NrhaMemberLookupVerification, locale: Locale) {
+function nrhaMemberMismatchMessage(verification: NrhaMemberLookupVerification, locale: Locale, identityComparison?: IdentityComparison) {
   if (verification.status === "not_found") {
     return uiText(locale, "NRHA: aucun membre trouvé pour ce numéro.", "NRHA: no member found for this number.");
   }
 
-  const mismatches = [
+  const comparisonMismatches = identityComparison?.evidence
+    .filter((item) => item.outcome === "different")
+    .map((item) => `${contactIdentityFieldLabel(item.field, locale)}: ${item.candidate || uiText(locale, "NRHA inconnu", "unknown in NRHA")}`) ?? [];
+  const mismatches = comparisonMismatches.length ? comparisonMismatches : [
     nrhaCheckMismatchLabel(uiText(locale, "prénom", "first name"), verification.checks?.firstName, locale),
     nrhaCheckMismatchLabel(uiText(locale, "nom", "last name"), verification.checks?.lastName, locale),
     nrhaCheckMismatchLabel(uiText(locale, "nom complet", "full name"), verification.checks?.fullName, locale),
@@ -265,6 +306,40 @@ function nrhaMemberMismatchMessage(verification: NrhaMemberLookupVerification, l
   return `${uiText(locale, "NRHA: informations non concordantes", "NRHA: details do not match")}: ${mismatches.join(" · ")}`;
 }
 
+function compareNrhaMemberIdentity(current: NrhaMemberLocalValues, official: NrhaOfficialMemberValues) {
+  return compareExternalContactIdentity(
+    {
+      first_name: current.firstName,
+      middle_name: current.middleName,
+      last_name: current.lastName,
+      email: current.email,
+      phone: current.phone,
+      external_identifier: current.memberNumber,
+    },
+    {
+      first_name: official.firstName,
+      middle_name: official.middleName,
+      last_name: official.lastName,
+      email: official.email,
+      phone: official.phone,
+      external_identifier: official.memberNumber,
+    },
+  );
+}
+
+function contactIdentityFieldLabel(field: string, locale: Locale) {
+  const labels: Record<string, [string, string]> = {
+    identifier: ["numéro", "number"],
+    first_name: ["prénom", "first name"],
+    last_name: ["nom", "last name"],
+    email: ["courriel", "email"],
+    phone: ["téléphone", "phone"],
+    date_of_birth: ["date de naissance", "birth date"],
+  };
+  const label = labels[field] ?? [field, field];
+  return uiText(locale, label[0], label[1]);
+}
+
 function nrhaCheckMismatchLabel(label: string, check: NrhaMemberLookupCheck | undefined, locale: Locale) {
   if (!check || check.matched) {
     return null;
@@ -273,7 +348,7 @@ function nrhaCheckMismatchLabel(label: string, check: NrhaMemberLookupCheck | un
   return `${label}: ${check.official || uiText(locale, "NRHA inconnu", "unknown in NRHA")}`;
 }
 
-function nrhaMemberStatus(values: NrhaOfficialMemberValues): ContactExternalMembership["status"] {
+function nrhaMemberStatus(values: NrhaOfficialMemberValues): ContactExternalIdentifier["status"] {
   if (!values.expiresOn) {
     return "active";
   }
@@ -311,26 +386,8 @@ function formatPlainValue(value: string, locale: Locale) {
   return value || uiText(locale, "Non renseigné", "Not set");
 }
 
-function sameNumber(current: string, official: string) {
-  const currentDigits = current.replace(/\D/g, "");
-  const officialDigits = official.replace(/\D/g, "");
-
-  return Boolean(currentDigits && officialDigits && currentDigits === officialDigits) || current.trim() === official.trim();
-}
-
-function samePhone(current: string, official: string) {
-  const currentDigits = current.replace(/\D/g, "");
-  const officialDigits = official.replace(/\D/g, "");
-
-  return Boolean(currentDigits && officialDigits && currentDigits === officialDigits) || sameText(current, official);
-}
-
 function sameCountry(current: string, official: string) {
   return normalizeNrhaCountry(current) === normalizeNrhaCountry(official);
-}
-
-function sameText(current: string, official: string) {
-  return normalizeText(current) === normalizeText(official);
 }
 
 function deriveMiddleName(fullName: string, firstName: string, lastName: string) {
@@ -352,14 +409,6 @@ function deriveMiddleName(fullName: string, firstName: string, lastName: string)
   return fullParts.slice(start, end).join(" ");
 }
 
-function normalizeText(value: string | null | undefined) {
-  return (value ?? "")
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
 
 function contactNrhaLocalValues(contact: Contact, memberNumber: string): NrhaMemberLocalValues {
   return {
@@ -424,8 +473,10 @@ function normalizeNrhaCountry(value: string | null | undefined) {
 
 export {
   contactNrhaLocalValues,
+  compareNrhaMemberIdentity,
   integerFromMembershipNumber,
   nrhaMemberDataImportRows,
+  nrhaMemberImportDecisionPayload,
   nrhaMemberMismatchMessage,
   nrhaMemberStatus,
   nrhaMemberVerificationFromPayload,

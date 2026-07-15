@@ -3,9 +3,10 @@ import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
-import { uiText, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel } from "../dashboard/shared";
+import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import { uiText, horseExternalReferenceChips, horseGenderLabel, todayDateValue } from "../dashboard/shared";
+import { healthComplianceStatusLabel, healthComplianceTone, HorseAssociationComplianceGroups, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
 
@@ -13,20 +14,19 @@ function MyHorsesView({
   locale,
   contacts,
   contactRoles,
-  canManageHealthDocuments,
-  externalOrganizations,
+  externalCredentialIssuers,
   membershipRequirements = [],
   horses,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horseContacts,
+  healthComplianceRevision,
   organization,
   profileId,
   onCreateContact,
   onCreateHorse,
   onCreateHorseHealthDocument,
   onDeleteHorse,
-  onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
@@ -34,26 +34,30 @@ function MyHorsesView({
   locale: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
-  canManageHealthDocuments: boolean;
-  externalOrganizations: ExternalOrganization[];
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   horses: Horse[];
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horseContacts: HorseContact[];
+  healthComplianceRevision?: string;
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+  const healthCompliance = useHorseHealthComplianceOverview({
+    horseIds: horses.map((horse) => horse.id),
+    referenceDate: todayDateValue(),
+    refreshToken: healthComplianceRevision,
+  });
 
   async function handleDeleteHorse(horse: Horse) {
     if (!window.confirm(uiText(locale, `Supprimer ${horse.name} et les inscriptions/réservations liées?`, `Delete ${horse.name} and linked entries/reservations?`))) {
@@ -98,7 +102,7 @@ function MyHorsesView({
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={onCreateContact}
@@ -117,11 +121,10 @@ function MyHorsesView({
             locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
-            canManageHealthDocuments={canManageHealthDocuments}
             createdByUserId={profileId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={membershipRequirements}
-            horseExternalMemberships={horseExternalMemberships}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={horseHealthDocuments}
             horseContacts={horseContacts}
             organization={organization}
@@ -129,7 +132,6 @@ function MyHorsesView({
             onCancel={() => setEditingHorse(null)}
             onCreateContact={onCreateContact}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={async (id, input) => {
               await onUpdateHorse(id, input);
               setEditingHorse(null);
@@ -155,11 +157,19 @@ function MyHorsesView({
             <span>Action</span>
           </div>
           {horses.map((horse) => {
-            const healthDisplay = horseHealthDisplay(horse, horseHealthDocuments, organization);
-            const referenceChips = horseExternalReferenceChips(horse, horseExternalMemberships, externalOrganizations);
+            const associationResults = healthCompliance.results.filter((result) => result.horse_id === horse.id);
+            const summaryStatus = associationResults.some((result) => result.compliance_status === "non_compliant")
+              ? "non_compliant"
+              : associationResults.some((result) => result.compliance_status === "pending_review")
+                ? "pending_review"
+                : associationResults.length
+                  ? "compliant"
+                  : null;
+            const summaryTone = summaryStatus ? healthComplianceTone(summaryStatus) : "neutral";
+            const referenceChips = horseExternalReferenceChips(horse, horseExternalIdentifiers, externalCredentialIssuers);
 
             return (
-              <div className={`horse-list-row ${healthDisplay.summary.tone}`} key={horse.id}>
+              <div className={`horse-list-row ${summaryTone}`} key={horse.id}>
                 <div className="horse-list-identity">
                   <strong>{horse.name}</strong>
                   <span>
@@ -172,15 +182,19 @@ function MyHorsesView({
                   ) : null}
                 </div>
                 <div className="horse-list-status">
-                  <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
-                  <div className="horse-chip-row">
-                    {healthDisplay.chips.map((chip) => (
-                      <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}`}>
-                        <span>{chip.label}</span>
-                        <strong>{chip.value}</strong>
-                      </span>
-                    ))}
-                  </div>
+                  <span className={`horse-summary-pill ${summaryTone}`}>
+                    {healthCompliance.loading
+                      ? uiText(locale, "Calcul en cours", "Calculating")
+                      : healthCompliance.error
+                        ? uiText(locale, "Statut indisponible", "Status unavailable")
+                        : summaryStatus
+                          ? healthComplianceStatusLabel(summaryStatus, locale)
+                          : uiText(locale, "Aucune association liée", "No linked association")}
+                  </span>
+                  {healthCompliance.error ? <span className="muted-line">{healthCompliance.error}</span> : null}
+                  {!healthCompliance.loading && !healthCompliance.error ? (
+                    <HorseAssociationComplianceGroups locale={locale} results={associationResults} />
+                  ) : null}
                 </div>
                 <div className="horse-chip-row reference-chip-row">
                   {referenceChips.map((chip) => (

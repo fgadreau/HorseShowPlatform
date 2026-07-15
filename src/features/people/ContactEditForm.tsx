@@ -3,13 +3,16 @@ import type { FormEvent } from "react";
 import { Plus, ShieldCheck } from "lucide-react";
 import { FormActions } from "../../components/ui";
 import { contactLabel, errorMessage } from "../../lib/display";
+import { defaultAcceptedExternalImportKeys } from "../../lib/externalImportProposal";
 import type { Locale } from "../../lib/i18n";
 import { updateContact, verifyNrhaMember } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ExternalOrganization, OrganizationExternalMembershipRequirement } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, OrganizationExternalCredentialRequirement } from "../../types/domain";
 import { uiText, buildExternalMembershipFields, InlineHealthMessage } from "../dashboard/shared";
 import {
   integerFromMembershipNumber,
+  compareNrhaMemberIdentity,
   nrhaMemberDataImportRows,
+  nrhaMemberImportDecisionPayload,
   nrhaMemberMismatchMessage,
   nrhaMemberStatus,
   nrhaMemberVerificationFromPayload,
@@ -23,8 +26,8 @@ import {
 function ContactEditForm({
   locale = "fr",
   contact,
-  contactExternalMemberships,
-  externalOrganizations = [],
+  contactExternalIdentifiers,
+  externalCredentialIssuers = [],
   membershipRequirements = [],
   onCancel,
   onUpdateContact,
@@ -32,9 +35,9 @@ function ContactEditForm({
 }: {
   locale?: Locale;
   contact: Contact;
-  contactExternalMemberships?: ContactExternalMembership[];
-  externalOrganizations?: ExternalOrganization[];
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  contactExternalIdentifiers?: ContactExternalIdentifier[];
+  externalCredentialIssuers?: ExternalCredentialIssuer[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   onCancel: () => void;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
@@ -54,30 +57,34 @@ function ContactEditForm({
   const [country, setCountry] = useState(contact.country ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(contact.date_of_birth ?? "");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>(() =>
-    Object.fromEntries((contactExternalMemberships ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_organization_id, membership.membership_number])),
+    Object.fromEntries((contactExternalIdentifiers ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_credential_issuer_id, membership.identifier_value])),
   );
   const [nrhaMemberBusy, setNrhaMemberBusy] = useState(false);
   const [nrhaMemberMessage, setNrhaMemberMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaMemberLookup, setNrhaMemberLookup] = useState<Awaited<ReturnType<typeof verifyNrhaMember>> | null>(null);
   const [nrhaMemberVerification, setNrhaMemberVerification] = useState<NrhaMemberVerificationState | null>(null);
+  const [nrhaMemberImportEvidence, setNrhaMemberImportEvidence] = useState<Record<string, unknown> | null>(null);
   const [saveMessage, setSaveMessage] = useState<InlineHealthMessage | null>(null);
   const [busy, setBusy] = useState(false);
   const contactMemberships = useMemo(
-    () => contactExternalMemberships?.filter((membership) => membership.contact_id === contact.id) ?? [],
-    [contact.id, contactExternalMemberships],
+    () => contactExternalIdentifiers?.filter((membership) => membership.contact_id === contact.id) ?? [],
+    [contact.id, contactExternalIdentifiers],
   );
   const externalMembershipFields = useMemo(
-    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements, contactMemberships),
-    [contactMemberships, externalOrganizations, membershipRequirements, type],
+    () => buildExternalMembershipFields(type, externalCredentialIssuers, membershipRequirements, contactMemberships),
+    [contactMemberships, externalCredentialIssuers, membershipRequirements, type],
   );
-  const nrhaExternalOrganization = externalMembershipFields.find((field) => field.organization.code.toUpperCase() === "NRHA")?.organization ?? null;
-  const nrhaOrganizationId = nrhaExternalOrganization?.id ?? null;
+  const nrhaExternalCredentialIssuer = externalMembershipFields.find((field) => field.organization.code.toUpperCase() === "NRHA")?.organization ?? null;
+  const nrhaOrganizationId = nrhaExternalCredentialIssuer?.id ?? null;
   const currentNrhaMemberNumber = nrhaOrganizationId ? membershipNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
   const existingNrhaMembership = nrhaOrganizationId
-    ? contactMemberships.find((membership) => membership.external_organization_id === nrhaOrganizationId) ?? null
+    ? contactMemberships.find((membership) => membership.external_credential_issuer_id === nrhaOrganizationId) ?? null
     : null;
   const existingNrhaLookup = nrhaMemberVerificationFromPayload(existingNrhaMembership?.verification_payload);
-  const existingNrhaOfficialValues = existingNrhaLookup ? nrhaOfficialMemberValues(existingNrhaLookup, { memberNumber: existingNrhaMembership?.membership_number }) : null;
+  const existingNrhaImportEvidence = existingNrhaMembership?.verification_payload?.externalImportDecision
+    ? existingNrhaMembership.verification_payload
+    : null;
+  const existingNrhaOfficialValues = existingNrhaLookup ? nrhaOfficialMemberValues(existingNrhaLookup, { memberNumber: existingNrhaMembership?.identifier_value }) : null;
   const currentNrhaLocalValues: NrhaMemberLocalValues = {
     address,
     addressLine2,
@@ -109,7 +116,7 @@ function ContactEditForm({
       ? {
           memberNumber: currentNrhaMemberNumber,
           officialValues: existingNrhaOfficialValues,
-          organizationId: existingNrhaMembership.external_organization_id,
+          organizationId: existingNrhaMembership.external_credential_issuer_id,
           payload: existingNrhaMembership.verification_payload ?? (existingNrhaLookup ? nrhaMemberVerificationPayload(existingNrhaLookup) : {}),
         }
       : null;
@@ -161,13 +168,13 @@ function ContactEditForm({
           const verifiedMembership = verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember : null;
 
           return {
-            external_organization_id: field.organization.id,
-            membership_number: membershipNumbers[field.organization.id] ?? "",
+            external_credential_issuer_id: field.organization.id,
+            identifier_value: membershipNumbers[field.organization.id] ?? "",
             status: verifiedMembership ? nrhaMemberStatus(verifiedMembership.officialValues) : "unknown",
             expires_on: verifiedMembership ? verifiedMembership.officialValues.expiresOn || null : null,
             verified_at: verifiedMembership ? new Date().toISOString() : null,
-            verification_payload: verifiedMembership ? verifiedMembership.payload : undefined,
-            verification_source: verifiedMembership ? "nrha_api" : null,
+            verification_payload: field.organization.id === nrhaOrganizationId ? verifiedMembership?.payload ?? nrhaMemberImportEvidence ?? existingNrhaImportEvidence ?? undefined : undefined,
+            verification_source: field.organization.id === nrhaOrganizationId && (verifiedMembership || nrhaMemberImportEvidence || existingNrhaImportEvidence) ? "nrha_api" : null,
           };
         }),
       });
@@ -185,6 +192,7 @@ function ContactEditForm({
     setNrhaMemberMessage(null);
     setNrhaMemberLookup(null);
     setNrhaMemberVerification(null);
+    setNrhaMemberImportEvidence(null);
   }
 
   async function handleVerifyNrhaMember() {
@@ -193,6 +201,7 @@ function ContactEditForm({
     setNrhaMemberMessage(null);
     setNrhaMemberLookup(null);
     setNrhaMemberVerification(null);
+    setNrhaMemberImportEvidence(null);
 
     if (!nrhaOrganizationId) {
       setNrhaMemberMessage({
@@ -229,6 +238,10 @@ function ContactEditForm({
         memberNumber,
       });
       const officialValues = nrhaOfficialMemberValues(verification, { memberNumber });
+      const identityComparison = compareNrhaMemberIdentity(
+        { ...stateNrhaLocalValues, memberNumber: String(memberNumber) },
+        officialValues,
+      );
 
       if (verification.status === "not_found" || !verification.member) {
         setNrhaMemberMessage({
@@ -240,12 +253,12 @@ function ContactEditForm({
 
       setNrhaMemberLookup(verification);
 
-      if (verification.status === "verified" && verification.matched) {
+      if (verification.status === "verified" && verification.matched && identityComparison.verdict === "match") {
         setNrhaMemberVerification({
           memberNumber: String(memberNumber),
           officialValues,
           organizationId: nrhaOrganizationId,
-          payload: nrhaMemberVerificationPayload(verification),
+          payload: nrhaMemberVerificationPayload(verification, identityComparison),
         });
         setNrhaMemberMessage({
           tone: "success",
@@ -256,7 +269,7 @@ function ContactEditForm({
 
       setNrhaMemberMessage({
         tone: "info",
-        message: `${nrhaMemberMismatchMessage(verification, locale)} ${uiText(locale, "Tu peux importer les données officielles ci-dessous.", "You can import the official data below.")}`,
+        message: `${nrhaMemberMismatchMessage(verification, locale, identityComparison)} ${uiText(locale, "Tu peux importer les données officielles ci-dessous.", "You can import the official data below.")}`,
       });
     } catch (error) {
       setNrhaMemberMessage({
@@ -269,11 +282,31 @@ function ContactEditForm({
   }
 
   function handleApplyNrhaMemberData(keys: NrhaMemberDataImportRow["key"][]) {
-    if (!activeNrhaOfficialValues || !nrhaOrganizationId) {
+    const activeLookup = nrhaMemberLookup ?? existingNrhaLookup;
+
+    if (!activeNrhaOfficialValues || !nrhaOrganizationId || !activeLookup) {
       return;
     }
 
     const selectedKeys = new Set(keys);
+    const intendedValues: NrhaMemberLocalValues = {
+      address: selectedKeys.has("address") ? activeNrhaOfficialValues.address : address,
+      addressLine2: selectedKeys.has("addressLine2") ? activeNrhaOfficialValues.addressLine2 : addressLine2,
+      city: selectedKeys.has("city") ? activeNrhaOfficialValues.city : city,
+      country: selectedKeys.has("country") ? activeNrhaOfficialValues.country : country,
+      email: selectedKeys.has("email") ? activeNrhaOfficialValues.email : email,
+      expiresOn: selectedKeys.has("expiresOn") ? activeNrhaOfficialValues.expiresOn : currentNrhaLocalValues.expiresOn,
+      firstName: selectedKeys.has("firstName") ? activeNrhaOfficialValues.firstName : firstName,
+      lastName: selectedKeys.has("lastName") ? activeNrhaOfficialValues.lastName : lastName,
+      middleName: selectedKeys.has("middleName") ? activeNrhaOfficialValues.middleName : middleName,
+      memberNumber: selectedKeys.has("memberNumber") ? activeNrhaOfficialValues.memberNumber : currentNrhaMemberNumber,
+      phone: selectedKeys.has("phone") ? activeNrhaOfficialValues.phone : phone,
+      state: selectedKeys.has("state") ? activeNrhaOfficialValues.state : state,
+      zipCode: selectedKeys.has("zipCode") ? activeNrhaOfficialValues.zipCode : zipCode,
+    };
+    const comparison = compareNrhaMemberIdentity(intendedValues, activeNrhaOfficialValues);
+    const importPayload = nrhaMemberImportDecisionPayload(activeLookup, nrhaMemberRows, selectedKeys, comparison);
+    setNrhaMemberImportEvidence(importPayload);
     applyMemberValues(activeNrhaOfficialValues, selectedKeys);
 
     if (nrhaMemberRows.every((row) => selectedKeys.has(row.key))) {
@@ -281,7 +314,7 @@ function ContactEditForm({
         memberNumber: activeNrhaOfficialValues.memberNumber || currentNrhaMemberNumber,
         officialValues: activeNrhaOfficialValues,
         organizationId: nrhaOrganizationId,
-        payload: nrhaMemberLookup ? nrhaMemberVerificationPayload(nrhaMemberLookup) : existingNrhaMembership?.verification_payload ?? {},
+        payload: importPayload,
       });
       setNrhaMemberMessage({
         tone: "success",
@@ -530,11 +563,11 @@ function NrhaMemberDataPanel({
   rows: NrhaMemberDataImportRow[];
   onApply: (keys: NrhaMemberDataImportRow["key"][]) => void;
 }) {
-  const [selectedKeys, setSelectedKeys] = useState<Set<NrhaMemberDataImportRow["key"]>>(() => new Set(rows.map((row) => row.key)));
+  const [selectedKeys, setSelectedKeys] = useState<Set<NrhaMemberDataImportRow["key"]>>(() => new Set(defaultAcceptedExternalImportKeys(rows)));
   const rowSelectionSignature = rows.map((row) => `${row.key}:${row.current}:${row.official}`).join("|");
 
   useEffect(() => {
-    setSelectedKeys(new Set(rows.map((row) => row.key)));
+    setSelectedKeys(new Set(defaultAcceptedExternalImportKeys(rows)));
   }, [rowSelectionSignature]);
 
   function toggleKey(key: NrhaMemberDataImportRow["key"]) {
@@ -555,7 +588,7 @@ function NrhaMemberDataPanel({
     <div className="nrha-data-import-panel">
       <div className="inline-form-header">
         <strong>{uiText(locale, "Données NRHA disponibles", "Available NRHA data")}</strong>
-        <span>{uiText(locale, "Importe les valeurs officielles qui manquent ou qui ont changé dans HSP.", "Import official values missing or changed in HSP.")}</span>
+        <span>{uiText(locale, "Les champs vides sont présélectionnés. Toute valeur HSP existante à remplacer doit être cochée explicitement.", "Missing fields are preselected. Any existing HSP value to replace must be checked explicitly.")}</span>
       </div>
       <div className="nrha-data-import-list">
         {rows.map((row) => (

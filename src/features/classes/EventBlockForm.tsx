@@ -3,8 +3,8 @@ import type { FormEvent } from "react";
 import { SearchSelect } from "../../components/ui";
 import { findById, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createClass } from "../../services/supabaseServices";
-import type { ClassRecord, Organization, Show, ShowDay } from "../../types/domain";
+import { createBlock } from "../../services/supabaseServices";
+import type { Block, Organization, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showDayLabel } from "./classUtils";
 
@@ -17,7 +17,7 @@ function EventBlockForm({
   organization,
   showDays,
   shows,
-  onCreateClass,
+  onCreateBlock,
   onCreated,
 }: {
   locale?: Locale;
@@ -26,7 +26,7 @@ function EventBlockForm({
   organization: Organization | null;
   showDays: ShowDay[];
   shows: Show[];
-  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
+  onCreateBlock: (input: Parameters<typeof createBlock>[0]) => Promise<Block>;
   onCreated?: () => void;
 }) {
   const [showId, setShowId] = useState(defaultShowId ?? "");
@@ -45,15 +45,15 @@ function EventBlockForm({
 
     setSubmitting(true);
     try {
-      await onCreateClass({
+      await onCreateBlock({
         organization_id: organization.id,
         show_id: showId,
         show_day_id: showDayId || undefined,
         name: name.trim(),
-        block_label: eventType || undefined,
+        display_label: eventType || undefined,
         schedule_start_mode: scheduledTime ? "fixed" : "unscheduled",
         scheduled_time: scheduledTime ? `${scheduledTime}:00` : null,
-        is_event_block: true,
+        block_type: "event",
       });
       onCreated?.();
     } finally {

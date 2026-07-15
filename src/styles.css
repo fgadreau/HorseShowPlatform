@@ -3852,6 +3852,196 @@ button:focus-visible {
   background: #f7faf9;
 }
 
+.health-association-groups {
+  display: grid;
+  gap: 7px;
+}
+
+.health-association-group {
+  align-items: center;
+  display: grid;
+  gap: 7px;
+  grid-template-columns: minmax(110px, auto) 1fr;
+}
+
+.health-association-group-label {
+  color: #52615c;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.health-association-group-label.success {
+  color: #166534;
+}
+
+.health-association-group-label.warning {
+  color: #9a5b13;
+}
+
+.health-association-group-label.error {
+  color: #b42318;
+}
+
+.health-compliance-board {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.health-compliance-group {
+  background: #fbfdfc;
+  border: 1px solid #dce5e1;
+  border-radius: 10px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.health-compliance-group.success {
+  border-color: #bfe8cd;
+}
+
+.health-compliance-group.warning {
+  border-color: #f5d69b;
+}
+
+.health-compliance-group.error {
+  border-color: #ffc9c4;
+}
+
+.health-compliance-group > header {
+  align-items: flex-start;
+  background: #f2f6f4;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  padding: 14px;
+}
+
+.health-compliance-group.success > header {
+  background: #f0fbf4;
+}
+
+.health-compliance-group.warning > header {
+  background: #fff8ec;
+}
+
+.health-compliance-group.error > header {
+  background: #fff4f2;
+}
+
+.health-compliance-group > header h3,
+.health-compliance-group > header p {
+  margin: 0;
+}
+
+.health-compliance-group > header h3 {
+  font-size: 16px;
+}
+
+.health-compliance-group > header p {
+  color: #63766f;
+  font-size: 12px;
+  line-height: 1.4;
+  margin-top: 4px;
+}
+
+.health-compliance-group > header > strong {
+  align-items: center;
+  background: #ffffff;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 13px;
+  height: 30px;
+  justify-content: center;
+  min-width: 30px;
+}
+
+.health-compliance-group.success > header > strong {
+  color: #166534;
+}
+
+.health-compliance-group.warning > header > strong {
+  color: #9a5b13;
+}
+
+.health-compliance-group.error > header > strong {
+  color: #b42318;
+}
+
+.health-compliance-rows {
+  display: grid;
+}
+
+.health-compliance-row {
+  background: #ffffff;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.health-compliance-row + .health-compliance-row {
+  border-top: 1px solid #e7eeeb;
+}
+
+.health-compliance-row.success {
+  box-shadow: inset 4px 0 0 #2f9f62;
+}
+
+.health-compliance-row.warning {
+  box-shadow: inset 4px 0 0 #d99222;
+}
+
+.health-compliance-row.error {
+  box-shadow: inset 4px 0 0 #d44a3a;
+}
+
+.strong-line {
+  font-weight: 800;
+}
+
+.directory-discipline-picker {
+  display: grid;
+  gap: 5px;
+  margin-top: 8px;
+}
+
+.directory-discipline-label {
+  color: #63766f;
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.directory-discipline-toggle {
+  align-items: center;
+  background: #f7faf9;
+  border: 1px dashed #b9c8c2;
+  border-radius: 999px;
+  color: #52615c;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  gap: 5px;
+  min-height: 28px;
+  padding: 5px 9px;
+}
+
+.directory-discipline-toggle.linked {
+  background: #f0fbf4;
+  border-color: #86d2a2;
+  border-style: solid;
+  color: #166534;
+}
+
+.directory-discipline-toggle:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
 .horse-row-actions {
   justify-content: flex-start;
 }
@@ -4259,6 +4449,15 @@ button:focus-visible {
     gap: 12px;
     grid-template-columns: 1fr;
     padding: 14px;
+  }
+
+  .health-compliance-board {
+    grid-template-columns: 1fr;
+  }
+
+  .health-association-group {
+    align-items: flex-start;
+    grid-template-columns: 1fr;
   }
 
   .notification-card {
@@ -5712,5 +5911,52 @@ button:focus-visible {
     justify-self: auto;
     margin: 8px 16px 0;
     width: calc(100% - 32px);
+  }
+}
+.identity-candidate-review {
+  display: grid;
+  gap: 0.9rem;
+  padding: 1rem;
+  border: 1px solid #f2c36b;
+  border-radius: 14px;
+  background: #fffaf0;
+}
+
+.identity-candidate-review .inline-form-header strong {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.identity-candidate-list {
+  display: grid;
+  gap: 0.7rem;
+}
+
+.identity-candidate-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.85rem;
+  border: 1px solid var(--border-color, #d9dee8);
+  border-radius: 12px;
+  background: white;
+}
+
+.identity-candidate-card > div {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.identity-candidate-card span {
+  color: var(--muted-color, #64748b);
+  font-size: 0.88rem;
+}
+
+@media (max-width: 720px) {
+  .identity-candidate-card {
+    align-items: stretch;
+    flex-direction: column;
   }
 }

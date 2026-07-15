@@ -26,8 +26,6 @@ export type Organization = {
   secondary_tax_name: string | null;
   secondary_tax_number: string | null;
   back_number_policy: OrganizationBackNumberAssignmentMode;
-  health_verification_required: boolean;
-  coggins_validity_months: 6 | 12;
   subscription_plan: PlanTier;
   subscription_status: string;
   subscription_expires_at: string | null;
@@ -35,6 +33,121 @@ export type Organization = {
   modules_enabled: OrganizationModules;
   created_by_user_id: string | null;
   created_at: string;
+};
+
+export type HealthIdentityValidationRequirement = "none" | "identified" | "verified";
+export type HealthPolicyEnforcementMode = "warning" | "blocking";
+export type CogginsValidityRule = "rolling_months" | "calendar_year";
+
+export type OrganizationHealthPolicy = {
+  id: string;
+  organization_id: string;
+  effective_from: string;
+  effective_until: string | null;
+  coggins_required: boolean;
+  coggins_validity_rule: CogginsValidityRule;
+  coggins_validity_months: number;
+  influenza_required: boolean;
+  rhino_required: boolean;
+  combo_vaccine_accepted: boolean;
+  vaccine_validity_months: number;
+  identity_validation_requirement: HealthIdentityValidationRequirement;
+  association_review_required: boolean;
+  enforcement_mode: HealthPolicyEnforcementMode;
+  notes: string | null;
+  created_by_user_id: string | null;
+  updated_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationHealthPolicyInput = Pick<
+  OrganizationHealthPolicy,
+  | "coggins_required"
+  | "coggins_validity_rule"
+  | "coggins_validity_months"
+  | "influenza_required"
+  | "rhino_required"
+  | "combo_vaccine_accepted"
+  | "vaccine_validity_months"
+  | "identity_validation_requirement"
+  | "association_review_required"
+  | "enforcement_mode"
+> & {
+  notes?: string | null;
+};
+
+export type OrganizationHealthDocumentReview = {
+  id: string;
+  organization_id: string;
+  horse_document_id: string;
+  health_policy_id: string | null;
+  version: number;
+  status: "approved" | "rejected";
+  review_notes: string | null;
+  reviewed_by_user_id: string;
+  reviewed_at: string;
+  created_at: string;
+};
+
+export type HorseHealthRequirementStatus =
+  | "not_required"
+  | "valid"
+  | "missing"
+  | "missing_date"
+  | "future_date"
+  | "expired"
+  | "rejected"
+  | "identity_pending"
+  | "identity_mismatch"
+  | "review_pending"
+  | "review_rejected";
+
+export type HorseHealthComplianceStatus =
+  | "not_required"
+  | "compliant"
+  | "pending_review"
+  | "non_compliant";
+
+export type HorseHealthRequirementAssessment = {
+  required: boolean;
+  status: HorseHealthRequirementStatus;
+  document_id: string | null;
+  document_type: string | null;
+  document_status: string | null;
+  test_or_administered_on: string | null;
+  expires_on: string | null;
+  identity_validation_id: string | null;
+  identity_validation_status: string | null;
+  identity_validation_verdict: string | null;
+  association_review_id: string | null;
+  association_review_status: OrganizationHealthDocumentReview["status"] | null;
+};
+
+export type HorseHealthComplianceReason = {
+  code: string;
+  requirement: "coggins" | "influenza" | "rhino";
+  status: HorseHealthRequirementStatus;
+  document_id: string | null;
+  expires_on: string | null;
+};
+
+export type HorseHealthCompliance = {
+  horse_id: string;
+  organization_id: string;
+  reference_date: string;
+  policy_id: string;
+  policy_effective_from: string;
+  compliance_status: HorseHealthComplianceStatus;
+  can_proceed: boolean;
+  enforcement_mode: HealthPolicyEnforcementMode;
+  requirements: Record<"coggins" | "influenza" | "rhino", HorseHealthRequirementAssessment>;
+  reasons: HorseHealthComplianceReason[];
+};
+
+export type HorseHealthComplianceOverview = HorseHealthCompliance & {
+  organization_name: string;
+  organization_short_name: string | null;
 };
 
 export type PlanTier = 'community' | 'professional' | 'premium';
@@ -81,6 +194,11 @@ export type Show = {
   default_currency: string | null;
   tax_rate: number | null;
   is_public: boolean;
+  entry_deadline_mode: "show" | "block";
+  entries_close_at: string | null;
+  reservations_close_at: string | null;
+  late_entries_allowed: boolean;
+  late_entry_fee_percent: number;
   reservation_payment_policy: "pay_at_booking" | "manual";
   entry_payment_policy: "card_on_file_preauth" | "manual";
   entry_preauth_timing: "show_start" | "manual";
@@ -190,7 +308,6 @@ export type ManualSale = {
 
 export type Contact = {
   id: string;
-  organization_id: string;
   type: "owner" | "agent" | "rider" | "payer" | "other";
   first_name: string;
   middle_name: string | null;
@@ -238,23 +355,97 @@ export type HorseOrganizationLink = {
   created_at: string;
 };
 
-export type ExternalOrganization = {
+export type DirectorySource = "manual" | "entry" | "membership" | "relationship" | "reservation" | "import";
+
+export type DirectoryContact = {
+  id: string;
+  organization_discipline_id: string;
+  contact_id: string;
+  source: DirectorySource;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DirectoryHorse = {
+  id: string;
+  organization_discipline_id: string;
+  horse_id: string;
+  source: DirectorySource;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExternalCredentialIssuerType =
+  | "provincial_territorial_sport_organization"
+  | "national_sport_organization"
+  | "breed_registry"
+  | "sanctioning_organization"
+  | "other";
+
+export type ExternalCredentialIssuer = {
   id: string;
   code: string;
   name: string;
-  verification_provider: string | null;
-  verification_url: string | null;
-  verification_enabled: boolean;
+  issuer_type: ExternalCredentialIssuerType;
+  country_code: string | null;
+  subdivision_code: string | null;
+  website_url: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
-export type OrganizationExternalMembershipRequirement = {
+export type ExternalDataSourceType = "api" | "manual_import" | "document" | "public_registry";
+export type ExternalDataSourceStatus = "planned" | "available" | "degraded" | "unavailable" | "retired";
+
+export type ExternalDataSource = {
+  id: string;
+  code: string;
+  name: string;
+  source_type: ExternalDataSourceType;
+  operational_status: ExternalDataSourceStatus;
+  base_url: string | null;
+  documentation_url: string | null;
+  capabilities: Record<string, unknown>;
+  configuration: Record<string, unknown>;
+  availability_checked_at: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExternalSourceGoverningBody = {
+  external_data_source_id: string;
+  governing_body_id: string;
+  relationship_type: "official" | "authorized" | "third_party" | "manual";
+  data_scope: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationExternalCredentialRequirement = {
   id: string;
   organization_id: string;
-  external_organization_id: string;
+  external_credential_issuer_id: string;
   contact_type: Contact["type"];
+  identifier_type: ContactExternalIdentifier["identifier_type"];
+  requirement_group_code: string | null;
+  match_rule: "all" | "at_least_one";
+  validity_rule: "present" | "active_on_reference_date";
+  enforcement_mode: "warning" | "blocking";
   is_required: boolean;
+  metadata: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
 export type OrganizationMembershipType = {
@@ -293,38 +484,64 @@ export type ContactOrganizationMembership = {
   updated_at: string;
 };
 
-export type ContactExternalMembership = {
+export type ContactExternalIdentifier = {
   id: string;
   contact_id: string;
-  external_organization_id: string;
-  membership_number: string;
-  status: "active" | "pending" | "expired" | "unknown";
+  external_credential_issuer_id: string;
+  identifier_type: "membership" | "license" | "registration" | "certification" | "other";
+  identifier_value: string;
+  normalized_identifier_value: string;
+  status: "active" | "pending" | "expired" | "inactive" | "revoked" | "unknown";
+  valid_from: string | null;
   expires_on: string | null;
   verified_at: string | null;
+  verified_by_external_data_source_id: string | null;
+  latest_snapshot_id: string | null;
+  metadata: Record<string, unknown>;
+  /** Hydrated compatibility fields for the existing NRHA review UI. */
   verification_source: string | null;
   verification_payload: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
-export type HorseExternalMembership = {
+export type HorseExternalIdentifier = {
   id: string;
   horse_id: string;
-  external_organization_id: string;
-  reference_type: "competition_license" | "registration" | "membership" | "other";
-  reference_number: string;
-  status: "active" | "pending" | "expired" | "unknown";
+  external_credential_issuer_id: string;
+  identifier_type: "competition_license" | "registration" | "membership" | "microchip" | "passport" | "other";
+  identifier_value: string;
+  normalized_identifier_value: string;
+  status: "active" | "pending" | "expired" | "inactive" | "revoked" | "unknown";
+  valid_from: string | null;
   expires_on: string | null;
   verified_at: string | null;
+  verified_by_external_data_source_id: string | null;
+  latest_snapshot_id: string | null;
+  metadata: Record<string, unknown>;
+  /** Hydrated compatibility fields for the existing NRHA review UI. */
   verification_source: string | null;
   verification_payload: Record<string, unknown>;
   created_at: string;
+  updated_at: string;
 };
 
-export type HorseHealthDocument = {
+export type HorseDocumentCategory = "health" | "registration" | "other";
+export type HorseDocumentType =
+  | "coggins_eia"
+  | "influenza_vaccine"
+  | "rhino_vaccine"
+  | "combo_vaccine"
+  | "breed_registration"
+  | "breed_pedigree"
+  | "ownership_certificate"
+  | "other";
+
+export type HorseDocument = {
   id: string;
-  organization_id: string;
   horse_id: string;
-  document_type: "coggins_eia" | "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other";
+  document_category: HorseDocumentCategory;
+  document_type: HorseDocumentType;
   status: "pending_review" | "verified" | "approved" | "rejected" | "expired";
   verification_source: "manual" | "gvl_qr" | "gvl_url" | "gvl_api" | "upload";
   source_url: string | null;
@@ -337,6 +554,15 @@ export type HorseHealthDocument = {
   horse_name: string | null;
   horse_date_of_birth: string | null;
   horse_external_id: string | null;
+  external_credential_issuer_id: string | null;
+  registration_number: string | null;
+  breed_name: string | null;
+  original_file_name: string | null;
+  mime_type: string | null;
+  file_size_bytes: number | null;
+  content_sha256: string | null;
+  metadata: Record<string, unknown>;
+  uploaded_by_organization_id: string | null;
   warnings: string[];
   payload: Record<string, unknown>;
   reviewed_by_user_id: string | null;
@@ -344,11 +570,84 @@ export type HorseHealthDocument = {
   review_notes: string | null;
   created_by_user_id: string | null;
   created_at: string;
+  updated_at: string;
+};
+
+/** Compatibility name used by the existing health UI while horse_documents becomes canonical. */
+export type HorseHealthDocument = HorseDocument;
+
+export type HorseDocumentValidationStatus = "identified" | "verified" | "mismatch" | "rejected" | "superseded" | "invalidated";
+export type HorseDocumentValidationSource = "manual" | "ocr" | "qr" | "external_api" | "import";
+
+export type HorseDocumentValidation = {
+  id: string;
+  horse_document_id: string;
+  horse_id: string;
+  version: number;
+  status: HorseDocumentValidationStatus;
+  source: HorseDocumentValidationSource;
+  comparison_profile: "health_document_horse" | "external_horse";
+  extracted_horse_name: string | null;
+  extracted_date_of_birth: string | null;
+  extracted_birth_year: number | null;
+  extracted_age_years: number | null;
+  extracted_age_reference_date: string | null;
+  extracted_gender: string | null;
+  extracted_breed: string | null;
+  extracted_color: string | null;
+  extracted_identifier: string | null;
+  extracted_owner_name: string | null;
+  horse_identity_snapshot: Record<string, unknown>;
+  comparison_result: Record<string, unknown>;
+  evidence: Record<string, unknown>[];
+  source_payload: Record<string, unknown>;
+  warnings: string[];
+  verdict: "match" | "possible_match" | "mismatch" | "insufficient_data";
+  score: number;
+  confidence: "certain" | "probable" | "weak";
+  created_by_user_id: string;
+  created_at: string;
+  superseded_by_validation_id: string | null;
+  superseded_at: string | null;
+  invalidated_by_correction_id: string | null;
+  invalidated_at: string | null;
+  invalidated_fields: string[] | null;
+};
+
+export type HorseIdentityCorrection = {
+  id: string;
+  horse_id: string;
+  reason: string;
+  changed_fields: string[];
+  before_identity: Record<string, unknown>;
+  after_identity: Record<string, unknown>;
+  status: "pending" | "applied";
+  created_by_user_id: string;
+  created_at: string;
+  applied_at: string | null;
+};
+
+export type HorseIdentityLockField =
+  | "name"
+  | "date_of_birth"
+  | "birth_year"
+  | "gender"
+  | "breed"
+  | "registration_number"
+  | "registration_status"
+  | "external_identifier";
+
+export type HorseIdentityLock = {
+  lock_field: HorseIdentityLockField;
+  validation_id: string;
+  horse_document_id: string;
+  document_type: HorseDocumentType;
+  external_credential_issuer_id: string | null;
+  validation_version: number;
 };
 
 export type Horse = {
   id: string;
-  organization_id: string;
   name: string;
   breed: string | null;
   color: string | null;
@@ -356,6 +655,7 @@ export type Horse = {
   date_of_birth: string | null;
   birth_year: number | null;
   registration_number: string | null;
+  registration_status: "registered" | "grade" | "unknown";
   sire_name: string | null;
   dam_name: string | null;
   primary_owner_contact_id: string;
@@ -364,7 +664,6 @@ export type Horse = {
 
 export type HorseContact = {
   id: string;
-  organization_id: string;
   horse_id: string;
   contact_id: string;
   role: "owner" | "co-owner" | "agent" | "rider" | "manager";
@@ -396,13 +695,115 @@ export type OrganizationBackNumber = {
 };
 
 export type SanctioningBody = {
+  id: string;
   code: string;
   name: string;
-  back_number_policy: BackNumberPolicy;
-  rule_notes: string | null;
+  default_back_number_policy: BackNumberPolicy;
+  description: string | null;
+  is_active: boolean;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+};
+
+export type GoverningBodyAssignment = {
+  governing_body_id: string;
+  code: string;
+  name: string;
+  reporting_class_code: string | null;
+  eligibility_profile_code: string | null;
+  sanction_metadata: Record<string, unknown>;
+};
+
+export type GoverningBodyAssignmentInput = {
+  governing_body_id: string;
+  reporting_class_code?: string | null;
+  eligibility_profile_code?: string | null;
+  sanction_metadata?: Record<string, unknown>;
+};
+
+export type Discipline = {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  is_active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationDiscipline = {
+  id: string;
+  organization_id: string;
+  discipline_id: string;
+  is_default: boolean;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type Slate = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  governing_body_id: string | null;
+  name: string;
+  technical_number: string | null;
+  sort_order: number;
+  reporting_rules: Record<string, unknown>;
+  notes: string | null;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type SlateInput = {
+  organization_id: string;
+  show_id: string;
+  governing_body_id?: string | null;
+  name: string;
+  technical_number?: string | null;
+  sort_order?: number;
+  reporting_rules?: Record<string, unknown>;
+  notes?: string | null;
+  created_by_user_id?: string | null;
+};
+
+export type SlateUpdateInput = Partial<Omit<SlateInput, "organization_id" | "show_id">>;
+
+export type BlockJudgeAssignment = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  block_id: string;
+  judge_user_profile_id: string | null;
+  judge_contact_id: string | null;
+  display_name: string;
+  assignment_role: "judge" | "chair" | "alternate";
+  sort_order: number;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlockConcurrencyGroup = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  name: string;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BlockConcurrencyGroupMember = {
+  group_id: string;
+  block_id: string;
+  sort_order: number;
+  created_at: string;
 };
 
 export type EligibilityRules = {
@@ -453,7 +854,7 @@ export type PayoutResultSnapshotRow = {
 export type PayoutCalculation = {
   id: string;
   show_id: string;
-  division_id: string;
+  class_id: string;
   import_batch_id: string | null;
   status: PayoutCalculationStatus;
   currency: string;
@@ -492,18 +893,16 @@ export type PayoutAward = {
   updated_at: string;
 };
 
-export type ClassTemplate = {
+export type BlockTemplate = {
   id: string;
   organization_id: string;
   name: string;
   code: string | null;
   block_label: string | null;
   category: string | null;
-  default_pattern: string | null;
-  default_entry_fee: number | null;
-  sanctioning_body_codes: string[];
-  back_number_policy: BackNumberPolicy;
-  eligibility_rules: EligibilityRules;
+  pattern: string | null;
+  custom_pattern: Record<string, unknown> | null;
+  block_type: Block["block_type"];
   sort_order: number;
   is_active: boolean;
   notes: string | null;
@@ -511,10 +910,11 @@ export type ClassTemplate = {
   updated_at: string;
 };
 
-export type ClassTemplateDivision = {
+export type ClassTemplate = {
   id: string;
   organization_id: string;
-  class_template_id: string;
+  block_template_id: string;
+  organization_discipline_id: string;
   name: string;
   code: string | null;
   level: number | null;
@@ -527,7 +927,8 @@ export type ClassTemplateDivision = {
   default_sanctioning_fee_percent: number | null;
   default_payout_rules: Record<string, unknown>;
   default_payout_notes: string | null;
-  sanctioning_body_codes: string[];
+  back_number_policy_override: BackNumberPolicy | null;
+  governing_body_assignments: GoverningBodyAssignment[];
   eligibility_rules: EligibilityRules;
   sort_order: number;
   notes: string | null;
@@ -535,35 +936,32 @@ export type ClassTemplateDivision = {
   updated_at: string;
 };
 
-export type ClassRecord = {
+export type Block = {
   id: string;
   organization_id: string;
   show_id: string;
   show_day_id: string | null;
-  class_template_id: string | null;
+  block_template_id: string | null;
+  slate_id: string | null;
   name: string;
-  code: string | null;
-  block_label: string | null;
+  display_label: string | null;
+  block_type: "competition" | "paid_warmup" | "event" | "break" | "ceremony";
   arena: string | null;
   pattern: string | null;
   custom_pattern: Record<string, unknown> | null;
-  sanctioning_body_codes: string[];
-  back_number_policy: BackNumberPolicy;
-  nrha_slate_number: string | null;
   entries_close_at: string | null;
-  late_entries_allowed: boolean;
-  late_entry_fee_percent: number;
   draw_prepared_at: string | null;
-  eligibility_rules: EligibilityRules;
-  judge_name: string | null;
+  judge_display_name: string | null;
   schedule_start_mode: ScheduleStartMode;
   scheduled_time: string | null;
+  estimated_duration: string | null;
   sort_order: number;
-  entry_fee: number | null;
-  status: "open" | "closed" | "running" | "finished";
-  is_public: boolean;
-  is_event_block: boolean;
+  schedule_status: "open" | "closed" | "running" | "finished";
+  schedule_is_public: boolean;
+  results_are_public: boolean;
+  notes: string | null;
   created_at: string;
+  updated_at: string;
 };
 
 export type ShowDay = {
@@ -597,8 +995,8 @@ export type ShowAnnouncementInput = {
   created_by_user_id?: string;
 };
 
-export type ShowScoreClassSetup = {
-  class_id: string;
+export type ShowScoreBlockSetup = {
+  block_id: string;
   organization_id: string;
   show_id: string;
   show_day_id: string | null;
@@ -658,7 +1056,7 @@ export type EntryResult = {
   run_id: string;
   block_run_id: string;
   block_id: string;
-  division_id: string;
+  class_id: string;
   show_id: string;
   final_score: number | null;
   status: ScoredRunStatus;
@@ -681,6 +1079,7 @@ export type ShowScorePaidWarmup = {
   organization_id: string;
   show_id: string;
   show_day_id: string;
+  block_id: string;
   name: string;
   arena: string | null;
   duration_minutes_per_rider: number;
@@ -698,13 +1097,15 @@ export type ShowScorePaidWarmup = {
   updated_at: string;
 };
 
-export type Division = {
+export type ClassRecord = {
   id: string;
   organization_id: string;
   show_id: string;
-  class_id: string;
-  class_template_division_id: string | null;
+  block_id: string;
+  class_template_id: string | null;
+  organization_discipline_id: string;
   name: string;
+  description: string | null;
   level: number | null;
   code: string | null;
   entry_fee: number | null;
@@ -716,9 +1117,16 @@ export type Division = {
   sanctioning_fee_percent: number | null;
   payout_rules: Record<string, unknown>;
   payout_notes: string | null;
-  sanctioning_body_codes: string[];
+  minimum_entries: number;
+  registration_status: "draft" | "open" | "closed" | "cancelled";
+  is_public: boolean;
+  back_number_policy_override: BackNumberPolicy | null;
+  sort_order: number;
   eligibility_rules: EligibilityRules;
+  notes: string | null;
   created_at: string;
+  updated_at: string;
+  governing_body_assignments: GoverningBodyAssignment[];
 };
 
 export type Entry = {
@@ -726,7 +1134,7 @@ export type Entry = {
   organization_id: string;
   show_id: string;
   horse_id: string;
-  division_id: string;
+  class_id: string;
   import_source: string | null;
   import_batch_id: string | null;
   external_source_key: string | null;
@@ -846,8 +1254,6 @@ export type OrganizationSettingsInput = {
   secondary_tax_name?: string | null;
   secondary_tax_number?: string | null;
   back_number_policy?: Organization["back_number_policy"];
-  health_verification_required?: boolean;
-  coggins_validity_months?: 6 | 12;
 };
 
 export type ShowInput = {
@@ -908,7 +1314,7 @@ export type ContactInput = {
   zip_code?: string;
   country?: string;
   date_of_birth?: string;
-  external_memberships?: ExternalMembershipInput[];
+  external_memberships?: ExternalContactIdentifierInput[];
 };
 
 export type ContactUpdateInput = {
@@ -926,13 +1332,15 @@ export type ContactUpdateInput = {
   zip_code?: string | null;
   country?: string | null;
   date_of_birth?: string | null;
-  external_memberships?: ExternalMembershipInput[];
+  external_memberships?: ExternalContactIdentifierInput[];
 };
 
-export type ExternalMembershipInput = {
-  external_organization_id: string;
-  membership_number: string;
-  status?: ContactExternalMembership["status"];
+export type ExternalContactIdentifierInput = {
+  external_credential_issuer_id: string;
+  identifier_type?: ContactExternalIdentifier["identifier_type"];
+  identifier_value: string;
+  status?: ContactExternalIdentifier["status"];
+  valid_from?: string | null;
   expires_on?: string | null;
   verified_at?: string | null;
   verification_payload?: Record<string, unknown>;
@@ -997,11 +1405,12 @@ export type ManualSaleInput = {
   source_payload?: Record<string, unknown>;
 };
 
-export type ExternalHorseMembershipInput = {
-  external_organization_id: string;
-  reference_type?: HorseExternalMembership["reference_type"];
-  reference_number: string;
-  status?: HorseExternalMembership["status"];
+export type ExternalHorseIdentifierInput = {
+  external_credential_issuer_id: string;
+  identifier_type?: HorseExternalIdentifier["identifier_type"];
+  identifier_value: string;
+  status?: HorseExternalIdentifier["status"];
+  valid_from?: string | null;
   expires_on?: string | null;
   verified_at?: string | null;
   verification_payload?: Record<string, unknown>;
@@ -1019,10 +1428,11 @@ export type HorseInput = {
   date_of_birth?: string | null;
   birth_year?: number;
   registration_number?: string;
+  registration_status?: Horse["registration_status"];
   sire_name?: string;
   dam_name?: string;
   created_by_user_id?: string;
-  external_memberships?: ExternalHorseMembershipInput[];
+  external_memberships?: ExternalHorseIdentifierInput[];
 };
 
 export type HorseUpdateInput = {
@@ -1035,70 +1445,71 @@ export type HorseUpdateInput = {
   date_of_birth?: string | null;
   birth_year?: number | null;
   registration_number?: string | null;
+  registration_status?: Horse["registration_status"];
   sire_name?: string | null;
   dam_name?: string | null;
-  external_memberships?: ExternalHorseMembershipInput[];
+  external_memberships?: ExternalHorseIdentifierInput[];
+  identity_correction_reason?: string;
+};
+
+export type BlockInput = {
+  organization_id: string;
+  show_id: string;
+  name: string;
+  block_template_id?: string | null;
+  slate_id?: string | null;
+  show_day_id?: string;
+  display_label?: string;
+  block_type?: Block["block_type"];
+  arena?: string;
+  pattern?: string;
+  custom_pattern?: Record<string, unknown> | null;
+  entries_close_at?: string | null;
+  draw_prepared_at?: string | null;
+  judge_display_name?: string;
+  schedule_start_mode?: ScheduleStartMode;
+  scheduled_time?: string | null;
+  sort_order?: number;
+  schedule_status?: Block["schedule_status"];
+  schedule_is_public?: boolean;
+  results_are_public?: boolean;
+  notes?: string | null;
+  /** Association applicative; persistée dans block_concurrency_group_members. */
+  concurrent_block_id?: string | null;
+};
+
+export type BlockUpdateInput = {
+  name?: string;
+  block_template_id?: string | null;
+  slate_id?: string | null;
+  show_day_id?: string | null;
+  display_label?: string | null;
+  block_type?: Block["block_type"];
+  arena?: string | null;
+  pattern?: string | null;
+  custom_pattern?: Record<string, unknown> | null;
+  entries_close_at?: string | null;
+  draw_prepared_at?: string | null;
+  judge_display_name?: string | null;
+  schedule_start_mode?: ScheduleStartMode;
+  scheduled_time?: string | null;
+  sort_order?: number;
+  schedule_status?: Block["schedule_status"];
+  schedule_is_public?: boolean;
+  results_are_public?: boolean;
+  notes?: string | null;
+  /** Association applicative; persistée dans block_concurrency_group_members. */
+  concurrent_block_id?: string | null;
 };
 
 export type ClassInput = {
   organization_id: string;
   show_id: string;
+  block_id: string;
+  organization_discipline_id?: string;
   name: string;
   class_template_id?: string | null;
-  show_day_id?: string;
-  code?: string;
-  block_label?: string;
-  arena?: string;
-  pattern?: string;
-  custom_pattern?: Record<string, unknown> | null;
-  sanctioning_body_codes?: string[];
-  back_number_policy?: BackNumberPolicy;
-  nrha_slate_number?: string | null;
-  entries_close_at?: string | null;
-  late_entries_allowed?: boolean;
-  late_entry_fee_percent?: number;
-  draw_prepared_at?: string | null;
-  eligibility_rules?: EligibilityRules;
-  judge_name?: string;
-  schedule_start_mode?: ScheduleStartMode;
-  scheduled_time?: string | null;
-  sort_order?: number;
-  entry_fee?: number;
-  is_event_block?: boolean;
-};
-
-export type ClassUpdateInput = {
-  name?: string;
-  code?: string | null;
-  class_template_id?: string | null;
-  show_day_id?: string | null;
-  block_label?: string | null;
-  arena?: string | null;
-  pattern?: string | null;
-  custom_pattern?: Record<string, unknown> | null;
-  sanctioning_body_codes?: string[];
-  back_number_policy?: BackNumberPolicy;
-  nrha_slate_number?: string | null;
-  entries_close_at?: string | null;
-  late_entries_allowed?: boolean;
-  late_entry_fee_percent?: number;
-  draw_prepared_at?: string | null;
-  eligibility_rules?: EligibilityRules;
-  judge_name?: string | null;
-  schedule_start_mode?: ScheduleStartMode;
-  scheduled_time?: string | null;
-  sort_order?: number;
-  entry_fee?: number | null;
-  status?: ClassRecord["status"];
-  is_event_block?: boolean;
-};
-
-export type DivisionInput = {
-  organization_id: string;
-  show_id: string;
-  class_id: string;
-  name: string;
-  class_template_division_id?: string | null;
+  description?: string | null;
   code?: string;
   level?: number;
   entry_fee?: number;
@@ -1110,15 +1521,23 @@ export type DivisionInput = {
   sanctioning_fee_percent?: number | null;
   payout_rules?: Record<string, unknown>;
   payout_notes?: string | null;
-  sanctioning_body_codes?: string[];
+  minimum_entries?: number;
+  registration_status?: ClassRecord["registration_status"];
+  is_public?: boolean;
+  back_number_policy_override?: BackNumberPolicy | null;
+  sort_order?: number;
   eligibility_rules?: EligibilityRules;
+  notes?: string | null;
+  governing_body_assignments?: GoverningBodyAssignmentInput[];
 };
 
-export type DivisionUpdateInput = {
-  class_id?: string;
+export type ClassUpdateInput = {
+  block_id?: string;
   show_id?: string;
+  organization_discipline_id?: string;
   name?: string;
-  class_template_division_id?: string | null;
+  class_template_id?: string | null;
+  description?: string | null;
   code?: string | null;
   level?: number | null;
   entry_fee?: number | null;
@@ -1130,44 +1549,47 @@ export type DivisionUpdateInput = {
   sanctioning_fee_percent?: number | null;
   payout_rules?: Record<string, unknown>;
   payout_notes?: string | null;
-  sanctioning_body_codes?: string[];
+  minimum_entries?: number;
+  registration_status?: ClassRecord["registration_status"];
+  is_public?: boolean;
+  back_number_policy_override?: BackNumberPolicy | null;
+  sort_order?: number;
   eligibility_rules?: EligibilityRules;
+  notes?: string | null;
+  governing_body_assignments?: GoverningBodyAssignmentInput[];
 };
 
-export type ClassTemplateInput = {
+export type BlockTemplateInput = {
   organization_id: string;
   name: string;
   code?: string;
   block_label?: string;
   category?: string;
-  default_pattern?: string;
-  default_entry_fee?: number;
-  sanctioning_body_codes?: string[];
-  back_number_policy?: BackNumberPolicy;
-  eligibility_rules?: EligibilityRules;
+  pattern?: string;
+  custom_pattern?: Record<string, unknown> | null;
+  block_type?: Block["block_type"];
   sort_order?: number;
   is_active?: boolean;
   notes?: string;
 };
 
-export type ClassTemplateUpdateInput = {
+export type BlockTemplateUpdateInput = {
   name?: string;
   code?: string | null;
   block_label?: string | null;
   category?: string | null;
-  default_pattern?: string | null;
-  default_entry_fee?: number | null;
-  sanctioning_body_codes?: string[];
-  back_number_policy?: BackNumberPolicy;
-  eligibility_rules?: EligibilityRules;
+  pattern?: string | null;
+  custom_pattern?: Record<string, unknown> | null;
+  block_type?: Block["block_type"];
   sort_order?: number;
   is_active?: boolean;
   notes?: string | null;
 };
 
-export type ClassTemplateDivisionInput = {
+export type ClassTemplateInput = {
   organization_id: string;
-  class_template_id: string;
+  block_template_id: string;
+  organization_discipline_id?: string;
   name: string;
   code?: string;
   level?: number;
@@ -1180,14 +1602,16 @@ export type ClassTemplateDivisionInput = {
   default_sanctioning_fee_percent?: number | null;
   default_payout_rules?: Record<string, unknown>;
   default_payout_notes?: string | null;
-  sanctioning_body_codes?: string[];
+  back_number_policy_override?: BackNumberPolicy | null;
   eligibility_rules?: EligibilityRules;
   sort_order?: number;
   notes?: string;
+  governing_body_assignments?: GoverningBodyAssignmentInput[];
 };
 
-export type ClassTemplateDivisionUpdateInput = {
-  class_template_id?: string;
+export type ClassTemplateUpdateInput = {
+  block_template_id?: string;
+  organization_discipline_id?: string;
   name?: string;
   code?: string | null;
   level?: number | null;
@@ -1200,17 +1624,18 @@ export type ClassTemplateDivisionUpdateInput = {
   default_sanctioning_fee_percent?: number | null;
   default_payout_rules?: Record<string, unknown>;
   default_payout_notes?: string | null;
-  sanctioning_body_codes?: string[];
+  back_number_policy_override?: BackNumberPolicy | null;
   eligibility_rules?: EligibilityRules;
   sort_order?: number;
   notes?: string | null;
+  governing_body_assignments?: GoverningBodyAssignmentInput[];
 };
 
 export type EntryInput = {
   organization_id: string;
   show_id: string;
   horse_id: string;
-  division_id: string;
+  class_id: string;
   created_by_user_id: string;
   owner_contact_id: string;
   rider_contact_id?: string;
@@ -1224,7 +1649,7 @@ export type EntryInput = {
 
 export type EntryUpdateInput = {
   horse_id?: string;
-  division_id?: string;
+  class_id?: string;
   owner_contact_id?: string;
   rider_contact_id?: string | null;
   payer_contact_id?: string;

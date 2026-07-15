@@ -3,10 +3,12 @@ import { Globe2, Lock, X } from "lucide-react";
 import type { ComponentType, FormEvent, ReactNode } from "react";
 import type { Locale } from "../lib/i18n";
 import { contactLabel, findById, itemSearchLabel } from "../lib/display";
-import type { Contact, ContactInput, ContactRole, ContactRoleName, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, PlanTier } from "../types/domain";
+import type { Contact, ContactInput, ContactRole, ContactRoleName, ExternalCredentialIssuer, Organization, OrganizationExternalCredentialRequirement, PlanTier } from "../types/domain";
 import type { Notice } from "../types/ui";
 import { getPlanLabel } from "../utils/planFeatures";
 import { buildExternalMembershipFields } from "../features/dashboard/shared";
+import { ContactIdentityCandidateReview } from "../features/people/IdentityCandidateReview";
+import type { ContactIdentityCandidate } from "../services/supabaseServices";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -236,7 +238,7 @@ export function ContactPicker({
   contactRoles = [],
   createdByUserId,
   disabled = false,
-  externalOrganizations = [],
+  externalCredentialIssuers = [],
   label,
   linkedUserId,
   locale = "fr",
@@ -247,23 +249,29 @@ export function ContactPicker({
   value,
   onChange,
   onCreateContact,
+  onDismissIdentityCandidate,
+  onSearchIdentityCandidates,
+  onUseExistingContact,
 }: {
   allowEmpty?: boolean;
   contacts: Contact[];
   contactRoles?: ContactRole[];
   createdByUserId?: string;
   disabled?: boolean;
-  externalOrganizations?: ExternalOrganization[];
+  externalCredentialIssuers?: ExternalCredentialIssuer[];
   label: string;
   linkedUserId?: string;
   locale?: Locale;
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   placeholder?: string;
   role: ContactRoleName;
   value: string;
   onChange: (contactId: string) => void;
   onCreateContact: (input: ContactInput) => Promise<Contact>;
+  onDismissIdentityCandidate?: (candidate: ContactIdentityCandidate) => Promise<void>;
+  onSearchIdentityCandidates?: (input: ContactInput) => Promise<ContactIdentityCandidate[]>;
+  onUseExistingContact?: (candidate: ContactIdentityCandidate) => Promise<void>;
 }) {
   const [creating, setCreating] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -284,6 +292,8 @@ export function ContactPicker({
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
+  const [identityCandidates, setIdentityCandidates] = useState<ContactIdentityCandidate[]>([]);
+  const [pendingContactInput, setPendingContactInput] = useState<ContactInput | null>(null);
   const visibleContacts = useMemo(() => {
     if (!createdContact || contacts.some((contact) => contact.id === createdContact.id)) {
       return contacts;
@@ -293,8 +303,8 @@ export function ContactPicker({
   }, [contacts, createdContact]);
   const roleLabel = contactRoleLabel(role, locale);
   const externalMembershipFields = useMemo(
-    () => buildExternalMembershipFields(type, externalOrganizations, membershipRequirements),
-    [externalOrganizations, membershipRequirements, type],
+    () => buildExternalMembershipFields(type, externalCredentialIssuers, membershipRequirements),
+    [externalCredentialIssuers, membershipRequirements, type],
   );
   const missingRequiredMembership = externalMembershipFields.some((field) => field.required && !membershipNumbers[field.organization.id]?.trim());
 
@@ -314,6 +324,8 @@ export function ContactPicker({
     setCountry("");
     setDateOfBirth("");
     setMembershipNumbers({});
+    setIdentityCandidates([]);
+    setPendingContactInput(null);
   }
 
   async function handleCreate(event?: FormEvent<HTMLFormElement>) {
@@ -327,7 +339,7 @@ export function ContactPicker({
     setErrorMessage("");
 
     try {
-      const contact = await onCreateContact({
+      const input: ContactInput = {
         organization_id: organization.id,
         type,
         roles: [role],
@@ -347,11 +359,60 @@ export function ContactPicker({
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
         external_memberships: externalMembershipFields.map((field) => ({
-          external_organization_id: field.organization.id,
-          membership_number: membershipNumbers[field.organization.id] ?? "",
+          external_credential_issuer_id: field.organization.id,
+          identifier_value: membershipNumbers[field.organization.id] ?? "",
           status: "unknown",
         })),
-      });
+      };
+
+      if (onSearchIdentityCandidates) {
+        const candidates = await onSearchIdentityCandidates(input);
+        if (candidates.length) {
+          setIdentityCandidates(candidates);
+          setPendingContactInput(input);
+          return;
+        }
+      }
+
+      const contact = await onCreateContact(input);
+      setCreatedContact(contact);
+      onChange(contact.id);
+      resetCreateForm();
+      setCreating(false);
+    } catch (error) {
+      setErrorMessage(contactCreateErrorMessage(error, locale));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleUseExisting(candidate: ContactIdentityCandidate) {
+    if (!onUseExistingContact) return;
+    setBusy(true);
+    setErrorMessage("");
+
+    try {
+      await onUseExistingContact(candidate);
+      onChange(candidate.contact_id);
+      resetCreateForm();
+      setCreating(false);
+    } catch (error) {
+      setErrorMessage(contactCreateErrorMessage(error, locale));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateDistinct() {
+    if (!pendingContactInput) return;
+    setBusy(true);
+    setErrorMessage("");
+
+    try {
+      if (onDismissIdentityCandidate) {
+        await Promise.all(identityCandidates.map((candidate) => onDismissIdentityCandidate(candidate)));
+      }
+      const contact = await onCreateContact(pendingContactInput);
       setCreatedContact(contact);
       onChange(contact.id);
       resetCreateForm();
@@ -594,9 +655,23 @@ export function ContactPicker({
               </div>
             ) : null}
             {errorMessage ? <p className="inline-error">{errorMessage}</p> : null}
-            <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim() || missingRequiredMembership} type="submit">
-              {busy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer et sélectionner", "Create and select")}
-            </button>
+            {identityCandidates.length && pendingContactInput ? (
+              <ContactIdentityCandidateReview
+                busy={busy}
+                candidates={identityCandidates}
+                locale={locale}
+                onCreateDistinct={handleCreateDistinct}
+                onEdit={() => {
+                  setIdentityCandidates([]);
+                  setPendingContactInput(null);
+                }}
+                onUseExisting={handleUseExisting}
+              />
+            ) : (
+              <button className="primary-button" disabled={busy || !firstName.trim() || !lastName.trim() || missingRequiredMembership} type="submit">
+                {busy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer et sélectionner", "Create and select")}
+              </button>
+            )}
           </form>
         </ModalDialog>
       ) : null}
@@ -622,7 +697,7 @@ function contactRoleSummary(contact: Contact, contactRoles: ContactRole[], local
 }
 
 function contactPickerDetail(contact: Contact, contactRoles: ContactRole[], organization: Organization | null, locale: Locale) {
-  const scope = organization && contact.organization_id !== organization.id ? uiText(locale, "Ailleurs dans l'app", "Elsewhere in the app") : uiText(locale, "Association active", "Active organization");
+  const scope = organization ? uiText(locale, "Association active", "Active organization") : uiText(locale, "Contact global", "Global contact");
   return `${contactRoleSummary(contact, contactRoles, locale)} - ${scope}`;
 }
 

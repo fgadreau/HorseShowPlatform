@@ -1,64 +1,112 @@
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { FormActions } from "../../components/ui";
-import { numericValue } from "../../lib/display";
+import { FormActions, SearchSelect } from "../../components/ui";
+import { findById, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { updateClassTemplate } from "../../services/supabaseServices";
-import type { BackNumberPolicy, ClassTemplate, SanctioningBody } from "../../types/domain";
+import type { BackNumberPolicy, BlockTemplate, ClassTemplate, Discipline, OrganizationDiscipline, PayoutScheduleType, SanctioningBody } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
-import { defaultBackNumberPolicy, eligibilityRulesFromNotes, eligibilityNotesFromRules } from "./classUtils";
+import { governingBodyAssignmentsFromSelection, hasSelectedGoverningBodyCode, nrhaClassTypes, eligibilityRulesFromNotes, eligibilityNotesFromRules, nrhaClassTypeFromAssignments, nrhaEligibilityPolicyFromAssignments, applyNrhaApprovedClassChoice, NrhaApprovedClassSelect } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
-import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
-import { showScorePatternSelectValue } from "./showScorePatterns";
+import { PayoutSettingsFields } from "./PayoutSettingsFields";
+import { DisciplineSelect } from "./DisciplineSelect";
 
 function ClassTemplateEditForm({
   locale = "fr",
+  blockTemplates,
   classTemplate,
+  disciplines,
+  organizationDisciplines,
   sanctioningBodies,
   onCancel,
   onUpdateClassTemplate,
 }: {
   locale?: Locale;
+  blockTemplates: BlockTemplate[];
   classTemplate: ClassTemplate;
+  disciplines: Discipline[];
+  organizationDisciplines: OrganizationDiscipline[];
   sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
 }) {
+  const [templateId, setTemplateId] = useState(classTemplate.block_template_id);
+  const [organizationDisciplineId, setOrganizationDisciplineId] = useState(classTemplate.organization_discipline_id);
   const [name, setName] = useState(classTemplate.name);
   const [code, setCode] = useState(classTemplate.code ?? "");
-  const [blockLabel, setBlockLabel] = useState(classTemplate.block_label ?? "");
-  const [category, setCategory] = useState(classTemplate.category ?? "");
-  const [pattern, setPattern] = useState(showScorePatternSelectValue(classTemplate.default_pattern));
   const [entryFee, setEntryFee] = useState(classTemplate.default_entry_fee == null ? "" : String(classTemplate.default_entry_fee));
-  const [sanctioningBodyCodes, setSanctioningBodyCodes] = useState<string[]>(classTemplate.sanctioning_body_codes ?? []);
-  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classTemplate.back_number_policy ?? "horse");
+  const [judgeFee, setJudgeFee] = useState(classTemplate.default_judge_fee == null ? "" : String(classTemplate.default_judge_fee));
+  const [payoutScheduleType, setPayoutScheduleType] = useState<PayoutScheduleType>(classTemplate.default_payout_schedule_type ?? "none");
+  const [addedMoney, setAddedMoney] = useState(classTemplate.default_added_money == null ? "" : String(classTemplate.default_added_money));
+  const [retainagePercent, setRetainagePercent] = useState(classTemplate.default_retainage_percent == null ? "" : String(classTemplate.default_retainage_percent));
+  const [trophyOrPlaqueFee, setTrophyOrPlaqueFee] = useState(classTemplate.default_trophy_or_plaque_fee == null ? "" : String(classTemplate.default_trophy_or_plaque_fee));
+  const [sanctioningFeePercent, setSanctioningFeePercent] = useState(
+    classTemplate.default_sanctioning_fee_percent == null ? "" : String(classTemplate.default_sanctioning_fee_percent),
+  );
+  const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>(classTemplate.default_payout_rules ?? {});
+  const [payoutNotes, setPayoutNotes] = useState(classTemplate.default_payout_notes ?? "");
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classTemplate.eligibility_rules));
-  const [notes, setNotes] = useState(classTemplate.notes ?? "");
-  const [isActive, setIsActive] = useState(classTemplate.is_active);
+  const [governingBodyIds, setGoverningBodyIds] = useState<string[]>(classTemplate.governing_body_assignments.map((assignment) => assignment.governing_body_id));
+  const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>(classTemplate.back_number_policy_override ?? "horse");
+  const [nrhaClassType, setNrhaClassType] = useState(nrhaClassTypeFromAssignments(classTemplate.governing_body_assignments));
+  const initialEligibilityPolicy = nrhaEligibilityPolicyFromAssignments(classTemplate.governing_body_assignments);
+  const [eligibilityCacheTtlHours, setEligibilityCacheTtlHours] = useState(initialEligibilityPolicy.cacheTtlHours);
+  const [sourceUnavailablePolicy, setSourceUnavailablePolicy] = useState<"block" | "allow_with_warning">(initialEligibilityPolicy.sourceUnavailablePolicy);
   const [busy, setBusy] = useState(false);
+  const selectedTemplate = findById(blockTemplates, templateId);
+  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, sanctioningBodies, "NRHA");
 
-  function handleSanctioningBodyCodes(nextCodes: string[]) {
-    setSanctioningBodyCodes(nextCodes);
-    setBackNumberPolicy(defaultBackNumberPolicy(nextCodes, sanctioningBodies));
+  function handleGoverningBodyIds(nextIds: string[]) {
+    setGoverningBodyIds(nextIds);
+
+    if (!hasSelectedGoverningBodyCode(nextIds, sanctioningBodies, "NRHA")) {
+      setNrhaClassType("");
+    }
+  }
+
+  function handleNrhaApprovedClassChange(nextCode: string) {
+    applyNrhaApprovedClassChoice(nextCode, {
+      setCode,
+      setName,
+      setNrhaClassType,
+    });
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (!selectedTemplate || !organizationDisciplineId) {
+      return;
+    }
+
     setBusy(true);
 
     try {
       await onUpdateClassTemplate(classTemplate.id, {
+        block_template_id: selectedTemplate.id,
+        organization_discipline_id: organizationDisciplineId,
         name,
         code: code || null,
-        block_label: blockLabel || null,
-        category: category || null,
-        default_pattern: showScorePatternSelectValue(pattern) || null,
         default_entry_fee: numericValue(entryFee) ?? null,
-        sanctioning_body_codes: sanctioningBodyCodes,
-        back_number_policy: backNumberPolicy,
+        default_judge_fee: numericValue(judgeFee) ?? null,
+        default_payout_schedule_type: payoutScheduleType,
+        default_added_money: numericValue(addedMoney) ?? 0,
+        default_retainage_percent: numericValue(retainagePercent) ?? null,
+        default_trophy_or_plaque_fee: numericValue(trophyOrPlaqueFee) ?? 0,
+        default_sanctioning_fee_percent: numericValue(sanctioningFeePercent) ?? null,
+        default_payout_rules: payoutRules,
+        default_payout_notes: payoutNotes.trim() || null,
+        governing_body_assignments: governingBodyAssignmentsFromSelection({
+          selectedIds: governingBodyIds,
+          sanctioningBodies,
+          existingAssignments: classTemplate.governing_body_assignments,
+          classCode: code,
+          nrhaEligibilityProfileCode: nrhaClassType,
+          eligibilityCacheTtlHours,
+          sourceUnavailablePolicy,
+        }),
+        back_number_policy_override: backNumberPolicy,
         eligibility_rules: eligibilityRulesFromNotes(eligibilityNotes),
-        notes: notes || null,
-        is_active: isActive,
       });
     } finally {
       setBusy(false);
@@ -69,61 +117,98 @@ function ClassTemplateEditForm({
     <section className="panel edit-panel span-2">
       <div className="panel-header">
         <div>
-          <h2>{uiText(locale, "Modifier le bloc récurrent", "Edit recurring block")}</h2>
+          <h2>{uiText(locale, "Modifier la classe récurrente", "Edit recurring class")}</h2>
           <p>{classTemplate.name}</p>
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
         <label>
-          {uiText(locale, "Nom du bloc", "Block name")}
-          <input required value={name} onChange={(event) => setName(event.target.value)} />
+          {uiText(locale, "Bloc récurrent", "Recurring block")}
+          <SearchSelect
+            items={blockTemplates.map((template) => ({ id: template.id, label: template.name, detail: template.category ?? template.block_label ?? "" }))}
+            placeholder={uiText(locale, "Rechercher un bloc récurrent", "Search recurring block")}
+            value={templateId}
+            onChange={setTemplateId}
+          />
         </label>
-        <div className="form-grid">
-          <label>
-            Code
-            <input value={code} onChange={(event) => setCode(event.target.value)} />
-          </label>
-          <label>
-            {uiText(locale, "Catégorie du bloc", "Block category")}
-            <input value={category} onChange={(event) => setCategory(event.target.value)} />
-          </label>
-        </div>
-        <div className="form-grid">
-          <label>
-            {uiText(locale, "Libellé d'horaire", "Schedule label")}
-            <input value={blockLabel} onChange={(event) => setBlockLabel(event.target.value)} />
-          </label>
-          <label>
-            Patron
-            <ShowScorePatternSelect locale={locale} value={pattern} onChange={setPattern} />
-          </label>
-        </div>
-        <label>
-          {uiText(locale, "Frais par défaut", "Default fee")}
-          <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
-        </label>
+        <DisciplineSelect
+          locale={locale}
+          disciplines={disciplines}
+          organizationDisciplines={organizationDisciplines}
+          value={organizationDisciplineId}
+          onChange={setOrganizationDisciplineId}
+        />
         <SanctioningFields
           locale={locale}
           backNumberPolicy={backNumberPolicy}
-          label={uiText(locale, "Sanctions par défaut du bloc", "Default block sanctioning")}
+          label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
           sanctioningBodies={sanctioningBodies}
-          sanctioningBodyCodes={sanctioningBodyCodes}
+          governingBodyIds={governingBodyIds}
+          eligibilityCacheTtlHours={eligibilityCacheTtlHours}
+          sourceUnavailablePolicy={sourceUnavailablePolicy}
           onBackNumberPolicyChange={setBackNumberPolicy}
-          onSanctioningBodyCodesChange={handleSanctioningBodyCodes}
+          onGoverningBodyIdsChange={handleGoverningBodyIds}
+          onEligibilityCacheTtlHoursChange={setEligibilityCacheTtlHours}
+          onSourceUnavailablePolicyChange={setSourceUnavailablePolicy}
         />
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Nom de classe", "Class name")}
+            <input required value={name} onChange={(event) => setName(event.target.value)} />
+          </label>
+          <label>
+            {classIsNrha ? uiText(locale, "Classe NRHA", "NRHA class") : "Code"}
+            {classIsNrha ? <NrhaApprovedClassSelect locale={locale} value={code} onChange={handleNrhaApprovedClassChange} /> : <input value={code} onChange={(event) => setCode(event.target.value)} />}
+          </label>
+        </div>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Frais d'inscription", "Entry fee")}
+            <input min="0" step="0.01" type="number" value={entryFee} onChange={(event) => setEntryFee(event.target.value)} />
+          </label>
+          <label>
+            {uiText(locale, "Frais de juge", "Judge fee")}
+            <input min="0" step="0.01" type="number" value={judgeFee} onChange={(event) => setJudgeFee(event.target.value)} />
+          </label>
+        </div>
+        <PayoutSettingsFields
+          locale={locale}
+          addedMoney={addedMoney}
+          className={name}
+          entryFee={entryFee}
+          isNrha={classIsNrha}
+          payoutNotes={payoutNotes}
+          payoutRules={payoutRules}
+          payoutScheduleType={payoutScheduleType}
+          retainagePercent={retainagePercent}
+          sanctioningFeePercent={sanctioningFeePercent}
+          trophyOrPlaqueFee={trophyOrPlaqueFee}
+          onAddedMoneyChange={setAddedMoney}
+          onPayoutNotesChange={setPayoutNotes}
+          onPayoutRulesChange={setPayoutRules}
+          onPayoutScheduleTypeChange={setPayoutScheduleType}
+          onRetainagePercentChange={setRetainagePercent}
+          onSanctioningFeePercentChange={setSanctioningFeePercent}
+          onTrophyOrPlaqueFeeChange={setTrophyOrPlaqueFee}
+        />
+        {classIsNrha ? (
+          <label>
+            {uiText(locale, "Type de classe NRHA", "NRHA class type")}
+            <select value={nrhaClassType} onChange={(event) => setNrhaClassType(event.target.value)}>
+              <option value="">{uiText(locale, "À préciser", "To be specified")}</option>
+              {nrhaClassTypes.map((type) => (
+                <option key={type.value} value={type.value}>
+                  {type.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <label>
           {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
           <textarea rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
         </label>
-        <label>
-          Notes
-          <textarea rows={2} value={notes} onChange={(event) => setNotes(event.target.value)} />
-        </label>
-        <label className="check-row">
-          <input checked={isActive} type="checkbox" onChange={(event) => setIsActive(event.target.checked)} />
-          <span>{uiText(locale, "Bloc récurrent actif", "Active recurring block")}</span>
-        </label>
-        <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
+        <FormActions busy={busy || !selectedTemplate || !organizationDisciplineId} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
   );

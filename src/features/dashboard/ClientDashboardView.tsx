@@ -2,7 +2,7 @@ import { AlertCircle, AlertTriangle, CalendarDays, ChevronRight, CircleDollarSig
 import { ViewIntro } from "../../components/ui";
 import { formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { Contact, Division, Entry, Horse, Invoice, Organization, Show, ShowDay, StallBooking, StallOption, UserProfile } from "../../types/domain";
+import type { Contact, ClassRecord, Entry, Horse, Invoice, Organization, Show, ShowDay, StallBooking, StallOption, UserProfile } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { profileIsComplete } from "../profile/ProfileView";
 import { uiText } from "./shared";
@@ -113,7 +113,7 @@ function ShowCard({
 function ClientDashboardView({
   locale,
   contacts,
-  divisions,
+  classes,
   entries,
   horses,
   invoices,
@@ -127,7 +127,7 @@ function ClientDashboardView({
 }: {
   locale: Locale;
   contacts: Contact[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
   horses: Horse[];
   invoices: Invoice[];
@@ -198,8 +198,8 @@ function ClientDashboardView({
       title: uiText(locale, "Aucun cheval ajouté", "No horse added"),
       message: uiText(
         locale,
-        "Ajoute au moins un cheval pour pouvoir t'inscrire à des classes.",
-        "Add at least one horse to be able to enter classes.",
+        "Ajoute au moins un cheval pour pouvoir t'inscrire à des blocks.",
+        "Add at least one horse to be able to enter blocks.",
       ),
       cta: uiText(locale, "Ajouter un cheval", "Add a horse"),
       view: "my-horses" as ViewKey,
@@ -284,7 +284,7 @@ function ClientDashboardView({
                   <span className="client-entry-group-date">{formatDate(show.start_date)}</span>
                 </div>
                 {showEntries.map((entry) => {
-                  const division = divisions.find((d) => d.id === entry.division_id);
+                  const classRecord = classes.find((d) => d.id === entry.class_id);
                   const horse = horses.find((h) => h.id === entry.horse_id);
                   const rider = contacts.find((c) => c.id === entry.rider_contact_id);
                   const tone = entryStatusTone(entry.status);
@@ -293,7 +293,7 @@ function ClientDashboardView({
                       <div className="client-entry-row-main">
                         <span className="client-entry-horse">{horse?.name ?? "—"}</span>
                         {rider ? <span className="client-entry-rider">{[rider.first_name, rider.middle_name, rider.last_name].filter(Boolean).join(" ")}</span> : null}
-                        <span className="client-entry-division">{division?.name ?? "—"}</span>
+                        <span className="client-entry-classRecord">{classRecord?.name ?? "—"}</span>
                       </div>
                       <span className={`client-status-badge status-${tone}`}>{entryStatusLabel(entry.status, locale)}</span>
                     </div>

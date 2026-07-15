@@ -53,15 +53,14 @@ set email = excluded.email,
     email_confirmed_at = excluded.email_confirmed_at,
     updated_at = now();
 
-insert into public.user_profiles (id, user_id, first_name, last_name, type_user)
+insert into public.user_profiles (user_id, first_name, last_name, type_user)
 values (
-  '20000000-0000-0000-0000-000000000104',
   '10000000-0000-0000-0000-000000000104',
   'Horse',
   'Creator',
   'owner'
 )
-on conflict (id) do update
+on conflict (user_id) do update
 set first_name = excluded.first_name,
     last_name = excluded.last_name,
     type_user = excluded.type_user,
@@ -76,8 +75,6 @@ insert into public.organizations (
   timezone,
   currency,
   tax_rate,
-  health_verification_required,
-  coggins_validity_months,
   created_by_user_id
 )
 values (
@@ -89,9 +86,7 @@ values (
   'America/Toronto',
   'CAD',
   13.00,
-  false,
-  12,
-  '20000000-0000-0000-0000-000000000104'
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
 )
 on conflict (id) do update
 set name = excluded.name,
@@ -100,8 +95,30 @@ set name = excluded.name,
     timezone = excluded.timezone,
     currency = excluded.currency,
     tax_rate = excluded.tax_rate,
-    health_verification_required = excluded.health_verification_required,
-    coggins_validity_months = excluded.coggins_validity_months,
+    updated_at = now();
+
+insert into public.organization_disciplines (
+  id,
+  organization_id,
+  discipline_id,
+  is_default,
+  is_active,
+  created_by_user_id
+)
+select
+  '33000000-0000-0000-0000-000000000104',
+  '30000000-0000-0000-0000-000000000104',
+  discipline.id,
+  true,
+  true,
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
+from public.disciplines discipline
+where discipline.is_active
+order by discipline.code
+limit 1
+on conflict (organization_id, discipline_id) do update
+set is_default = true,
+    is_active = true,
     updated_at = now();
 
 set local role authenticated;
@@ -110,7 +127,6 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -121,14 +137,13 @@ insert into public.contacts (
 )
 values (
   '70000000-0000-0000-0000-000000000104',
-  '30000000-0000-0000-0000-000000000104',
   'owner',
   'Managed',
   'Owner',
   'managed.owner@example.test',
-  null,
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104'),
   'North Barn',
-  '20000000-0000-0000-0000-000000000104'
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
 );
 
 do $$
@@ -145,23 +160,22 @@ begin
 end;
 $$;
 
-insert into public.contact_organization_links (
-  organization_id,
+insert into public.directory_contacts (
+  organization_discipline_id,
   contact_id,
   source,
   created_by_user_id
 )
 values (
-  '30000000-0000-0000-0000-000000000104',
+  '33000000-0000-0000-0000-000000000104',
   '70000000-0000-0000-0000-000000000104',
-  'horse',
-  '20000000-0000-0000-0000-000000000104'
+  'relationship',
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
 )
-on conflict (organization_id, contact_id) do nothing;
+on conflict (organization_discipline_id, contact_id) do nothing;
 
 insert into public.horses (
   id,
-  organization_id,
   name,
   breed,
   color,
@@ -172,32 +186,30 @@ insert into public.horses (
 )
 values (
   '80000000-0000-0000-0000-000000000104',
-  '30000000-0000-0000-0000-000000000104',
   'Creator Access Test',
   'Quarter Horse',
   'Bay',
   'G',
   'HCTA-104',
   '70000000-0000-0000-0000-000000000104',
-  '20000000-0000-0000-0000-000000000104'
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
 );
 
-insert into public.horse_organization_links (
-  organization_id,
+insert into public.directory_horses (
+  organization_discipline_id,
   horse_id,
   source,
   created_by_user_id
 )
 values (
-  '30000000-0000-0000-0000-000000000104',
+  '33000000-0000-0000-0000-000000000104',
   '80000000-0000-0000-0000-000000000104',
-  'created_here',
-  '20000000-0000-0000-0000-000000000104'
+  'manual',
+  (select id from public.user_profiles where user_id = '10000000-0000-0000-0000-000000000104')
 )
-on conflict (organization_id, horse_id) do nothing;
+on conflict (organization_discipline_id, horse_id) do nothing;
 
 insert into public.horse_contacts (
-  organization_id,
   horse_id,
   contact_id,
   role,
@@ -207,7 +219,6 @@ insert into public.horse_contacts (
   can_pay_invoices
 )
 values (
-  '30000000-0000-0000-0000-000000000104',
   '80000000-0000-0000-0000-000000000104',
   '70000000-0000-0000-0000-000000000104',
   'owner',
@@ -227,7 +238,7 @@ begin
   where id = '80000000-0000-0000-0000-000000000104';
 
   select count(*) into visible_links
-  from public.horse_organization_links
+  from public.directory_horses
   where horse_id = '80000000-0000-0000-0000-000000000104';
 
   if visible_horses <> 1 or visible_links <> 1 then

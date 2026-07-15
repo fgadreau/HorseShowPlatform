@@ -1,32 +1,32 @@
 import { useState } from "react";
 import { AlertCircle, CheckCircle2 } from "lucide-react";
-import { divisionLabel, formatCurrency, formatDate, findById, horseLabel, contactLabel } from "../../lib/display";
+import { classLabel, formatCurrency, formatDate, findById, horseLabel, contactLabel } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
-import { getHorseCogginsValidity, getHorseVaccineValidity, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
 import type {
-  ClassRecord,
+  Block,
   Contact,
-  ContactExternalMembership,
+  ContactExternalIdentifier,
   ContactRole,
   ContactRoleName,
-  Division,
+  ClassRecord,
   Entry,
-  ExternalOrganization,
+  ExternalCredentialIssuer,
   Horse,
   HorseContact,
-  HorseExternalMembership,
+  HorseExternalIdentifier,
+  HorseHealthComplianceOverview,
   HorseHealthDocument,
   Invoice,
   InvoiceLineItem,
   Organization,
   OrganizationBackNumber,
-  OrganizationExternalMembershipRequirement,
+  OrganizationExternalCredentialRequirement,
   SanctioningBody,
   Show,
   ShowDay,
-  ShowScoreClassSetup,
+  ShowScoreBlockSetup,
   StallOption,
 } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
@@ -50,17 +50,17 @@ export function sortRecordsForOrganization<T extends { id: string }>(records: T[
 
 export function buildExternalMembershipFields(
   contactType: Contact["type"],
-  externalOrganizations: ExternalOrganization[],
-  requirements: OrganizationExternalMembershipRequirement[],
-  existingMemberships: ContactExternalMembership[] = [],
+  externalCredentialIssuers: ExternalCredentialIssuer[],
+  requirements: OrganizationExternalCredentialRequirement[],
+  existingMemberships: ContactExternalIdentifier[] = [],
 ) {
   const requiredOrganizationIds = new Set(
     requirements
       .filter((requirement) => requirement.is_required && requirement.contact_type === contactType)
-      .map((requirement) => requirement.external_organization_id),
+      .map((requirement) => requirement.external_credential_issuer_id),
   );
-  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_organization_id));
-  const visibleOrganizations = [...externalOrganizations].sort((a, b) => {
+  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_credential_issuer_id));
+  const visibleOrganizations = [...externalCredentialIssuers].sort((a, b) => {
     const aPinned = requiredOrganizationIds.has(a.id) || existingOrganizationIds.has(a.id);
     const bPinned = requiredOrganizationIds.has(b.id) || existingOrganizationIds.has(b.id);
 
@@ -77,18 +77,18 @@ export function buildExternalMembershipFields(
   }));
 }
 
-export function horseReferenceTypeForOrganization(organization: ExternalOrganization): HorseExternalMembership["reference_type"] {
+export function horseReferenceTypeForOrganization(organization: ExternalCredentialIssuer): HorseExternalIdentifier["identifier_type"] {
   return organization.code.toUpperCase() === "NRHA" ? "competition_license" : "registration";
 }
 
-export function horseExternalReferenceLabel(organization: ExternalOrganization) {
+export function horseExternalReferenceLabel(organization: ExternalCredentialIssuer) {
   return organization.code.toUpperCase() === "NRHA" ? "NRHA Competition licence #" : `${organization.code} #`;
 }
 
-export function buildHorseExternalMembershipFields(externalOrganizations: ExternalOrganization[], existingMemberships: HorseExternalMembership[] = []) {
-  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_organization_id));
+export function buildHorseExternalIdentifierFields(externalCredentialIssuers: ExternalCredentialIssuer[], existingMemberships: HorseExternalIdentifier[] = []) {
+  const existingOrganizationIds = new Set(existingMemberships.map((membership) => membership.external_credential_issuer_id));
 
-  return [...externalOrganizations].sort((a, b) => {
+  return [...externalCredentialIssuers].sort((a, b) => {
     const aPinned = existingOrganizationIds.has(a.id);
     const bPinned = existingOrganizationIds.has(b.id);
 
@@ -100,12 +100,12 @@ export function buildHorseExternalMembershipFields(externalOrganizations: Extern
   });
 }
 
-export function horseExternalReferenceSummary(horse: Horse, memberships: HorseExternalMembership[], externalOrganizations: ExternalOrganization[]) {
+export function horseExternalReferenceSummary(horse: Horse, memberships: HorseExternalIdentifier[], externalCredentialIssuers: ExternalCredentialIssuer[]) {
   const references = memberships
     .filter((membership) => membership.horse_id === horse.id)
     .map((membership) => {
-      const organization = externalOrganizations.find((externalOrganization) => externalOrganization.id === membership.external_organization_id);
-      return `${organization?.code ?? "Ext."} ${membership.reference_number}`;
+      const organization = externalCredentialIssuers.find((externalCredentialIssuer) => externalCredentialIssuer.id === membership.external_credential_issuer_id);
+      return `${organization?.code ?? "Ext."} ${membership.identifier_value}`;
     });
 
   return references.length ? references.join(" · ") : "Aucune référence externe";
@@ -138,12 +138,6 @@ export type InlineHealthMessage = {
   message: string;
 };
 
-export type HorseHealthValidity = {
-  coggins: HorseCogginsValidity;
-  vaccine: HorseVaccineValidity;
-  valid: boolean;
-};
-
 export function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMessage {
   if (document.status === "verified") {
     return {
@@ -172,144 +166,6 @@ export function horseHealthResultMessage(document: HorseHealthDocument): InlineH
   };
 }
 
-export function cogginsValidityMessage(validity: HorseCogginsValidity) {
-  if (validity.status === "not_required") {
-    return "Coggins non exigé par cette association.";
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return `Coggins valide jusqu'au ${formatDate(validity.expiresOn)} (${validity.months} mois).`;
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `Coggins expiré depuis le ${formatDate(validity.expiresOn)}.`;
-  }
-
-  if (validity.status === "pending_review") {
-    return "Coggins en révision manuelle.";
-  }
-
-  if (validity.status === "rejected") {
-    return "Coggins refusé.";
-  }
-
-  return "Coggins manquant.";
-}
-
-export function cogginsValidityTagLabel(validity: HorseCogginsValidity, locale: Locale = "fr") {
-  if (validity.status === "not_required") {
-    return uiText(locale, "Non exigé", "Not required");
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return uiText(locale, `Valide jusqu'au ${formatDate(validity.expiresOn)}`, `Valid until ${formatDate(validity.expiresOn)}`);
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return uiText(locale, `Expiré le ${formatDate(validity.expiresOn)}`, `Expired on ${formatDate(validity.expiresOn)}`);
-  }
-
-  if (validity.status === "pending_review") {
-    return uiText(locale, "En révision", "In review");
-  }
-
-  if (validity.status === "rejected") {
-    return uiText(locale, "Refusé", "Rejected");
-  }
-
-  return uiText(locale, "Manquant", "Missing");
-}
-
-export function cogginsValidityBadgeClass(validity: HorseCogginsValidity) {
-  if (validity.valid) {
-    return "verified";
-  }
-
-  if (validity.status === "pending_review" || validity.status === "expired") {
-    return validity.status;
-  }
-
-  return "rejected";
-}
-
-export function cogginsValidityTone(validity: HorseCogginsValidity): InlineHealthMessage["tone"] {
-  return validity.valid ? "success" : validity.status === "pending_review" || validity.status === "not_required" ? "info" : "error";
-}
-
-export function vaccineValidityMessage(validity: HorseVaccineValidity) {
-  if (validity.status === "not_required") {
-    return "Vaccin non exigé par cette association.";
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return `Vaccin valide jusqu'au ${formatDate(validity.expiresOn)} (${validity.months} mois).`;
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `Vaccin expiré depuis le ${formatDate(validity.expiresOn)}.`;
-  }
-
-  if (validity.status === "pending_review") {
-    return "Vaccin en révision manuelle.";
-  }
-
-  if (validity.status === "rejected") {
-    return "Vaccin refusé.";
-  }
-
-  return "Vaccin manquant.";
-}
-
-export function getHorseHealthValidity(input: {
-  documents: HorseHealthDocument[];
-  horseId: string;
-  organization: Organization | null | undefined;
-  referenceDate?: string | null;
-}): HorseHealthValidity {
-  const coggins = getHorseCogginsValidity(input);
-  const vaccine = getHorseVaccineValidity(input);
-
-  return {
-    coggins,
-    vaccine,
-    valid: coggins.valid && vaccine.valid,
-  };
-}
-
-export function horseHealthValidityMessage(validity: HorseHealthValidity) {
-  if (!validity.coggins.valid) {
-    return cogginsValidityMessage(validity.coggins);
-  }
-
-  if (!validity.vaccine.valid) {
-    return vaccineValidityMessage(validity.vaccine);
-  }
-
-  if (validity.coggins.status === "not_required" && validity.vaccine.status === "not_required") {
-    return "Documents santé non exigés par cette association.";
-  }
-
-  return [cogginsValidityMessage(validity.coggins), vaccineValidityMessage(validity.vaccine)].join(" · ");
-}
-
-export function horseHealthValidityTone(validity: HorseHealthValidity): InlineHealthMessage["tone"] {
-  if (validity.valid) {
-    return "success";
-  }
-
-  return validity.coggins.status === "pending_review" || validity.vaccine.status === "pending_review" ? "info" : "error";
-}
-
-export function horseHealthSummary(horse: Horse, documents: HorseHealthDocument[], organization: Organization | null | undefined) {
-  const validity = getHorseHealthValidity({
-    documents,
-    horseId: horse.id,
-    organization,
-  });
-
-  return horseHealthValidityMessage(validity);
-}
-
 export type HorseStatusTone = "success" | "warning" | "error" | "neutral";
 
 export type HorseStatusChip = {
@@ -318,103 +174,27 @@ export type HorseStatusChip = {
   value: string;
 };
 
-export function horseHealthDisplay(horse: Horse, documents: HorseHealthDocument[], organization: Organization | null | undefined) {
-  const validity = getHorseHealthValidity({
-    documents,
-    horseId: horse.id,
-    organization,
-  });
-  const chips = [healthGateChip("Coggins", validity.coggins), healthGateChip("Vaccin", validity.vaccine)];
-  const hasPendingReview = validity.coggins.status === "pending_review" || validity.vaccine.status === "pending_review";
-  const hasMissingInfo = validity.coggins.status === "missing" || validity.vaccine.status === "missing";
-  const hasRejected = validity.coggins.status === "rejected" || validity.vaccine.status === "rejected";
-  const hasExpired = validity.coggins.status === "expired" || validity.vaccine.status === "expired";
-  const healthRequired = organizationRequiresHealthVerification(organization);
-
-  if (!healthRequired) {
-    return {
-      chips,
-      summary: {
-        label: "Prêt",
-        tone: "success" as const,
-      },
-    };
-  }
-
-  if (validity.valid) {
-    return {
-      chips,
-      summary: {
-        label: "Santé vérifiée",
-        tone: "success" as const,
-      },
-    };
-  }
-
-  if (hasPendingReview) {
-    return {
-      chips,
-      summary: {
-        label: "En révision",
-        tone: "warning" as const,
-      },
-    };
-  }
-
-  return {
-    chips,
-    summary: {
-      label: hasMissingInfo ? "Info manquante" : hasRejected ? "À corriger" : hasExpired ? "Expiré" : "À vérifier",
-      tone: "error" as const,
-    },
-  };
-}
-
-export function healthGateChip(label: string, validity: HorseCogginsValidity | HorseVaccineValidity): HorseStatusChip {
-  if (validity.status === "not_required") {
-    return { label, tone: "neutral", value: "Non requis" };
-  }
-
-  if (validity.status === "valid") {
-    return { label, tone: "success", value: validity.expiresOn ? `Jusqu'au ${formatDate(validity.expiresOn)}` : "Vérifié" };
-  }
-
-  if (validity.status === "pending_review") {
-    return { label, tone: "warning", value: "En révision" };
-  }
-
-  if (validity.status === "expired") {
-    return { label, tone: "error", value: validity.expiresOn ? `Expiré ${formatDate(validity.expiresOn)}` : "Expiré" };
-  }
-
-  if (validity.status === "rejected") {
-    return { label, tone: "error", value: "Refusé" };
-  }
-
-  return { label, tone: "error", value: "Manquant" };
-}
-
-export function horseExternalReferenceChips(horse: Horse, memberships: HorseExternalMembership[], externalOrganizations: ExternalOrganization[]): HorseStatusChip[] {
+export function horseExternalReferenceChips(horse: Horse, memberships: HorseExternalIdentifier[], externalCredentialIssuers: ExternalCredentialIssuer[]): HorseStatusChip[] {
   const references = memberships
     .filter((membership) => membership.horse_id === horse.id)
     .sort((a, b) => {
-      const aOrganization = externalOrganizations.find((organization) => organization.id === a.external_organization_id);
-      const bOrganization = externalOrganizations.find((organization) => organization.id === b.external_organization_id);
+      const aOrganization = externalCredentialIssuers.find((organization) => organization.id === a.external_credential_issuer_id);
+      const bOrganization = externalCredentialIssuers.find((organization) => organization.id === b.external_credential_issuer_id);
       return (aOrganization?.code ?? "").localeCompare(bOrganization?.code ?? "");
     })
     .map((membership) => {
-      const organization = externalOrganizations.find((externalOrganization) => externalOrganization.id === membership.external_organization_id);
+      const organization = externalCredentialIssuers.find((externalCredentialIssuer) => externalCredentialIssuer.id === membership.external_credential_issuer_id);
       return {
         label: organization?.code ?? "Ext.",
         tone: horseExternalReferenceTone(membership.status),
-        value: membership.reference_number || horseExternalReferenceStatusLabel(membership.status),
+        value: membership.identifier_value || horseExternalReferenceStatusLabel(membership.status),
       };
     });
 
   return references.length ? references : [{ label: "Références", tone: "neutral", value: "Aucune" }];
 }
 
-export function horseExternalReferenceTone(status: HorseExternalMembership["status"]): HorseStatusTone {
+export function horseExternalReferenceTone(status: HorseExternalIdentifier["status"]): HorseStatusTone {
   if (status === "active") {
     return "success";
   }
@@ -430,11 +210,13 @@ export function horseExternalReferenceTone(status: HorseExternalMembership["stat
   return "neutral";
 }
 
-export function horseExternalReferenceStatusLabel(status: HorseExternalMembership["status"]) {
-  const labels: Record<HorseExternalMembership["status"], string> = {
+export function horseExternalReferenceStatusLabel(status: HorseExternalIdentifier["status"]) {
+  const labels: Record<HorseExternalIdentifier["status"], string> = {
     active: "Active",
     pending: "En révision",
     expired: "Expirée",
+    inactive: "Inactive",
+    revoked: "Révoquée",
     unknown: "À valider",
   };
 
@@ -457,130 +239,15 @@ export function horseGenderLabel(gender: Horse["gender"]) {
   return "Genre non indiqué";
 }
 
-export type HealthAlert = {
-  detail: string;
-  horse: Horse;
-  key: string;
-  label: string;
-  referenceLabel: string;
-  tone: "error" | "warning" | "info";
-};
-
-export function buildHealthAlerts(input: {
-  documents: HorseHealthDocument[];
-  horses: Horse[];
-  organization: Organization | null | undefined;
-  referenceShow: Show | null;
-  today: string;
-}) {
-  if (!organizationRequiresHealthVerification(input.organization)) {
-    return [];
-  }
-
-  const referenceDate = input.referenceShow?.start_date ?? input.today;
-  const referenceLabel = input.referenceShow ? `${input.referenceShow.name} - ${formatDate(input.referenceShow.start_date)}` : formatDate(input.today);
-  const alerts: HealthAlert[] = [];
-
-  for (const horse of input.horses) {
-    const validity = getHorseCogginsValidity({
-      documents: input.documents,
-      horseId: horse.id,
-      organization: input.organization,
-      referenceDate,
-    });
-
-    if (validity.status === "not_required") {
-      continue;
-    }
-
-    if (!validity.valid) {
-      alerts.push({
-        detail: cogginsValidityMessage(validity),
-        horse,
-        key: `${horse.id}-${validity.status}`,
-        label: healthAlertLabel(validity.status),
-        referenceLabel,
-        tone: validity.status === "pending_review" ? "warning" : "error",
-      });
-    } else if (validity.expiresOn) {
-      const daysUntilExpiry = daysBetween(input.today, validity.expiresOn);
-
-      if (daysUntilExpiry <= 30) {
-        alerts.push({
-          detail: `Coggins expire dans ${Math.max(daysUntilExpiry, 0)} jour${daysUntilExpiry === 1 ? "" : "s"} (${formatDate(validity.expiresOn)}).`,
-          horse,
-          key: `${horse.id}-coggins-expires-${validity.expiresOn}`,
-          label: "Bientôt expiré",
-          referenceLabel,
-          tone: "warning",
-        });
-      }
-    }
-
-    const vaccineValidity = getHorseVaccineValidity({
-      documents: input.documents,
-      horseId: horse.id,
-      organization: input.organization,
-      referenceDate,
-    });
-
-    if (vaccineValidity.status === "not_required") {
-      continue;
-    }
-
-    if (!vaccineValidity.valid) {
-      alerts.push({
-        detail: vaccineValidityMessage(vaccineValidity),
-        horse,
-        key: `${horse.id}-vaccine-${vaccineValidity.status}`,
-        label: healthAlertLabel(vaccineValidity.status),
-        referenceLabel,
-        tone: vaccineValidity.status === "pending_review" ? "warning" : "error",
-      });
-    } else if (vaccineValidity.expiresOn) {
-      const daysUntilExpiry = daysBetween(input.today, vaccineValidity.expiresOn);
-
-      if (daysUntilExpiry <= 30) {
-        alerts.push({
-          detail: `Vaccin expire dans ${Math.max(daysUntilExpiry, 0)} jour${daysUntilExpiry === 1 ? "" : "s"} (${formatDate(vaccineValidity.expiresOn)}).`,
-          horse,
-          key: `${horse.id}-vaccine-expires-${vaccineValidity.expiresOn}`,
-          label: "Bientôt expiré",
-          referenceLabel,
-          tone: "warning",
-        });
-      }
-    }
-  }
-
-  return alerts.sort((a, b) => {
-    const toneRank = { error: 0, warning: 1, info: 2 };
-    return toneRank[a.tone] - toneRank[b.tone] || a.horse.name.localeCompare(b.horse.name);
-  });
-}
-
-export function healthAlertLabel(status: HealthGateStatus) {
-  if (status === "pending_review") {
-    return "En révision";
-  }
-
-  if (status === "expired") {
-    return "Expiré";
-  }
-
-  if (status === "rejected") {
-    return "Refusé";
-  }
-
-  return "Bloquant";
-}
-
 export function healthDocumentTypeLabel(type: HorseHealthDocument["document_type"], locale: Locale = "fr") {
   const labels: Record<HorseHealthDocument["document_type"], { en: string; fr: string }> = {
     coggins_eia: { fr: "Coggins / EIA", en: "Coggins / EIA" },
+    breed_registration: { fr: "Enregistrement de race", en: "Breed registration" },
+    breed_pedigree: { fr: "Pedigree", en: "Pedigree" },
     combo_vaccine: { fr: "Vaccin influenza/rhino", en: "Influenza/rhino vaccine" },
     influenza_vaccine: { fr: "Vaccin influenza", en: "Influenza vaccine" },
     other: { fr: "Autre document", en: "Other document" },
+    ownership_certificate: { fr: "Certificat de propriété", en: "Ownership certificate" },
     rhino_vaccine: { fr: "Vaccin rhino", en: "Rhino vaccine" },
   };
 
@@ -630,18 +297,11 @@ export function latestHorseVaccineDocument(horseId: string, documents: HorseHeal
 }
 
 export function todayDateValue() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-export function daysBetween(from: string, to: string) {
-  const start = Date.parse(`${from}T00:00:00Z`);
-  const end = Date.parse(`${to}T00:00:00Z`);
-
-  if (!Number.isFinite(start) || !Number.isFinite(end)) {
-    return Number.POSITIVE_INFINITY;
-  }
-
-  return Math.ceil((end - start) / 86_400_000);
+  const today = new Date();
+  const year = today.getFullYear();
+  const month = String(today.getMonth() + 1).padStart(2, "0");
+  const day = String(today.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 export function birthYearFromDateValue(value: string | null | undefined) {
@@ -710,6 +370,30 @@ export type NotificationItem = {
   view: ViewKey;
 };
 
+function healthComplianceNotificationReason(result: HorseHealthComplianceOverview) {
+  if (!result.reasons.length) {
+    return "conformité santé à vérifier";
+  }
+
+  return result.reasons.map((reason) => {
+    const requirement = reason.requirement === "coggins" ? "Coggins" : reason.requirement === "influenza" ? "Influenza" : "Rhino";
+    const status = {
+      expired: reason.expires_on ? `expiré le ${formatDate(reason.expires_on)}` : "expiré",
+      identity_mismatch: "identité différente",
+      identity_pending: "identité à confirmer",
+      missing: "document manquant",
+      missing_date: "date absente",
+      future_date: "date postérieure au concours",
+      not_required: "non exigé",
+      rejected: "document refusé",
+      review_pending: "révision de l'association requise",
+      review_rejected: "refusé par l'association",
+      valid: "valide",
+    }[reason.status];
+    return `${requirement}: ${status}`;
+  }).join(" · ");
+}
+
 export const notificationCategoryFilters: Array<{ key: "all" | NotificationCategory; label: string }> = [
   { key: "all", label: "Toutes" },
   { key: "health", label: "Santé" },
@@ -723,70 +407,52 @@ export const notificationCategoryFilters: Array<{ key: "all" | NotificationCateg
 
 export function buildNotificationItems(input: {
   backNumbers: OrganizationBackNumber[];
-  classes: ClassRecord[];
-  contactExternalMemberships: ContactExternalMembership[];
+  blocks: Block[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contacts: Contact[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
-  externalOrganizations: ExternalOrganization[];
-  horseHealthDocuments: HorseHealthDocument[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  healthComplianceResults: HorseHealthComplianceOverview[];
   horses: Horse[];
   invoices: Invoice[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   showDays: ShowDay[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   shows: Show[];
   stallOptions: StallOption[];
 }) {
   const today = todayDateValue();
-  const referenceShow = referenceShowForNotifications(input.shows, today);
   const activeEntries = input.entries.filter((entry) => !inactiveProgramEntryStatuses.has(entry.status));
   const notifications: NotificationItem[] = [];
 
-  for (const document of input.horseHealthDocuments.filter((candidate) => candidate.status === "pending_review")) {
-    const horse = findById(input.horses, document.horse_id);
-    notifications.push({
-      actionLabel: "Valider",
-      category: "health",
-      detail: `${healthDocumentTypeLabel(document.document_type)} pour ${horseLabel(horse)}.`,
-      id: `health-document-${document.id}`,
-      meta: `${healthVerificationSourceLabel(document.verification_source)} - ${healthDocumentDateLabel(document)}`,
-      priority: "warning",
-      title: "Document santé à valider",
-      view: "health",
-    });
-  }
-
-  for (const alert of buildHealthAlerts({
-    documents: input.horseHealthDocuments,
-    horses: input.horses,
-    organization: input.organization,
-    referenceShow,
-    today,
-  }).filter((alert) => alert.label !== "En révision")) {
+  for (const result of input.healthComplianceResults.filter(
+    (candidate) => candidate.compliance_status !== "compliant" && candidate.compliance_status !== "not_required",
+  )) {
+    const horse = findById(input.horses, result.horse_id);
     notifications.push({
       actionLabel: "Voir santé",
       category: "health",
-      detail: `${alert.horse.name}: ${alert.detail}`,
-      id: `health-alert-${alert.key}`,
-      meta: alert.referenceLabel,
-      priority: alert.tone === "error" ? "critical" : "warning",
-      title: `Santé cheval - ${alert.label}`,
+      detail: `${horseLabel(horse)}: ${healthComplianceNotificationReason(result)}.`,
+      id: `health-compliance-${result.organization_id}-${result.horse_id}-${result.reference_date}`,
+      meta: `${result.organization_short_name || result.organization_name} - ${formatDate(result.reference_date)}`,
+      priority: result.can_proceed ? "warning" : "critical",
+      title: result.can_proceed ? "Conformité santé - Avertissement" : "Conformité santé bloquante",
       view: "health",
     });
   }
 
   for (const entry of activeEntries.filter((candidate) => !candidate.entry_number)) {
-    const division = findById(input.divisions, entry.division_id);
-    const classRecord = division ? findById(input.classes, division.class_id) : null;
+    const classRecord = findById(input.classes, entry.class_id);
+    const block = classRecord ? findById(input.blocks, classRecord.block_id) : null;
     const show = findById(input.shows, entry.show_id);
-    const cutoffPassed = classRecord ? classEntriesAreClosed(classRecord) : false;
+    const cutoffPassed = block ? classEntriesAreClosed(block) : false;
 
     notifications.push({
       actionLabel: "Assigner",
       category: "back-numbers",
-      detail: `${horseLabel(findById(input.horses, entry.horse_id))} - ${divisionLabel(division, input.classes)}.`,
+      detail: `${horseLabel(findById(input.horses, entry.horse_id))} - ${classLabel(classRecord, input.blocks)}.`,
       id: `entry-back-number-${entry.id}`,
       meta: [show?.name, cutoffPassed ? "fermeture passée" : "avant fermeture"].filter(Boolean).join(" - "),
       priority: cutoffPassed ? "critical" : "warning",
@@ -797,11 +463,10 @@ export function buildNotificationItems(input: {
 
   buildMembershipNotificationItems({
     activeEntries,
-    contactExternalMemberships: input.contactExternalMemberships,
+    contactExternalIdentifiers: input.contactExternalIdentifiers,
     contacts: input.contacts,
-    divisions: input.divisions,
-    externalOrganizations: input.externalOrganizations,
-    horseHealthDocuments: input.horseHealthDocuments,
+    classes: input.classes,
+    externalCredentialIssuers: input.externalCredentialIssuers,
     horses: input.horses,
     membershipRequirements: input.membershipRequirements,
     organization: input.organization,
@@ -822,11 +487,11 @@ export function buildNotificationItems(input: {
     });
   }
 
-  for (const classRecord of input.classes) {
-    const classDivisionIds = new Set(input.divisions.filter((division) => division.class_id === classRecord.id).map((division) => division.id));
-    const classEntries = activeEntries.filter((entry) => classDivisionIds.has(entry.division_id));
+  for (const block of input.blocks) {
+    const blockClassIds = new Set(input.classes.filter((classRecord) => classRecord.block_id === block.id).map((classRecord) => classRecord.id));
+    const classEntries = activeEntries.filter((entry) => blockClassIds.has(entry.class_id));
 
-    if (!classEntries.length || !classEntriesAreClosed(classRecord) || classRecord.draw_prepared_at) {
+    if (!classEntries.length || !classEntriesAreClosed(block) || block.draw_prepared_at) {
       continue;
     }
 
@@ -834,8 +499,8 @@ export function buildNotificationItems(input: {
     notifications.push({
       actionLabel: "Préparer",
       category: "entries",
-      detail: `${classRecord.name}: ${classEntries.length} inscription${classEntries.length === 1 ? "" : "s"} prête${classEntries.length === 1 ? "" : "s"} pour l'ordre de passage.`,
-      id: `draw-ready-${classRecord.id}`,
+      detail: `${block.name}: ${classEntries.length} inscription${classEntries.length === 1 ? "" : "s"} prête${classEntries.length === 1 ? "" : "s"} pour l'ordre de passage.`,
+      id: `draw-ready-${block.id}`,
       meta: missingBackNumberCount ? `${missingBackNumberCount} dossard${missingBackNumberCount === 1 ? "" : "s"} manquant${missingBackNumberCount === 1 ? "" : "s"}` : "Fermeture passée",
       priority: missingBackNumberCount ? "critical" : "warning",
       title: "Ordre de passage à sortir",
@@ -845,8 +510,8 @@ export function buildNotificationItems(input: {
 
   for (const show of input.shows.filter((candidate) => candidate.status !== "archived" && candidate.end_date >= today)) {
     const incompleteItems = buildShowReadinessItems(show, {
+      blocks: input.blocks,
       classes: input.classes,
-      divisions: input.divisions,
       entries: input.entries,
       invoices: input.invoices,
       showDays: input.showDays,
@@ -875,13 +540,12 @@ export function buildNotificationItems(input: {
 
 export function buildMembershipNotificationItems(input: {
   activeEntries: Entry[];
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contacts: Contact[];
-  divisions: Division[];
-  externalOrganizations: ExternalOrganization[];
-  horseHealthDocuments: HorseHealthDocument[];
+  classes: ClassRecord[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   horses: Horse[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   shows: Show[];
 }) {
@@ -890,12 +554,10 @@ export function buildMembershipNotificationItems(input: {
   for (const entry of input.activeEntries) {
     const horse = findById(input.horses, entry.horse_id);
     const readiness = buildEntryShowReadiness({
-      contactExternalMemberships: input.contactExternalMemberships,
-      documents: input.horseHealthDocuments,
-      externalOrganizations: input.externalOrganizations,
+      contactExternalIdentifiers: input.contactExternalIdentifiers,
+      externalCredentialIssuers: input.externalCredentialIssuers,
       horse,
       membershipRequirements: input.membershipRequirements,
-      organization: input.organization,
       ownerContact: findById(input.contacts, entry.owner_contact_id),
       payerContact: findById(input.contacts, entry.payer_contact_id),
       riderContact: findById(input.contacts, entry.rider_contact_id),
@@ -927,14 +589,6 @@ export function buildMembershipNotificationItems(input: {
   }
 
   return Array.from(grouped.values()).map(({ count: _count, ...notification }) => notification);
-}
-
-export function referenceShowForNotifications(shows: Show[], today: string) {
-  const upcomingShows = [...shows]
-    .filter((show) => show.status !== "archived" && show.end_date >= today)
-    .sort((a, b) => a.start_date.localeCompare(b.start_date));
-
-  return upcomingShows[0] ?? [...shows].filter((show) => show.status !== "archived").sort((a, b) => a.start_date.localeCompare(b.start_date))[0] ?? null;
 }
 
 export function notificationPriorityLabel(priority: NotificationPriority) {
@@ -1015,16 +669,16 @@ export function contactMatchesDirectorySearch(contact: Contact, contactRoles: Co
 export function horseMatchesDirectorySearch(
   horse: Horse,
   contacts: Contact[],
-  memberships: HorseExternalMembership[],
-  externalOrganizations: ExternalOrganization[],
+  memberships: HorseExternalIdentifier[],
+  externalCredentialIssuers: ExternalCredentialIssuer[],
   query: string,
 ) {
   const owner = findById(contacts, horse.primary_owner_contact_id);
   const membershipValues = memberships
     .filter((membership) => membership.horse_id === horse.id)
     .flatMap((membership) => {
-      const externalOrganization = findById(externalOrganizations, membership.external_organization_id);
-      return [externalOrganization?.code, externalOrganization?.name, membership.reference_number, membership.status];
+      const externalCredentialIssuer = findById(externalCredentialIssuers, membership.external_credential_issuer_id);
+      return [externalCredentialIssuer?.code, externalCredentialIssuer?.name, membership.identifier_value, membership.status];
     });
 
   return matchesDirectorySearch(
@@ -1040,7 +694,7 @@ export function horseMatchesDirectorySearch(
       contactLabel(owner),
       owner?.email,
       owner?.barn_name,
-      horseExternalReferenceSummary(horse, memberships, externalOrganizations),
+      horseExternalReferenceSummary(horse, memberships, externalCredentialIssuers),
       ...membershipValues,
     ],
     query,
@@ -1173,24 +827,24 @@ export function buildShowReadinessItems(
   show: Show,
   context: {
     locale?: Locale;
+    blocks: Block[];
     classes: ClassRecord[];
-    divisions: Division[];
     entries: Entry[];
     invoices: Invoice[];
     showDays: ShowDay[];
-    showScoreClassSetups: ShowScoreClassSetup[];
+    showScoreClassSetups: ShowScoreBlockSetup[];
     stallOptions: StallOption[];
   },
 ): ShowReadinessItem[] {
   const locale = context.locale ?? "fr";
   const showDays = context.showDays.filter((day) => day.show_id === show.id);
+  const showBlocks = context.blocks.filter((block) => block.show_id === show.id);
   const showClasses = context.classes.filter((classRecord) => classRecord.show_id === show.id);
-  const showDivisions = context.divisions.filter((division) => division.show_id === show.id);
   const showEntries = context.entries.filter((entry) => entry.show_id === show.id);
   const showStallOptions = context.stallOptions.filter((option) => option.show_id === show.id);
   const showInvoices = context.invoices.filter((invoice) => invoice.show_id === show.id);
-  const preparedClassIds = new Set(context.showScoreClassSetups.filter((setup) => setup.show_id === show.id).map((setup) => setup.class_id));
-  const preparedClasses = showClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length;
+  const preparedClassIds = new Set(context.showScoreClassSetups.filter((setup) => setup.show_id === show.id).map((setup) => setup.block_id));
+  const preparedBlocks = showBlocks.filter((block) => preparedClassIds.has(block.id)).length;
 
   return [
     {
@@ -1202,20 +856,20 @@ export function buildShowReadinessItems(
       actionLabel: uiText(locale, "Vérifier", "Review"),
     },
     {
-      key: "classes",
+      key: "blocks",
       title: uiText(locale, "Blocs", "Schedule blocks"),
-      detail: showClasses.length ? uiText(locale, `${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} à l'horaire.`, `${showClasses.length} schedule block${showClasses.length === 1 ? "" : "s"} in the schedule.`) : uiText(locale, "Aucun bloc créé.", "No schedule blocks created."),
-      done: showClasses.length > 0,
-      view: "classes",
-      actionLabel: showClasses.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
+      detail: showBlocks.length ? uiText(locale, `${showBlocks.length} bloc${showBlocks.length === 1 ? "" : "s"} à l'horaire.`, `${showBlocks.length} schedule block${showBlocks.length === 1 ? "" : "s"} in the schedule.`) : uiText(locale, "Aucun bloc créé.", "No schedule blocks created."),
+      done: showBlocks.length > 0,
+      view: "blocks",
+      actionLabel: showBlocks.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
     },
     {
-      key: "divisions",
+      key: "blocks",
       title: uiText(locale, "Classes", "Classes"),
-      detail: showDivisions.length ? uiText(locale, `${showDivisions.length} classe${showDivisions.length === 1 ? "" : "s"} disponible${showDivisions.length === 1 ? "" : "s"}.`, `${showDivisions.length} class${showDivisions.length === 1 ? "" : "es"} available.`) : uiText(locale, "Aucune classe disponible.", "No classes available."),
-      done: showDivisions.length > 0,
-      view: "classes",
-      actionLabel: showDivisions.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
+      detail: showClasses.length ? uiText(locale, `${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} disponible${showClasses.length === 1 ? "" : "s"}.`, `${showClasses.length} class${showClasses.length === 1 ? "" : "es"} available.`) : uiText(locale, "Aucune classe disponible.", "No blocks available."),
+      done: showClasses.length > 0,
+      view: "blocks",
+      actionLabel: showClasses.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
     },
     {
       key: "stalls",
@@ -1236,8 +890,8 @@ export function buildShowReadinessItems(
     {
       key: "scoring",
       title: uiText(locale, "Pointage", "Scoring"),
-      detail: showClasses.length ? uiText(locale, `${preparedClasses}/${showClasses.length} bloc${showClasses.length === 1 ? "" : "s"} préparé${showClasses.length === 1 ? "" : "s"}.`, `${preparedClasses}/${showClasses.length} schedule block${showClasses.length === 1 ? "" : "s"} prepared.`) : uiText(locale, "Crée des blocs avant le pointage.", "Create schedule blocks before scoring."),
-      done: showClasses.length > 0 && preparedClasses === showClasses.length,
+      detail: showBlocks.length ? uiText(locale, `${preparedBlocks}/${showBlocks.length} bloc${showBlocks.length === 1 ? "" : "s"} préparé${showBlocks.length === 1 ? "" : "s"}.`, `${preparedBlocks}/${showBlocks.length} schedule block${showBlocks.length === 1 ? "" : "s"} prepared.`) : uiText(locale, "Crée des blocs avant le pointage.", "Create schedule blocks before scoring."),
+      done: showBlocks.length > 0 && preparedBlocks === showBlocks.length,
       view: "scoring",
       actionLabel: uiText(locale, "Préparer", "Prepare"),
     },
@@ -1264,17 +918,17 @@ export function formatInvoiceNumber(value: string) {
   return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, "0") : normalized;
 }
 
-export function classEntriesCloseDate(classRecord: ClassRecord | null | undefined) {
-  if (!classRecord?.entries_close_at) {
+export function classEntriesCloseDate(block: Block | null | undefined) {
+  if (!block?.entries_close_at) {
     return null;
   }
 
-  const closeDate = new Date(classRecord.entries_close_at);
+  const closeDate = new Date(block.entries_close_at);
   return Number.isNaN(closeDate.getTime()) ? null : closeDate;
 }
 
-export function classEntriesAreClosed(classRecord: ClassRecord | null | undefined) {
-  const closeDate = classEntriesCloseDate(classRecord);
+export function classEntriesAreClosed(block: Block | null | undefined) {
+  const closeDate = classEntriesCloseDate(block);
   return !closeDate || Date.now() >= closeDate.getTime();
 }
 

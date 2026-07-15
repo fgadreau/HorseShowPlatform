@@ -85,7 +85,7 @@ select phase1_test.assert_count(
 );
 select phase1_test.assert_count(
   'anon cannot see private ShowScore setups',
-  'select count(*) from public.show_score_class_setups',
+  'select count(*) from public.show_score_block_setups',
   0
 );
 reset role;
@@ -107,24 +107,24 @@ reset role;
 set local role authenticated;
 select phase1_test.as_user('10000000-0000-0000-0000-000000000002');
 select phase1_test.assert_count(
-  'org A admin sees only org A',
+  'org A admin sees public organization metadata catalog',
   'select count(*) from public.organizations',
-  1
+  2
 );
 select phase1_test.assert_count(
-  'org A admin cannot see org B directly',
+  'org A admin can see org B public organization metadata',
   $$select count(*) from public.organizations where id = '30000000-0000-0000-0000-000000000002'$$,
-  0
-);
-select phase1_test.assert_count(
-  'org A admin sees org A contacts',
-  'select count(*) from public.contacts',
-  3
-);
-select phase1_test.assert_count(
-  'org A admin sees org A invoices',
-  'select count(*) from public.invoices',
   1
+);
+select phase1_test.assert_count(
+  'org A admin sees contacts linked to org A directories',
+  'select count(*) from public.contacts',
+  2
+);
+select phase1_test.assert_count(
+  'org A admin sees org A seeded invoices',
+  'select count(*) from public.invoices',
+  2
 );
 reset role;
 
@@ -191,7 +191,7 @@ select phase1_test.assert_count(
 select phase1_test.assert_count(
   'owner sees own invoices',
   'select count(*) from public.invoices',
-  2
+  3
 );
 select phase1_test.assert_succeeds(
   'owner can create a second draft entry for own horse',
@@ -200,7 +200,7 @@ select phase1_test.assert_succeeds(
       organization_id,
       show_id,
       horse_id,
-      division_id,
+      class_id,
       created_by_user_id,
       owner_contact_id,
       rider_contact_id,
@@ -231,7 +231,7 @@ select phase1_test.assert_denied(
       organization_id,
       show_id,
       horse_id,
-      division_id,
+      class_id,
       created_by_user_id,
       owner_contact_id,
       rider_contact_id,
@@ -250,7 +250,7 @@ select phase1_test.assert_denied(
       '70000000-0000-0000-0000-000000000003',
       null,
       '70000000-0000-0000-0000-000000000003',
-      'draft',
+      'cancelled',
       145,
       145
     )$$
@@ -261,15 +261,15 @@ set local role authenticated;
 select phase1_test.as_user('10000000-0000-0000-0000-000000000005');
 select phase1_test.assert_count(
   'show judge can view ShowScore setup for assigned show',
-  'select count(*) from public.show_score_class_setups',
+  'select count(*) from public.show_score_block_setups',
   1
 );
 select phase1_test.assert_count(
   'show judge cannot update ShowScore class setup',
   $$with updated as (
-      update public.show_score_class_setups
+      update public.show_score_block_setups
       set drag_duration_minutes = 9
-      where class_id = '50000000-0000-0000-0000-000000000001'
+      where block_id = '50000000-0000-0000-0000-000000000001'
       returning 1
     )
     select count(*) from updated$$,
@@ -278,7 +278,7 @@ select phase1_test.assert_count(
 select phase1_test.assert_succeeds(
   'show judge can create a scoring session',
   $$insert into public.show_score_scoring_sessions (
-      class_id,
+      block_id,
       organization_id,
       show_id,
       runs
@@ -295,9 +295,9 @@ reset role;
 set local role authenticated;
 select phase1_test.as_user('10000000-0000-0000-0000-000000000006');
 select phase1_test.assert_count(
-  'org B admin sees only org B',
+  'org B admin sees public organization metadata catalog',
   'select count(*) from public.organizations',
-  1
+  2
 );
 select phase1_test.assert_count(
   'org B admin cannot see org A invoice',

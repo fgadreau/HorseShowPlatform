@@ -2,32 +2,25 @@ import { useMemo } from "react";
 import { SearchSelect } from "../../components/ui";
 import { formatCurrency, formatDate, numericValue, findById } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { BackNumberPolicy, ClassRecord, ClassTemplateDivision, Contact, Division, Entry, EligibilityRules, Horse, InvoiceLineItem, PayoutScheduleType, SanctioningBody, ScheduleStartMode, Show, ShowDay, ShowScoreClassSetup } from "../../types/domain";
+import type { BackNumberPolicy, Block, ClassTemplate, Contact, ClassRecord, Entry, EligibilityRules, GoverningBodyAssignment, Horse, InvoiceLineItem, PayoutScheduleType, SanctioningBody, ScheduleStartMode, Show, ShowDay, ShowScoreBlockSetup } from "../../types/domain";
+import { governingBodyAssignmentsFromSelection, hasGoverningBodyCode, hasSelectedGoverningBodyCode, nrhaClassTypeFromAssignments, nrhaEligibilityPolicyFromAssignments, toggleGoverningBodyId } from "../../lib/governingBodies";
 import { uiText } from "../dashboard/shared";
 import type { InlineHealthMessage } from "../dashboard/shared";
 
-function toggleSanctioningBodyCode(currentCodes: string[], code: string) {
-  return currentCodes.includes(code) ? currentCodes.filter((currentCode) => currentCode !== code) : [...currentCodes, code];
-}
-
-function defaultBackNumberPolicy(codes: string[], sanctioningBodies: SanctioningBody[]): BackNumberPolicy {
-  if (codes.some((code) => sanctioningBodies.find((body) => body.code === code)?.back_number_policy === "rider")) {
+function defaultBackNumberPolicy(ids: string[], sanctioningBodies: SanctioningBody[]): BackNumberPolicy {
+  if (ids.some((id) => sanctioningBodies.find((body) => body.id === id)?.default_back_number_policy === "rider")) {
     return "rider";
   }
 
-  return codes.some((code) => sanctioningBodies.find((body) => body.code === code)?.back_number_policy === "horse_rider_team") ? "horse_rider_team" : "horse";
+  return ids.some((id) => sanctioningBodies.find((body) => body.id === id)?.default_back_number_policy === "horse_rider_team") ? "horse_rider_team" : "horse";
 }
 
-function isNrhaSanctioned(codes: string[] | null | undefined) {
-  return Boolean(codes?.includes("NRHA"));
-}
-
-function sanctionLabel(codes: string[] | null | undefined, sanctioningBodies: SanctioningBody[], locale: Locale = "fr") {
-  if (!codes?.length) {
+function sanctionLabel(assignments: GoverningBodyAssignment[] | null | undefined, locale: Locale = "fr") {
+  if (!assignments?.length) {
     return uiText(locale, "Aucune sanction", "No sanction");
   }
 
-  return codes.map((code) => sanctioningBodies.find((body) => body.code === code)?.name ?? code).join(", ");
+  return assignments.map((assignment) => assignment.name || assignment.code).join(", ");
 }
 
 function backNumberPolicyLabel(policy: BackNumberPolicy | null | undefined, locale: Locale = "fr") {
@@ -70,7 +63,7 @@ function payoutScheduleOptions(locale: Locale = "fr"): Array<{ description: stri
       value: "none",
     },
     {
-      description: uiText(locale, "Standard NRHA pour la majorité des classes ancillary. Paiements plus concentrés selon les tableaux officiels.", "NRHA standard for most ancillary classes. More concentrated payouts based on official schedules."),
+      description: uiText(locale, "Standard NRHA pour la majorité des blocks ancillary. Paiements plus concentrés selon les tableaux officiels.", "NRHA standard for most ancillary blocks. More concentrated payouts based on official schedules."),
       label: "NRHA Schedule A",
       value: "nrha_schedule_a",
     },
@@ -407,26 +400,26 @@ function payoutAmountSummary(value: number | null | undefined, label: string) {
   return value ? `${label} ${formatCurrency(value, "CAD")}` : "";
 }
 
-function payoutDivisionSummary(division: Pick<Division, "added_money" | "payout_schedule_type" | "retainage_percent" | "trophy_or_plaque_fee">, locale: Locale = "fr") {
+function payoutClassSummary(classRecord: Pick<ClassRecord, "added_money" | "payout_schedule_type" | "retainage_percent" | "trophy_or_plaque_fee">, locale: Locale = "fr") {
   return [
-    payoutScheduleLabel(division.payout_schedule_type, locale),
-    payoutAmountSummary(division.added_money, uiText(locale, "Ajouté", "Added")),
-    payoutAmountSummary(division.trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
-    division.retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${division.retainage_percent}%`,
+    payoutScheduleLabel(classRecord.payout_schedule_type, locale),
+    payoutAmountSummary(classRecord.added_money, uiText(locale, "Ajouté", "Added")),
+    payoutAmountSummary(classRecord.trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
+    classRecord.retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${classRecord.retainage_percent}%`,
   ]
     .filter(Boolean)
     .join(" - ");
 }
 
-function payoutTemplateDivisionSummary(
-  division: Pick<ClassTemplateDivision, "default_added_money" | "default_payout_schedule_type" | "default_retainage_percent" | "default_trophy_or_plaque_fee">,
+function payoutTemplateClassSummary(
+  classRecord: Pick<ClassTemplate, "default_added_money" | "default_payout_schedule_type" | "default_retainage_percent" | "default_trophy_or_plaque_fee">,
   locale: Locale = "fr",
 ) {
   return [
-    payoutScheduleLabel(division.default_payout_schedule_type, locale),
-    payoutAmountSummary(division.default_added_money, uiText(locale, "Ajouté", "Added")),
-    payoutAmountSummary(division.default_trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
-    division.default_retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${division.default_retainage_percent}%`,
+    payoutScheduleLabel(classRecord.default_payout_schedule_type, locale),
+    payoutAmountSummary(classRecord.default_added_money, uiText(locale, "Ajouté", "Added")),
+    payoutAmountSummary(classRecord.default_trophy_or_plaque_fee, uiText(locale, "Trophée", "Trophy")),
+    classRecord.default_retainage_percent == null ? null : `${uiText(locale, "Retenue", "Retainage")} ${classRecord.default_retainage_percent}%`,
   ]
     .filter(Boolean)
     .join(" - ");
@@ -434,48 +427,6 @@ function payoutTemplateDivisionSummary(
 
 function nrhaClassTypeLabel(value: string | null | undefined) {
   return nrhaClassTypes.find((type) => type.value === value)?.label ?? "";
-}
-
-function nrhaClassTypeFromRules(rules: EligibilityRules | null | undefined) {
-  return typeof rules?.nrha_class_type === "string" ? rules.nrha_class_type : "";
-}
-
-function concurrentClassIdFromRules(rules: EligibilityRules | null | undefined) {
-  return typeof rules?.concurrent_class_id === "string" ? rules.concurrent_class_id : "";
-}
-
-function concurrentGroupLabelFromRules(rules: EligibilityRules | null | undefined) {
-  return typeof rules?.concurrent_group_label === "string" ? rules.concurrent_group_label : "";
-}
-
-function concurrentClassLabel(classRecord: ClassRecord, classes: ClassRecord[], locale: Locale = "fr") {
-  const concurrentClassId = concurrentClassIdFromRules(classRecord.eligibility_rules);
-  const linkedClass = findById(classes, concurrentClassId);
-
-  if (linkedClass) {
-    return uiText(locale, `Bloc concurrent avec ${linkedClass.name}`, `Concurrent with ${linkedClass.name}`);
-  }
-
-  const groupLabel = concurrentGroupLabelFromRules(classRecord.eligibility_rules);
-  return groupLabel ? uiText(locale, `Bloc concurrent: ${groupLabel}`, `Concurrent block: ${groupLabel}`) : "";
-}
-
-function classProgramRules(
-  notes: string,
-  {
-    concurrentClass,
-  }: {
-    concurrentClass?: ClassRecord | null;
-  } = {},
-) {
-  const extras: EligibilityRules = {};
-
-  if (concurrentClass) {
-    extras.concurrent_class_id = concurrentClass.id;
-    extras.concurrent_group_label = concurrentClass.block_label || concurrentClass.name;
-  }
-
-  return eligibilityRulesFromNotes(notes, extras);
 }
 
 function showTimeInputValue(value: string | null | undefined, fallback: string) {
@@ -517,18 +468,16 @@ function defaultEntriesCloseAtForShowDay(day: ShowDay | null | undefined) {
   return offsetDate.toISOString().slice(0, 16);
 }
 
-function classEntriesCloseLabel(classRecord: ClassRecord) {
-  if (!classRecord.entries_close_at) {
+function classEntriesCloseLabel(block: Block) {
+  if (!block.entries_close_at) {
     return "Inscriptions sans fermeture";
   }
 
-  const closeDate = new Date(classRecord.entries_close_at);
+  const closeDate = new Date(block.entries_close_at);
 
   if (Number.isNaN(closeDate.getTime())) {
     return "Fermeture invalide";
   }
-
-  const lateLabel = classRecord.late_entries_allowed ? `tardives +${classRecord.late_entry_fee_percent ?? 50}%` : "tardives refusées";
 
   return `Fermeture ${closeDate.toLocaleString("fr-CA", {
     day: "2-digit",
@@ -536,27 +485,28 @@ function classEntriesCloseLabel(classRecord: ClassRecord) {
     minute: "2-digit",
     month: "short",
     year: "numeric",
-  })} - ${lateLabel}`;
+  })}`;
 }
 
-function classEntriesCloseDate(classRecord: ClassRecord | null | undefined) {
-  if (!classRecord?.entries_close_at) {
+function classEntriesCloseDate(block: Block | null | undefined) {
+  if (!block?.entries_close_at) {
     return null;
   }
 
-  const closeDate = new Date(classRecord.entries_close_at);
+  const closeDate = new Date(block.entries_close_at);
   return Number.isNaN(closeDate.getTime()) ? null : closeDate;
 }
 
-function classEntriesAreClosed(classRecord: ClassRecord | null | undefined) {
-  const closeDate = classEntriesCloseDate(classRecord);
+function classEntriesAreClosed(block: Block | null | undefined) {
+  const closeDate = classEntriesCloseDate(block);
   return !closeDate || Date.now() >= closeDate.getTime();
 }
 
-function buildEntryDeadlineReadiness(classRecord: ClassRecord | null, entryFee: number | null | undefined, currency: string): { canProceed: boolean; message: InlineHealthMessage | null } {
-  const closeDate = classEntriesCloseDate(classRecord);
+function buildEntryDeadlineReadiness(block: Block | null, show: Show | null, entryFee: number | null | undefined, currency: string): { canProceed: boolean; message: InlineHealthMessage | null } {
+  const closeValue = show?.entry_deadline_mode === "show" ? show.entries_close_at : block?.entries_close_at;
+  const closeDate = closeValue ? new Date(closeValue) : null;
 
-  if (!classRecord || !closeDate) {
+  if (!block || !show || !closeDate || Number.isNaN(closeDate.getTime())) {
     return { canProceed: true, message: null };
   }
 
@@ -578,7 +528,7 @@ function buildEntryDeadlineReadiness(classRecord: ClassRecord | null, entryFee: 
     };
   }
 
-  if (!classRecord.late_entries_allowed) {
+  if (!show.late_entries_allowed) {
     return {
       canProceed: false,
       message: {
@@ -588,7 +538,7 @@ function buildEntryDeadlineReadiness(classRecord: ClassRecord | null, entryFee: 
     };
   }
 
-  const lateFeePercent = classRecord.late_entry_fee_percent ?? 50;
+  const lateFeePercent = show.late_entry_fee_percent ?? 50;
   const lateFeeAmount = entryFee == null ? null : Math.round(entryFee * (lateFeePercent / 100) * 100) / 100;
 
   return {
@@ -603,8 +553,8 @@ function buildEntryDeadlineReadiness(classRecord: ClassRecord | null, entryFee: 
 const inactiveProgramEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
 
 function buildEntryProgramLimitReadiness({
-  division,
-  divisions,
+  classRecord,
+  classes,
   entries,
   existingEntryId,
   horse,
@@ -612,8 +562,8 @@ function buildEntryProgramLimitReadiness({
   riderContact,
   skip,
 }: {
-  division: Division | null | undefined;
-  divisions: Division[];
+  classRecord: ClassRecord | null | undefined;
+  classes: ClassRecord[];
   entries: Entry[];
   existingEntryId?: string;
   horse: Horse | null | undefined;
@@ -621,13 +571,13 @@ function buildEntryProgramLimitReadiness({
   riderContact: Contact | null | undefined;
   skip?: boolean;
 }): { canProceed: boolean; message: InlineHealthMessage | null } {
-  if (skip || !division || !horse) {
+  if (skip || !classRecord || !horse) {
     return { canProceed: true, message: null };
   }
 
   const activeEntries = entries.filter((entry) => entry.id !== existingEntryId && !inactiveProgramEntryStatuses.has(entry.status));
-  const classDivisionIds = new Set(divisions.filter((candidate) => candidate.class_id === division.class_id).map((candidate) => candidate.id));
-  const duplicateHorseEntry = activeEntries.find((entry) => entry.horse_id === horse.id && classDivisionIds.has(entry.division_id));
+  const blockClassIds = new Set(classes.filter((candidate) => candidate.block_id === classRecord.block_id).map((candidate) => candidate.id));
+  const duplicateHorseEntry = activeEntries.find((entry) => entry.horse_id === horse.id && blockClassIds.has(entry.class_id));
 
   if (duplicateHorseEntry) {
     return {
@@ -645,7 +595,7 @@ function buildEntryProgramLimitReadiness({
     return { canProceed: true, message: null };
   }
 
-  const riderEntryCount = activeEntries.filter((entry) => entry.division_id === division.id && (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
+  const riderEntryCount = activeEntries.filter((entry) => entry.class_id === classRecord.id && (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
 
   if (riderEntryCount >= 3) {
     return {
@@ -698,19 +648,19 @@ function showDayLabel(day: ShowDay) {
   return `${day.day_name || `Day ${day.day_number ?? ""}`.trim()} - ${formatDate(day.day_date)}`;
 }
 
-function scheduleStartModeForClass(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">): ScheduleStartMode {
-  return classRecord.schedule_start_mode ?? (classRecord.scheduled_time ? "fixed" : "unscheduled");
+function scheduleStartModeForClass(block: Pick<Block, "schedule_start_mode" | "scheduled_time">): ScheduleStartMode {
+  return block.schedule_start_mode ?? (block.scheduled_time ? "fixed" : "unscheduled");
 }
 
-function classHasFixedStart(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">) {
-  return scheduleStartModeForClass(classRecord) === "fixed" && Boolean(classRecord.scheduled_time);
+function classHasFixedStart(block: Pick<Block, "schedule_start_mode" | "scheduled_time">) {
+  return scheduleStartModeForClass(block) === "fixed" && Boolean(block.scheduled_time);
 }
 
-function canManuallyOrderClass(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">) {
-  return !classHasFixedStart(classRecord);
+function canManuallyOrderClass(block: Pick<Block, "schedule_start_mode" | "scheduled_time">) {
+  return !classHasFixedStart(block);
 }
 
-function compareScheduleClasses(a: ClassRecord, b: ClassRecord) {
+function compareScheduleClasses(a: Block, b: Block) {
   const aFixed = classHasFixedStart(a);
   const bFixed = classHasFixedStart(b);
 
@@ -729,11 +679,11 @@ function timeInputValue(time: string | null | undefined) {
   return time ? time.slice(0, 5) : "";
 }
 
-function classScheduleStartLabel(classRecord: Pick<ClassRecord, "schedule_start_mode" | "scheduled_time">, locale: Locale = "fr") {
-  const mode = scheduleStartModeForClass(classRecord);
+function classScheduleStartLabel(block: Pick<Block, "schedule_start_mode" | "scheduled_time">, locale: Locale = "fr") {
+  const mode = scheduleStartModeForClass(block);
 
-  if (mode === "fixed" && classRecord.scheduled_time) {
-    return uiText(locale, `Début ${timeInputValue(classRecord.scheduled_time)}`, `Start ${timeInputValue(classRecord.scheduled_time)}`);
+  if (mode === "fixed" && block.scheduled_time) {
+    return uiText(locale, `Début ${timeInputValue(block.scheduled_time)}`, `Start ${timeInputValue(block.scheduled_time)}`);
   }
 
   if (mode === "after_previous") {
@@ -799,9 +749,11 @@ function eligibilityNotesFromRules(rules: EligibilityRules | null | undefined) {
 
 
 export {
-  toggleSanctioningBodyCode,
+  toggleGoverningBodyId,
   defaultBackNumberPolicy,
-  isNrhaSanctioned,
+  hasSelectedGoverningBodyCode,
+  hasGoverningBodyCode,
+  governingBodyAssignmentsFromSelection,
   sanctionLabel,
   backNumberPolicyLabel,
   nrhaClassTypes,
@@ -821,11 +773,11 @@ export {
   NrhaApprovedClassSelect,
   applyNrhaApprovedClassChoice,
   findNrhaApprovedClass,
-  payoutDivisionSummary,
-  payoutTemplateDivisionSummary,
+  payoutClassSummary,
+  payoutTemplateClassSummary,
   nrhaClassTypeLabel,
-  nrhaClassTypeFromRules,
-  concurrentClassLabel,
+  nrhaClassTypeFromAssignments,
+  nrhaEligibilityPolicyFromAssignments,
   showTimeInputValue,
   datetimeLocalInputValue,
   datetimeLocalToIso,
@@ -849,8 +801,5 @@ export {
   invoiceQuantityLabel,
   eligibilityRulesFromNotes,
   eligibilityNotesFromRules,
-  classProgramRules,
-  concurrentClassIdFromRules,
-  concurrentGroupLabelFromRules,
 };
 export type { PayoutRuleBracket, PayoutRules, NrhaApprovedClass };

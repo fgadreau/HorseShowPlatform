@@ -7,7 +7,7 @@ export type ViewKey =
   | "shows"
   | "people"
   | "health"
-  | "classes"
+  | "blocks"
   | "entries"
   | "back-numbers"
   | "stalls"

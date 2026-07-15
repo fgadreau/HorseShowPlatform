@@ -1,17 +1,21 @@
 import type { User } from "@supabase/supabase-js";
+import { buildEligibilityFingerprint, eligibilityExpiresAt } from "../lib/eligibilityEngine";
 import { requireSupabase } from "../lib/supabase";
 import type {
-  ClassInput,
-  ClassRecord,
+  BlockInput,
+  Block,
+  BlockConcurrencyGroup,
+  BlockConcurrencyGroupMember,
+  BlockJudgeAssignment,
+  BlockTemplate,
   ClassTemplate,
-  ClassTemplateDivision,
-  ClassTemplateDivisionInput,
-  ClassTemplateDivisionUpdateInput,
   ClassTemplateInput,
   ClassTemplateUpdateInput,
-  ClassUpdateInput,
+  BlockTemplateInput,
+  BlockTemplateUpdateInput,
+  BlockUpdateInput,
   Contact,
-  ContactExternalMembership,
+  ContactExternalIdentifier,
   ContactInput,
   ContactOrganizationMembership,
   ContactOrganizationMembershipInput,
@@ -19,24 +23,36 @@ import type {
   ContactRole,
   ContactRoleName,
   ContactUpdateInput,
-  Division,
-  DivisionInput,
-  DivisionUpdateInput,
+  Discipline,
+  DirectoryContact,
+  DirectoryHorse,
+  ClassRecord,
+  ClassInput,
+  ClassUpdateInput,
   EntryImportBatch,
   EntryResult,
   Entry,
   EntryInput,
   EntryUpdateInput,
-  ExternalHorseMembershipInput,
+  ExternalHorseIdentifierInput,
+  ExternalDataSource,
+  ExternalSourceGoverningBody,
   Horse,
-  HorseExternalMembership,
+  HorseExternalIdentifier,
   HorseHealthDocument,
+  HorseHealthCompliance,
+  HorseHealthComplianceOverview,
+  HorseDocumentValidation,
+  HorseIdentityLock,
+  HorseIdentityCorrection,
   HorseOrganizationLink,
   HorseContact,
   HorseInput,
   HorseUpdateInput,
-  ExternalMembershipInput,
-  ExternalOrganization,
+  ExternalContactIdentifierInput,
+  ExternalCredentialIssuer,
+  GoverningBodyAssignment,
+  GoverningBodyAssignmentInput,
   Invoice,
   InvoiceLineItem,
   ManualSale,
@@ -45,17 +61,24 @@ import type {
   NrhaRiderRankingListType,
   Organization,
   OrganizationBackNumber,
-  OrganizationExternalMembershipRequirement,
+  OrganizationExternalCredentialRequirement,
+  OrganizationHealthDocumentReview,
+  OrganizationHealthPolicy,
+  OrganizationHealthPolicyInput,
   OrganizationInput,
   OrganizationMembershipType,
   OrganizationMembershipTypeInput,
   OrganizationMembershipTypeUpdateInput,
   OrganizationMember,
+  OrganizationDiscipline,
   OrganizationProduct,
   OrganizationProductInput,
   OrganizationProductUpdateInput,
   OrganizationSettingsInput,
   SanctioningBody,
+  Slate,
+  SlateInput,
+  SlateUpdateInput,
   PayoutAward,
   PayoutCalculation,
   PayoutCalculationStatus,
@@ -69,7 +92,7 @@ import type {
   BlockRunClassEntry,
   BlockRunEntry,
   ScoredRun,
-  ShowScoreClassSetup,
+  ShowScoreBlockSetup,
   ShowScorePaidWarmup,
   ShowScorePaidWarmupEntry,
   ShowScorePaidWarmupInput,
@@ -90,7 +113,7 @@ import {
   buildAqrExternalSourceKey,
   captureRunTechnicalSnapshot,
   isAqrScratchRun,
-  matchRunDivisions,
+  matchRunClasses,
   normalizeShowScoreDrawRun,
   previewShowScoreDrawEntryImport as buildAqrAuditImportPreview,
   restoreRunTechnicalSnapshot,
@@ -98,18 +121,23 @@ import {
   type RunTechnicalSnapshot,
 } from "../lib/aqrAuditImport";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "./showScoreAdapters";
+import { compareContactIdentity, compareHorseIdentity, type IdentityMatchConfidence } from "../lib/identityComparison";
 
 const inactiveEntryStatuses: Entry["status"][] = ["cancelled", "scratched", "scratched_pending_refund"];
 
 export type AppContext = {
   profile: UserProfile;
   isPlatformAdmin: boolean;
+  loadedOrganizationId: string | null;
   organizations: Organization[];
   organizationMembers: OrganizationMember[];
   shows: Show[];
   showDays: ShowDay[];
+  disciplines: Discipline[];
+  organizationDisciplines: OrganizationDiscipline[];
+  slates: Slate[];
   showAnnouncements: ShowAnnouncement[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   scoredRuns: ScoredRun[];
   blockRunEntries: BlockRunEntry[];
   blockRunClassEntries: BlockRunClassEntry[];
@@ -122,31 +150,70 @@ export type AppContext = {
   entryImportBatches: EntryImportBatch[];
   contacts: Contact[];
   contactOrganizationLinks: ContactOrganizationLink[];
+  directoryContacts: DirectoryContact[];
   contactRoles: ContactRole[];
-  externalOrganizations: ExternalOrganization[];
-  organizationExternalMembershipRequirements: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalDataSources: ExternalDataSource[];
+  externalSourceGoverningBodies: ExternalSourceGoverningBody[];
+  organizationExternalCredentialRequirements: OrganizationExternalCredentialRequirement[];
+  organizationHealthPolicies: OrganizationHealthPolicy[];
+  organizationHealthDocumentReviews: OrganizationHealthDocumentReview[];
   organizationMembershipTypes: OrganizationMembershipType[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   organizationProducts: OrganizationProduct[];
   manualSales: ManualSale[];
   nrhaRiderRankings: NrhaRiderRanking[];
-  contactExternalMemberships: ContactExternalMembership[];
-  horseExternalMemberships: HorseExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   horseOrganizationLinks: HorseOrganizationLink[];
+  directoryHorses: DirectoryHorse[];
   horseContacts: HorseContact[];
   organizationBackNumbers: OrganizationBackNumber[];
-  classes: ClassRecord[];
+  blocks: Block[];
+  blockJudgeAssignments: BlockJudgeAssignment[];
+  blockConcurrencyGroups: BlockConcurrencyGroup[];
+  blockConcurrencyGroupMembers: BlockConcurrencyGroupMember[];
+  blockTemplates: BlockTemplate[];
   classTemplates: ClassTemplate[];
-  classTemplateDivisions: ClassTemplateDivision[];
-  divisions: Division[];
+  classes: ClassRecord[];
   sanctioningBodies: SanctioningBody[];
   entries: Entry[];
   stallOptions: StallOption[];
   stallBookings: StallBooking[];
   invoices: Invoice[];
   invoiceLineItems: InvoiceLineItem[];
+};
+
+export type ContactIdentityCandidate = {
+  contact_id: string;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  date_of_birth: string | null;
+  email_hint: string | null;
+  phone_hint: string | null;
+  already_linked: boolean;
+  search_signature: string;
+  score: number;
+  confidence: IdentityMatchConfidence;
+  reasons: string[];
+};
+
+export type HorseIdentityCandidate = {
+  horse_id: string;
+  name: string;
+  registration_number: string | null;
+  date_of_birth: string | null;
+  birth_year: number | null;
+  gender: Horse["gender"];
+  primary_owner_contact_id: string;
+  already_linked: boolean;
+  search_signature: string;
+  score: number;
+  confidence: IdentityMatchConfidence;
+  reasons: string[];
 };
 
 export function slugify(value: string) {
@@ -214,36 +281,115 @@ export async function ensureUserProfile(user: User) {
   return created;
 }
 
-export async function loadAppContext(user: User): Promise<AppContext> {
+function scopeQueryToOrganization<T>(query: T, organizationId: string | null, column = "organization_id"): T {
+  if (!organizationId) return query;
+  return (query as T & { eq: (targetColumn: string, value: string) => T }).eq(column, organizationId);
+}
+
+function scopeQueryToIds<T>(query: T, ids: string[], column: string): T {
+  return (query as T & { in: (targetColumn: string, values: string[]) => T }).in(column, ids);
+}
+
+export async function loadAppContext(user: User, requestedOrganizationId?: string): Promise<AppContext> {
   const client = requireSupabase();
   const profile = await ensureUserProfile(user);
 
+  const [organizationsResult, organizationMembersResult] = await Promise.all([
+    client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
+    client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
+  ]);
+
+  if (organizationsResult.error) throw organizationsResult.error;
+  if (organizationMembersResult.error) throw organizationMembersResult.error;
+
+  const organizations = organizationsResult.data ?? [];
+  const loadedOrganizationId = requestedOrganizationId && organizations.some((organization) => organization.id === requestedOrganizationId)
+    ? requestedOrganizationId
+    : organizations[0]?.id ?? null;
+
+  const [showsResult, contactOrganizationLinksResult, horseOrganizationLinksResult] = await Promise.all([
+    scopeQueryToOrganization(client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(), loadedOrganizationId),
+    loadedOrganizationId
+      ? client
+          .from("directory_contacts")
+          .select("id, organization_discipline_id, contact_id, source, notes, metadata, created_by_user_id, created_at, updated_at, organization_disciplines!inner(organization_id)")
+          .eq("organization_disciplines.organization_id", loadedOrganizationId)
+          .order("created_at", { ascending: false })
+      : client
+          .from("directory_contacts")
+          .select("id, organization_discipline_id, contact_id, source, notes, metadata, created_by_user_id, created_at, updated_at, organization_disciplines!inner(organization_id)")
+          .order("created_at", { ascending: false }),
+    loadedOrganizationId
+      ? client
+          .from("directory_horses")
+          .select("id, organization_discipline_id, horse_id, source, notes, metadata, created_by_user_id, created_at, updated_at, organization_disciplines!inner(organization_id)")
+          .eq("organization_disciplines.organization_id", loadedOrganizationId)
+          .order("created_at", { ascending: false })
+      : client
+          .from("directory_horses")
+          .select("id, organization_discipline_id, horse_id, source, notes, metadata, created_by_user_id, created_at, updated_at, organization_disciplines!inner(organization_id)")
+          .order("created_at", { ascending: false }),
+  ]);
+
+  if (contactOrganizationLinksResult.error) throw contactOrganizationLinksResult.error;
+  if (horseOrganizationLinksResult.error) throw horseOrganizationLinksResult.error;
+  if (showsResult.error) throw showsResult.error;
+
+  const directoryContactIds = Array.from(new Set((contactOrganizationLinksResult.data ?? []).map((row) => row.contact_id)));
+  const directoryHorseIds = Array.from(new Set((horseOrganizationLinksResult.data ?? []).map((row) => row.horse_id)));
+  const showIds = (showsResult.data ?? []).map((show) => show.id);
+  const horsesQuery = scopeQueryToIds(
+    client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
+    directoryHorseIds,
+    "id",
+  );
+  const horsesResult = await horsesQuery;
+  const { data: horsesData, error: horsesError } = horsesResult;
+  if (horsesError) throw horsesError;
+
+  const horseIds = (horsesData ?? []).map((horse) => horse.id);
+  const [horseContactsResult, horseExternalIdentifiersResult, horseHealthDocumentsResult] = await Promise.all([
+    scopeQueryToIds(client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(), horseIds, "horse_id"),
+    scopeQueryToIds(client.from("horse_external_identifiers").select("*").order("created_at", { ascending: false }).returns<HorseExternalIdentifier[]>(), horseIds, "horse_id"),
+    scopeQueryToIds(client.from("horse_documents").select("*").order("created_at", { ascending: false }).returns<HorseHealthDocument[]>(), horseIds, "horse_id"),
+  ]);
+
+  if (horseContactsResult.error) throw horseContactsResult.error;
+
+  const relatedContactIds = Array.from(new Set([
+    ...directoryContactIds,
+    ...(horsesData ?? []).map((horse) => horse.primary_owner_contact_id),
+    ...(horseContactsResult.data ?? []).map((horseContact) => horseContact.contact_id),
+  ]));
+  const [contactsResult, contactExternalIdentifiersResult] = await Promise.all([
+    scopeQueryToIds(client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(), relatedContactIds, "id"),
+    scopeQueryToIds(client.from("contact_external_identifiers").select("*").order("created_at", { ascending: false }).returns<ContactExternalIdentifier[]>(), relatedContactIds, "contact_id"),
+  ]);
+
   const [
-    organizationsResult,
-    organizationMembersResult,
-    showsResult,
     showDaysResult,
-    contactsResult,
-    contactOrganizationLinksResult,
+    disciplinesResult,
+    organizationDisciplinesResult,
+    slatesResult,
     contactRolesResult,
-    externalOrganizationsResult,
-    organizationExternalMembershipRequirementsResult,
+    externalCredentialIssuersResult,
+    externalDataSourcesResult,
+    externalSourceGoverningBodiesResult,
+    organizationExternalCredentialRequirementsResult,
+    organizationHealthPoliciesResult,
+    organizationHealthDocumentReviewsResult,
     organizationMembershipTypesResult,
     contactOrganizationMembershipsResult,
     organizationProductsResult,
     manualSalesResult,
     nrhaRiderRankingsResult,
-    contactExternalMembershipsResult,
-    horseExternalMembershipsResult,
-    horseHealthDocumentsResult,
-    horsesResult,
-    horseOrganizationLinksResult,
-    horseContactsResult,
     organizationBackNumbersResult,
-    classesResult,
+    blocksResult,
+    blockJudgeAssignmentsResult,
+    blockConcurrencyGroupsResult,
+    blockTemplatesResult,
     classTemplatesResult,
-    classTemplateDivisionsResult,
-    divisionsResult,
+    classesResult,
     sanctioningBodiesResult,
     entriesResult,
     stallOptionsResult,
@@ -253,77 +399,86 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     showAnnouncementsResult,
     scoredRunsResult,
     blockRunEntriesResult,
-    blockRunClassEntriesResult,
     entryResultsResult,
     payoutSchedulesResult,
     payoutScheduleBracketsResult,
     payoutCalculationsResult,
-    payoutAwardsResult,
     showScorePaidWarmupsResult,
     entryImportBatchesResult,
   ] = await Promise.all([
-    client.from("organizations").select("*").order("created_at", { ascending: false }).returns<Organization[]>(),
-    client.from("organization_members").select("*").order("created_at", { ascending: false }).returns<OrganizationMember[]>(),
-    client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(),
-    client.from("show_days").select("*").order("day_date", { ascending: true }).returns<ShowDay[]>(),
-    client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(),
-    client.from("contact_organization_links").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationLink[]>(),
-    client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(),
-    client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
-    client.from("organization_external_membership_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalMembershipRequirement[]>(),
-    client.from("organization_membership_types").select("*").order("season_year", { ascending: false }).order("name", { ascending: true }).returns<OrganizationMembershipType[]>(),
-    client.from("contact_organization_memberships").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationMembership[]>(),
-    client.from("organization_products").select("*").order("category", { ascending: true }).order("name", { ascending: true }).returns<OrganizationProduct[]>(),
-    client.from("manual_sales").select("*").order("created_at", { ascending: false }).returns<ManualSale[]>(),
+    scopeQueryToOrganization(client.from("show_days").select("*").order("day_date", { ascending: true }).returns<ShowDay[]>(), loadedOrganizationId),
+    client.from("disciplines").select("*").eq("is_active", true).order("name", { ascending: true }).returns<Discipline[]>(),
+    scopeQueryToOrganization(client.from("organization_disciplines").select("*").eq("is_active", true).order("created_at", { ascending: true }).returns<OrganizationDiscipline[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("slates").select("*").order("sort_order", { ascending: true }).returns<Slate[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(), loadedOrganizationId),
+    client.from("external_credential_issuers").select("*").order("name", { ascending: true }).returns<ExternalCredentialIssuer[]>(),
+    client.from("external_data_sources").select("*").eq("is_active", true).order("name", { ascending: true }).returns<ExternalDataSource[]>(),
+    client.from("external_source_governing_bodies").select("*").eq("is_active", true).returns<ExternalSourceGoverningBody[]>(),
+    scopeQueryToOrganization(client.from("organization_external_credential_requirements").select("*").order("created_at", { ascending: false }).returns<OrganizationExternalCredentialRequirement[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("organization_health_policies").select("*").order("effective_from", { ascending: false }).returns<OrganizationHealthPolicy[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("organization_health_document_reviews").select("*").order("reviewed_at", { ascending: false }).returns<OrganizationHealthDocumentReview[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("organization_membership_types").select("*").order("season_year", { ascending: false }).order("name", { ascending: true }).returns<OrganizationMembershipType[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("contact_organization_memberships").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationMembership[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("organization_products").select("*").order("category", { ascending: true }).order("name", { ascending: true }).returns<OrganizationProduct[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("manual_sales").select("*").order("created_at", { ascending: false }).returns<ManualSale[]>(), loadedOrganizationId),
     client.from("nrha_rider_rankings").select("*").order("eligibility_year", { ascending: false }).order("list_type", { ascending: true }).order("rank", { ascending: true }).returns<NrhaRiderRanking[]>(),
-    client.from("contact_external_memberships").select("*").order("created_at", { ascending: false }).returns<ContactExternalMembership[]>(),
-    client.from("horse_external_memberships").select("*").order("created_at", { ascending: false }).returns<HorseExternalMembership[]>(),
-    client.from("horse_health_documents").select("*").order("created_at", { ascending: false }).returns<HorseHealthDocument[]>(),
-    client.from("horses").select("*").order("created_at", { ascending: false }).returns<Horse[]>(),
-    client.from("horse_organization_links").select("*").order("created_at", { ascending: false }).returns<HorseOrganizationLink[]>(),
-    client.from("horse_contacts").select("*").order("created_at", { ascending: false }).returns<HorseContact[]>(),
-    client.from("organization_back_numbers").select("*").order("number", { ascending: true }).returns<OrganizationBackNumber[]>(),
-    client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(),
-    client.from("class_templates").select("*").order("sort_order", { ascending: true }).returns<ClassTemplate[]>(),
-    client.from("class_template_divisions").select("*").order("sort_order", { ascending: true }).returns<ClassTemplateDivision[]>(),
-    client.from("divisions").select("*").order("created_at", { ascending: false }).returns<Division[]>(),
-    client.from("sanctioning_bodies").select("*").order("name", { ascending: true }).returns<SanctioningBody[]>(),
-    client.from("entries").select("*").order("created_at", { ascending: false }).returns<Entry[]>(),
-    client.from("stall_options").select("*").order("created_at", { ascending: false }).returns<StallOption[]>(),
-    client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(),
-    client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(),
-    client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(),
-    client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
-    client.from("scored_runs").select("*").order("scored_at", { ascending: false }).returns<ScoredRun[]>(),
-    client.from("block_run_entries").select("*").order("order_of_go", { ascending: true }).returns<BlockRunEntry[]>(),
-    client.from("block_run_class_entries").select("*").returns<BlockRunClassEntry[]>(),
-    client.from("entry_results").select("*").order("synced_at", { ascending: false }).returns<EntryResult[]>(),
+    scopeQueryToOrganization(client.from("organization_back_numbers").select("*").order("number", { ascending: true }).returns<OrganizationBackNumber[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("blocks").select("*").order("created_at", { ascending: false }).returns<Block[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("block_judge_assignments").select("*").order("sort_order", { ascending: true }).returns<BlockJudgeAssignment[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("block_concurrency_groups").select("*").order("name", { ascending: true }).returns<BlockConcurrencyGroup[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("block_templates").select("*").order("sort_order", { ascending: true }).returns<BlockTemplate[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("class_templates").select("*").order("sort_order", { ascending: true }).returns<ClassTemplate[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("classes").select("*").order("created_at", { ascending: false }).returns<ClassRecord[]>(), loadedOrganizationId),
+    client.from("governing_bodies").select("*").eq("is_active", true).order("name", { ascending: true }).returns<SanctioningBody[]>(),
+    scopeQueryToOrganization(client.from("entries").select("*").order("created_at", { ascending: false }).returns<Entry[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("stall_options").select("*").order("created_at", { ascending: false }).returns<StallOption[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(), loadedOrganizationId),
+    scopeQueryToIds(client.from("scored_runs").select("*").order("scored_at", { ascending: false }).returns<ScoredRun[]>(), showIds, "show_id"),
+    scopeQueryToIds(client.from("block_run_entries").select("*").order("order_of_go", { ascending: true }).returns<BlockRunEntry[]>(), showIds, "show_id"),
+    scopeQueryToIds(client.from("entry_results").select("*").order("synced_at", { ascending: false }).returns<EntryResult[]>(), showIds, "show_id"),
     client.from("payout_schedules").select("*").order("federation", { ascending: true }).order("name", { ascending: true }).returns<PayoutSchedule[]>(),
     client.from("payout_schedule_brackets").select("*").order("min_entries", { ascending: true }).order("place", { ascending: true }).returns<PayoutScheduleBracket[]>(),
-    client.from("payout_calculations").select("*").order("calculated_at", { ascending: false }).returns<PayoutCalculation[]>(),
-    client.from("payout_awards").select("*").order("rank", { ascending: true }).returns<PayoutAward[]>(),
-    client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(),
-    client.from("entry_import_batches").select("*").order("created_at", { ascending: false }).returns<EntryImportBatch[]>(),
+    scopeQueryToIds(client.from("payout_calculations").select("*").order("calculated_at", { ascending: false }).returns<PayoutCalculation[]>(), showIds, "show_id"),
+    scopeQueryToOrganization(client.from("show_score_paid_warmups").select("*").order("sort_order", { ascending: true }).returns<ShowScorePaidWarmup[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("entry_import_batches").select("*").order("created_at", { ascending: false }).returns<EntryImportBatch[]>(), loadedOrganizationId),
   ]);
-  const showScoreClassSetups = await loadShowScoreClassSetups();
+  const [blockConcurrencyGroupMembersResult, blockRunClassEntriesResult, payoutAwardsResult] = await Promise.all([
+    scopeQueryToIds(
+      client.from("block_concurrency_group_members").select("*").order("sort_order", { ascending: true }).returns<BlockConcurrencyGroupMember[]>(),
+      (blockConcurrencyGroupsResult.data ?? []).map((group) => group.id),
+      "group_id",
+    ),
+    scopeQueryToIds(
+      client.from("block_run_class_entries").select("*").returns<BlockRunClassEntry[]>(),
+      (blockRunEntriesResult.data ?? []).map((entry) => entry.block_run_id),
+      "block_run_id",
+    ),
+    scopeQueryToIds(
+      client.from("payout_awards").select("*").order("rank", { ascending: true }).returns<PayoutAward[]>(),
+      (payoutCalculationsResult.data ?? []).map((calculation) => calculation.id),
+      "calculation_id",
+    ),
+  ]);
+  const showScoreClassSetups = await loadShowScoreClassSetups(loadedOrganizationId);
 
   const { data: isPlatformAdminData } = await client.rpc("is_platform_admin").returns<boolean>();
   const isPlatformAdmin = Boolean(isPlatformAdminData);
 
-  if (organizationsResult.error) {
-    throw organizationsResult.error;
-  }
-
-  if (organizationMembersResult.error) {
-    throw organizationMembersResult.error;
-  }
-
-  if (showsResult.error) {
-    throw showsResult.error;
-  }
-
   if (showDaysResult.error) {
     throw showDaysResult.error;
+  }
+
+  if (disciplinesResult.error) {
+    throw disciplinesResult.error;
+  }
+  if (organizationDisciplinesResult.error) {
+    throw organizationDisciplinesResult.error;
+  }
+  if (slatesResult.error) {
+    throw slatesResult.error;
   }
 
   if (contactsResult.error) {
@@ -331,43 +486,80 @@ export async function loadAppContext(user: User): Promise<AppContext> {
   }
 
   const contactOrganizationLinks = contactOrganizationLinksResult.error
-    ? isMissingSchemaError(contactOrganizationLinksResult.error, "contact_organization_links")
-      ? deriveContactOrganizationLinksFromContacts(contactsResult.data ?? [])
-      : null
-    : contactOrganizationLinksResult.data ?? [];
+    ? null
+    : (contactOrganizationLinksResult.data ?? []).map(directoryContactRowToOrganizationLink);
 
   if (!contactOrganizationLinks) {
     throw contactOrganizationLinksResult.error;
   }
+  const directoryContacts = (contactOrganizationLinksResult.data ?? []).map(directoryContactRowToDirectoryContact);
 
   const contactRoles = contactRolesResult.error
-    ? isMissingSchemaError(contactRolesResult.error, "contact_roles")
-      ? deriveContactRolesFromContacts(contactsResult.data ?? [])
-      : null
+    ? null
     : contactRolesResult.data ?? [];
 
   if (!contactRoles) {
     throw contactRolesResult.error;
   }
 
-  const externalOrganizations = externalOrganizationsResult.error
-    ? isMissingSchemaError(externalOrganizationsResult.error, "external_organizations")
+  const externalCredentialIssuers = externalCredentialIssuersResult.error
+    ? isMissingSchemaError(externalCredentialIssuersResult.error, "external_credential_issuers")
       ? []
       : null
-    : externalOrganizationsResult.data ?? [];
+    : externalCredentialIssuersResult.data ?? [];
 
-  if (!externalOrganizations) {
-    throw externalOrganizationsResult.error;
+  if (!externalCredentialIssuers) {
+    throw externalCredentialIssuersResult.error;
   }
 
-  const organizationExternalMembershipRequirements = organizationExternalMembershipRequirementsResult.error
-    ? isMissingSchemaError(organizationExternalMembershipRequirementsResult.error, "organization_external_membership_requirements")
+  const externalDataSources = externalDataSourcesResult.error
+    ? isMissingSchemaError(externalDataSourcesResult.error, "external_data_sources")
       ? []
       : null
-    : organizationExternalMembershipRequirementsResult.data ?? [];
+    : externalDataSourcesResult.data ?? [];
 
-  if (!organizationExternalMembershipRequirements) {
-    throw organizationExternalMembershipRequirementsResult.error;
+  if (!externalDataSources) {
+    throw externalDataSourcesResult.error;
+  }
+
+  const externalSourceGoverningBodies = externalSourceGoverningBodiesResult.error
+    ? isMissingSchemaError(externalSourceGoverningBodiesResult.error, "external_source_governing_bodies")
+      ? []
+      : null
+    : externalSourceGoverningBodiesResult.data ?? [];
+
+  if (!externalSourceGoverningBodies) {
+    throw externalSourceGoverningBodiesResult.error;
+  }
+
+  const organizationExternalCredentialRequirements = organizationExternalCredentialRequirementsResult.error
+    ? isMissingSchemaError(organizationExternalCredentialRequirementsResult.error, "organization_external_credential_requirements")
+      ? []
+      : null
+    : organizationExternalCredentialRequirementsResult.data ?? [];
+
+  if (!organizationExternalCredentialRequirements) {
+    throw organizationExternalCredentialRequirementsResult.error;
+  }
+
+  const organizationHealthPolicies = organizationHealthPoliciesResult.error
+    ? isMissingSchemaError(organizationHealthPoliciesResult.error, "organization_health_policies")
+      ? []
+      : null
+    : organizationHealthPoliciesResult.data ?? [];
+
+  if (!organizationHealthPolicies) {
+    throw organizationHealthPoliciesResult.error;
+  }
+
+  const organizationHealthDocumentReviews = organizationHealthDocumentReviewsResult.error
+    ? isMissingSchemaError(organizationHealthDocumentReviewsResult.error, "organization_health_document_reviews")
+      ? []
+      : null
+    : organizationHealthDocumentReviewsResult.data ?? [];
+
+  if (!organizationHealthDocumentReviews) {
+    throw organizationHealthDocumentReviewsResult.error;
   }
 
   const organizationMembershipTypes = organizationMembershipTypesResult.error
@@ -410,28 +602,28 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw manualSalesResult.error;
   }
 
-  const contactExternalMemberships = contactExternalMembershipsResult.error
-    ? isMissingSchemaError(contactExternalMembershipsResult.error, "contact_external_memberships")
+  const contactExternalIdentifiers = contactExternalIdentifiersResult.error
+    ? isMissingSchemaError(contactExternalIdentifiersResult.error, "contact_external_identifiers")
       ? []
       : null
-    : contactExternalMembershipsResult.data ?? [];
+    : (contactExternalIdentifiersResult.data ?? []).map(hydrateContactExternalIdentifier);
 
-  if (!contactExternalMemberships) {
-    throw contactExternalMembershipsResult.error;
+  if (!contactExternalIdentifiers) {
+    throw contactExternalIdentifiersResult.error;
   }
 
-  const horseExternalMemberships = horseExternalMembershipsResult.error
-    ? isMissingSchemaError(horseExternalMembershipsResult.error, "horse_external_memberships")
+  const horseExternalIdentifiers = horseExternalIdentifiersResult.error
+    ? isMissingSchemaError(horseExternalIdentifiersResult.error, "horse_external_identifiers")
       ? []
       : null
-    : horseExternalMembershipsResult.data ?? [];
+    : (horseExternalIdentifiersResult.data ?? []).map(hydrateHorseExternalIdentifier);
 
-  if (!horseExternalMemberships) {
-    throw horseExternalMembershipsResult.error;
+  if (!horseExternalIdentifiers) {
+    throw horseExternalIdentifiersResult.error;
   }
 
   const horseHealthDocuments = horseHealthDocumentsResult.error
-    ? isMissingSchemaError(horseHealthDocumentsResult.error, "horse_health_documents")
+    ? isMissingSchemaError(horseHealthDocumentsResult.error, "horse_documents")
       ? []
       : null
     : horseHealthDocumentsResult.data ?? [];
@@ -440,23 +632,14 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw horseHealthDocumentsResult.error;
   }
 
-  if (horsesResult.error) {
-    throw horsesResult.error;
-  }
-
   const horseOrganizationLinks = horseOrganizationLinksResult.error
-    ? isMissingSchemaError(horseOrganizationLinksResult.error, "horse_organization_links")
-      ? deriveHorseOrganizationLinksFromHorses(horsesResult.data ?? [])
-      : null
-    : horseOrganizationLinksResult.data ?? [];
+    ? null
+    : (horseOrganizationLinksResult.data ?? []).map(directoryHorseRowToOrganizationLink);
 
   if (!horseOrganizationLinks) {
     throw horseOrganizationLinksResult.error;
   }
-
-  if (horseContactsResult.error) {
-    throw horseContactsResult.error;
-  }
+  const directoryHorses = (horseOrganizationLinksResult.data ?? []).map(directoryHorseRowToDirectoryHorse);
 
   const organizationBackNumbers = organizationBackNumbersResult.error
     ? isMissingSchemaError(organizationBackNumbersResult.error, "organization_back_numbers")
@@ -468,8 +651,27 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw organizationBackNumbersResult.error;
   }
 
-  if (classesResult.error) {
-    throw classesResult.error;
+  if (blocksResult.error) {
+    throw blocksResult.error;
+  }
+  if (blockJudgeAssignmentsResult.error) {
+    throw blockJudgeAssignmentsResult.error;
+  }
+  if (blockConcurrencyGroupsResult.error) {
+    throw blockConcurrencyGroupsResult.error;
+  }
+  if (blockConcurrencyGroupMembersResult.error) {
+    throw blockConcurrencyGroupMembersResult.error;
+  }
+
+  const blockTemplates = blockTemplatesResult.error
+    ? isMissingSchemaError(blockTemplatesResult.error, "block_templates")
+      ? []
+      : null
+    : blockTemplatesResult.data ?? [];
+
+  if (!blockTemplates) {
+    throw blockTemplatesResult.error;
   }
 
   const classTemplates = classTemplatesResult.error
@@ -482,22 +684,12 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     throw classTemplatesResult.error;
   }
 
-  const classTemplateDivisions = classTemplateDivisionsResult.error
-    ? isMissingSchemaError(classTemplateDivisionsResult.error, "class_template_divisions")
-      ? []
-      : null
-    : classTemplateDivisionsResult.data ?? [];
-
-  if (!classTemplateDivisions) {
-    throw classTemplateDivisionsResult.error;
-  }
-
-  if (divisionsResult.error) {
-    throw divisionsResult.error;
+  if (classesResult.error) {
+    throw classesResult.error;
   }
 
   const sanctioningBodies = sanctioningBodiesResult.error
-    ? isMissingSchemaError(sanctioningBodiesResult.error, "sanctioning_bodies")
+    ? isMissingSchemaError(sanctioningBodiesResult.error, "governing_bodies")
       ? []
       : null
     : sanctioningBodiesResult.data ?? [];
@@ -505,6 +697,35 @@ export async function loadAppContext(user: User): Promise<AppContext> {
   if (!sanctioningBodies) {
     throw sanctioningBodiesResult.error;
   }
+
+  const [classGoverningBodiesResult, classTemplateGoverningBodiesResult] = await Promise.all([
+    scopeQueryToIds(
+      client.from("class_governing_bodies").select("class_id,governing_body_id,reporting_class_code,eligibility_profile_code,sanction_metadata").returns<GoverningBodyLinkRow[]>(),
+      (classesResult.data ?? []).map((classRecord) => classRecord.id),
+      "class_id",
+    ),
+    scopeQueryToIds(
+      client.from("class_template_governing_bodies").select("class_template_id,governing_body_id,reporting_class_code,eligibility_profile_code,sanction_metadata").returns<GoverningBodyLinkRow[]>(),
+      classTemplates.map((classTemplate) => classTemplate.id),
+      "class_template_id",
+    ),
+  ]);
+
+  if (classGoverningBodiesResult.error) {
+    throw classGoverningBodiesResult.error;
+  }
+  if (classTemplateGoverningBodiesResult.error) {
+    throw classTemplateGoverningBodiesResult.error;
+  }
+
+  const governingBodyById = new Map(sanctioningBodies.map((body) => [body.id, body]));
+  const classes = attachGoverningBodyAssignments(classesResult.data ?? [], classGoverningBodiesResult.data ?? [], "class_id", governingBodyById);
+  const classTemplatesWithGoverningBodies = attachGoverningBodyAssignments(
+    classTemplates,
+    classTemplateGoverningBodiesResult.data ?? [],
+    "class_template_id",
+    governingBodyById,
+  );
 
   if (entriesResult.error) {
     throw entriesResult.error;
@@ -590,10 +811,14 @@ export async function loadAppContext(user: User): Promise<AppContext> {
   return {
     profile,
     isPlatformAdmin,
-    organizations: organizationsResult.data ?? [],
+    loadedOrganizationId,
+    organizations,
     organizationMembers: organizationMembersResult.data ?? [],
     shows: showsResult.data ?? [],
     showDays: showDaysResult.data ?? [],
+    disciplines: disciplinesResult.data ?? [],
+    organizationDisciplines: organizationDisciplinesResult.data ?? [],
+    slates: slatesResult.data ?? [],
     showAnnouncements,
     showScoreClassSetups,
     scoredRuns,
@@ -608,25 +833,34 @@ export async function loadAppContext(user: User): Promise<AppContext> {
     entryImportBatches,
     contacts: contactsResult.data ?? [],
     contactOrganizationLinks,
+    directoryContacts,
     contactRoles,
-    externalOrganizations,
-    organizationExternalMembershipRequirements,
+    externalCredentialIssuers,
+    externalDataSources,
+    externalSourceGoverningBodies,
+    organizationExternalCredentialRequirements,
+    organizationHealthPolicies,
+    organizationHealthDocumentReviews,
     organizationMembershipTypes,
     contactOrganizationMemberships,
     organizationProducts,
     manualSales,
     nrhaRiderRankings,
-    contactExternalMemberships,
-    horseExternalMemberships,
+    contactExternalIdentifiers,
+    horseExternalIdentifiers,
     horseHealthDocuments,
     horses: horsesResult.data ?? [],
     horseOrganizationLinks,
+    directoryHorses,
     horseContacts: horseContactsResult.data ?? [],
     organizationBackNumbers,
-    classes: classesResult.data ?? [],
-    classTemplates,
-    classTemplateDivisions,
-    divisions: divisionsResult.data ?? [],
+    blocks: blocksResult.data ?? [],
+    blockJudgeAssignments: blockJudgeAssignmentsResult.data ?? [],
+    blockConcurrencyGroups: blockConcurrencyGroupsResult.data ?? [],
+    blockConcurrencyGroupMembers: blockConcurrencyGroupMembersResult.data ?? [],
+    blockTemplates,
+    classTemplates: classTemplatesWithGoverningBodies,
+    classes,
     sanctioningBodies,
     entries: entriesResult.data ?? [],
     stallOptions: stallOptionsResult.data ?? [],
@@ -669,15 +903,16 @@ export async function fetchPublicShows(): Promise<PublicShowSummary[]> {
 export type PublicShowContext = {
   show: Show;
   organization: Organization;
+  healthPolicy: OrganizationHealthPolicy | null;
   showDays: ShowDay[];
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
   payoutCalculations: PayoutCalculation[];
   payoutAwards: PayoutAward[];
   stallOptions: StallOption[];
   announcements: ShowAnnouncement[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
-  externalOrganizations: ExternalOrganization[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   sanctioningBodies: SanctioningBody[];
 };
 
@@ -696,8 +931,9 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
 
   const [
     orgResult,
+    healthPolicyResult,
     daysResult,
-    classesResult,
+    blocksResult,
     stallOptionsResult,
     announcementsResult,
     membershipReqResult,
@@ -706,26 +942,49 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
     payoutCalculationsResult,
   ] = await Promise.all([
     client.from("organizations").select("*").eq("id", show.organization_id).single<Organization>(),
+    client
+      .from("organization_health_policies")
+      .select("*")
+      .eq("organization_id", show.organization_id)
+      .lte("effective_from", show.start_date)
+      .or(`effective_until.is.null,effective_until.gte.${show.start_date}`)
+      .order("effective_from", { ascending: false })
+      .limit(1)
+      .maybeSingle<OrganizationHealthPolicy>(),
     client.from("show_days").select("*").eq("show_id", show.id).order("sort_order", { ascending: true }).returns<ShowDay[]>(),
-    client.from("classes").select("*").eq("show_id", show.id).eq("is_public", true).order("sort_order", { ascending: true }).returns<ClassRecord[]>(),
+    client.from("blocks").select("*").eq("show_id", show.id).eq("schedule_is_public", true).order("sort_order", { ascending: true }).returns<Block[]>(),
     client.from("stall_options").select("*").eq("show_id", show.id).order("price", { ascending: true }).returns<StallOption[]>(),
     client.from("show_announcements").select("*").eq("show_id", show.id).order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(),
-    client.from("organization_external_membership_requirements").select("*").eq("organization_id", show.organization_id).returns<OrganizationExternalMembershipRequirement[]>(),
-    client.from("external_organizations").select("*").order("name", { ascending: true }).returns<ExternalOrganization[]>(),
-    client.from("sanctioning_bodies").select("*").order("name", { ascending: true }).returns<SanctioningBody[]>(),
+    client.from("organization_external_credential_requirements").select("*").eq("organization_id", show.organization_id).returns<OrganizationExternalCredentialRequirement[]>(),
+    client.from("external_credential_issuers").select("*").order("name", { ascending: true }).returns<ExternalCredentialIssuer[]>(),
+    client.from("governing_bodies").select("*").eq("is_active", true).order("name", { ascending: true }).returns<SanctioningBody[]>(),
     client.from("payout_calculations").select("*").eq("show_id", show.id).eq("status", "published").order("published_at", { ascending: false }).returns<PayoutCalculation[]>(),
   ]);
 
   if (orgResult.error) throw orgResult.error;
+  if (healthPolicyResult.error) throw healthPolicyResult.error;
   if (daysResult.error) throw daysResult.error;
-  if (classesResult.error) throw classesResult.error;
+  if (blocksResult.error) throw blocksResult.error;
 
-  const classIds = (classesResult.data ?? []).map((c) => c.id);
-  const divisionsResult = classIds.length
-    ? await client.from("divisions").select("*").in("class_id", classIds).returns<Division[]>()
+  const blockIds = (blocksResult.data ?? []).map((block) => block.id);
+  const classesResult = blockIds.length
+    ? await client.from("classes").select("*").in("block_id", blockIds).eq("is_public", true).returns<ClassRecord[]>()
     : { data: [], error: null };
 
-  if (divisionsResult.error) throw divisionsResult.error;
+  if (classesResult.error) throw classesResult.error;
+
+  const publicClassIds = (classesResult.data ?? []).map((classRecord) => classRecord.id);
+  const { data: classGoverningBodies, error: classGoverningBodiesError } = publicClassIds.length
+    ? await client
+        .from("class_governing_bodies")
+        .select("class_id,governing_body_id,reporting_class_code,eligibility_profile_code,sanction_metadata")
+        .in("class_id", publicClassIds)
+        .returns<GoverningBodyLinkRow[]>()
+    : { data: [], error: null };
+
+  if (classGoverningBodiesError) throw classGoverningBodiesError;
+  const publicGoverningBodyById = new Map((sanctioningBodiesResult.data ?? []).map((body) => [body.id, body]));
+  const publicClasses = attachGoverningBodyAssignments(classesResult.data ?? [], classGoverningBodies ?? [], "class_id", publicGoverningBodyById);
 
   const payoutCalculations = payoutCalculationsResult.error
     ? isMissingSchemaError(payoutCalculationsResult.error, "payout_calculations")
@@ -746,15 +1005,16 @@ export async function fetchPublicShow(slug: string): Promise<PublicShowContext |
   return {
     show,
     organization: orgResult.data,
+    healthPolicy: healthPolicyResult.data,
     showDays: daysResult.data ?? [],
-    classes: classesResult.data ?? [],
-    divisions: divisionsResult.data ?? [],
+    blocks: blocksResult.data ?? [],
+    classes: publicClasses,
     payoutCalculations,
     payoutAwards,
     stallOptions: stallOptionsResult.data ?? [],
     announcements: announcementsResult.data ?? [],
     membershipRequirements: membershipReqResult.data ?? [],
-    externalOrganizations: externalOrgsResult.data ?? [],
+    externalCredentialIssuers: externalOrgsResult.data ?? [],
     sanctioningBodies: sanctioningBodiesResult.data ?? [],
   };
 }
@@ -904,6 +1164,101 @@ export async function updateOrganizationHealthSettings(
   return data;
 }
 
+export async function setOrganizationHealthPolicy(input: {
+  organization_id: string;
+  effective_from: string;
+  policy: OrganizationHealthPolicyInput;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("set_organization_health_policy", {
+    p_organization_id: input.organization_id,
+    p_effective_from: input.effective_from,
+    p_policy: input.policy,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "set_organization_health_policy")) {
+      throw new Error("La migration des politiques de santé d'association n'est pas encore appliquée.");
+    }
+    throw error;
+  }
+
+  return data as OrganizationHealthPolicy;
+}
+
+export async function createOrganizationHealthDocumentReview(input: {
+  organization_id: string;
+  horse_document_id: string;
+  status: OrganizationHealthDocumentReview["status"];
+  review_notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("create_organization_health_document_review", {
+    p_organization_id: input.organization_id,
+    p_horse_document_id: input.horse_document_id,
+    p_status: input.status,
+    p_review_notes: input.review_notes ?? null,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "create_organization_health_document_review")) {
+      throw new Error("La migration des révisions santé par association n'est pas encore appliquée.");
+    }
+    throw error;
+  }
+
+  return data as OrganizationHealthDocumentReview;
+}
+
+export async function getHorseHealthCompliance(input: {
+  horse_id: string;
+  organization_id: string;
+  reference_date?: string;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("get_horse_health_compliance", {
+    p_horse_id: input.horse_id,
+    p_organization_id: input.organization_id,
+    p_reference_date: input.reference_date ?? null,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "get_horse_health_compliance")) {
+      throw new Error("La migration du calcul de conformité santé n'est pas encore appliquée.");
+    }
+    throw error;
+  }
+
+  const result = (data as HorseHealthCompliance[] | null)?.[0];
+  if (!result) {
+    throw new Error("Le calcul de conformité santé n'a retourné aucun résultat.");
+  }
+
+  return result;
+}
+
+export async function listHorseHealthCompliance(input: {
+  horse_ids?: string[];
+  organization_id?: string;
+  reference_date?: string;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("list_horse_health_compliance", {
+    p_horse_ids: input.horse_ids?.length ? input.horse_ids : null,
+    p_organization_id: input.organization_id ?? null,
+    p_reference_date: input.reference_date ?? null,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "list_horse_health_compliance")) {
+      throw new Error("La migration de présentation de la conformité santé n'est pas encore appliquée.");
+    }
+    throw error;
+  }
+
+  return (data ?? []) as HorseHealthComplianceOverview[];
+}
+
 export async function createShow(input: ShowInput) {
   const client = requireSupabase();
   const { data, error } = await client
@@ -953,6 +1308,276 @@ export async function updateShow(id: string, input: ShowUpdateInput) {
   return data;
 }
 
+export async function createSlate(input: SlateInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("slates")
+    .insert({
+      organization_id: input.organization_id,
+      show_id: input.show_id,
+      governing_body_id: input.governing_body_id ?? null,
+      name: input.name.trim(),
+      technical_number: input.technical_number?.trim() || null,
+      sort_order: input.sort_order ?? 1,
+      reporting_rules: input.reporting_rules ?? {},
+      notes: input.notes?.trim() || null,
+      created_by_user_id: input.created_by_user_id ?? null,
+    })
+    .select("*")
+    .single<Slate>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function updateSlate(id: string, input: SlateUpdateInput) {
+  const client = requireSupabase();
+  const payload = cleanPayload({
+    ...input,
+    name: input.name === undefined ? undefined : input.name.trim(),
+    governing_body_id: input.governing_body_id === undefined ? undefined : input.governing_body_id || null,
+    technical_number: input.technical_number === undefined ? undefined : input.technical_number?.trim() || null,
+    notes: input.notes === undefined ? undefined : input.notes?.trim() || null,
+  });
+  const { data, error } = await client
+    .from("slates")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single<Slate>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function deleteSlate(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("slates").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function linkContactToDirectory(input: {
+  organization_discipline_id: string;
+  contact_id: string;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("directory_contacts").upsert(
+    {
+      organization_discipline_id: input.organization_discipline_id,
+      contact_id: input.contact_id,
+      source: "manual",
+      created_by_user_id: input.created_by_user_id ?? null,
+    },
+    { onConflict: "organization_discipline_id,contact_id", ignoreDuplicates: true },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function unlinkContactFromDirectory(organizationDisciplineId: string, contactId: string) {
+  const client = requireSupabase();
+  const { error } = await client
+    .from("directory_contacts")
+    .delete()
+    .eq("organization_discipline_id", organizationDisciplineId)
+    .eq("contact_id", contactId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function linkHorseToDirectory(input: {
+  organization_discipline_id: string;
+  horse_id: string;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("directory_horses").upsert(
+    {
+      organization_discipline_id: input.organization_discipline_id,
+      horse_id: input.horse_id,
+      source: "manual",
+      created_by_user_id: input.created_by_user_id ?? null,
+    },
+    { onConflict: "organization_discipline_id,horse_id", ignoreDuplicates: true },
+  );
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function unlinkHorseFromDirectory(organizationDisciplineId: string, horseId: string) {
+  const client = requireSupabase();
+  const { error } = await client
+    .from("directory_horses")
+    .delete()
+    .eq("organization_discipline_id", organizationDisciplineId)
+    .eq("horse_id", horseId);
+
+  if (error) {
+    throw error;
+  }
+}
+
+type ContactIdentityCandidateRow = {
+  contact_id: string;
+  first_name: string;
+  middle_name: string | null;
+  last_name: string;
+  date_of_birth: string | null;
+  email_hint: string | null;
+  phone_hint: string | null;
+  email_exact: boolean;
+  phone_exact: boolean;
+  already_linked: boolean;
+  search_signature: string;
+};
+
+export async function searchContactIdentityCandidates(input: Pick<ContactInput, "organization_id" | "first_name" | "middle_name" | "last_name" | "email" | "phone" | "date_of_birth">) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("search_contact_identity_candidates", {
+    target_organization_id: input.organization_id,
+    target_first_name: input.first_name,
+    target_middle_name: input.middle_name ?? null,
+    target_last_name: input.last_name,
+    target_email: input.email ?? null,
+    target_phone: input.phone ?? null,
+    target_date_of_birth: input.date_of_birth || null,
+    result_limit: 5,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as unknown as ContactIdentityCandidateRow[];
+
+  return rows.flatMap((row): ContactIdentityCandidate[] => {
+    const match = compareContactIdentity(input, {
+      first_name: row.first_name,
+      middle_name: row.middle_name,
+      last_name: row.last_name,
+      email: row.email_exact ? input.email ?? null : null,
+      phone: row.phone_exact ? input.phone ?? null : null,
+      date_of_birth: row.date_of_birth,
+    });
+
+    return match ? [{
+      contact_id: row.contact_id,
+      first_name: row.first_name,
+      middle_name: row.middle_name,
+      last_name: row.last_name,
+      date_of_birth: row.date_of_birth,
+      email_hint: row.email_hint,
+      phone_hint: row.phone_hint,
+      already_linked: row.already_linked,
+      search_signature: row.search_signature,
+      ...match,
+    }] : [];
+  }).sort((left, right) => right.score - left.score);
+}
+
+type HorseIdentityCandidateRow = {
+  horse_id: string;
+  name: string;
+  registration_number: string | null;
+  date_of_birth: string | null;
+  birth_year: number | null;
+  gender: Horse["gender"];
+  primary_owner_contact_id: string;
+  already_linked: boolean;
+  search_signature: string;
+};
+
+export async function searchHorseIdentityCandidates(input: Pick<HorseInput, "organization_id" | "name" | "registration_number" | "date_of_birth" | "birth_year" | "gender" | "primary_owner_contact_id">) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("search_horse_identity_candidates", {
+    target_organization_id: input.organization_id,
+    target_name: input.name,
+    target_registration_number: input.registration_number ?? null,
+    target_date_of_birth: input.date_of_birth || null,
+    target_birth_year: input.birth_year ?? null,
+    target_gender: input.gender ?? null,
+    target_owner_contact_id: input.primary_owner_contact_id,
+    result_limit: 5,
+  });
+
+  if (error) {
+    throw error;
+  }
+
+  const rows = (data ?? []) as unknown as HorseIdentityCandidateRow[];
+
+  return rows.flatMap((row): HorseIdentityCandidate[] => {
+    const match = compareHorseIdentity(input, row);
+
+    return match ? [{
+      horse_id: row.horse_id,
+      name: row.name,
+      registration_number: row.registration_number,
+      date_of_birth: row.date_of_birth,
+      birth_year: row.birth_year,
+      gender: row.gender,
+      primary_owner_contact_id: row.primary_owner_contact_id,
+      already_linked: row.already_linked,
+      search_signature: row.search_signature,
+      ...match,
+    }] : [];
+  }).sort((left, right) => right.score - left.score);
+}
+
+export async function dismissContactIdentityCandidate(input: {
+  organization_id: string;
+  contact_id: string;
+  search_signature: string;
+  reason?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.rpc("dismiss_contact_identity_candidate", {
+    target_organization_id: input.organization_id,
+    target_contact_id: input.contact_id,
+    target_signature: input.search_signature,
+    target_reason: input.reason ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function dismissHorseIdentityCandidate(input: {
+  organization_id: string;
+  horse_id: string;
+  search_signature: string;
+  reason?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.rpc("dismiss_horse_identity_candidate", {
+    target_organization_id: input.organization_id,
+    target_horse_id: input.horse_id,
+    target_signature: input.search_signature,
+    target_reason: input.reason ?? null,
+  });
+
+  if (error) {
+    throw error;
+  }
+}
+
 export async function createContact(input: ContactInput) {
   const client = requireSupabase();
   const normalizedEmail = normalizeEmail(input.email);
@@ -975,7 +1600,7 @@ export async function createContact(input: ContactInput) {
         roles,
         source: input.roles?.length ? "manual" : "contact_type",
       });
-      await syncContactExternalMemberships(contact.id, input.external_memberships);
+      await syncContactExternalIdentifiers(contact.id, input.external_memberships);
 
       return contact;
     }
@@ -984,7 +1609,6 @@ export async function createContact(input: ContactInput) {
   const { data, error } = await client
     .from("contacts")
     .insert({
-      organization_id: input.organization_id,
       type: input.type,
       first_name: input.first_name.trim(),
       middle_name: input.middle_name?.trim() || null,
@@ -1010,7 +1634,7 @@ export async function createContact(input: ContactInput) {
       const reusedContact = await reuseContactByEmail(input, normalizedEmail, roles);
 
       if (reusedContact) {
-        await syncContactExternalMemberships(reusedContact.id, input.external_memberships);
+        await syncContactExternalIdentifiers(reusedContact.id, input.external_memberships);
 
         return reusedContact;
       }
@@ -1036,7 +1660,7 @@ export async function createContact(input: ContactInput) {
           roles,
           source: input.roles?.length ? "manual" : "contact_type",
         });
-        await syncContactExternalMemberships(contact.id, input.external_memberships);
+        await syncContactExternalIdentifiers(contact.id, input.external_memberships);
 
         return contact;
       }
@@ -1045,19 +1669,19 @@ export async function createContact(input: ContactInput) {
     throw error;
   }
 
-  await ensureContactRoles({
-    organization_id: data.organization_id,
-    contact_id: data.id,
-    roles,
-    source: input.roles?.length ? "manual" : "contact_type",
-  });
   await ensureContactOrganizationLink({
     organization_id: input.organization_id,
     contact_id: data.id,
     source: "created_here",
     created_by_user_id: input.created_by_user_id,
   });
-  await syncContactExternalMemberships(data.id, input.external_memberships);
+  await ensureContactRoles({
+    organization_id: input.organization_id,
+    contact_id: data.id,
+    roles,
+    source: input.roles?.length ? "manual" : "contact_type",
+  });
+  await syncContactExternalIdentifiers(data.id, input.external_memberships);
 
   return data;
 }
@@ -1092,16 +1716,7 @@ export async function updateContact(id: string, input: ContactUpdateInput) {
     throw error;
   }
 
-  if (input.type) {
-    await ensureContactRole({
-      organization_id: data.organization_id,
-      contact_id: data.id,
-      role: input.type,
-      source: "contact_type",
-    });
-  }
-
-  await syncContactExternalMemberships(data.id, externalMemberships);
+  await syncContactExternalIdentifiers(data.id, externalMemberships);
 
   return data;
 }
@@ -1176,21 +1791,24 @@ export async function deleteContact(id: string) {
   }
 }
 
-export async function setOrganizationExternalMembershipRequirement(input: {
+export async function setOrganizationExternalCredentialRequirement(input: {
   organization_id: string;
-  external_organization_id: string;
+  external_credential_issuer_id: string;
   contact_type: Contact["type"];
+  requirement_group_code?: string | null;
+  match_rule?: OrganizationExternalCredentialRequirement["match_rule"];
   is_required: boolean;
 }) {
   const client = requireSupabase();
 
   if (!input.is_required) {
     const { error } = await client
-      .from("organization_external_membership_requirements")
+      .from("organization_external_credential_requirements")
       .delete()
       .eq("organization_id", input.organization_id)
-      .eq("external_organization_id", input.external_organization_id)
-      .eq("contact_type", input.contact_type);
+      .eq("external_credential_issuer_id", input.external_credential_issuer_id)
+      .eq("contact_type", input.contact_type)
+      .eq("identifier_type", "membership");
 
     if (error) {
       throw error;
@@ -1199,14 +1817,19 @@ export async function setOrganizationExternalMembershipRequirement(input: {
     return;
   }
 
-  const { error } = await client.from("organization_external_membership_requirements").upsert(
+  const { error } = await client.from("organization_external_credential_requirements").upsert(
     {
       organization_id: input.organization_id,
-      external_organization_id: input.external_organization_id,
+      external_credential_issuer_id: input.external_credential_issuer_id,
       contact_type: input.contact_type,
+      identifier_type: "membership",
+      requirement_group_code: input.requirement_group_code ?? null,
+      match_rule: input.match_rule ?? "all",
+      validity_rule: "active_on_reference_date",
+      enforcement_mode: "blocking",
       is_required: true,
     },
-    { onConflict: "organization_id,external_organization_id,contact_type" },
+    { onConflict: "organization_id,external_credential_issuer_id,contact_type,identifier_type" },
   );
 
   if (error) {
@@ -1476,7 +2099,6 @@ export async function createHorse(input: HorseInput) {
   const { data: horse, error: horseError } = await client
     .from("horses")
     .insert({
-      organization_id: input.organization_id,
       name: input.name,
       primary_owner_contact_id: input.primary_owner_contact_id,
       breed: input.breed || null,
@@ -1484,7 +2106,8 @@ export async function createHorse(input: HorseInput) {
       gender: input.gender || null,
       date_of_birth: input.date_of_birth || null,
       birth_year: birthYear || null,
-      registration_number: input.registration_number || null,
+      registration_number: input.registration_status === "grade" ? null : input.registration_number || null,
+      registration_status: input.registration_status ?? (input.registration_number?.trim() ? "registered" : "unknown"),
       sire_name: input.sire_name || null,
       dam_name: input.dam_name || null,
       created_by_user_id: input.created_by_user_id || null,
@@ -1496,15 +2119,7 @@ export async function createHorse(input: HorseInput) {
     throw horseError;
   }
 
-  await ensureHorseOrganizationLink({
-    organization_id: input.organization_id,
-    horse_id: horse.id,
-    source: "created_here",
-    created_by_user_id: input.created_by_user_id,
-  });
-
   await upsertHorseContact({
-    organization_id: input.organization_id,
     horse_id: horse.id,
     contact_id: input.primary_owner_contact_id,
     role: "owner",
@@ -1519,7 +2134,6 @@ export async function createHorse(input: HorseInput) {
 
   if (input.agent_contact_id && input.agent_contact_id !== input.primary_owner_contact_id) {
     await upsertHorseContact({
-      organization_id: input.organization_id,
       horse_id: horse.id,
       contact_id: input.agent_contact_id,
       role: "agent",
@@ -1532,31 +2146,63 @@ export async function createHorse(input: HorseInput) {
     });
   }
 
-  await syncHorseExternalMemberships(horse.id, input.external_memberships);
+  await ensureHorseOrganizationLink({
+    organization_id: input.organization_id,
+    horse_id: horse.id,
+    source: "created_here",
+    created_by_user_id: input.created_by_user_id,
+  });
+
+  await syncHorseExternalIdentifiers(horse.id, input.external_memberships);
 
   return horse;
 }
 
 export async function updateHorse(id: string, input: HorseUpdateInput) {
   const client = requireSupabase();
-  const { agent_contact_id: agentContactId, external_memberships: externalMemberships, ...horseInput } = input;
-  const existingHorse = await getHorseById(id);
+  const {
+    agent_contact_id: agentContactId,
+    external_memberships: externalMemberships,
+    identity_correction_reason: identityCorrectionReason,
+    ...horseInput
+  } = input;
   const normalizedHorseInput = {
     ...horseInput,
+    registration_number: horseInput.registration_status === "grade" ? null : horseInput.registration_number,
     birth_year: horseInput.birth_year ?? (horseInput.date_of_birth !== undefined ? birthYearFromDate(horseInput.date_of_birth) : undefined),
   };
 
+  if (identityCorrectionReason?.trim()) {
+    await correctHorseIdentity(id, {
+      reason: identityCorrectionReason,
+      changes: cleanPayload({
+        name: normalizedHorseInput.name,
+        date_of_birth: normalizedHorseInput.date_of_birth,
+        birth_year: normalizedHorseInput.birth_year,
+        gender: normalizedHorseInput.gender,
+        breed: normalizedHorseInput.breed,
+        registration_number: normalizedHorseInput.registration_number,
+        registration_status: normalizedHorseInput.registration_status,
+        external_identifiers: externalMemberships?.map((membership) => ({
+          external_credential_issuer_id: membership.external_credential_issuer_id,
+          identifier_type: membership.identifier_type ?? "competition_license",
+          identifier_value: membership.identifier_value,
+        })),
+      }),
+    });
+  }
+
   if (input.primary_owner_contact_id) {
-    await ensureContactOrganizationLink({
-      organization_id: existingHorse.organization_id,
+    await ensureContactDirectoriesForHorse({
+      horse_id: id,
       contact_id: input.primary_owner_contact_id,
       source: "horse",
     });
   }
 
   if (agentContactId && agentContactId !== input.primary_owner_contact_id) {
-    await ensureContactOrganizationLink({
-      organization_id: existingHorse.organization_id,
+    await ensureContactDirectoriesForHorse({
+      horse_id: id,
       contact_id: agentContactId,
       source: "horse",
     });
@@ -1580,17 +2226,11 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
     }
 
     await upsertHorseContact({
-      organization_id: data.organization_id,
       horse_id: data.id,
       contact_id: input.primary_owner_contact_id,
       role: "owner",
     });
-    await ensureContactRole({
-      organization_id: data.organization_id,
-      contact_id: input.primary_owner_contact_id,
-      role: "owner",
-      source: "horse",
-    });
+    await ensureContactRoleForHorseOrganizations(data.id, input.primary_owner_contact_id, "owner");
   }
 
   if (agentContactId !== undefined) {
@@ -1601,21 +2241,17 @@ export async function updateHorse(id: string, input: HorseUpdateInput) {
 
     if (agentContactId && agentContactId !== data.primary_owner_contact_id) {
       await upsertHorseContact({
-        organization_id: data.organization_id,
         horse_id: data.id,
         contact_id: agentContactId,
         role: "agent",
       });
-      await ensureContactRole({
-        organization_id: data.organization_id,
-        contact_id: agentContactId,
-        role: "agent",
-        source: "horse",
-      });
+      await ensureContactRoleForHorseOrganizations(data.id, agentContactId, "agent");
     }
   }
 
-  await syncHorseExternalMemberships(data.id, externalMemberships);
+  if (!identityCorrectionReason?.trim()) {
+    await syncHorseExternalIdentifiers(data.id, externalMemberships);
+  }
 
   return data;
 }
@@ -1670,11 +2306,30 @@ export type NrhaEligibilityReason = {
 
 export type NrhaEligibilityVerification = {
   error?: string;
-  status?: "eligible" | "ineligible";
+  status?: "eligible" | "ineligible" | "unavailable";
   eligible?: boolean;
   parameters?: Record<string, unknown> | null;
   reasons?: NrhaEligibilityReason[];
   payload?: Record<string, unknown>;
+  cache?: {
+    decisionId: string;
+    source: "cache" | "live_external";
+    checkedAt: string;
+    expiresAt: string | null;
+  };
+};
+
+export type NrhaEligibilityDecisionContext = {
+  organizationId: string;
+  showId: string;
+  classId: string;
+  governingBodyId: string;
+  horseId: string;
+  riderContactId: string;
+  referenceDate: string;
+  eligibilityProfileCode: string;
+  cacheTtlHours: number;
+  sourceUnavailablePolicy: "block" | "allow_with_warning";
 };
 
 export type NrhaEligibilityProfileSignal = {
@@ -1901,14 +2556,68 @@ export async function verifyNrhaEligibility(input: {
   date: string;
   isEuroEvent?: boolean;
   memberNumber: number;
+  decisionContext?: NrhaEligibilityDecisionContext;
+  forceRefresh?: boolean;
 }) {
   const client = requireSupabase();
+  const requestBody = {
+    classCode: input.classCode,
+    competitionLicenseNumber: input.competitionLicenseNumber,
+    countryId: input.countryId,
+    date: input.date,
+    isEuroEvent: input.isEuroEvent,
+    memberNumber: input.memberNumber,
+  };
+  const inputFingerprint = buildEligibilityFingerprint([
+    "NRHA",
+    input.decisionContext?.eligibilityProfileCode,
+    input.classCode,
+    input.competitionLicenseNumber,
+    input.memberNumber,
+    input.date,
+    input.countryId,
+    input.isEuroEvent,
+  ]);
+
+  if (input.decisionContext && !input.forceRefresh) {
+    const cached = await findCachedTeamEligibilityDecision(input.decisionContext, inputFingerprint);
+    if (cached) {
+      return cached;
+    }
+  }
+
   const { data: verification, error: invokeError, response } = await client.functions.invoke<NrhaEligibilityVerification>("nrha-eligibility", {
-    body: input,
+    body: requestBody,
   });
 
   if (invokeError) {
-    throw new Error(await nrhaEligibilityInvokeErrorMessage(invokeError, response));
+    const message = await nrhaEligibilityInvokeErrorMessage(invokeError, response);
+    if (!input.decisionContext) {
+      throw new Error(message);
+    }
+
+    const decision = await recordTeamEligibilityDecision({
+      context: input.decisionContext,
+      inputFingerprint,
+      status: "unavailable",
+      canProceed: input.decisionContext.sourceUnavailablePolicy === "allow_with_warning",
+      reasons: [{ action: "retry", message }],
+      snapshotId: null,
+      checkedAt: new Date().toISOString(),
+      expiresAt: null,
+    });
+
+    return {
+      status: "unavailable" as const,
+      eligible: undefined,
+      reasons: [{ action: "retry", message }],
+      cache: {
+        decisionId: decision.id,
+        source: "live_external" as const,
+        checkedAt: decision.checked_at,
+        expiresAt: decision.expires_at,
+      },
+    };
   }
 
   if (!verification) {
@@ -1919,7 +2628,128 @@ export async function verifyNrhaEligibility(input: {
     throw new Error(verification.error);
   }
 
+  if (input.decisionContext) {
+    const checkedAt = new Date().toISOString();
+    const expiresAt = eligibilityExpiresAt(checkedAt, input.decisionContext.cacheTtlHours);
+    const externalDataSourceId = await externalDataSourceIdForVerificationSource("NRHA_ELIGIBILITY_API");
+    const snapshotId = externalDataSourceId
+      ? await recordExternalDataSnapshot({
+          externalDataSourceId,
+          sourceRecordKey: inputFingerprint,
+          payload: { request: requestBody, response: verification },
+          teamEligibility: {
+            horseId: input.decisionContext.horseId,
+            riderContactId: input.decisionContext.riderContactId,
+            showId: input.decisionContext.showId,
+            classId: input.decisionContext.classId,
+            governingBodyId: input.decisionContext.governingBodyId,
+          },
+        })
+      : null;
+    const status: "eligible" | "ineligible" = verification.eligible ? "eligible" : "ineligible";
+    const decision = await recordTeamEligibilityDecision({
+      context: input.decisionContext,
+      inputFingerprint,
+      status,
+      canProceed: Boolean(verification.eligible),
+      reasons: verification.reasons ?? [],
+      snapshotId,
+      checkedAt,
+      expiresAt,
+    });
+
+    return {
+      ...verification,
+      status,
+      cache: {
+        decisionId: decision.id,
+        source: "live_external" as const,
+        checkedAt: decision.checked_at,
+        expiresAt: decision.expires_at,
+      },
+    };
+  }
+
   return verification;
+}
+
+type TeamEligibilityDecisionRow = {
+  id: string;
+  status: "eligible" | "ineligible" | "unavailable";
+  reasons: NrhaEligibilityReason[];
+  checked_at: string;
+  expires_at: string | null;
+};
+
+async function findCachedTeamEligibilityDecision(context: NrhaEligibilityDecisionContext, inputFingerprint: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("team_eligibility_decisions")
+    .select("id,status,reasons,checked_at,expires_at")
+    .eq("class_id", context.classId)
+    .eq("governing_body_id", context.governingBodyId)
+    .eq("horse_id", context.horseId)
+    .eq("rider_contact_id", context.riderContactId)
+    .eq("show_id", context.showId)
+    .eq("reference_date", context.referenceDate)
+    .eq("input_fingerprint", inputFingerprint)
+    .in("status", ["eligible", "ineligible"])
+    .gt("expires_at", new Date().toISOString())
+    .order("checked_at", { ascending: false })
+    .limit(1)
+    .maybeSingle<TeamEligibilityDecisionRow>();
+
+  if (error) throw error;
+  if (!data) return null;
+
+  return {
+    status: data.status,
+    eligible: data.status === "eligible",
+    reasons: data.reasons ?? [],
+    cache: {
+      decisionId: data.id,
+      source: "cache" as const,
+      checkedAt: data.checked_at,
+      expiresAt: data.expires_at,
+    },
+  } satisfies NrhaEligibilityVerification;
+}
+
+async function recordTeamEligibilityDecision(input: {
+  context: NrhaEligibilityDecisionContext;
+  inputFingerprint: string;
+  status: TeamEligibilityDecisionRow["status"];
+  canProceed: boolean;
+  reasons: NrhaEligibilityReason[];
+  snapshotId: string | null;
+  checkedAt: string;
+  expiresAt: string | null;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("team_eligibility_decisions")
+    .insert({
+      organization_id: input.context.organizationId,
+      show_id: input.context.showId,
+      class_id: input.context.classId,
+      governing_body_id: input.context.governingBodyId,
+      horse_id: input.context.horseId,
+      rider_contact_id: input.context.riderContactId,
+      reference_date: input.context.referenceDate,
+      status: input.status,
+      can_proceed: input.canProceed,
+      reasons: input.reasons,
+      input_fingerprint: input.inputFingerprint,
+      source_mode: "live_external",
+      external_snapshot_id: input.snapshotId,
+      checked_at: input.checkedAt,
+      expires_at: input.expiresAt,
+    })
+    .select("id,status,reasons,checked_at,expires_at")
+    .single<TeamEligibilityDecisionRow>();
+
+  if (error) throw error;
+  return data;
 }
 
 export async function verifyNrhaEligibilityProfile(input: {
@@ -2174,7 +3004,8 @@ export async function verifyGvlCogginsDocument(input: {
   const status: HorseHealthDocument["status"] = verification.status === "verified" ? "verified" : verification.status === "rejected" ? "rejected" : "pending_review";
   const sourceUrlFromGvl = verification.source_url ?? sourceUrl;
   const payload = {
-    organization_id: input.organization_id,
+    document_category: "health",
+    uploaded_by_organization_id: input.organization_id,
     horse_id: input.horse_id,
     document_type: documentType,
     status,
@@ -2203,7 +3034,7 @@ export async function verifyGvlCogginsDocument(input: {
 
   if (existing) {
     const { data, error } = await client
-      .from("horse_health_documents")
+      .from("horse_documents")
       .update(cleanPayload(payload))
       .eq("id", existing.id)
       .select("*")
@@ -2225,7 +3056,7 @@ export async function verifyGvlCogginsDocument(input: {
   }
 
   const { data, error } = await client
-    .from("horse_health_documents")
+    .from("horse_documents")
     .insert({
       ...payload,
       created_by_user_id: input.created_by_user_id ?? null,
@@ -2234,7 +3065,7 @@ export async function verifyGvlCogginsDocument(input: {
     .single<HorseHealthDocument>();
 
   if (error) {
-    if (isMissingSchemaError(error, "horse_health_documents")) {
+    if (isMissingSchemaError(error, "horse_documents")) {
       throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
     }
 
@@ -2263,25 +3094,30 @@ async function createPendingGvlCogginsDocument(input: {
   review_notes?: string | null;
 }) {
   const client = requireSupabase();
-  const documentUrl = await uploadHealthDocumentFile({
-    organization_id: input.organization_id,
-    horse_id: input.horse_id,
-    file: input.document_file,
-  });
   const existing = await findExistingHorseHealthDocument({
     horse_id: input.horse_id,
     document_type: "coggins_eia",
     certificate_number: null,
     source_url: input.source_url,
   });
+  const fileMetadata = existing?.document_url ? null : await horseDocumentFileMetadata(input.document_file);
+  const documentUrl = existing?.document_url ?? await uploadHealthDocumentFile({
+    horse_id: input.horse_id,
+    file: input.document_file,
+  });
   const payload = {
-    organization_id: input.organization_id,
+    document_category: "health",
+    uploaded_by_organization_id: input.organization_id,
     horse_id: input.horse_id,
     document_type: "coggins_eia",
     status: "pending_review",
     verification_source: "upload",
     source_url: input.source_url,
     document_url: documentUrl,
+    original_file_name: existing?.original_file_name ?? (input.document_file.name || null),
+    mime_type: existing?.mime_type ?? (input.document_file.type || null),
+    file_size_bytes: existing?.file_size_bytes ?? input.document_file.size,
+    content_sha256: existing?.content_sha256 ?? fileMetadata?.sha256 ?? null,
     horse_name: input.horse_name ?? null,
     horse_date_of_birth: input.horse_date_of_birth ?? null,
     warnings: ["GVL_MANUAL_REVIEW"],
@@ -2290,7 +3126,7 @@ async function createPendingGvlCogginsDocument(input: {
 
   if (existing) {
     const { data, error } = await client
-      .from("horse_health_documents")
+      .from("horse_documents")
       .update(cleanPayload(payload))
       .eq("id", existing.id)
       .select("*")
@@ -2304,7 +3140,7 @@ async function createPendingGvlCogginsDocument(input: {
   }
 
   const { data, error } = await client
-    .from("horse_health_documents")
+    .from("horse_documents")
     .insert({
       ...payload,
       created_by_user_id: input.created_by_user_id ?? null,
@@ -2313,7 +3149,7 @@ async function createPendingGvlCogginsDocument(input: {
     .single<HorseHealthDocument>();
 
   if (error) {
-    if (isMissingSchemaError(error, "horse_health_documents")) {
+    if (isMissingSchemaError(error, "horse_documents")) {
       throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
     }
 
@@ -2326,24 +3162,30 @@ async function createPendingGvlCogginsDocument(input: {
 export async function createUploadedHorseHealthDocument(input: {
   organization_id: string;
   horse_id: string;
-  document_type: Extract<HorseHealthDocument["document_type"], "coggins_eia" | "influenza_vaccine" | "rhino_vaccine" | "combo_vaccine" | "other">;
+  document_category?: HorseHealthDocument["document_category"];
+  document_type: HorseHealthDocument["document_type"];
   file: File;
   source_url?: string | null;
   test_or_administered_on?: string | null;
   issuer_name?: string | null;
+  external_credential_issuer_id?: string | null;
+  registration_number?: string | null;
+  breed_name?: string | null;
   created_by_user_id?: string;
   review_notes?: string | null;
 }) {
   const client = requireSupabase();
+  const documentCategory = input.document_category ?? (input.document_type.startsWith("breed_") || input.document_type === "ownership_certificate" ? "registration" : "health");
+  const fileMetadata = await horseDocumentFileMetadata(input.file);
   const documentUrl = await uploadHealthDocumentFile({
-    organization_id: input.organization_id,
     horse_id: input.horse_id,
     file: input.file,
   });
   const { data, error } = await client
-    .from("horse_health_documents")
+    .from("horse_documents")
     .insert({
-      organization_id: input.organization_id,
+      document_category: documentCategory,
+      uploaded_by_organization_id: input.organization_id,
       horse_id: input.horse_id,
       document_type: input.document_type,
       status: "pending_review",
@@ -2351,6 +3193,13 @@ export async function createUploadedHorseHealthDocument(input: {
       source_url: input.source_url || null,
       document_url: documentUrl,
       issuer_name: input.issuer_name || null,
+      external_credential_issuer_id: input.external_credential_issuer_id || null,
+      registration_number: input.registration_number?.trim() || null,
+      breed_name: input.breed_name?.trim() || null,
+      original_file_name: input.file.name || null,
+      mime_type: input.file.type || null,
+      file_size_bytes: input.file.size,
+      content_sha256: fileMetadata.sha256,
       test_or_administered_on: input.test_or_administered_on || null,
       created_by_user_id: input.created_by_user_id ?? null,
       review_notes: input.review_notes || null,
@@ -2359,7 +3208,7 @@ export async function createUploadedHorseHealthDocument(input: {
     .single<HorseHealthDocument>();
 
   if (error) {
-    if (isMissingSchemaError(error, "horse_health_documents")) {
+    if (isMissingSchemaError(error, "horse_documents")) {
       throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
     }
 
@@ -2367,6 +3216,116 @@ export async function createUploadedHorseHealthDocument(input: {
   }
 
   return data;
+}
+
+export async function listHorseDocumentValidations(horseId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("horse_document_validations")
+    .select("*")
+    .eq("horse_id", horseId)
+    .order("created_at", { ascending: false })
+    .returns<HorseDocumentValidation[]>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_document_validations")) {
+      throw new Error("La migration d'identification des documents n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function createHorseDocumentValidation(
+  horseDocumentId: string,
+  validation: Record<string, unknown>,
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("create_horse_document_validation", {
+    p_horse_document_id: horseDocumentId,
+    p_validation: validation,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "create_horse_document_validation")) {
+      throw new Error("La migration d'identification des documents n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return data as HorseDocumentValidation;
+}
+
+export async function listHorseIdentityLocks(horseId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("get_horse_identity_locks", {
+    p_horse_id: horseId,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "get_horse_identity_locks")) {
+      throw new Error("La migration de verrouillage de l'identite du cheval n'est pas encore appliquee.");
+    }
+
+    throw error;
+  }
+
+  return (data ?? []) as HorseIdentityLock[];
+}
+
+export async function canCorrectHorseIdentity(horseId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("can_correct_horse_identity", {
+    target_horse_id: horseId,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "can_correct_horse_identity")) return false;
+    throw error;
+  }
+
+  return data === true;
+}
+
+export async function listHorseIdentityCorrections(horseId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("horse_identity_corrections")
+    .select("*")
+    .eq("horse_id", horseId)
+    .order("created_at", { ascending: false })
+    .returns<HorseIdentityCorrection[]>();
+
+  if (error) {
+    if (isMissingSchemaError(error, "horse_identity_corrections")) return [];
+    throw error;
+  }
+
+  return data ?? [];
+}
+
+export async function correctHorseIdentity(
+  horseId: string,
+  input: { reason: string; changes: Record<string, unknown> },
+) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("correct_horse_identity", {
+    p_horse_id: horseId,
+    p_reason: input.reason,
+    p_changes: input.changes,
+  });
+
+  if (error) {
+    if (isMissingRpcError(error, "correct_horse_identity")) {
+      throw new Error("La migration de correction auditee de l'identite n'est pas encore appliquee.");
+    }
+    throw error;
+  }
+
+  return data as HorseIdentityCorrection;
 }
 
 async function attachHorseHealthDocumentFile(
@@ -2378,52 +3337,22 @@ async function attachHorseHealthDocumentFile(
   },
 ) {
   const client = requireSupabase();
+  const fileMetadata = await horseDocumentFileMetadata(input.file);
   const documentUrl = await uploadHealthDocumentFile(input);
   const { data, error } = await client
-    .from("horse_health_documents")
-    .update({ document_url: documentUrl })
+    .from("horse_documents")
+    .update({
+      document_url: documentUrl,
+      original_file_name: input.file.name || null,
+      mime_type: input.file.type || null,
+      file_size_bytes: input.file.size,
+      content_sha256: fileMetadata.sha256,
+    })
     .eq("id", id)
     .select("*")
     .single<HorseHealthDocument>();
 
   if (error) {
-    throw error;
-  }
-
-  return data;
-}
-
-export async function reviewHorseHealthDocument(
-  id: string,
-  input: {
-    status: Extract<HorseHealthDocument["status"], "approved" | "rejected" | "pending_review">;
-    reviewed_by_user_id?: string;
-    review_notes?: string | null;
-    test_or_administered_on?: string | null;
-  },
-) {
-  const client = requireSupabase();
-  const reviewed = input.status === "approved" || input.status === "rejected";
-  const { data, error } = await client
-    .from("horse_health_documents")
-    .update(
-      cleanPayload({
-        status: input.status,
-        reviewed_by_user_id: reviewed ? input.reviewed_by_user_id ?? null : null,
-        reviewed_at: reviewed ? new Date().toISOString() : null,
-        review_notes: input.review_notes ?? null,
-        test_or_administered_on: input.test_or_administered_on === undefined ? undefined : input.test_or_administered_on || null,
-      }),
-    )
-    .eq("id", id)
-    .select("*")
-    .single<HorseHealthDocument>();
-
-  if (error) {
-    if (isMissingSchemaError(error, "horse_health_documents")) {
-      throw new Error("La migration des documents sante des chevaux n'est pas encore appliquee.");
-    }
-
     throw error;
   }
 
@@ -2438,7 +3367,7 @@ export async function getHorseHealthDocumentFileUrl(documentUrl: string) {
     return objectPath;
   }
 
-  const { data, error } = await client.storage.from("health-documents").createSignedUrl(objectPath, 10 * 60);
+  const { data, error } = await client.storage.from("horse-documents").createSignedUrl(objectPath, 10 * 60);
 
   if (error) {
     throw error;
@@ -2455,13 +3384,13 @@ function horseHealthDocumentObjectPath(documentUrl: string) {
   }
 
   if (!/^https?:\/\//i.test(cleanUrl)) {
-    return cleanUrl.replace(/^\/+/, "").replace(/^health-documents\//, "");
+    return cleanUrl.replace(/^\/+/, "").replace(/^(?:health|horse)-documents\//, "");
   }
 
   try {
     const url = new URL(cleanUrl);
     const decodedPath = decodeURIComponent(url.pathname);
-    const marker = "/health-documents/";
+    const marker = decodedPath.includes("/horse-documents/") ? "/horse-documents/" : "/health-documents/";
     const markerIndex = decodedPath.indexOf(marker);
 
     if (markerIndex >= 0) {
@@ -2474,10 +3403,10 @@ function horseHealthDocumentObjectPath(documentUrl: string) {
   return cleanUrl;
 }
 
-async function uploadHealthDocumentFile(input: { organization_id: string; horse_id: string; file: File }) {
+async function uploadHealthDocumentFile(input: { organization_id?: string; horse_id: string; file: File }) {
   const client = requireSupabase();
-  const objectPath = `${input.organization_id}/${input.horse_id}/${crypto.randomUUID()}-${safeStorageFileName(input.file.name)}`;
-  const { error } = await client.storage.from("health-documents").upload(objectPath, input.file, {
+  const objectPath = `${input.horse_id}/${crypto.randomUUID()}-${safeStorageFileName(input.file.name)}`;
+  const { error } = await client.storage.from("horse-documents").upload(objectPath, input.file, {
     contentType: input.file.type || undefined,
   });
 
@@ -2486,6 +3415,12 @@ async function uploadHealthDocumentFile(input: { organization_id: string; horse_
   }
 
   return objectPath;
+}
+
+async function horseDocumentFileMetadata(file: File) {
+  const digest = await crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  const sha256 = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { sha256 };
 }
 
 function safeStorageFileName(value: string) {
@@ -2508,14 +3443,14 @@ async function findExistingHorseHealthDocument(input: {
 
   if (input.certificate_number) {
     const { data, error } = await client
-      .from("horse_health_documents")
+      .from("horse_documents")
       .select("*")
       .eq("horse_id", input.horse_id)
       .eq("document_type", input.document_type)
       .eq("certificate_number", input.certificate_number)
       .maybeSingle<HorseHealthDocument>();
 
-    if (error && !isMissingSchemaError(error, "horse_health_documents")) {
+    if (error && !isMissingSchemaError(error, "horse_documents")) {
       throw error;
     }
 
@@ -2525,14 +3460,14 @@ async function findExistingHorseHealthDocument(input: {
   }
 
   const { data, error } = await client
-    .from("horse_health_documents")
+    .from("horse_documents")
     .select("*")
     .eq("horse_id", input.horse_id)
     .eq("document_type", input.document_type)
     .eq("source_url", input.source_url)
     .maybeSingle<HorseHealthDocument>();
 
-  if (error && !isMissingSchemaError(error, "horse_health_documents")) {
+  if (error && !isMissingSchemaError(error, "horse_documents")) {
     throw error;
   }
 
@@ -2540,7 +3475,6 @@ async function findExistingHorseHealthDocument(input: {
 }
 
 async function upsertHorseContact(input: {
-  organization_id: string;
   horse_id: string;
   contact_id: string;
   role: HorseContact["role"];
@@ -2549,7 +3483,6 @@ async function upsertHorseContact(input: {
   const canPayInvoices = input.role === "owner" || input.role === "co-owner";
   const { error } = await client.from("horse_contacts").upsert(
     {
-      organization_id: input.organization_id,
       horse_id: input.horse_id,
       contact_id: input.contact_id,
       role: input.role,
@@ -2566,27 +3499,25 @@ async function upsertHorseContact(input: {
   }
 }
 
-export async function createClassTemplate(input: ClassTemplateInput) {
+export async function createBlockTemplate(input: BlockTemplateInput) {
   const client = requireSupabase();
   const { data, error } = await client
-    .from("class_templates")
+    .from("block_templates")
     .insert({
       organization_id: input.organization_id,
       name: input.name,
       code: input.code || null,
       block_label: input.block_label || null,
       category: input.category || null,
-      default_pattern: input.default_pattern || null,
-      default_entry_fee: input.default_entry_fee ?? null,
-      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
-      back_number_policy: input.back_number_policy ?? "horse",
-      eligibility_rules: input.eligibility_rules ?? {},
+      pattern: input.pattern || null,
+      custom_pattern: input.custom_pattern ?? null,
+      block_type: input.block_type ?? "competition",
       sort_order: input.sort_order ?? 1,
       is_active: input.is_active ?? true,
       notes: input.notes || null,
     })
     .select("*")
-    .single<ClassTemplate>();
+    .single<BlockTemplate>();
 
   if (error) {
     throw error;
@@ -2595,14 +3526,14 @@ export async function createClassTemplate(input: ClassTemplateInput) {
   return data;
 }
 
-export async function updateClassTemplate(id: string, input: ClassTemplateUpdateInput) {
+export async function updateBlockTemplate(id: string, input: BlockTemplateUpdateInput) {
   const client = requireSupabase();
   const { data, error } = await client
-    .from("class_templates")
+    .from("block_templates")
     .update(cleanPayload(input))
     .eq("id", id)
     .select("*")
-    .single<ClassTemplate>();
+    .single<BlockTemplate>();
 
   if (error) {
     throw error;
@@ -2611,22 +3542,25 @@ export async function updateClassTemplate(id: string, input: ClassTemplateUpdate
   return data;
 }
 
-export async function deleteClassTemplate(id: string) {
+export async function deleteBlockTemplate(id: string) {
   const client = requireSupabase();
-  const { error } = await client.from("class_templates").delete().eq("id", id);
+  const { error } = await client.from("block_templates").delete().eq("id", id);
 
   if (error) {
     throw error;
   }
 }
 
-export async function createClassTemplateDivision(input: ClassTemplateDivisionInput) {
+export async function createClassTemplate(input: ClassTemplateInput) {
   const client = requireSupabase();
+  const organizationDisciplineId = input.organization_discipline_id
+    ?? await findDefaultOrganizationDisciplineId(input.organization_id);
   const { data, error } = await client
-    .from("class_template_divisions")
+    .from("class_templates")
     .insert({
       organization_id: input.organization_id,
-      class_template_id: input.class_template_id,
+      block_template_id: input.block_template_id,
+      organization_discipline_id: organizationDisciplineId,
       name: input.name,
       code: input.code || null,
       level: input.level ?? null,
@@ -2639,40 +3573,284 @@ export async function createClassTemplateDivision(input: ClassTemplateDivisionIn
       default_sanctioning_fee_percent: input.default_sanctioning_fee_percent ?? null,
       default_payout_rules: input.default_payout_rules ?? {},
       default_payout_notes: input.default_payout_notes || null,
-      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      back_number_policy_override: input.back_number_policy_override ?? null,
       eligibility_rules: input.eligibility_rules ?? {},
       sort_order: input.sort_order ?? 1,
       notes: input.notes || null,
     })
     .select("*")
-    .single<ClassTemplateDivision>();
+    .single<ClassTemplate>();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  const governingBodyAssignments = await syncGoverningBodyAssignments("class_template_governing_bodies", "class_template_id", data.id, input.governing_body_assignments ?? []);
+
+  return { ...data, governing_body_assignments: governingBodyAssignments };
 }
 
-export async function updateClassTemplateDivision(id: string, input: ClassTemplateDivisionUpdateInput) {
+export async function updateClassTemplate(id: string, input: ClassTemplateUpdateInput) {
   const client = requireSupabase();
+  const { governing_body_assignments: governingBodyAssignments, ...rowInput } = input;
   const { data, error } = await client
-    .from("class_template_divisions")
-    .update(cleanPayload(input))
+    .from("class_templates")
+    .update(cleanPayload(rowInput))
     .eq("id", id)
     .select("*")
-    .single<ClassTemplateDivision>();
+    .single<ClassTemplate>();
 
   if (error) {
     throw error;
   }
 
+  const savedGoverningBodyAssignments = governingBodyAssignments
+    ? await syncGoverningBodyAssignments("class_template_governing_bodies", "class_template_id", id, governingBodyAssignments)
+    : [];
+
+  return { ...data, governing_body_assignments: savedGoverningBodyAssignments };
+}
+
+export async function deleteClassTemplate(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("class_templates").delete().eq("id", id);
+
+  if (error) {
+    throw error;
+  }
+}
+
+export async function createBlock(input: BlockInput) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("blocks")
+    .insert({
+      organization_id: input.organization_id,
+      show_id: input.show_id,
+      show_day_id: input.show_day_id || null,
+      block_template_id: input.block_template_id || null,
+      slate_id: input.slate_id || null,
+      name: input.name,
+      display_label: input.display_label || null,
+      block_type: input.block_type ?? "competition",
+      arena: input.arena || null,
+      pattern: input.pattern || null,
+      custom_pattern: input.custom_pattern ?? null,
+      entries_close_at: input.entries_close_at ?? null,
+      draw_prepared_at: input.draw_prepared_at ?? null,
+      judge_display_name: input.judge_display_name || null,
+      schedule_start_mode: input.schedule_start_mode ?? (input.scheduled_time ? "fixed" : "unscheduled"),
+      scheduled_time: input.scheduled_time ?? null,
+      sort_order: input.sort_order ?? 1,
+      schedule_status: input.schedule_status ?? "open",
+      schedule_is_public: input.schedule_is_public ?? true,
+      results_are_public: input.results_are_public ?? false,
+      notes: input.notes ?? null,
+    })
+    .select("*")
+    .single<Block>();
+
+  if (error) {
+    throw error;
+  }
+
+  try {
+    if (input.concurrent_block_id) {
+      await addBlockToConcurrencyGroup(data, input.concurrent_block_id);
+    }
+
+    await syncBlockJudgeAssignments(data, input.judge_display_name ?? null);
+  } catch (relatedDataError) {
+    await client.from("blocks").delete().eq("id", data.id);
+    throw relatedDataError;
+  }
+
   return data;
 }
 
-export async function deleteClassTemplateDivision(id: string) {
+async function removeBlockFromConcurrencyGroup(blockId: string) {
   const client = requireSupabase();
-  const { error } = await client.from("class_template_divisions").delete().eq("id", id);
+  const { data: membership, error: membershipError } = await client
+    .from("block_concurrency_group_members")
+    .select("group_id")
+    .eq("block_id", blockId)
+    .maybeSingle<{ group_id: string }>();
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  if (!membership) {
+    return;
+  }
+
+  const { error: deleteError } = await client
+    .from("block_concurrency_group_members")
+    .delete()
+    .eq("block_id", blockId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const { count, error: countError } = await client
+    .from("block_concurrency_group_members")
+    .select("block_id", { count: "exact", head: true })
+    .eq("group_id", membership.group_id);
+
+  if (countError) {
+    throw countError;
+  }
+
+  if ((count ?? 0) < 2) {
+    const { error: groupDeleteError } = await client
+      .from("block_concurrency_groups")
+      .delete()
+      .eq("id", membership.group_id);
+
+    if (groupDeleteError) {
+      throw groupDeleteError;
+    }
+  }
+}
+
+async function syncBlockJudgeAssignments(block: Block, judgeDisplayName: string | null) {
+  const client = requireSupabase();
+  const { error: deleteError } = await client
+    .from("block_judge_assignments")
+    .delete()
+    .eq("block_id", block.id);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  const judgeNames = (judgeDisplayName ?? "")
+    .split(/[;\n]+/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+
+  if (!judgeNames.length) {
+    return;
+  }
+
+  const { error: insertError } = await client.from("block_judge_assignments").insert(
+    judgeNames.map((displayName, index) => ({
+      organization_id: block.organization_id,
+      show_id: block.show_id,
+      block_id: block.id,
+      display_name: displayName,
+      assignment_role: "judge",
+      sort_order: index + 1,
+    })),
+  );
+
+  if (insertError) {
+    throw insertError;
+  }
+}
+
+async function addBlockToConcurrencyGroup(block: Block, concurrentBlockId: string) {
+  const client = requireSupabase();
+  let createdGroupId: string | null = null;
+  const { data: existingMembership, error: membershipError } = await client
+    .from("block_concurrency_group_members")
+    .select("group_id")
+    .eq("block_id", concurrentBlockId)
+    .maybeSingle<{ group_id: string }>();
+
+  if (membershipError) {
+    throw membershipError;
+  }
+
+  let groupId = existingMembership?.group_id ?? null;
+
+  if (!groupId) {
+    const { data: group, error: groupError } = await client
+      .from("block_concurrency_groups")
+      .insert({
+        organization_id: block.organization_id,
+        show_id: block.show_id,
+        name: `Concurrent ${concurrentBlockId.slice(0, 8)} ${block.id.slice(0, 8)}`,
+      })
+      .select("id")
+      .single<{ id: string }>();
+
+    if (groupError) {
+      throw groupError;
+    }
+
+    groupId = group.id;
+    createdGroupId = group.id;
+    const { error: firstMemberError } = await client.from("block_concurrency_group_members").insert({
+      group_id: groupId,
+      block_id: concurrentBlockId,
+      sort_order: 1,
+    });
+
+    if (firstMemberError) {
+      await client.from("block_concurrency_groups").delete().eq("id", groupId);
+      throw firstMemberError;
+    }
+  }
+
+  const { data: members, error: membersError } = await client
+    .from("block_concurrency_group_members")
+    .select("sort_order")
+    .eq("group_id", groupId)
+    .order("sort_order", { ascending: false })
+    .limit(1)
+    .returns<Array<{ sort_order: number }>>();
+
+  if (membersError) {
+    throw membersError;
+  }
+
+  const { error: addMemberError } = await client.from("block_concurrency_group_members").insert({
+    group_id: groupId,
+    block_id: block.id,
+    sort_order: (members?.[0]?.sort_order ?? 0) + 1,
+  });
+
+  if (addMemberError) {
+    if (createdGroupId) {
+      await client.from("block_concurrency_groups").delete().eq("id", createdGroupId);
+    }
+    throw addMemberError;
+  }
+}
+
+export async function updateBlock(id: string, input: BlockUpdateInput) {
+  const client = requireSupabase();
+  const { concurrent_block_id: concurrentBlockId, ...rowInput } = input;
+  const { data, error } = await client
+    .from("blocks")
+    .update(cleanPayload(rowInput))
+    .eq("id", id)
+    .select("*")
+    .single<Block>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "concurrent_block_id")) {
+    await removeBlockFromConcurrencyGroup(id);
+    if (concurrentBlockId) {
+      await addBlockToConcurrencyGroup(data, concurrentBlockId);
+    }
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "judge_display_name")) {
+    await syncBlockJudgeAssignments(data, input.judge_display_name ?? null);
+  }
+
+  return data;
+}
+
+export async function deleteBlock(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("blocks").delete().eq("id", id);
 
   if (error) {
     throw error;
@@ -2681,81 +3859,18 @@ export async function deleteClassTemplateDivision(id: string) {
 
 export async function createClass(input: ClassInput) {
   const client = requireSupabase();
+  const organizationDisciplineId = input.organization_discipline_id
+    ?? await findDefaultOrganizationDisciplineId(input.organization_id);
   const { data, error } = await client
     .from("classes")
     .insert({
       organization_id: input.organization_id,
       show_id: input.show_id,
-      show_day_id: input.show_day_id || null,
+      block_id: input.block_id,
+      organization_discipline_id: organizationDisciplineId,
       class_template_id: input.class_template_id || null,
       name: input.name,
-      code: input.code || null,
-      block_label: input.block_label || null,
-      arena: input.arena || null,
-      pattern: input.pattern || null,
-      custom_pattern: input.custom_pattern ?? null,
-	      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
-	      back_number_policy: input.back_number_policy ?? "horse",
-	      nrha_slate_number: input.nrha_slate_number || null,
-	      entries_close_at: input.entries_close_at ?? null,
-	      late_entries_allowed: input.late_entries_allowed ?? true,
-	      late_entry_fee_percent: input.late_entry_fee_percent ?? 50,
-      draw_prepared_at: input.draw_prepared_at ?? null,
-      eligibility_rules: input.eligibility_rules ?? {},
-      judge_name: input.judge_name || null,
-      schedule_start_mode: input.schedule_start_mode ?? (input.scheduled_time ? "fixed" : "unscheduled"),
-      scheduled_time: input.scheduled_time ?? null,
-      sort_order: input.sort_order ?? 1,
-      entry_fee: input.entry_fee ?? null,
-      status: "open",
-      is_public: true,
-      is_event_block: input.is_event_block ?? false,
-    })
-    .select("*")
-    .single<ClassRecord>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
-}
-
-export async function updateClass(id: string, input: ClassUpdateInput) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("classes")
-    .update(cleanPayload(input))
-    .eq("id", id)
-    .select("*")
-    .single<ClassRecord>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
-}
-
-export async function deleteClass(id: string) {
-  const client = requireSupabase();
-  const { error } = await client.from("classes").delete().eq("id", id);
-
-  if (error) {
-    throw error;
-  }
-}
-
-export async function createDivision(input: DivisionInput) {
-  const client = requireSupabase();
-  const { data, error } = await client
-    .from("divisions")
-    .insert({
-      organization_id: input.organization_id,
-      show_id: input.show_id,
-      class_id: input.class_id,
-      class_template_division_id: input.class_template_division_id || null,
-      name: input.name,
+      description: input.description ?? null,
       code: input.code || null,
       level: input.level ?? null,
       entry_fee: input.entry_fee ?? null,
@@ -2767,38 +3882,126 @@ export async function createDivision(input: DivisionInput) {
       sanctioning_fee_percent: input.sanctioning_fee_percent ?? null,
       payout_rules: input.payout_rules ?? {},
       payout_notes: input.payout_notes || null,
-      sanctioning_body_codes: input.sanctioning_body_codes ?? [],
+      minimum_entries: input.minimum_entries ?? 2,
+      registration_status: input.registration_status ?? "open",
+      is_public: input.is_public ?? true,
+      back_number_policy_override: input.back_number_policy_override ?? null,
+      sort_order: input.sort_order ?? 1,
       eligibility_rules: input.eligibility_rules ?? {},
+      notes: input.notes ?? null,
     })
     .select("*")
-    .single<Division>();
+    .single<ClassRecord>();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  const governingBodyAssignments = await syncGoverningBodyAssignments("class_governing_bodies", "class_id", data.id, input.governing_body_assignments ?? []);
+
+  return { ...data, governing_body_assignments: governingBodyAssignments };
 }
 
-export async function updateDivision(id: string, input: DivisionUpdateInput) {
+export async function updateClass(id: string, input: ClassUpdateInput) {
   const client = requireSupabase();
+  const { governing_body_assignments: governingBodyAssignments, ...rowInput } = input;
   const { data, error } = await client
-    .from("divisions")
-    .update(cleanPayload(input))
+    .from("classes")
+    .update(cleanPayload(rowInput))
     .eq("id", id)
     .select("*")
-    .single<Division>();
+    .single<ClassRecord>();
 
   if (error) {
     throw error;
   }
 
-  return data;
+  const savedGoverningBodyAssignments = governingBodyAssignments
+    ? await syncGoverningBodyAssignments("class_governing_bodies", "class_id", id, governingBodyAssignments)
+    : [];
+
+  return { ...data, governing_body_assignments: savedGoverningBodyAssignments };
 }
 
-export async function deleteDivision(id: string) {
+async function syncGoverningBodyAssignments(
+  joinTable: "class_governing_bodies" | "class_template_governing_bodies",
+  ownerColumn: "class_id" | "class_template_id",
+  ownerId: string,
+  assignments: GoverningBodyAssignmentInput[],
+) {
   const client = requireSupabase();
-  const { error } = await client.from("divisions").delete().eq("id", id);
+  const normalizedAssignments = Array.from(
+    new Map(
+      assignments
+        .filter((assignment) => assignment.governing_body_id)
+        .map((assignment) => [assignment.governing_body_id, {
+          governing_body_id: assignment.governing_body_id,
+          reporting_class_code: assignment.reporting_class_code?.trim() || null,
+          eligibility_profile_code: assignment.eligibility_profile_code?.trim() || null,
+          sanction_metadata: assignment.sanction_metadata ?? {},
+        }]),
+    ).values(),
+  );
+
+  let governingBodies: Array<Pick<SanctioningBody, "id" | "code" | "name">> = [];
+
+  if (normalizedAssignments.length) {
+    const governingBodyIds = normalizedAssignments.map((assignment) => assignment.governing_body_id);
+    const { data, error: governingBodiesError } = await client
+      .from("governing_bodies")
+      .select("id,code,name")
+      .in("id", governingBodyIds)
+      .eq("is_active", true)
+      .returns<Array<Pick<SanctioningBody, "id" | "code" | "name">>>();
+
+    if (governingBodiesError) {
+      throw governingBodiesError;
+    }
+
+    governingBodies = data ?? [];
+    const foundIds = new Set(governingBodies.map((body) => body.id));
+    const missingIds = governingBodyIds.filter((id) => !foundIds.has(id));
+
+    if (missingIds.length) {
+      throw new Error(`Organisme de règles introuvable ou inactif: ${missingIds.join(", ")}.`);
+    }
+  }
+
+  const { error: deleteError } = await client.from(joinTable).delete().eq(ownerColumn, ownerId);
+
+  if (deleteError) {
+    throw deleteError;
+  }
+
+  if (!normalizedAssignments.length) {
+    return [];
+  }
+
+  const { error: insertError } = await client.from(joinTable).insert(
+    normalizedAssignments.map((assignment) => ({
+      [ownerColumn]: ownerId,
+      ...assignment,
+    })),
+  );
+
+  if (insertError) {
+    throw insertError;
+  }
+
+  const bodyById = new Map(governingBodies.map((body) => [body.id, body]));
+  return normalizedAssignments.map((assignment) => {
+    const body = bodyById.get(assignment.governing_body_id)!;
+    return {
+      ...assignment,
+      code: body.code,
+      name: body.name,
+    };
+  });
+}
+
+export async function deleteClass(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("classes").delete().eq("id", id);
 
   if (error) {
     throw error;
@@ -2808,7 +4011,7 @@ export async function deleteDivision(id: string) {
 type PayoutCalculationSaveInput = Pick<
   PayoutCalculation,
   | "show_id"
-  | "division_id"
+  | "class_id"
   | "import_batch_id"
   | "currency"
   | "entry_count"
@@ -2847,7 +4050,7 @@ export async function savePayoutCalculationDraft(input: {
     .from("payout_calculations")
     .select("*")
     .eq("show_id", input.calculation.show_id)
-    .eq("division_id", input.calculation.division_id)
+    .eq("class_id", input.calculation.class_id)
     .maybeSingle<PayoutCalculation>();
 
   if (existingError) {
@@ -3279,21 +4482,11 @@ async function releaseExistingBackNumberAssignment(input: {
 
 async function resolveEntryBackNumber(input: EntryInput) {
   const client = requireSupabase();
-  const { data: division, error: divisionError } = await client
-    .from("divisions")
-    .select("class_id")
-    .eq("id", input.division_id)
-    .single<Pick<Division, "class_id">>();
-
-  if (divisionError) {
-    throw divisionError;
-  }
-
   const { data: classRecord, error: classError } = await client
     .from("classes")
-    .select("back_number_policy")
-    .eq("id", division.class_id)
-    .single<Pick<ClassRecord, "back_number_policy">>();
+    .select("block_id, back_number_policy_override")
+    .eq("id", input.class_id)
+    .single<Pick<ClassRecord, "back_number_policy_override" | "block_id">>();
 
   if (classError) {
     throw classError;
@@ -3309,10 +4502,7 @@ async function resolveEntryBackNumber(input: EntryInput) {
     throw organizationError;
   }
 
-  const effectivePolicy =
-    classRecord.back_number_policy === "entry" || classRecord.back_number_policy === "custom"
-      ? classRecord.back_number_policy
-      : organization?.back_number_policy ?? classRecord.back_number_policy;
+  const effectivePolicy = classRecord.back_number_policy_override ?? organization?.back_number_policy ?? "horse";
 
   if (effectivePolicy === "entry" || effectivePolicy === "custom") {
     return null;
@@ -3400,34 +4590,44 @@ function backNumberStatusErrorLabel(status: OrganizationBackNumber["status"]) {
 
 async function resolveLateEntryFee(input: EntryInput) {
   const client = requireSupabase();
-  const { data: division, error: divisionError } = await client
-    .from("divisions")
-    .select("entry_fee, class_id")
-    .eq("id", input.division_id)
-    .single<{ entry_fee: number | null; class_id: string }>();
-
-  if (divisionError) {
-    throw divisionError;
-  }
-
   const { data: classRecord, error: classError } = await client
     .from("classes")
-    .select("entry_fee, entries_close_at, late_entries_allowed, late_entry_fee_percent")
-    .eq("id", division.class_id)
-    .single<Pick<ClassRecord, "entries_close_at" | "entry_fee" | "late_entries_allowed" | "late_entry_fee_percent">>();
+    .select("entry_fee, block_id")
+    .eq("id", input.class_id)
+    .single<{ entry_fee: number | null; block_id: string }>();
 
   if (classError) {
     throw classError;
   }
 
-  const baseFee = input.base_fee ?? division.entry_fee ?? classRecord.entry_fee ?? null;
-  const isLate = Boolean(classRecord.entries_close_at && Date.now() > new Date(classRecord.entries_close_at).getTime());
+  const { data: block, error: blockError } = await client
+    .from("blocks")
+    .select("entries_close_at")
+    .eq("id", classRecord.block_id)
+    .single<Pick<Block, "entries_close_at">>();
 
-  if (isLate && !classRecord.late_entries_allowed) {
+  if (blockError) {
+    throw blockError;
+  }
+
+  const { data: show, error: showError } = await client
+    .from("shows")
+    .select("late_entries_allowed, late_entry_fee_percent")
+    .eq("id", input.show_id)
+    .single<Pick<Show, "late_entries_allowed" | "late_entry_fee_percent">>();
+
+  if (showError) {
+    throw showError;
+  }
+
+  const baseFee = input.base_fee ?? classRecord.entry_fee ?? null;
+  const isLate = Boolean(block.entries_close_at && Date.now() > new Date(block.entries_close_at).getTime());
+
+  if (isLate && !show.late_entries_allowed) {
     throw new Error("Les inscriptions sont fermées pour ce bloc.");
   }
 
-  const lateFeePercent = isLate ? classRecord.late_entry_fee_percent ?? 50 : 0;
+  const lateFeePercent = isLate ? show.late_entry_fee_percent ?? 50 : 0;
   const lateFeeAmount = isLate && baseFee != null ? Math.round(baseFee * (lateFeePercent / 100) * 100) / 100 : 0;
 
   return {
@@ -3440,7 +4640,7 @@ async function resolveLateEntryFee(input: EntryInput) {
 
 async function assertEntryProgramLimits(input: {
   entry_id?: string;
-  division_id: string;
+  class_id: string;
   horse_id: string;
   owner_contact_id: string;
   rider_contact_id: string | null;
@@ -3452,32 +4652,32 @@ async function assertEntryProgramLimits(input: {
 
   const client = requireSupabase();
   const inactiveStatusFilter = `(${inactiveEntryStatuses.join(",")})`;
-  const { data: division, error: divisionError } = await client
-    .from("divisions")
-    .select("id, class_id")
-    .eq("id", input.division_id)
-    .single<Pick<Division, "id" | "class_id">>();
+  const { data: classRecord, error: classError } = await client
+    .from("classes")
+    .select("id, block_id")
+    .eq("id", input.class_id)
+    .single<Pick<ClassRecord, "id" | "block_id">>();
 
-  if (divisionError) {
-    throw divisionError;
+  if (classError) {
+    throw classError;
   }
 
-  const { data: classDivisions, error: classDivisionsError } = await client
-    .from("divisions")
+  const { data: blockClasses, error: blockClassesError } = await client
+    .from("classes")
     .select("id")
-    .eq("class_id", division.class_id)
-    .returns<Array<Pick<Division, "id">>>();
+    .eq("block_id", classRecord.block_id)
+    .returns<Array<Pick<ClassRecord, "id">>>();
 
-  if (classDivisionsError) {
-    throw classDivisionsError;
+  if (blockClassesError) {
+    throw blockClassesError;
   }
 
-  const classDivisionIds = (classDivisions ?? []).map((classDivision) => classDivision.id);
+  const blockClassIds = (blockClasses ?? []).map((blockClass) => blockClass.id);
   let horseEntryQuery = client
     .from("entries")
     .select("id", { count: "exact", head: true })
     .eq("horse_id", input.horse_id)
-    .in("division_id", classDivisionIds)
+    .in("class_id", blockClassIds)
     .not("status", "in", inactiveStatusFilter);
 
   if (input.entry_id) {
@@ -3498,7 +4698,7 @@ async function assertEntryProgramLimits(input: {
   let riderEntryQuery = client
     .from("entries")
     .select("id, rider_contact_id, owner_contact_id")
-    .eq("division_id", input.division_id)
+    .eq("class_id", input.class_id)
     .not("status", "in", inactiveStatusFilter);
 
   if (input.entry_id) {
@@ -3528,7 +4728,7 @@ export async function createEntry(input: EntryInput) {
     payer_contact_id: input.payer_contact_id,
     created_by_user_id: input.created_by_user_id,
   });
-  await assertHorseHealthValidForShow(input.horse_id, input.show_id);
+  await assertHorseHealthComplianceForShow(input.horse_id, input.show_id);
   await assertEntryShowLevelMembershipRequirements({
     organization_id: input.organization_id,
     owner_contact_id: input.owner_contact_id,
@@ -3537,7 +4737,7 @@ export async function createEntry(input: EntryInput) {
     show_id: input.show_id,
   });
   await assertEntryProgramLimits({
-    division_id: input.division_id,
+    class_id: input.class_id,
     horse_id: input.horse_id,
     owner_contact_id: input.owner_contact_id,
     rider_contact_id: input.rider_contact_id ?? null,
@@ -3551,7 +4751,7 @@ export async function createEntry(input: EntryInput) {
       organization_id: input.organization_id,
 	      show_id: input.show_id,
 	      horse_id: input.horse_id,
-	      division_id: input.division_id,
+	      class_id: input.class_id,
 	      created_by_user_id: input.created_by_user_id,
 	      owner_contact_id: input.owner_contact_id,
 	      rider_contact_id: input.rider_contact_id || null,
@@ -3609,7 +4809,7 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
   const nextEntryStatus = input.status ?? existing.status;
 
   if (!["cancelled", "scratched", "scratched_pending_refund"].includes(nextEntryStatus)) {
-    await assertHorseHealthValidForShow(input.horse_id ?? existing.horse_id, existing.show_id);
+    await assertHorseHealthComplianceForShow(input.horse_id ?? existing.horse_id, existing.show_id);
     await assertEntryShowLevelMembershipRequirements({
       organization_id: existing.organization_id,
       owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
@@ -3619,7 +4819,7 @@ export async function updateEntry(id: string, input: EntryUpdateInput) {
     });
     await assertEntryProgramLimits({
       entry_id: id,
-      division_id: input.division_id ?? existing.division_id,
+      class_id: input.class_id ?? existing.class_id,
       horse_id: input.horse_id ?? existing.horse_id,
       owner_contact_id: input.owner_contact_id ?? existing.owner_contact_id,
       rider_contact_id: input.rider_contact_id === undefined ? existing.rider_contact_id : input.rider_contact_id,
@@ -3730,7 +4930,7 @@ export async function createStallBooking(input: StallBookingInput) {
   const bookingStatus = input.status ?? "requested";
 
   if (input.horse_id && !["cancelled", "completed"].includes(bookingStatus)) {
-    await assertHorseHealthValidForShow(input.horse_id, input.show_id);
+    await assertHorseHealthComplianceForShow(input.horse_id, input.show_id);
   }
 
   const { data, error } = await client
@@ -3790,7 +4990,7 @@ export async function updateStallBooking(id: string, input: StallBookingUpdateIn
   const nextBookingStatus = input.status ?? existing.status;
 
   if (nextBookingHorseId && !["cancelled", "completed"].includes(nextBookingStatus)) {
-    await assertHorseHealthValidForShow(nextBookingHorseId, existing.show_id);
+    await assertHorseHealthComplianceForShow(nextBookingHorseId, existing.show_id);
   }
 
   const { data, error } = await client
@@ -3829,13 +5029,14 @@ export async function deleteStallBooking(id: string) {
   }
 }
 
-async function loadShowScoreClassSetups() {
+async function loadShowScoreClassSetups(organizationId: string | null = null) {
   const client = requireSupabase();
-  const { data, error } = await client
-    .from("show_score_class_setups")
+  const query = client
+    .from("show_score_block_setups")
     .select("*")
     .order("updated_at", { ascending: false })
-    .returns<ShowScoreClassSetup[]>();
+    .returns<ShowScoreBlockSetup[]>();
+  const { data, error } = await scopeQueryToOrganization(query, organizationId);
 
   if (error) {
     if (isMissingShowScoreSchemaError(error)) {
@@ -3851,9 +5052,9 @@ async function loadShowScoreClassSetups() {
 export function previewShowScoreDrawEntryImport(input: {
   showId: string;
   classIds?: string[];
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
 }) {
   return buildAqrAuditImportPreview(input);
 }
@@ -3891,28 +5092,51 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
     throw new Error("Un batch AQR est deja actif pour ce show. Nettoie-le avant de relancer l'import.");
   }
 
-  const [
-    setupsResult,
-    classesResult,
-    divisionsResult,
-    contactsResult,
-    horsesResult,
-  ] = await Promise.all([
-    client.from("show_score_class_setups").select("*").eq("show_id", input.showId).returns<ShowScoreClassSetup[]>(),
-    client.from("classes").select("*").eq("show_id", input.showId).returns<ClassRecord[]>(),
-    client.from("divisions").select("*").eq("show_id", input.showId).returns<Division[]>(),
-    client.from("contacts").select("*").eq("organization_id", show.organization_id).returns<Contact[]>(),
-    client.from("horses").select("*").eq("organization_id", show.organization_id).returns<Horse[]>(),
+  const [setupsResult, blocksResult, contactDirectoryResult, horseDirectoryResult] = await Promise.all([
+    client.from("show_score_block_setups").select("*").eq("show_id", input.showId).returns<ShowScoreBlockSetup[]>(),
+    client.from("blocks").select("*").eq("show_id", input.showId).returns<Block[]>(),
+    client
+      .from("directory_contacts")
+      .select("contact_id, organization_disciplines!inner(organization_id)")
+      .eq("organization_disciplines.organization_id", show.organization_id)
+      .returns<Array<{ contact_id: string }>>(),
+    client
+      .from("directory_horses")
+      .select("horse_id, organization_disciplines!inner(organization_id)")
+      .eq("organization_disciplines.organization_id", show.organization_id)
+      .returns<Array<{ horse_id: string }>>(),
   ]);
 
   if (setupsResult.error) {
     throw setupsResult.error;
   }
+  if (blocksResult.error) {
+    throw blocksResult.error;
+  }
+  if (contactDirectoryResult.error) {
+    throw contactDirectoryResult.error;
+  }
+  if (horseDirectoryResult.error) {
+    throw horseDirectoryResult.error;
+  }
+
+  const blockIds = (blocksResult.data ?? []).map((block) => block.id);
+  const contactIds = [...new Set((contactDirectoryResult.data ?? []).map((row) => row.contact_id))];
+  const horseIds = [...new Set((horseDirectoryResult.data ?? []).map((row) => row.horse_id))];
+  const [classesResult, contactsResult, horsesResult] = await Promise.all([
+    blockIds.length
+      ? client.from("classes").select("*").in("block_id", blockIds).returns<ClassRecord[]>()
+      : Promise.resolve({ data: [] as ClassRecord[], error: null }),
+    contactIds.length
+      ? client.from("contacts").select("*").in("id", contactIds).returns<Contact[]>()
+      : Promise.resolve({ data: [] as Contact[], error: null }),
+    horseIds.length
+      ? client.from("horses").select("*").in("id", horseIds).returns<Horse[]>()
+      : Promise.resolve({ data: [] as Horse[], error: null }),
+  ]);
+
   if (classesResult.error) {
     throw classesResult.error;
-  }
-  if (divisionsResult.error) {
-    throw divisionsResult.error;
   }
   if (contactsResult.error) {
     throw contactsResult.error;
@@ -3924,8 +5148,8 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
   const preview = buildAqrAuditImportPreview({
     showId: input.showId,
     classIds: input.classIds,
+    blocks: blocksResult.data ?? [],
     classes: classesResult.data ?? [],
-    divisions: divisionsResult.data ?? [],
     showScoreClassSetups: setupsResult.data ?? [],
   });
 
@@ -3939,7 +5163,7 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
 
   await assertShowScoreOfficialScoringNotStarted(
     input.showId,
-    preview.classPreviews.map((classPreview) => classPreview.classRecord.id),
+    preview.classPreviews.map((classPreview) => classPreview.block.id),
   );
 
   const sourceRunSnapshots: Record<string, Record<string, unknown>> = {};
@@ -3983,7 +5207,7 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
         return { ...run, __normalizedAqrRun: normalizedRun };
       });
 
-      sourceRunSnapshots[classPreview.classRecord.id] = {};
+      sourceRunSnapshots[classPreview.block.id] = {};
 
       for (const runPreview of classPreview.runs) {
         const run = runPreview.run;
@@ -4028,21 +5252,21 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
         const blockRunId = pickRunUuid(sourceRun, ["blockRunId", "block_run_id"]) ?? crypto.randomUUID();
         const entryIds: string[] = [];
 
-        for (const division of runPreview.matchedDivisions) {
+        for (const classRecord of runPreview.matchedClasses) {
           const externalSourceKey = buildAqrExternalSourceKey({
-            classId: classPreview.classRecord.id,
-            divisionId: division.id,
+            blockId: classPreview.block.id,
+            classId: classRecord.id,
             run,
           });
           const entryStatus: Entry["status"] = isAqrScratchRun(run) ? "scratched" : "active";
-          const baseFee = division.entry_fee ?? classPreview.classRecord.entry_fee ?? 0;
+          const baseFee = classRecord.entry_fee ?? 0;
           const { data: entry, error: entryError } = await client
             .from("entries")
             .insert({
               organization_id: show.organization_id,
               show_id: input.showId,
               horse_id: horse.id,
-              division_id: division.id,
+              class_id: classRecord.id,
               created_by_user_id: input.createdByUserId,
               owner_contact_id: ownerContact.id,
               rider_contact_id: riderContact.id,
@@ -4058,10 +5282,10 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
               import_batch_id: batch.id,
               external_source_key: externalSourceKey,
               source_payload: {
-                classId: classPreview.classRecord.id,
-                className: classPreview.classRecord.name,
-                divisionId: division.id,
-                divisionCode: division.code,
+                classId: classPreview.block.id,
+                className: classPreview.block.name,
+                divisionId: classRecord.id,
+                divisionCode: classRecord.code,
                 run,
                 runId,
                 blockRunId,
@@ -4088,7 +5312,7 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
         }
 
         await upsertAuditRunLinks({
-          blockId: classPreview.classRecord.id,
+          blockId: classPreview.block.id,
           blockRunId,
           entryIds,
           orderOfGo: run.order || run.draw,
@@ -4098,12 +5322,12 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
 
         runIds.push(runId);
         blockRunIds.push(blockRunId);
-        sourceRunSnapshots[classPreview.classRecord.id][run.sourceRunId] = {
+        sourceRunSnapshots[classPreview.block.id][run.sourceRunId] = {
           snapshot,
           runId,
           blockRunId,
           entryIds,
-          divisionIds: runPreview.matchedDivisions.map((division) => division.id),
+          divisionIds: runPreview.matchedClasses.map((classRecord) => classRecord.id),
           horseId: horse.id,
           ownerContactId: ownerContact.id,
           riderContactId: riderContact.id,
@@ -4124,8 +5348,8 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
             blockRunId,
             entryId: entryIds[0] ?? null,
             entryIds,
-            divisionId: runPreview.matchedDivisions[0]?.id ?? null,
-            divisionIds: runPreview.matchedDivisions.map((division) => division.id),
+            divisionId: runPreview.matchedClasses[0]?.id ?? null,
+            divisionIds: runPreview.matchedClasses.map((classRecord) => classRecord.id),
             horseId: horse.id,
             ownerContactId: ownerContact.id,
             riderContactId: riderContact.id,
@@ -4141,9 +5365,9 @@ export async function syncShowScoreDrawEntryImportBatch(input: {
       });
 
       const { error: setupError } = await client
-        .from("show_score_class_setups")
+        .from("show_score_block_setups")
         .update({ runs: cleanedRuns })
-        .eq("class_id", classPreview.classRecord.id)
+        .eq("block_id", classPreview.block.id)
         .eq("show_id", input.showId);
 
       if (setupError) {
@@ -4301,8 +5525,8 @@ export async function cleanupShowScoreDrawEntryImportBatch(batchId: string) {
   }
 
   await deleteEmptyDraftInvoices(invoiceIds);
-  await cleanupAuditHorses(createdHorseIds, batch.organization_id);
-  await cleanupAuditContacts(createdContactIds, batch.organization_id);
+  await cleanupAuditHorses(createdHorseIds);
+  await cleanupAuditContacts(createdContactIds);
   await restoreShowScoreRunsForBatch(batch);
 
   const { data: cleanedBatch, error: cleanedBatchError } = await client
@@ -4330,10 +5554,10 @@ async function assertShowScoreOfficialScoringNotStarted(showId: string, classIds
   const client = requireSupabase();
   const { data: scoringSessions, error: scoringError } = await client
     .from("show_score_scoring_sessions")
-    .select("class_id,started_at")
+    .select("block_id,started_at")
     .eq("show_id", showId)
-    .in("class_id", classIds)
-    .returns<Array<{ class_id: string; started_at: string | null }>>();
+    .in("block_id", classIds)
+    .returns<Array<{ block_id: string; started_at: string | null }>>();
 
   if (scoringError && !isMissingSchemaError(scoringError, "show_score_scoring_sessions")) {
     throw scoringError;
@@ -4341,7 +5565,7 @@ async function assertShowScoreOfficialScoringNotStarted(showId: string, classIds
 
   const startedClassIds = (scoringSessions ?? [])
     .filter((session) => session.started_at)
-    .map((session) => session.class_id);
+    .map((session) => session.block_id);
 
   if (startedClassIds.length) {
     throw new Error("Import AQR bloque: le pointage officiel ShowScore a deja commence pour une classe selectionnee.");
@@ -4349,10 +5573,10 @@ async function assertShowScoreOfficialScoringNotStarted(showId: string, classIds
 
   const { data: judgeSessions, error: judgeError } = await client
     .from("show_score_judge_sessions")
-    .select("class_id,finalized")
+    .select("block_id,finalized")
     .eq("show_id", showId)
-    .in("class_id", classIds)
-    .returns<Array<{ class_id: string; finalized: boolean }>>();
+    .in("block_id", classIds)
+    .returns<Array<{ block_id: string; finalized: boolean }>>();
 
   if (judgeError && !isMissingSchemaError(judgeError, "show_score_judge_sessions")) {
     throw judgeError;
@@ -4425,7 +5649,6 @@ async function findOrCreateAuditHorse(input: {
       created_by_user_id: input.createdByUserId,
     });
     await upsertHorseContact({
-      organization_id: input.organizationId,
       horse_id: existing.id,
       contact_id: input.ownerContactId,
       role: "owner",
@@ -4546,7 +5769,7 @@ async function deleteEmptyDraftInvoices(invoiceIds: string[]) {
   }
 }
 
-async function cleanupAuditHorses(horseIds: string[], organizationId: string) {
+async function cleanupAuditHorses(horseIds: string[]) {
   const client = requireSupabase();
 
   for (const horseId of uniqueStrings(horseIds)) {
@@ -4559,11 +5782,13 @@ async function cleanupAuditHorses(horseIds: string[], organizationId: string) {
       continue;
     }
 
-    const { error } = await client
-      .from("horses")
-      .delete()
-      .eq("id", horseId)
-      .eq("organization_id", organizationId);
+    const { error: directoryError } = await client.from("directory_horses").delete().eq("horse_id", horseId);
+
+    if (directoryError) {
+      throw directoryError;
+    }
+
+    const { error } = await client.from("horses").delete().eq("id", horseId);
 
     if (error && error.code !== "23503") {
       throw error;
@@ -4571,7 +5796,7 @@ async function cleanupAuditHorses(horseIds: string[], organizationId: string) {
   }
 }
 
-async function cleanupAuditContacts(contactIds: string[], organizationId: string) {
+async function cleanupAuditContacts(contactIds: string[]) {
   const client = requireSupabase();
 
   for (const contactId of uniqueStrings(contactIds)) {
@@ -4595,11 +5820,13 @@ async function cleanupAuditContacts(contactIds: string[], organizationId: string
       continue;
     }
 
-    const { error } = await client
-      .from("contacts")
-      .delete()
-      .eq("id", contactId)
-      .eq("organization_id", organizationId);
+    const { error: directoryError } = await client.from("directory_contacts").delete().eq("contact_id", contactId);
+
+    if (directoryError) {
+      throw directoryError;
+    }
+
+    const { error } = await client.from("contacts").delete().eq("id", contactId);
 
     if (error && error.code !== "23503") {
       throw error;
@@ -4635,18 +5862,18 @@ async function restoreShowScoreRunsForBatch(batch: EntryImportBatch) {
   }
 
   const { data: setups, error } = await client
-    .from("show_score_class_setups")
+    .from("show_score_block_setups")
     .select("*")
     .eq("show_id", batch.show_id)
-    .in("class_id", classIds)
-    .returns<ShowScoreClassSetup[]>();
+    .in("block_id", classIds)
+    .returns<ShowScoreBlockSetup[]>();
 
   if (error) {
     throw error;
   }
 
   for (const setup of setups ?? []) {
-    const classSnapshots = snapshots[setup.class_id] ?? {};
+    const classSnapshots = snapshots[setup.block_id] ?? {};
     let changed = false;
     const restoredRuns = setup.runs.map((run, index) => {
       const normalizedRun = normalizeShowScoreDrawRun(run, index);
@@ -4665,9 +5892,9 @@ async function restoreShowScoreRunsForBatch(batch: EntryImportBatch) {
     }
 
     const { error: updateError } = await client
-      .from("show_score_class_setups")
+      .from("show_score_block_setups")
       .update({ runs: restoredRuns })
-      .eq("class_id", setup.class_id)
+      .eq("block_id", setup.block_id)
       .eq("show_id", setup.show_id);
 
     if (updateError) {
@@ -4802,10 +6029,49 @@ function uniqueStrings(values: Array<string | null | undefined>) {
   return [...new Set(values.filter((value): value is string => Boolean(value)))];
 }
 
+type GoverningBodyLinkRow = {
+  class_id?: string;
+  class_template_id?: string;
+  governing_body_id: string;
+  reporting_class_code: string | null;
+  eligibility_profile_code: string | null;
+  sanction_metadata: Record<string, unknown>;
+};
+
+function attachGoverningBodyAssignments<T extends { id: string }>(
+  records: T[],
+  links: GoverningBodyLinkRow[],
+  ownerColumn: "class_id" | "class_template_id",
+  governingBodyById: Map<string, SanctioningBody>,
+) {
+  const assignmentsByOwnerId = new Map<string, GoverningBodyAssignment[]>();
+
+  for (const link of links) {
+    const ownerId = link[ownerColumn];
+    const body = governingBodyById.get(link.governing_body_id);
+
+    if (ownerId && body) {
+      assignmentsByOwnerId.set(ownerId, [...(assignmentsByOwnerId.get(ownerId) ?? []), {
+        governing_body_id: body.id,
+        code: body.code,
+        name: body.name,
+        reporting_class_code: link.reporting_class_code,
+        eligibility_profile_code: link.eligibility_profile_code,
+        sanction_metadata: link.sanction_metadata ?? {},
+      }]);
+    }
+  }
+
+  return records.map((record) => ({
+    ...record,
+    governing_body_assignments: assignmentsByOwnerId.get(record.id) ?? [],
+  }));
+}
+
 export async function prepareShowScoreClassSetup(input: {
-  classRecord: ClassRecord;
+  classRecord: Block;
   entries: Entry[];
-  divisions: Division[];
+  classes: ClassRecord[];
   horses: Horse[];
   contacts: Contact[];
 }) {
@@ -4818,7 +6084,7 @@ export async function prepareShowScoreClassSetup(input: {
 
   const runs = buildShowScoreRunsForClass(input.classRecord.id, input.entries, {
     contacts: input.contacts,
-    divisions: input.divisions,
+    classes: input.classes,
     horses: input.horses,
   });
 
@@ -4828,16 +6094,16 @@ export async function prepareShowScoreClassSetup(input: {
 
   await saveShowScoreRunLinks(input.classRecord, runs);
 
-  const judges = input.classRecord.judge_name
-    ? [{ id: "judge-1", name: input.classRecord.judge_name, order: 1 }]
+  const judges = input.classRecord.judge_display_name
+    ? [{ id: "judge-1", name: input.classRecord.judge_display_name, order: 1 }]
     : [{ id: "judge-1", name: "", order: 1 }];
   const preparedAt = new Date().toISOString();
 
   const { data, error } = await client
-    .from("show_score_class_setups")
+    .from("show_score_block_setups")
     .upsert(
       {
-        class_id: input.classRecord.id,
+        block_id: input.classRecord.id,
         organization_id: input.classRecord.organization_id,
         show_id: input.classRecord.show_id,
         show_day_id: input.classRecord.show_day_id,
@@ -4847,16 +6113,16 @@ export async function prepareShowScoreClassSetup(input: {
         judges,
         is_draw_imported: true,
       },
-      { onConflict: "class_id" },
+      { onConflict: "block_id" },
     )
     .select("*")
-    .single<ShowScoreClassSetup>();
+    .single<ShowScoreBlockSetup>();
 
   if (error) {
     throw error;
   }
 
-  const { error: classError } = await client.from("classes").update({ draw_prepared_at: preparedAt }).eq("id", input.classRecord.id);
+  const { error: classError } = await client.from("blocks").update({ draw_prepared_at: preparedAt }).eq("id", input.classRecord.id);
 
   if (classError) {
     throw classError;
@@ -4865,7 +6131,7 @@ export async function prepareShowScoreClassSetup(input: {
   return data;
 }
 
-async function saveShowScoreRunLinks(classRecord: ClassRecord, runs: ShowScoreRun[]) {
+async function saveShowScoreRunLinks(classRecord: Block, runs: ShowScoreRun[]) {
   const client = requireSupabase();
   const blockRunRows = runs.map((run) => ({
     block_run_id: run.blockRunId,
@@ -4920,7 +6186,7 @@ export function buildShowScorePaidWarmupEntriesForClass(
   entries: Entry[],
   relations: {
     contacts: Contact[];
-    divisions: Division[];
+    classes: ClassRecord[];
     horses: Horse[];
   },
 ): ShowScorePaidWarmupEntry[] {
@@ -4935,9 +6201,9 @@ export function buildShowScorePaidWarmupEntriesForClass(
 
 export async function prepareShowScorePaidWarmupFromClass(input: {
   paidWarmupId?: string;
-  classRecord: ClassRecord;
+  classRecord: Block;
   entries: Entry[];
-  divisions: Division[];
+  classes: ClassRecord[];
   horses: Horse[];
   contacts: Contact[];
   name?: string;
@@ -4952,7 +6218,7 @@ export async function prepareShowScorePaidWarmupFromClass(input: {
 
   const entries = buildShowScorePaidWarmupEntriesForClass(input.classRecord.id, input.entries, {
     contacts: input.contacts,
-    divisions: input.divisions,
+    classes: input.classes,
     horses: input.horses,
   });
 
@@ -4979,7 +6245,7 @@ export async function prepareShowScorePaidWarmupFromClass(input: {
     sort_order: input.classRecord.sort_order,
     legacy_payload: {
       source: "hsp_class_entries",
-      source_class_id: input.classRecord.id,
+      source_block_id: input.classRecord.id,
     },
   });
 }
@@ -5087,21 +6353,18 @@ async function ensureContactOrganizationLink(input: {
   created_by_user_id?: string | null;
 }) {
   const client = requireSupabase();
-  const { error } = await client.from("contact_organization_links").upsert(
+  const organizationDisciplineId = await findDefaultOrganizationDisciplineId(input.organization_id);
+  const { error } = await client.from("directory_contacts").upsert(
     {
-      organization_id: input.organization_id,
+      organization_discipline_id: organizationDisciplineId,
       contact_id: input.contact_id,
-      source: input.source,
+      source: directorySourceFromLegacyLink(input.source),
       created_by_user_id: input.created_by_user_id ?? null,
     },
-    { onConflict: "organization_id,contact_id" },
+    { onConflict: "organization_discipline_id,contact_id" },
   );
 
   if (error) {
-    if (isMissingSchemaError(error, "contact_organization_links")) {
-      return;
-    }
-
     throw error;
   }
 }
@@ -5113,146 +6376,438 @@ async function ensureHorseOrganizationLink(input: {
   created_by_user_id?: string | null;
 }) {
   const client = requireSupabase();
-  const { error } = await client.from("horse_organization_links").upsert(
+  const organizationDisciplineId = await findDefaultOrganizationDisciplineId(input.organization_id);
+  const { error } = await client.from("directory_horses").upsert(
     {
-      organization_id: input.organization_id,
+      organization_discipline_id: organizationDisciplineId,
       horse_id: input.horse_id,
-      source: input.source,
+      source: directorySourceFromLegacyLink(input.source),
       created_by_user_id: input.created_by_user_id ?? null,
     },
-    { onConflict: "organization_id,horse_id" },
+    { onConflict: "organization_discipline_id,horse_id" },
   );
 
   if (error) {
-    if (isMissingSchemaError(error, "horse_organization_links")) {
-      return;
-    }
-
     throw error;
   }
 }
 
-async function syncContactExternalMemberships(contactId: string, memberships?: ExternalMembershipInput[]) {
-  if (!memberships) {
+type HorseDirectoryContextRow = {
+  organization_discipline_id: string;
+  organization_disciplines:
+    | { organization_id: string; is_active: boolean }
+    | Array<{ organization_id: string; is_active: boolean }>;
+};
+
+async function loadHorseDirectoryContexts(horseId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("directory_horses")
+    .select("organization_discipline_id, organization_disciplines!inner(organization_id,is_active)")
+    .eq("horse_id", horseId)
+    .eq("organization_disciplines.is_active", true)
+    .returns<HorseDirectoryContextRow[]>();
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []).map((row) => {
+    const directory = Array.isArray(row.organization_disciplines)
+      ? row.organization_disciplines[0]
+      : row.organization_disciplines;
+
+    return {
+      organizationDisciplineId: row.organization_discipline_id,
+      organizationId: directory?.organization_id ?? "",
+    };
+  }).filter((context) => context.organizationId);
+}
+
+async function ensureContactDirectoriesForHorse(input: {
+  horse_id: string;
+  contact_id: string;
+  source: ContactOrganizationLink["source"];
+  created_by_user_id?: string | null;
+}) {
+  const contexts = await loadHorseDirectoryContexts(input.horse_id);
+
+  if (!contexts.length) {
     return;
   }
 
   const client = requireSupabase();
-  const cleanMemberships = memberships
-    .map((membership) => ({
-      contact_id: contactId,
-      external_organization_id: membership.external_organization_id,
-      membership_number: membership.membership_number.trim(),
-      status: membership.status ?? "unknown",
-      expires_on: membership.expires_on ?? null,
-      verified_at: membership.verified_at ?? null,
-      verification_source: membership.verification_source ?? null,
-      verification_payload: membership.verification_payload ?? {},
-    }))
-    .filter((membership) => membership.external_organization_id && membership.membership_number);
+  const { error } = await client.from("directory_contacts").upsert(
+    contexts.map((context) => ({
+      organization_discipline_id: context.organizationDisciplineId,
+      contact_id: input.contact_id,
+      source: directorySourceFromLegacyLink(input.source),
+      created_by_user_id: input.created_by_user_id ?? null,
+    })),
+    { onConflict: "organization_discipline_id,contact_id" },
+  );
 
-  if (cleanMemberships.length) {
-    const { error } = await client.from("contact_external_memberships").upsert(cleanMemberships, {
-      onConflict: "contact_id,external_organization_id",
-    });
-
-    if (error) {
-      if (isMissingSchemaError(error, "contact_external_memberships")) {
-        return;
-      }
-
-      if (isMissingExternalMembershipVerificationColumn(error)) {
-        const basicMemberships = cleanMemberships.map(({ verified_at, verification_source, verification_payload, ...membership }) => membership);
-        const { error: fallbackError } = await client.from("contact_external_memberships").upsert(basicMemberships, {
-          onConflict: "contact_id,external_organization_id",
-        });
-
-        if (!fallbackError || isMissingSchemaError(fallbackError, "contact_external_memberships")) {
-          return;
-        }
-
-        throw fallbackError;
-      }
-
-      throw error;
-    }
-  }
-
-  const emptyMemberships = memberships.filter((membership) => membership.external_organization_id && !membership.membership_number.trim());
-
-  if (emptyMemberships.length) {
-    const { error } = await client
-      .from("contact_external_memberships")
-      .delete()
-      .eq("contact_id", contactId)
-      .in(
-        "external_organization_id",
-        emptyMemberships.map((membership) => membership.external_organization_id),
-      );
-
-    if (error && !isMissingSchemaError(error, "contact_external_memberships")) {
-      throw error;
-    }
+  if (error) {
+    throw error;
   }
 }
 
-async function syncHorseExternalMemberships(horseId: string, memberships?: ExternalHorseMembershipInput[]) {
+async function ensureContactRoleForHorseOrganizations(
+  horseId: string,
+  contactId: string,
+  role: ContactRoleName,
+) {
+  const contexts = await loadHorseDirectoryContexts(horseId);
+  const organizationIds = Array.from(new Set(contexts.map((context) => context.organizationId)));
+
+  for (const organizationId of organizationIds) {
+    await ensureContactRole({
+      organization_id: organizationId,
+      contact_id: contactId,
+      role,
+      source: "horse",
+    });
+  }
+}
+
+async function findDefaultOrganizationDisciplineId(organizationId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("organization_disciplines")
+    .select("id")
+    .eq("organization_id", organizationId)
+    .eq("is_active", true)
+    .order("is_default", { ascending: false })
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (!data) {
+    throw new Error("Cette association n'a aucun répertoire de discipline actif.");
+  }
+
+  return data.id;
+}
+
+function directorySourceFromLegacyLink(
+  source: ContactOrganizationLink["source"] | HorseOrganizationLink["source"],
+) {
+  switch (source) {
+    case "entry":
+      return "entry";
+    case "reservation":
+      return "reservation";
+    case "claimed_account":
+      return "membership";
+    case "horse":
+      return "relationship";
+    default:
+      return "manual";
+  }
+}
+
+async function syncContactExternalIdentifiers(contactId: string, memberships?: ExternalContactIdentifierInput[]) {
   if (!memberships) {
     return;
   }
 
   const client = requireSupabase();
-  const cleanMemberships = memberships
-    .map((membership) => ({
-      horse_id: horseId,
-      external_organization_id: membership.external_organization_id,
-      reference_type: membership.reference_type ?? "competition_license",
-      reference_number: membership.reference_number.trim(),
-      status: membership.status ?? "unknown",
-      expires_on: membership.expires_on ?? null,
-      verified_at: membership.verified_at ?? null,
-      verification_source: membership.verification_source ?? null,
-      verification_payload: membership.verification_payload ?? {},
-    }))
-    .filter((membership) => membership.external_organization_id && membership.reference_number);
+  const cleanIdentifiers = memberships.filter(
+    (membership) => membership.external_credential_issuer_id && membership.identifier_value.trim(),
+  );
 
-  if (cleanMemberships.length) {
-    const { error } = await client.from("horse_external_memberships").upsert(cleanMemberships, {
-      onConflict: "horse_id,external_organization_id,reference_type",
-    });
+  for (const membership of cleanIdentifiers) {
+    const verificationPayload = membership.verification_payload ?? {};
+    const verificationSource = membership.verification_source ?? null;
+    const sourceId = await externalDataSourceIdForVerificationSource(verificationSource);
+    const { data, error } = await client
+      .from("contact_external_identifiers")
+      .upsert(
+        {
+          contact_id: contactId,
+          external_credential_issuer_id: membership.external_credential_issuer_id,
+          identifier_type: membership.identifier_type ?? "membership",
+          identifier_value: membership.identifier_value.trim(),
+          status: membership.status ?? "unknown",
+          valid_from: membership.valid_from ?? null,
+          expires_on: membership.expires_on ?? null,
+          verified_at: membership.verified_at ?? null,
+          verified_by_external_data_source_id: sourceId,
+          metadata: {
+            verification_source: verificationSource,
+            verification_payload: verificationPayload,
+          },
+        },
+        { onConflict: "contact_id,external_credential_issuer_id,identifier_type" },
+      )
+      .select("id")
+      .single<{ id: string }>();
 
     if (error) {
-      if (isMissingSchemaError(error, "horse_external_memberships")) {
+      if (isMissingSchemaError(error, "contact_external_identifiers")) {
         return;
       }
 
       throw error;
     }
+
+    if (sourceId && Object.keys(verificationPayload).length) {
+      const snapshotId = await recordExternalDataSnapshot({
+        externalDataSourceId: sourceId,
+        payload: verificationPayload,
+        sourceRecordKey: membership.identifier_value.trim(),
+        contactId,
+      });
+      const { error: snapshotLinkError } = await client
+        .from("contact_external_identifiers")
+        .update({ latest_snapshot_id: snapshotId })
+        .eq("id", data.id);
+
+      if (snapshotLinkError) {
+        throw snapshotLinkError;
+      }
+    }
   }
 
-  const emptyMemberships = memberships.filter((membership) => membership.external_organization_id && !membership.reference_number.trim());
+  const emptyMemberships = memberships.filter((membership) => membership.external_credential_issuer_id && !membership.identifier_value.trim());
 
   if (emptyMemberships.length) {
-    const membershipsByType = new Map<HorseExternalMembership["reference_type"], string[]>();
+    const membershipsByType = new Map<ContactExternalIdentifier["identifier_type"], string[]>();
 
     for (const membership of emptyMemberships) {
-      const referenceType = membership.reference_type ?? "competition_license";
-      membershipsByType.set(referenceType, [...(membershipsByType.get(referenceType) ?? []), membership.external_organization_id]);
+      const identifierType = membership.identifier_type ?? "membership";
+      membershipsByType.set(identifierType, [
+        ...(membershipsByType.get(identifierType) ?? []),
+        membership.external_credential_issuer_id,
+      ]);
     }
 
-    for (const [referenceType, externalOrganizationIds] of membershipsByType.entries()) {
+    for (const [identifierType, issuerIds] of membershipsByType.entries()) {
       const { error } = await client
-        .from("horse_external_memberships")
+        .from("contact_external_identifiers")
         .delete()
-        .eq("horse_id", horseId)
-        .eq("reference_type", referenceType)
-        .in("external_organization_id", externalOrganizationIds);
+        .eq("contact_id", contactId)
+        .eq("identifier_type", identifierType)
+        .in("external_credential_issuer_id", issuerIds);
 
-      if (error && !isMissingSchemaError(error, "horse_external_memberships")) {
+      if (error && !isMissingSchemaError(error, "contact_external_identifiers")) {
         throw error;
       }
     }
   }
+}
+
+async function syncHorseExternalIdentifiers(horseId: string, memberships?: ExternalHorseIdentifierInput[]) {
+  if (!memberships) {
+    return;
+  }
+
+  const client = requireSupabase();
+  const cleanIdentifiers = memberships.filter(
+    (membership) => membership.external_credential_issuer_id && membership.identifier_value.trim(),
+  );
+
+  for (const membership of cleanIdentifiers) {
+    const verificationPayload = membership.verification_payload ?? {};
+    const verificationSource = membership.verification_source ?? null;
+    const sourceId = await externalDataSourceIdForVerificationSource(verificationSource);
+    const { data, error } = await client
+      .from("horse_external_identifiers")
+      .upsert(
+        {
+          horse_id: horseId,
+          external_credential_issuer_id: membership.external_credential_issuer_id,
+          identifier_type: membership.identifier_type ?? "competition_license",
+          identifier_value: membership.identifier_value.trim(),
+          status: membership.status ?? "unknown",
+          valid_from: membership.valid_from ?? null,
+          expires_on: membership.expires_on ?? null,
+          verified_at: membership.verified_at ?? null,
+          verified_by_external_data_source_id: sourceId,
+          metadata: {
+            verification_source: verificationSource,
+            verification_payload: verificationPayload,
+          },
+        },
+        { onConflict: "horse_id,external_credential_issuer_id,identifier_type" },
+      )
+      .select("id")
+      .single<{ id: string }>();
+
+    if (error) {
+      if (isMissingSchemaError(error, "horse_external_identifiers")) {
+        return;
+      }
+
+      throw error;
+    }
+
+    if (sourceId && Object.keys(verificationPayload).length) {
+      const snapshotId = await recordExternalDataSnapshot({
+        externalDataSourceId: sourceId,
+        payload: verificationPayload,
+        sourceRecordKey: membership.identifier_value.trim(),
+        horseId,
+      });
+      const { error: snapshotLinkError } = await client
+        .from("horse_external_identifiers")
+        .update({ latest_snapshot_id: snapshotId })
+        .eq("id", data.id);
+
+      if (snapshotLinkError) {
+        throw snapshotLinkError;
+      }
+    }
+  }
+
+  const emptyMemberships = memberships.filter((membership) => membership.external_credential_issuer_id && !membership.identifier_value.trim());
+
+  if (emptyMemberships.length) {
+    const membershipsByType = new Map<HorseExternalIdentifier["identifier_type"], string[]>();
+
+    for (const membership of emptyMemberships) {
+      const referenceType = membership.identifier_type ?? "competition_license";
+      membershipsByType.set(referenceType, [...(membershipsByType.get(referenceType) ?? []), membership.external_credential_issuer_id]);
+    }
+
+    for (const [referenceType, externalCredentialIssuerIds] of membershipsByType.entries()) {
+      const { error } = await client
+        .from("horse_external_identifiers")
+        .delete()
+        .eq("horse_id", horseId)
+        .eq("identifier_type", referenceType)
+        .in("external_credential_issuer_id", externalCredentialIssuerIds);
+
+      if (error && !isMissingSchemaError(error, "horse_external_identifiers")) {
+        throw error;
+      }
+    }
+  }
+}
+
+const externalDataSourceIdCache = new Map<string, string | null>();
+
+async function externalDataSourceIdForVerificationSource(source: string | null) {
+  if (!source) {
+    return null;
+  }
+
+  const sourceCode = source === "nrha_api" ? "NRHA_MEMBER_LOOKUP" : source.trim().toUpperCase();
+  if (externalDataSourceIdCache.has(sourceCode)) {
+    return externalDataSourceIdCache.get(sourceCode) ?? null;
+  }
+
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("external_data_sources")
+    .select("id")
+    .eq("code", sourceCode)
+    .eq("is_active", true)
+    .maybeSingle<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  const sourceId = data?.id ?? null;
+  externalDataSourceIdCache.set(sourceCode, sourceId);
+  return sourceId;
+}
+
+async function recordExternalDataSnapshot(input: {
+  externalDataSourceId: string;
+  payload: Record<string, unknown>;
+  sourceRecordKey?: string;
+  contactId?: string;
+  horseId?: string;
+  teamEligibility?: {
+    horseId: string;
+    riderContactId: string;
+    showId: string;
+    classId: string;
+    governingBodyId: string;
+  };
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("external_data_snapshots")
+    .insert({
+      external_data_source_id: input.externalDataSourceId,
+      source_record_key: input.sourceRecordKey?.trim() || null,
+      status: "verified",
+      effective_at: new Date().toISOString(),
+      payload: input.payload,
+    })
+    .select("id")
+    .single<{ id: string }>();
+
+  if (error) {
+    throw error;
+  }
+
+  if (input.contactId) {
+    const { error: contactLinkError } = await client.from("external_data_snapshot_contacts").insert({
+      snapshot_id: data.id,
+      contact_id: input.contactId,
+      relationship_type: "subject",
+    });
+    if (contactLinkError) {
+      throw contactLinkError;
+    }
+  }
+
+  if (input.horseId) {
+    const { error: horseLinkError } = await client.from("external_data_snapshot_horses").insert({
+      snapshot_id: data.id,
+      horse_id: input.horseId,
+      relationship_type: "subject",
+    });
+    if (horseLinkError) {
+      throw horseLinkError;
+    }
+  }
+
+  if (input.teamEligibility) {
+    const { error: teamLinkError } = await client.from("team_eligibility_snapshots").insert({
+      snapshot_id: data.id,
+      horse_id: input.teamEligibility.horseId,
+      rider_contact_id: input.teamEligibility.riderContactId,
+      show_id: input.teamEligibility.showId,
+      class_id: input.teamEligibility.classId,
+      governing_body_id: input.teamEligibility.governingBodyId,
+    });
+    if (teamLinkError) {
+      throw teamLinkError;
+    }
+  }
+
+  return data.id;
+}
+
+function hydrateContactExternalIdentifier(identifier: ContactExternalIdentifier): ContactExternalIdentifier {
+  const metadata = identifier.metadata ?? {};
+  return {
+    ...identifier,
+    verification_source: typeof metadata.verification_source === "string" ? metadata.verification_source : null,
+    verification_payload: isPlainRecord(metadata.verification_payload) ? metadata.verification_payload : {},
+  };
+}
+
+function hydrateHorseExternalIdentifier(identifier: HorseExternalIdentifier): HorseExternalIdentifier {
+  const metadata = identifier.metadata ?? {};
+  return {
+    ...identifier,
+    verification_source: typeof metadata.verification_source === "string" ? metadata.verification_source : null,
+    verification_payload: isPlainRecord(metadata.verification_payload) ? metadata.verification_payload : {},
+  };
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
 }
 
 async function getHorseById(id: string) {
@@ -5288,32 +6843,27 @@ async function getStallBookingById(id: string) {
   return data;
 }
 
-async function assertHorseHealthValidForShow(horseId: string | null | undefined, showId: string | null | undefined) {
+async function assertHorseHealthComplianceForShow(horseId: string | null | undefined, showId: string | null | undefined) {
   if (!horseId || !showId) {
     return;
   }
 
   const client = requireSupabase();
-  const { error } = await client.rpc("assert_horse_health_valid_for_show", {
-    target_horse_id: horseId,
-    target_show_id: showId,
+  const { error } = await client.rpc("assert_horse_health_compliance_for_show", {
+    p_horse_id: horseId,
+    p_show_id: showId,
   });
 
   if (error) {
-    if (isMissingRpcError(error, "assert_horse_health_valid_for_show")) {
-      const { error: cogginsError } = await client.rpc("assert_horse_coggins_valid_for_show", {
-        target_horse_id: horseId,
-        target_show_id: showId,
-      });
-
-      if (!cogginsError || isMissingRpcError(cogginsError, "assert_horse_coggins_valid_for_show")) {
-        return;
-      }
-
-      throw new Error(cogginsError.message || "Le statut sante du cheval n'est pas valide pour ce show.");
+    if (isMissingRpcError(error, "assert_horse_health_compliance_for_show")) {
+      throw new Error("La migration de conformité santé des inscriptions et réservations n'est pas encore appliquée.");
     }
 
-    throw new Error(error.message || "Le statut sante du cheval n'est pas valide pour ce show.");
+    if (error.message.includes("HSP_HEALTH_COMPLIANCE_BLOCKED")) {
+      throw new Error("Les documents santé de ce cheval ne respectent pas la politique bloquante de l'association pour la date du concours.");
+    }
+
+    throw new Error(error.message || "Impossible de vérifier la conformité santé du cheval pour ce concours.");
   }
 }
 
@@ -5324,29 +6874,29 @@ async function assertEntryShowLevelMembershipRequirements(input: {
   rider_contact_id: string | null | undefined;
   show_id: string | null | undefined;
 }) {
-  const requirements = await loadRequiredExternalMembershipRequirements(input.organization_id);
-  const riderRequirementIds = membershipRequirementIdsForType(requirements, "rider");
+  const requirements = await loadRequiredExternalCredentialRequirements(input.organization_id);
+  const riderRequirementIds = credentialRequirementIssuerIdsForType(requirements, "rider");
   const referenceDate = await entryMembershipReferenceDate(input.show_id);
 
   if (riderRequirementIds.length && !input.rider_contact_id) {
     throw new Error("Choisir un cavalier avant de creer l'inscription: cette association exige des numeros de membre pour les riders.");
   }
 
-  await assertContactExternalMembershipRequirements({
+  await assertContactExternalIdentifierRequirements({
     contact_id: input.owner_contact_id,
     contact_type: "owner",
     reference_date: referenceDate,
     requirements,
     role_label: "Proprietaire",
   });
-  await assertContactExternalMembershipRequirements({
+  await assertContactExternalIdentifierRequirements({
     contact_id: input.rider_contact_id,
     contact_type: "rider",
     reference_date: referenceDate,
     requirements,
     role_label: "Cavalier",
   });
-  await assertContactExternalMembershipRequirements({
+  await assertContactExternalIdentifierRequirements({
     contact_id: input.payer_contact_id,
     contact_type: "payer",
     reference_date: referenceDate,
@@ -5370,17 +6920,17 @@ async function entryMembershipReferenceDate(showId: string | null | undefined) {
   return data?.start_date?.slice(0, 10) || todayDateValue();
 }
 
-async function loadRequiredExternalMembershipRequirements(organizationId: string) {
+async function loadRequiredExternalCredentialRequirements(organizationId: string) {
   const client = requireSupabase();
   const { data, error } = await client
-    .from("organization_external_membership_requirements")
-    .select("external_organization_id,contact_type,is_required")
+    .from("organization_external_credential_requirements")
+    .select("id,external_credential_issuer_id,contact_type,identifier_type,requirement_group_code,match_rule,validity_rule,enforcement_mode,is_required")
     .eq("organization_id", organizationId)
     .eq("is_required", true)
-    .returns<Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>>();
+    .returns<ExternalCredentialRequirementCheck[]>();
 
   if (error) {
-    if (isMissingSchemaError(error, "organization_external_membership_requirements")) {
+    if (isMissingSchemaError(error, "organization_external_credential_requirements")) {
       return [];
     }
 
@@ -5390,14 +6940,22 @@ async function loadRequiredExternalMembershipRequirements(organizationId: string
   return data ?? [];
 }
 
-async function assertContactExternalMembershipRequirements(input: {
+async function assertContactExternalIdentifierRequirements(input: {
   contact_id: string | null | undefined;
   contact_type: Contact["type"];
   reference_date: string;
-  requirements: Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>;
+  requirements: ExternalCredentialRequirementCheck[];
   role_label: string;
 }) {
-  const requiredOrganizationIds = membershipRequirementIdsForType(input.requirements, input.contact_type);
+  const requiredCredentials = input.requirements.filter(
+    (requirement) =>
+      requirement.is_required &&
+      requirement.contact_type === input.contact_type &&
+      requirement.enforcement_mode === "blocking",
+  );
+  const requiredOrganizationIds = Array.from(
+    new Set(requiredCredentials.map((requirement) => requirement.external_credential_issuer_id)),
+  );
 
   if (!requiredOrganizationIds.length) {
     return;
@@ -5409,64 +6967,88 @@ async function assertContactExternalMembershipRequirements(input: {
 
   const client = requireSupabase();
   const { data, error } = await client
-    .from("contact_external_memberships")
-    .select("external_organization_id,membership_number,status,expires_on")
+    .from("contact_external_identifiers")
+    .select("external_credential_issuer_id,identifier_type,identifier_value,status,valid_from,expires_on")
     .eq("contact_id", input.contact_id)
-    .in("external_organization_id", requiredOrganizationIds)
-    .returns<Array<Pick<ContactExternalMembership, "external_organization_id" | "membership_number" | "status" | "expires_on">>>();
+    .in("external_credential_issuer_id", requiredOrganizationIds)
+    .returns<Array<Pick<ContactExternalIdentifier, "external_credential_issuer_id" | "identifier_type" | "identifier_value" | "status" | "valid_from" | "expires_on">>>();
 
   if (error) {
-    if (isMissingSchemaError(error, "contact_external_memberships")) {
+    if (isMissingSchemaError(error, "contact_external_identifiers")) {
       return;
     }
 
     throw error;
   }
 
-  const validOrganizationIds = new Set(
-    (data ?? [])
-      .filter((membership) => membership.membership_number.trim() && contactExternalMembershipIsValidForDate(membership, input.reference_date))
-      .map((membership) => membership.external_organization_id),
+  const requirementGroups = groupExternalCredentialRequirements(requiredCredentials);
+  const missingRequirements = requirementGroups
+    .filter((group) => {
+      const results = group.requirements.map((requirement) =>
+        (data ?? []).some(
+          (identifier) =>
+            identifier.external_credential_issuer_id === requirement.external_credential_issuer_id &&
+            identifier.identifier_type === requirement.identifier_type &&
+            contactExternalIdentifierSatisfiesRequirement(identifier, requirement, input.reference_date),
+        ),
+      );
+      return group.matchRule === "at_least_one" ? !results.some(Boolean) : !results.every(Boolean);
+    })
+    .flatMap((group) => group.requirements);
+  const missingOrganizationIds = Array.from(
+    new Set(missingRequirements.map((requirement) => requirement.external_credential_issuer_id)),
   );
-  const missingOrganizationIds = requiredOrganizationIds.filter((organizationId) => !validOrganizationIds.has(organizationId));
 
   if (!missingOrganizationIds.length) {
     return;
   }
 
-  const labels = await loadExternalOrganizationLabels(missingOrganizationIds);
+  const labels = await loadExternalCredentialIssuerLabels(missingOrganizationIds);
   throw new Error(`${input.role_label}: numeros de membre obligatoires manquants ou expires (${labels.join(", ")}).`);
 }
 
-function contactExternalMembershipIsValidForDate(
-  membership: Pick<ContactExternalMembership, "expires_on" | "status">,
+function contactExternalIdentifierSatisfiesRequirement(
+  identifier: Pick<ContactExternalIdentifier, "identifier_value" | "status" | "valid_from" | "expires_on">,
+  requirement: Pick<OrganizationExternalCredentialRequirement, "validity_rule">,
   referenceDate: string,
 ) {
-  if (membership.status === "expired") {
+  if (!identifier.identifier_value.trim()) {
     return false;
   }
 
-  return !membership.expires_on || membership.expires_on.slice(0, 10) >= referenceDate;
+  if (requirement.validity_rule === "present") {
+    return true;
+  }
+
+  if (identifier.status !== "active") {
+    return false;
+  }
+
+  if (identifier.valid_from && identifier.valid_from.slice(0, 10) > referenceDate) {
+    return false;
+  }
+
+  return !identifier.expires_on || identifier.expires_on.slice(0, 10) >= referenceDate;
 }
 
 function todayDateValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function loadExternalOrganizationLabels(ids: string[]) {
+async function loadExternalCredentialIssuerLabels(ids: string[]) {
   if (!ids.length) {
     return [];
   }
 
   const client = requireSupabase();
   const { data, error } = await client
-    .from("external_organizations")
+    .from("external_credential_issuers")
     .select("id,code,name")
     .in("id", ids)
-    .returns<Array<Pick<ExternalOrganization, "id" | "code" | "name">>>();
+    .returns<Array<Pick<ExternalCredentialIssuer, "id" | "code" | "name">>>();
 
   if (error) {
-    if (isMissingSchemaError(error, "external_organizations")) {
+    if (isMissingSchemaError(error, "external_credential_issuers")) {
       return ids;
     }
 
@@ -5479,11 +7061,40 @@ async function loadExternalOrganizationLabels(ids: string[]) {
   });
 }
 
-function membershipRequirementIdsForType(
-  requirements: Array<Pick<OrganizationExternalMembershipRequirement, "external_organization_id" | "contact_type" | "is_required">>,
+type ExternalCredentialRequirementCheck = Pick<
+  OrganizationExternalCredentialRequirement,
+  "id" | "external_credential_issuer_id" | "contact_type" | "identifier_type" | "requirement_group_code" | "match_rule" | "validity_rule" | "enforcement_mode" | "is_required"
+>;
+
+function groupExternalCredentialRequirements(requirements: ExternalCredentialRequirementCheck[]) {
+  const groups = new Map<string, ExternalCredentialRequirementCheck[]>();
+
+  for (const requirement of requirements) {
+    const key = requirement.requirement_group_code
+      ? `${requirement.contact_type}:${requirement.requirement_group_code}`
+      : `direct:${requirement.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), requirement]);
+  }
+
+  return Array.from(groups.entries()).map(([key, groupedRequirements]) => ({
+    key,
+    matchRule: groupedRequirements[0]?.match_rule ?? "all",
+    requirements: groupedRequirements,
+  }));
+}
+
+function credentialRequirementIssuerIdsForType(
+  requirements: ExternalCredentialRequirementCheck[],
   contactType: Contact["type"],
 ) {
-  return requirements.filter((requirement) => requirement.is_required && requirement.contact_type === contactType).map((requirement) => requirement.external_organization_id);
+  return requirements
+    .filter(
+      (requirement) =>
+        requirement.is_required &&
+        requirement.contact_type === contactType &&
+        requirement.enforcement_mode === "blocking",
+    )
+    .map((requirement) => requirement.external_credential_issuer_id);
 }
 
 async function ensureEntryOrganizationLinks(input: {
@@ -5758,37 +7369,103 @@ function uniqueRoles(roles: ContactRoleName[]) {
   return Array.from(new Set(roles.filter(Boolean)));
 }
 
-function deriveContactRolesFromContacts(contacts: Contact[]): ContactRole[] {
-  return contacts.map((contact) => ({
-    id: `${contact.id}-${contact.type}`,
-    organization_id: contact.organization_id,
-    contact_id: contact.id,
-    role: contact.type,
-    source: "contact_type",
-    created_at: contact.created_at,
-  }));
+type DirectoryContactLinkRow = {
+  id: string;
+  organization_discipline_id: string;
+  contact_id: string;
+  source: string;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  organization_disciplines: { organization_id: string } | Array<{ organization_id: string }>;
+};
+
+type DirectoryHorseLinkRow = {
+  id: string;
+  organization_discipline_id: string;
+  horse_id: string;
+  source: string;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+  organization_disciplines: { organization_id: string } | Array<{ organization_id: string }>;
+};
+
+function directoryOrganizationId(
+  relation: DirectoryContactLinkRow["organization_disciplines"],
+) {
+  return Array.isArray(relation) ? relation[0]?.organization_id ?? "" : relation.organization_id;
 }
 
-function deriveContactOrganizationLinksFromContacts(contacts: Contact[]): ContactOrganizationLink[] {
-  return contacts.map((contact) => ({
-    id: `${contact.organization_id}-${contact.id}`,
-    organization_id: contact.organization_id,
-    contact_id: contact.id,
-    source: "created_here",
-    created_by_user_id: null,
-    created_at: contact.created_at,
-  }));
+function legacyLinkSourceFromDirectory(source: string): ContactOrganizationLink["source"] {
+  switch (source) {
+    case "entry":
+      return "entry";
+    case "reservation":
+      return "reservation";
+    case "membership":
+      return "claimed_account";
+    case "relationship":
+      return "horse";
+    default:
+      return "manual";
+  }
 }
 
-function deriveHorseOrganizationLinksFromHorses(horses: Horse[]): HorseOrganizationLink[] {
-  return horses.map((horse) => ({
-    id: `${horse.organization_id}-${horse.id}`,
-    organization_id: horse.organization_id,
-    horse_id: horse.id,
-    source: "created_here",
-    created_by_user_id: null,
-    created_at: horse.created_at,
-  }));
+function directoryContactRowToOrganizationLink(row: DirectoryContactLinkRow): ContactOrganizationLink {
+  return {
+    id: row.id,
+    organization_id: directoryOrganizationId(row.organization_disciplines),
+    contact_id: row.contact_id,
+    source: legacyLinkSourceFromDirectory(row.source),
+    created_by_user_id: row.created_by_user_id,
+    created_at: row.created_at,
+  };
+}
+
+function directoryContactRowToDirectoryContact(row: DirectoryContactLinkRow): DirectoryContact {
+  return {
+    id: row.id,
+    organization_discipline_id: row.organization_discipline_id,
+    contact_id: row.contact_id,
+    source: row.source as DirectoryContact["source"],
+    notes: row.notes,
+    metadata: row.metadata,
+    created_by_user_id: row.created_by_user_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+function directoryHorseRowToOrganizationLink(row: DirectoryHorseLinkRow): HorseOrganizationLink {
+  const source = legacyLinkSourceFromDirectory(row.source);
+
+  return {
+    id: row.id,
+    organization_id: directoryOrganizationId(row.organization_disciplines),
+    horse_id: row.horse_id,
+    source: source === "horse" || source === "claimed_account" ? "manual" : source,
+    created_by_user_id: row.created_by_user_id,
+    created_at: row.created_at,
+  };
+}
+
+function directoryHorseRowToDirectoryHorse(row: DirectoryHorseLinkRow): DirectoryHorse {
+  return {
+    id: row.id,
+    organization_discipline_id: row.organization_discipline_id,
+    horse_id: row.horse_id,
+    source: row.source as DirectoryHorse["source"],
+    notes: row.notes,
+    metadata: row.metadata,
+    created_by_user_id: row.created_by_user_id,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
 }
 
 function titleCase(value: string) {
@@ -5988,7 +7665,7 @@ function normalizeTaxRate(value: number) {
 }
 
 function isMissingShowScoreSchemaError(error: { code?: string; message?: string }) {
-  return isMissingSchemaError(error, "show_score_class_setups");
+  return isMissingSchemaError(error, "show_score_block_setups");
 }
 
 const AQR_AUDIT_IMPORT_MIGRATION_MESSAGE =

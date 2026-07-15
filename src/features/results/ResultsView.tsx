@@ -11,9 +11,9 @@ import {
   type PayoutCalculationDraft,
 } from "../../lib/payouts";
 import type {
-  ClassRecord,
+  Block,
   Contact,
-  Division,
+  ClassRecord,
   Entry,
   EntryResult,
   Horse,
@@ -30,9 +30,9 @@ import { uiText } from "../dashboard/shared";
 
 function ResultsView({
   locale = "fr",
-  classes,
+  blocks,
   contacts,
-  divisions,
+  classes,
   entries,
   entryResults,
   horses,
@@ -48,9 +48,9 @@ function ResultsView({
   onUpdatePayoutCalculationStatus,
 }: {
   locale?: Locale;
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
   entryResults: EntryResult[];
   horses: Horse[];
@@ -68,17 +68,17 @@ function ResultsView({
   const [busyKey, setBusyKey] = useState("");
   const [actionError, setActionError] = useState("");
   const [collapsedBlockIds, setCollapsedBlockIds] = useState<Record<string, boolean>>({});
-  const [collapsedDivisionIds, setCollapsedDivisionIds] = useState<Record<string, boolean>>({});
-  const resultClasses = useMemo(() => classes.filter((classRecord) => !classRecord.is_event_block), [classes]);
-  const resultClassIds = useMemo(() => new Set(resultClasses.map((classRecord) => classRecord.id)), [resultClasses]);
-  const resultDivisions = useMemo(() => divisions.filter((division) => resultClassIds.has(division.class_id)), [divisions, resultClassIds]);
-  const classesByShow = useMemo(() => {
-    const grouped = new Map<string, ClassRecord[]>();
+  const [collapsedClassIds, setCollapsedClassIds] = useState<Record<string, boolean>>({});
+  const resultBlocks = useMemo(() => blocks.filter((block) => block.block_type === "competition"), [blocks]);
+  const resultBlockIds = useMemo(() => new Set(resultBlocks.map((block) => block.id)), [resultBlocks]);
+  const resultClasses = useMemo(() => classes.filter((classRecord) => resultBlockIds.has(classRecord.block_id)), [classes, resultBlockIds]);
+  const blocksByShow = useMemo(() => {
+    const grouped = new Map<string, Block[]>();
 
-    for (const classRecord of resultClasses) {
-      const group = grouped.get(classRecord.show_id) ?? [];
-      group.push(classRecord);
-      grouped.set(classRecord.show_id, group);
+    for (const block of resultBlocks) {
+      const group = grouped.get(block.show_id) ?? [];
+      group.push(block);
+      grouped.set(block.show_id, group);
     }
 
     for (const group of grouped.values()) {
@@ -86,26 +86,26 @@ function ResultsView({
     }
 
     return grouped;
-  }, [resultClasses]);
-  const divisionsByClass = useMemo(() => {
-    const grouped = new Map<string, Division[]>();
+  }, [resultBlocks]);
+  const classesByBlock = useMemo(() => {
+    const grouped = new Map<string, ClassRecord[]>();
 
-    for (const division of resultDivisions) {
-      const group = grouped.get(division.class_id) ?? [];
-      group.push(division);
-      grouped.set(division.class_id, group);
+    for (const classRecord of resultClasses) {
+      const group = grouped.get(classRecord.block_id) ?? [];
+      group.push(classRecord);
+      grouped.set(classRecord.block_id, group);
     }
 
     return grouped;
-  }, [resultDivisions]);
-  const latestCalculationByDivision = useMemo(() => {
+  }, [resultClasses]);
+  const latestCalculationByClass = useMemo(() => {
     const mapped = new Map<string, PayoutCalculation>();
 
     for (const calculation of payoutCalculations) {
-      const existing = mapped.get(calculation.division_id);
+      const existing = mapped.get(calculation.class_id);
 
       if (!existing || calculation.calculated_at > existing.calculated_at) {
-        mapped.set(calculation.division_id, calculation);
+        mapped.set(calculation.class_id, calculation);
       }
     }
 
@@ -146,8 +146,8 @@ function ResultsView({
     setCollapsedBlockIds((current) => ({ ...current, [id]: !(current[id] ?? true) }));
   }
 
-  function toggleDivision(id: string) {
-    setCollapsedDivisionIds((current) => ({ ...current, [id]: !(current[id] ?? true) }));
+  function toggleClass(id: string) {
+    setCollapsedClassIds((current) => ({ ...current, [id]: !(current[id] ?? true) }));
   }
 
   return (
@@ -161,7 +161,7 @@ function ResultsView({
           "Review synced results, recalculate purses, and publish final results together with payout amounts.",
         )}
         stats={[
-          { label: uiText(locale, "classes", "classes"), value: String(resultDivisions.length) },
+          { label: uiText(locale, "blocs", "blocks"), value: String(resultBlocks.length) },
           { label: uiText(locale, "révisées", "reviewed"), value: String(reviewedCount) },
           { label: uiText(locale, "publiées", "published"), value: String(publishedCount) },
         ]}
@@ -177,7 +177,7 @@ function ResultsView({
       ) : null}
 
       {shows.map((show) => {
-        const showClasses = classesByShow.get(show.id) ?? [];
+        const showBlocks = blocksByShow.get(show.id) ?? [];
 
         return (
           <section className="panel results-show-panel" key={show.id}>
@@ -188,37 +188,37 @@ function ResultsView({
               </div>
             </div>
             <div className="results-block-list">
-              {showClasses.map((classRecord) => {
-                const classDivisions = divisionsByClass.get(classRecord.id) ?? [];
-                const blockCollapsed = collapsedBlockIds[classRecord.id] ?? true;
+              {showBlocks.map((block) => {
+                const blockClasses = classesByBlock.get(block.id) ?? [];
+                const blockCollapsed = collapsedBlockIds[block.id] ?? true;
 
                 return (
-                  <section className="results-block" key={classRecord.id}>
+                  <section className="results-block" key={block.id}>
                     <button
                       aria-expanded={!blockCollapsed}
                       className="results-block-header results-collapse-button"
                       type="button"
-                      onClick={() => toggleBlock(classRecord.id)}
+                      onClick={() => toggleBlock(block.id)}
                     >
                       <span className={`results-chevron ${blockCollapsed ? "" : "open"}`}>
                         <ChevronDown size={16} />
                       </span>
                       <span className="results-block-title">
-                        <strong>{classRecord.name}</strong>
-                        <span>{[classRecord.block_label, classRecord.code].filter(Boolean).join(" - ")}</span>
+                        <strong>{block.name}</strong>
+                        <span>{block.display_label || block.name}</span>
                       </span>
                       <span className="results-collapse-count">
-                        {classDivisions.length} {uiText(locale, "classes", "classes")}
+                        {blockClasses.length} {uiText(locale, "blocks", "blocks")}
                       </span>
                     </button>
-                    {!blockCollapsed && classDivisions.length ? (
-                      <div className="results-division-list">
-                        {classDivisions.map((division) => {
-                          const calculation = latestCalculationByDivision.get(division.id) ?? null;
+                    {!blockCollapsed && blockClasses.length ? (
+                      <div className="results-classRecord-list">
+                        {blockClasses.map((classRecord) => {
+                          const calculation = latestCalculationByClass.get(classRecord.id) ?? null;
                           const savedAwards = calculation ? awardsByCalculation.get(calculation.id) ?? [] : [];
                           const draft = buildPayoutDraft({
                             contacts,
-                            division,
+                            classRecord,
                             entries,
                             entryResults,
                             existingAwards: savedAwards,
@@ -234,32 +234,32 @@ function ResultsView({
                           const canReview = Boolean(calculation && inSync && calculation.status === "draft");
                           const canPublish = Boolean(calculation && inSync && calculation.status === "reviewed");
                           const rows = mergeSavedPayees(draft.calculation.result_snapshot, savedAwards);
-                          const divisionBusy = busyKey.endsWith(`:${division.id}`);
+                          const classBusy = busyKey.endsWith(`:${classRecord.id}`);
                           const statusTone = payoutStatusTone(calculation, inSync);
-                          const divisionCollapsed = collapsedDivisionIds[division.id] ?? true;
+                          const classCollapsed = collapsedClassIds[classRecord.id] ?? true;
 
                           return (
-                            <section className="results-division" key={division.id}>
-                              <div className="results-division-header">
-                                <div className="results-division-title">
+                            <section className="results-classRecord" key={classRecord.id}>
+                              <div className="results-classRecord-header">
+                                <div className="results-classRecord-title">
                                   <div className="results-title-row">
                                     <button
-                                      aria-expanded={!divisionCollapsed}
+                                      aria-expanded={!classCollapsed}
                                       className="icon-button results-collapse-icon"
-                                      title={divisionCollapsed ? uiText(locale, "Ouvrir", "Open") : uiText(locale, "Replier", "Collapse")}
+                                      title={classCollapsed ? uiText(locale, "Ouvrir", "Open") : uiText(locale, "Replier", "Collapse")}
                                       type="button"
-                                      onClick={() => toggleDivision(division.id)}
+                                      onClick={() => toggleClass(classRecord.id)}
                                     >
-                                      <ChevronDown className={`results-chevron ${divisionCollapsed ? "" : "open"}`} size={16} />
+                                      <ChevronDown className={`results-chevron ${classCollapsed ? "" : "open"}`} size={16} />
                                     </button>
-                                    <h3>{division.name}</h3>
+                                    <h3>{classRecord.name}</h3>
                                     <span className={`status-chip ${statusTone}`}>
                                       {calculation?.status === "published" ? <Send size={14} /> : calculation?.status === "reviewed" ? <FileCheck2 size={14} /> : <AlertCircle size={14} />}
                                       {statusLabel}
                                     </span>
                                   </div>
-                                  <div className="results-division-meta">
-                                    <span>{payoutScheduleLabel(division.payout_schedule_type, locale)}</span>
+                                  <div className="results-classRecord-meta">
+                                    <span>{payoutScheduleLabel(classRecord.payout_schedule_type, locale)}</span>
                                     <span>{draft.calculation.currency}</span>
                                     <span>
                                       {draft.awards.length} {uiText(locale, "payouts", "payouts")}
@@ -268,8 +268,8 @@ function ResultsView({
                                     {!inSync && calculation ? <span className="warning">{uiText(locale, "À recalculer", "Recalculation needed")}</span> : null}
                                   </div>
                                 </div>
-                                <div className="results-division-actions">
-                                  {payoutNeedsScheduleBHint(division) ? (
+                                <div className="results-classRecord-actions">
+                                  {payoutNeedsScheduleBHint(classRecord) ? (
                                     <span className="status-chip warning">
                                       <AlertCircle size={14} />
                                       {uiText(locale, "Schedule B suggéré", "Schedule B suggested")}
@@ -277,10 +277,10 @@ function ResultsView({
                                   ) : null}
                                   <button
                                     className="ghost-button"
-                                    disabled={divisionBusy}
+                                    disabled={classBusy}
                                     type="button"
                                     onClick={() =>
-                                      runAction(`recalculate:${division.id}`, () =>
+                                      runAction(`recalculate:${classRecord.id}`, () =>
                                         onSavePayoutCalculationDraft({
                                           awards: draft.awards,
                                           calculatedByUserId: profileId,
@@ -294,18 +294,18 @@ function ResultsView({
                                   </button>
                                   <button
                                     className="ghost-button"
-                                    disabled={!canReview || divisionBusy}
+                                    disabled={!canReview || classBusy}
                                     type="button"
-                                    onClick={() => calculation && runAction(`review:${division.id}`, () => onUpdatePayoutCalculationStatus(calculation.id, "reviewed"))}
+                                    onClick={() => calculation && runAction(`review:${classRecord.id}`, () => onUpdatePayoutCalculationStatus(calculation.id, "reviewed"))}
                                   >
                                     <FileCheck2 size={16} />
                                     {uiText(locale, "Marquer révisé", "Mark reviewed")}
                                   </button>
                                   <button
                                     className="primary-button"
-                                    disabled={!canPublish || divisionBusy}
+                                    disabled={!canPublish || classBusy}
                                     type="button"
-                                    onClick={() => calculation && runAction(`publish:${division.id}`, () => onUpdatePayoutCalculationStatus(calculation.id, "published"))}
+                                    onClick={() => calculation && runAction(`publish:${classRecord.id}`, () => onUpdatePayoutCalculationStatus(calculation.id, "published"))}
                                   >
                                     <Send size={16} />
                                     {uiText(locale, "Publier", "Publish")}
@@ -313,8 +313,8 @@ function ResultsView({
                                 </div>
                               </div>
 
-                              {!divisionCollapsed ? (
-                                <div className="results-division-body">
+                              {!classCollapsed ? (
+                                <div className="results-classRecord-body">
                                   <div className="results-worksheet">
                                     <div className="results-worksheet-item">
                                       <span>{uiText(locale, "Entrées", "Entries")}</span>
@@ -347,8 +347,8 @@ function ResultsView({
                                       <AlertCircle size={16} />
                                       {uiText(
                                         locale,
-                                        "Recalcule et révise cette division avant de publier. Les drafts ne sont jamais publics.",
-                                        "Recalculate and review this division before publishing. Drafts are never public.",
+                                        "Recalcule et révise cette classRecord avant de publier. Les drafts ne sont jamais publics.",
+                                        "Recalculate and review this classRecord before publishing. Drafts are never public.",
                                       )}
                                     </div>
                                   ) : null}
@@ -357,7 +357,7 @@ function ResultsView({
                                     calculation={calculation}
                                     contacts={contacts}
                                     currency={draft.calculation.currency}
-                                    disabled={!calculation || calculation.status !== "draft" || divisionBusy}
+                                    disabled={!calculation || calculation.status !== "draft" || classBusy}
                                     locale={locale}
                                     rows={rows}
                                     savedAwards={savedAwards}
@@ -370,12 +370,12 @@ function ResultsView({
                         })}
                       </div>
                     ) : !blockCollapsed ? (
-                      <EmptyState label={uiText(locale, "Aucune classe dans ce bloc.", "No classes in this block.")} />
+                      <EmptyState label={uiText(locale, "Aucune classe dans ce bloc.", "No blocks in this block.")} />
                     ) : null}
                   </section>
                 );
               })}
-              {!showClasses.length ? <EmptyState label={uiText(locale, "Aucun bloc à afficher pour ce show.", "No blocks to show for this show.")} /> : null}
+              {!showBlocks.length ? <EmptyState label={uiText(locale, "Aucun bloc à afficher pour ce show.", "No blocks to show for this show.")} /> : null}
             </div>
           </section>
         );
