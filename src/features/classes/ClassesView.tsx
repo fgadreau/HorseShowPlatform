@@ -611,7 +611,7 @@ function ClassesView({
       <ViewIntro
         eyebrow={uiText(locale, "Horaire", "Schedule")}
         title={uiText(locale, "Horaire par journées", "Schedule by day")}
-        description={uiText(locale, "Place les blocs dans les journées du concours, puis gère les blocks directement dans chaque bloc.", "Place blocks inside show days, then manage the blocks directly inside each block.")}
+        description={uiText(locale, "Place les blocs dans les journées du concours, puis gère les classes directement dans chaque bloc.", "Place blocks inside show days, then manage the classes directly inside each block.")}
         stats={[
           { label: uiText(locale, "Journées", "Days"), value: String(showDays.length) },
           { label: uiText(locale, "Blocs", "Blocks"), value: String(blocks.length) },
@@ -996,7 +996,7 @@ function ClassesView({
       <section className="panel span-2 recurring-catalog-panel">
         <div className="panel-header">
           <div>
-            <h2>{uiText(locale, "Blocs de blocks récurrents", "Recurring class blocks")}</h2>
+            <h2>{uiText(locale, "Blocs de classes récurrents", "Recurring class blocks")}</h2>
             <p>{uiText(locale, "Catalogue de l'association, réutilisable dans n'importe quel show.", "Association catalog, reusable in any show.")}</p>
           </div>
           <div className="row-actions">
