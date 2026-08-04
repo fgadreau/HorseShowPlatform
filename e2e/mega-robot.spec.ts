@@ -232,9 +232,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(state.showName);
 
     await showScorePage.goto(
+      `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}?day=${crossAppFixture.showDayId}`,
+    );
+    await verifyShowScoreDayTabs(showScorePage, crossAppFixture);
+
+    await showScorePage.goto(
       `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/days/${crossAppFixture.showDayId}`,
     );
     await expect(showScorePage.locator("body")).toContainText(blockName);
+    await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     const setupLink = showScorePage.locator(
       `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
     );
@@ -271,8 +277,17 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       };
     }).toEqual({ source: "announcer", runCount: 2 });
 
-    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/announcer`);
+    for (const managementView of ["scribe", "schedule", "time"]) {
+      await showScorePage.goto(
+        `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/${managementView}?day=${crossAppFixture.showDayId}`,
+      );
+      await expect(showScorePage.locator("body")).toContainText(blockName);
+      await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
+    }
+
+    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/announcer?day=${crossAppFixture.showDayId}`);
     await expect(showScorePage.locator("body")).toContainText(blockName);
+    await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     await expect(showScorePage.locator("body")).toContainText(/Source\s*:\s*annonceur/i);
     await expect(showScorePage.locator("body")).toContainText(/Runs\s*:\s*2/i);
     const announcerClass = showScorePage.locator(`[data-announcer-class-id="${crossAppFixture.blockId}"]`);
@@ -306,7 +321,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     if (!crossAppFixture || !showScoreContext) throw new Error("Session ShowScore absente.");
     const config = readE2EConfig();
     const showScorePage = showScoreContext.pages()[0];
-    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/secretariat`);
+    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/secretariat?day=${crossAppFixture.showDayId}`);
+    await expect(showScorePage.locator("body")).toContainText(blockName);
+    await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     const resultRow = showScorePage.getByRole("row").filter({ hasText: blockName });
     await resultRow.getByRole("button", { name: "Approuver résultats annonceur", exact: true }).click();
     await expect(resultRow).toContainText("Résultats annonceur validés");
@@ -468,6 +485,46 @@ function pastDateTimeLocal() {
 
 function expectMoney(actual: unknown, expected: number) {
   expect(Number(actual)).toBeCloseTo(expected, 2);
+}
+
+async function verifyShowScoreDayTabs(
+  page: Page,
+  fixture: CrossAppFixture,
+  expectedActiveText?: string,
+) {
+  const otherDayId = fixture.showDayIds.find((dayId) => dayId !== fixture.showDayId);
+  if (!otherDayId) throw new Error("Une deuxième journée ShowScore est requise.");
+
+  const dayNavigation = page.getByRole("navigation", {
+    name: "Changer de journée du show",
+    exact: true,
+  });
+  await expect(dayNavigation).toBeVisible();
+  const tabList = dayNavigation.getByRole("tablist");
+  await expect(tabList).toBeVisible();
+  await expect(tabList.getByRole("tab")).toHaveCount(fixture.showDayIds.length);
+
+  const activeTab = tabList.locator(`[data-show-day-tab="${fixture.showDayId}"]`);
+  const otherTab = tabList.locator(`[data-show-day-tab="${otherDayId}"]`);
+  await expect(activeTab).toHaveAttribute("aria-selected", "true");
+
+  const sentinel = crypto.randomUUID();
+  await page.evaluate((value) => Reflect.set(window, "__e2eShowDayTabSentinel", value), sentinel);
+  await otherTab.click();
+  await expect(otherTab).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(new RegExp(`[?&]day=${otherDayId}`));
+  expect(await page.evaluate(() => Reflect.get(window, "__e2eShowDayTabSentinel"))).toBe(sentinel);
+  if (expectedActiveText) {
+    await expect(page.locator("body")).not.toContainText(expectedActiveText);
+  }
+
+  await activeTab.click();
+  await expect(activeTab).toHaveAttribute("aria-selected", "true");
+  await expect(page).toHaveURL(new RegExp(`[?&]day=${fixture.showDayId}`));
+  expect(await page.evaluate(() => Reflect.get(window, "__e2eShowDayTabSentinel"))).toBe(sentinel);
+  if (expectedActiveText) {
+    await expect(page.locator("body")).toContainText(expectedActiveText);
+  }
 }
 
 function waitForContactCreateResponse(page: Page) {
