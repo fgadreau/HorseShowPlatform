@@ -74,6 +74,7 @@ export type ShowScoreRun = {
   rider: string;
   horse: string;
   owner: string;
+  classCodes: string[];
   divisionNames: string[];
   isLate: boolean;
   drawGroup: "late" | "regular";
@@ -258,6 +259,13 @@ function toShowScoreRun(
     rider: formatContactName(rider),
     horse: horse.name,
     owner: formatContactName(owner),
+    classCodes: Array.from(
+      new Set(
+        group.entries
+          .map((entry) => classesById.get(entry.class_id)?.code)
+          .filter((code): code is string => Boolean(code)),
+      ),
+    ),
     divisionNames: group.entries
       .map((entry) => classesById.get(entry.class_id))
       .filter((entryClass): entryClass is ClassRecord => Boolean(entryClass))
