@@ -1,13 +1,13 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Dialog, type Locator, type Page } from "@playwright/test";
 import { createE2EAdminClient } from "./support/admin";
 import {
-  EXPECTED_PAYOUT,
   FULL_CLASS_CONFIG,
   assertFullClassConfiguration,
+  buildExpectedPayout,
   createCrossAppEntries,
   type CrossAppFixture,
 } from "./support/cross-app-fixture";
-import { buildContactScenarios, futureDate } from "./support/data-factory";
+import { buildContactScenarios, futureDate, scenarioSize } from "./support/data-factory";
 import { readE2EConfig } from "./support/environment";
 import { readRunState } from "./support/run-state";
 
@@ -15,11 +15,25 @@ import { readRunState } from "./support/run-state";
 // and collide with the show, contacts and entries created by the first attempt.
 test.describe.configure({ retries: 0 });
 
+type AnnouncerOutcome =
+  | { score: number; status: "scored" }
+  | { score: null; status: "no_score" | "scratch" };
+
 test("le méga robot complète un vrai parcours de préproduction", async ({ browser, page }) => {
   test.slow();
   const state = readRunState();
+  const participantCount = scenarioSize();
+  const announcerOutcomes = buildAnnouncerOutcomes(participantCount);
+  const announcerScores = announcerOutcomes
+    .filter((outcome): outcome is Extract<AnnouncerOutcome, { status: "scored" }> => outcome.status === "scored")
+    .map((outcome) => outcome.score)
+    .sort((a, b) => b - a);
+  const rankedTeamCount = Math.min(announcerScores.length, 10);
+  const expectedPayout = buildExpectedPayout(participantCount);
+  const expectedAwards = buildExpectedAwards(expectedPayout.netPurse, participantCount);
   const blockName = `[E2E] Bloc annonceur — ${state.runId}`;
   let crossAppFixture: CrossAppFixture | null = null;
+  let championshipParticipantNames: string[] = [];
   const browserErrors: string[] = [];
   let showScoreContext: BrowserContext | null = null;
   page.on("pageerror", (error) => browserErrors.push(error.message));
@@ -162,10 +176,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await payoutDetails.locator("label").filter({ hasText: /^Frais d'organisme/ }).locator("input").fill(String(FULL_CLASS_CONFIG.sanctioningFeePercent));
     const payoutRow = payoutFields.locator(".payout-rule-row").nth(1);
     await payoutRow.locator("input").nth(0).fill("1");
-    await payoutRow.locator("input").nth(1).fill("5");
+    await payoutRow.locator("input").nth(1).fill(String(FULL_CLASS_CONFIG.payoutMaxEntries));
     await payoutRow.locator("input").nth(2).fill(FULL_CLASS_CONFIG.payoutPercentages);
-    await payoutDetails.locator("label").filter({ hasText: /^Aperçu avec/ }).locator("input").fill("2");
-    await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*\$?\s*330[,.]85/);
+    await payoutDetails.locator("label").filter({ hasText: /^Aperçu avec/ }).locator("input").fill(String(participantCount));
+    await expect(payoutFields.locator(".payout-preview")).toContainText(moneyPattern(expectedPayout.netPurse));
     await payoutDetails.locator("label").filter({ hasText: /^Notes de paiement/ }).locator("textarea").fill(FULL_CLASS_CONFIG.payoutNotes);
     await classForm.getByRole("textbox", { name: "Critères d'éligibilité", exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
     await classForm.getByRole("button", { name: "Créer la classe", exact: true }).click();
@@ -182,7 +196,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(page.getByRole("button", { name: "Déconnexion" })).toBeVisible();
     await navigateTo(page, "scoring");
     const scoringGroup = page.locator(".scoring-class-group").filter({ hasText: blockName });
-    await expect(scoringGroup).toContainText("2");
+    await expect(scoringGroup).toContainText(String(participantCount));
     await scoringGroup.getByRole("button", { name: "Sortir ordre", exact: true }).click();
     await expect(scoringGroup).toContainText("Ordre sorti");
     await scoringGroup.getByRole("button", { name: "Voir ordre", exact: true }).click();
@@ -198,8 +212,13 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .single<{ runs: Array<Record<string, unknown>>; block_classes: Array<Record<string, unknown>>; is_draw_imported: boolean }>();
     if (setupError) throw setupError;
     expect(setup.is_draw_imported).toBe(true);
-    expect(setup.runs).toHaveLength(2);
+    expect(setup.runs).toHaveLength(participantCount);
     expect(setup.block_classes).toEqual(expect.arrayContaining([expect.objectContaining({ code: FULL_CLASS_CONFIG.classCode })]));
+    championshipParticipantNames = setup.runs
+      .slice(0, rankedTeamCount)
+      .map((run) => String(run.rider ?? "").trim());
+    expect(championshipParticipantNames).toHaveLength(rankedTeamCount);
+    expect(championshipParticipantNames.every(Boolean)).toBe(true);
   });
 
   await test.step("saisie des résultats par l’annonceur dans ShowScore", async () => {
@@ -265,11 +284,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .getByText("Nombre de runs", { exact: true })
       .locator("..")
       .getByRole("spinbutton");
-    await expect(runCountField).toHaveValue("2");
+    await expect(runCountField).toHaveValue(String(participantCount));
     const liveSource = showScorePage.getByLabel("Source des données live", { exact: true });
-    showScorePage.once("dialog", (dialog) => dialog.accept());
+    const acceptLiveSourceDialog = (dialog: Dialog) => {
+      void dialog.accept();
+    };
+    showScorePage.once("dialog", acceptLiveSourceDialog);
     await liveSource.selectOption("announcer");
     await expect(liveSource).toHaveValue("announcer");
+    showScorePage.off("dialog", acceptLiveSourceDialog);
     const admin = createE2EAdminClient();
     await expect.poll(async () => {
       const [{ data: setup, error: setupError }, { data: session, error: sessionError }] = await Promise.all([
@@ -290,7 +313,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
         source: setup.live_data_source,
         runCount: session?.runs?.length ?? 0,
       };
-    }).toEqual({ source: "announcer", runCount: 2 });
+    }).toEqual({ source: "announcer", runCount: participantCount });
 
     for (const managementView of ["scribe", "schedule", "time"]) {
       await showScorePage.goto(
@@ -304,14 +327,30 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     await expect(showScorePage.locator("body")).toContainText(/Source\s*:\s*annonceur/i);
-    await expect(showScorePage.locator("body")).toContainText(/Runs\s*:\s*2/i);
+    await expect(showScorePage.locator("body")).toContainText(new RegExp(`Runs\\s*:\\s*${participantCount}`, "i"));
     const announcerClass = showScorePage.locator(`[data-announcer-class-id="${crossAppFixture.blockId}"]`);
     const announcerClassHeader = announcerClass.locator('[role="button"][aria-expanded]');
     if ((await announcerClassHeader.getAttribute("aria-expanded")) !== "true") {
       await announcerClassHeader.click();
     }
-    await scoreNextAnnouncerRun(showScorePage, "72,5");
-    await scoreNextAnnouncerRun(showScorePage, "70");
+    for (const [index, outcome] of announcerOutcomes.entries()) {
+      await test.step(`résultat annonceur ${index + 1}/${participantCount}: ${outcome.status}${outcome.score == null ? "" : ` ${outcome.score}`}`, async () => {
+        if (outcome.status === "scored") {
+          await scoreNextAnnouncerRun(showScorePage, String(outcome.score).replace(".", ","));
+        } else {
+          await completeNextAnnouncerRunWithStatus(showScorePage, outcome.status);
+        }
+        await expect.poll(async () => {
+          const { data, error } = await admin
+            .from("show_score_announcer_live_sessions")
+            .select("runs")
+            .eq("class_id", crossAppFixture!.blockId)
+            .single<{ runs: Array<Record<string, unknown>> }>();
+          if (error) throw error;
+          return data.runs.filter((run) => ["scored", "no_score", "scratch"].includes(String(run.status))).length;
+        }).toBe(index + 1);
+      });
+    }
     const completeBlock = showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true });
     if (!(await completeBlock.isVisible())) {
       await announcerClassHeader.click();
@@ -327,9 +366,14 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       if (error) throw error;
       return {
         completed: Boolean(data.completed_at),
-        scores: data.runs.map((run) => String(run.scoreTotal ?? "")).sort(),
+        outcomes: data.runs
+          .map((run) => ({
+            score: run.status === "scored" ? parseShowScoreScore(run.scoreTotal) : null,
+            status: String(run.status),
+          }))
+          .sort(compareOutcomes),
       };
-    }).toEqual({ completed: true, scores: ["70", "72½"] });
+    }).toEqual({ completed: true, outcomes: [...announcerOutcomes].sort(compareOutcomes) });
   });
 
   await test.step("approbation, publication et retour automatique des résultats dans HSP", async () => {
@@ -352,19 +396,20 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
         .select("run_id,final_score,status")
         .eq("show_id", crossAppFixture!.showId);
       if (error) throw error;
-      return (data ?? []).map((run) => ({ score: Number(run.final_score), status: run.status })).sort((a, b) => b.score - a.score);
-    }).toEqual([
-      { score: 72.5, status: "scored" },
-      { score: 70, status: "scored" },
-    ]);
+      return (data ?? [])
+        .map((run) => ({ score: run.final_score == null ? null : Number(run.final_score), status: String(run.status) }))
+        .sort(compareOutcomes);
+    }).toEqual([...announcerOutcomes].sort(compareOutcomes));
     await expect.poll(async () => {
       const { data, error } = await admin
         .from("entry_results")
         .select("entry_id,final_score,status")
         .in("entry_id", crossAppFixture!.entryIds);
       if (error) throw error;
-      return (data ?? []).map((result) => Number(result.final_score)).sort((a, b) => b - a);
-    }).toEqual([72.5, 70]);
+      return (data ?? [])
+        .map((result) => ({ score: result.final_score == null ? null : Number(result.final_score), status: String(result.status) }))
+        .sort(compareOutcomes);
+    }).toEqual([...announcerOutcomes].sort(compareOutcomes));
   });
 
   await test.step("ajout des résultats ShowScore au championnat AQR", async () => {
@@ -380,11 +425,11 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .filter({ hasText: "Importer depuis ShowScore" })
       .click();
     await showScorePage.getByRole("button", { name: "Analyser les résultats ShowScore", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText("2 inscrits · 2 résultats scorés");
+    await expect(showScorePage.locator("body")).toContainText(`${participantCount} inscrits · ${announcerScores.length} résultats scorés`);
     await expect(showScorePage.locator("body")).toContainText(/Code import 1100 → championnat 1100/);
-    await expect(showScorePage.locator("body")).toContainText("1 classes sélectionnées · 2 lignes actives · 0 lignes ignorées");
+    await expect(showScorePage.locator("body")).toContainText(`1 classes sélectionnées · ${announcerScores.length} lignes actives · 0 lignes ignorées`);
     await showScorePage.getByRole("button", { name: "Ajouter au championnat", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText(/2\s*Équipes/);
+    await expect(showScorePage.locator("body")).toContainText(new RegExp(`${rankedTeamCount}\\s*Équipes`));
     await showScorePage.getByRole("button", { name: "Publier provisoire", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("Championnat enregistré.");
 
@@ -402,7 +447,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText("Open");
     const publicClassCard = showScorePage.locator("article").filter({ hasText: "Omnium NRHA (Open)" });
     await publicClassCard.getByRole("button").first().click();
-    for (const participantName of crossAppFixture.participantNames) {
+    for (const participantName of championshipParticipantNames) {
       await expect(publicClassCard).toContainText(participantName);
     }
   });
@@ -418,13 +463,20 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await resultBlock.locator(".results-block-header").click();
     const resultClass = resultBlock.locator(".results-classRecord").filter({ has: page.getByRole("heading", { name: FULL_CLASS_CONFIG.className, exact: true }) });
     await resultClass.getByTitle("Ouvrir").click();
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Brut\s*\$?\s*300[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Après trophée\s*\$?\s*270[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Frais NRHA\s*\$?\s*13[,.]50/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Retenue\s*\$?\s*25[,.]65/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Bourse nette\s*\$?\s*330[,.]85/);
-    await expect(resultClass.locator(".results-table")).toContainText(/198[,.]51/);
-    await expect(resultClass.locator(".results-table")).toContainText(/132[,.]34/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(moneyPattern(expectedPayout.grossEntryFees));
+    await expect(resultClass.locator(".results-worksheet")).toContainText(moneyPattern(expectedPayout.baseAfterTrophy));
+    await expect(resultClass.locator(".results-worksheet")).toContainText(moneyPattern(expectedPayout.sanctioningFeeAmount));
+    await expect(resultClass.locator(".results-worksheet")).toContainText(moneyPattern(expectedPayout.retainageAmount));
+    await expect(resultClass.locator(".results-worksheet")).toContainText(moneyPattern(expectedPayout.netPurse));
+    if (announcerOutcomes.some((outcome) => outcome.status === "no_score")) {
+      await expect(resultClass.locator(".results-table")).toContainText("No score");
+    }
+    if (announcerOutcomes.some((outcome) => outcome.status === "scratch")) {
+      await expect(resultClass.locator(".results-table")).toContainText("Scratch");
+    }
+    for (const award of expectedAwards) {
+      await expect(resultClass.locator(".results-table")).toContainText(moneyPattern(award));
+    }
 
     await resultClass.getByRole("button", { name: "Recalculer", exact: true }).click();
     await expect(resultClass).toContainText("Draft");
@@ -441,28 +493,31 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .eq("status", "published")
       .single<Record<string, unknown>>();
     if (calculationError) throw calculationError;
-    expectMoney(calculation.gross_entry_fees, EXPECTED_PAYOUT.grossEntryFees);
-    expectMoney(calculation.trophy_or_plaque_fee, EXPECTED_PAYOUT.trophyFee);
-    expectMoney(calculation.base_after_trophy_fee, EXPECTED_PAYOUT.baseAfterTrophy);
-    expectMoney(calculation.nrha_fee_amount, EXPECTED_PAYOUT.sanctioningFeeAmount);
-    expectMoney(calculation.net_entry_fee, EXPECTED_PAYOUT.netEntryFee);
-    expectMoney(calculation.retainage_amount, EXPECTED_PAYOUT.retainageAmount);
-    expectMoney(calculation.final_net_entry_fee, EXPECTED_PAYOUT.finalNetEntryFee);
-    expectMoney(calculation.added_money, EXPECTED_PAYOUT.addedMoney);
-    expectMoney(calculation.net_purse, EXPECTED_PAYOUT.netPurse);
+    expectMoney(calculation.gross_entry_fees, expectedPayout.grossEntryFees);
+    expectMoney(calculation.trophy_or_plaque_fee, expectedPayout.trophyFee);
+    expectMoney(calculation.base_after_trophy_fee, expectedPayout.baseAfterTrophy);
+    expectMoney(calculation.nrha_fee_amount, expectedPayout.sanctioningFeeAmount);
+    expectMoney(calculation.net_entry_fee, expectedPayout.netEntryFee);
+    expectMoney(calculation.retainage_amount, expectedPayout.retainageAmount);
+    expectMoney(calculation.final_net_entry_fee, expectedPayout.finalNetEntryFee);
+    expectMoney(calculation.added_money, expectedPayout.addedMoney);
+    expectMoney(calculation.net_purse, expectedPayout.netPurse);
 
     const { data: awards, error: awardsError } = await admin
       .from("payout_awards")
       .select("amount,percentage,rank")
       .eq("calculation_id", String(calculation.id));
     if (awardsError) throw awardsError;
-    expect((awards ?? []).sort((a, b) => a.rank - b.rank).map((award) => Number(award.amount))).toEqual([...EXPECTED_PAYOUT.awards]);
+    const sortedAwards = (awards ?? []).sort((a, b) => a.rank - b.rank);
+    expect(sortedAwards.map((award) => Number(award.amount))).toEqual(expectedAwards);
+    expect(sortedAwards.map((award) => award.rank)).toEqual(expectedAwards.map(() => 1));
 
     await page.goto(`/shows/${state.showSlug}`);
     await expect(page.getByRole("heading", { name: state.showName, exact: true })).toBeVisible();
-    await expect(page.locator("body")).toContainText(/330[,.]85/);
-    await expect(page.locator("body")).toContainText(/198[,.]51/);
-    await expect(page.locator("body")).toContainText(/132[,.]34/);
+    await expect(page.locator("body")).toContainText(moneyPattern(expectedPayout.netPurse));
+    for (const award of expectedAwards) {
+      await expect(page.locator("body")).toContainText(moneyPattern(award));
+    }
   });
 
   await showScoreContext?.close();
@@ -492,6 +547,17 @@ async function scoreNextAnnouncerRun(page: Page, score: string) {
   await expect(page.getByRole("dialog")).toHaveCount(0);
 }
 
+async function completeNextAnnouncerRunWithStatus(page: Page, status: "no_score" | "scratch") {
+  const buttonName = status === "no_score" ? "No score" : "Scratch";
+  const confirmation = new Promise<void>((resolve, reject) => {
+    page.once("dialog", (dialog) => {
+      dialog.accept().then(resolve, reject);
+    });
+  });
+  await page.getByRole("button", { name: buttonName, exact: true }).first().click();
+  await confirmation;
+}
+
 function pastDateTimeLocal() {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - 1);
@@ -500,6 +566,50 @@ function pastDateTimeLocal() {
 
 function expectMoney(actual: unknown, expected: number) {
   expect(Number(actual)).toBeCloseTo(expected, 2);
+}
+
+function buildAnnouncerOutcomes(participantCount: number): AnnouncerOutcome[] {
+  return Array.from({ length: participantCount }, (_, index) => {
+    if (participantCount >= 5 && index === participantCount - 1) return { score: null, status: "scratch" };
+    if (participantCount >= 3 && index === participantCount - (participantCount >= 5 ? 2 : 1)) {
+      return { score: null, status: "no_score" };
+    }
+    return { score: index < 2 ? 80 : 80 - index * 0.5, status: "scored" };
+  });
+}
+
+function buildExpectedAwards(netPurse: number, participantCount: number) {
+  const percentages = FULL_CLASS_CONFIG.payoutPercentages.split(",").map((value) => Number(value.trim()));
+  if (participantCount === 1) return [money(netPurse * (percentages[0] / 100))];
+  const tiedPercentage = percentages.reduce((total, percentage) => total + percentage, 0) / 2;
+  return [money(netPurse * (tiedPercentage / 100)), money(netPurse * (tiedPercentage / 100))];
+}
+
+function compareOutcomes(
+  first: { score: number | null; status: string },
+  second: { score: number | null; status: string },
+) {
+  return first.status.localeCompare(second.status) || (second.score ?? Number.NEGATIVE_INFINITY) - (first.score ?? Number.NEGATIVE_INFINITY);
+}
+
+function money(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function parseShowScoreScore(value: unknown) {
+  const normalized = String(value ?? "").trim().replace("½", ".5").replace(",", ".");
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) throw new Error(`Score ShowScore invalide: ${value}`);
+  return parsed;
+}
+
+function moneyPattern(amount: number) {
+  const [integer, decimal] = amount.toFixed(2).split(".");
+  const groups: string[] = [];
+  for (let end = integer.length; end > 0; end -= 3) {
+    groups.unshift(integer.slice(Math.max(0, end - 3), end));
+  }
+  return new RegExp(`${groups.join("[\\s\\u00a0\\u202f,.]?")}[,.]${decimal}`);
 }
 
 async function verifyShowScoreDayTabs(
