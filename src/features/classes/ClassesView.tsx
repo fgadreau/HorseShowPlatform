@@ -370,7 +370,7 @@ function ClassesView({
       : [];
 
     return (
-      <article className={`schedule-block ${isExpanded ? "expanded" : ""}`} key={block.id}>
+      <article className={`schedule-block ${isExpanded ? "expanded" : ""}`} data-block-id={block.id} data-block-name={block.name} key={block.id}>
         <div className="schedule-block-header">
           <button aria-expanded={isExpanded} className="schedule-block-trigger" type="button" onClick={() => setExpandedScheduleBlockId(isExpanded ? null : block.id)}>
             {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
@@ -433,7 +433,7 @@ function ClassesView({
         {isExpanded ? (
           <div className="schedule-class-list">
             {blockClasses.map((classRecord) => (
-              <div className="schedule-class-row" key={classRecord.id}>
+              <div className="schedule-class-row" data-class-code={classRecord.code ?? ""} data-class-id={classRecord.id} key={classRecord.id}>
                 <div>
                   <strong>{classRecord.name}</strong>
                   <span className="muted-line">

@@ -11,6 +11,8 @@ export type E2EConfig = {
   productionProjectRef: string;
   publishableKey: string;
   serviceRoleKey: string;
+  showScoreUrl: string;
+  showScoreVercelProtectionBypass: string;
   supabaseUrl: string;
 };
 
@@ -35,6 +37,8 @@ export function readE2EConfig({ requireSecrets = true }: { requireSecrets?: bool
   const productionProjectRef = value("E2E_PRODUCTION_SUPABASE_PROJECT_REF", "VITE_PRODUCTION_SUPABASE_PROJECT_REF");
   const deployEnvironment = value("E2E_DEPLOY_ENV", "VITE_DEPLOY_ENV").toLowerCase();
   const baseUrl = process.env.E2E_BASE_URL?.trim() || "http://127.0.0.1:5173";
+  const showScoreUrl = process.env.E2E_SHOWSCORE_URL?.trim() || "";
+  const showScoreVercelProtectionBypass = process.env.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET?.trim() || "";
   const allowWrites = process.env.E2E_ALLOW_WRITES === "true";
 
   if (requireSecrets) {
@@ -60,6 +64,8 @@ export function readE2EConfig({ requireSecrets = true }: { requireSecrets?: bool
     productionProjectRef,
     publishableKey,
     serviceRoleKey,
+    showScoreUrl,
+    showScoreVercelProtectionBypass,
     supabaseUrl,
   };
 }
@@ -85,6 +91,13 @@ export function assertSafeWriteTarget(config: E2EConfig) {
   const appUrl = new URL(config.baseUrl);
   if (!new Set(["http:", "https:"]).has(appUrl.protocol)) {
     throw new Error("E2E_BASE_URL doit être une URL HTTP(S).");
+  }
+
+  if (config.showScoreUrl) {
+    const showScoreUrl = new URL(config.showScoreUrl);
+    if (!new Set(["http:", "https:"]).has(showScoreUrl.protocol)) {
+      throw new Error("E2E_SHOWSCORE_URL doit être une URL HTTP(S).");
+    }
   }
 }
 

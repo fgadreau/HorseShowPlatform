@@ -208,7 +208,7 @@ function BlockForm({
           <p>{shows.length ? uiText(locale, "Crée des blocs pour un concours.", "Create schedule blocks for a show.") : uiText(locale, "Crée un concours d'abord.", "Create a show first.")}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="block-create-form" onSubmit={handleSubmit}>
         <div className="segmented-control">
           <button className={creationMode === "preset" ? "active" : ""} disabled={!organization || !activeBlockTemplates.length} type="button" onClick={() => handleCreationModeChange("preset")}>
             {uiText(locale, "Depuis un bloc récurrent", "From recurring block")}

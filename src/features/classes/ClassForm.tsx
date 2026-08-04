@@ -148,7 +148,7 @@ function ClassForm({
           <p>{selectedShow ? selectedShow.name : uiText(locale, "Crée un bloc d'abord.", "Create a block first.")}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="class-create-form" onSubmit={handleSubmit}>
         <label>
           {uiText(locale, "Bloc", "Block")}
           <SearchSelect
