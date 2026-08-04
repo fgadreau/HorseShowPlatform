@@ -228,6 +228,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await showScorePage.getByRole("button", { name: "Se connecter", exact: true }).click();
     await expect(showScorePage).toHaveURL(/\/associations/);
 
+    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows`);
+    await expect(showScorePage.locator("body")).toContainText(state.showName);
+
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup`);
     const liveSource = showScorePage.getByLabel("Source des données live", { exact: true });
     showScorePage.once("dialog", (dialog) => dialog.accept());
