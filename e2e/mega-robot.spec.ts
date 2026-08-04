@@ -158,7 +158,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await payoutRow.locator("input").nth(1).fill("5");
     await payoutRow.locator("input").nth(2).fill(FULL_CLASS_CONFIG.payoutPercentages);
     await payoutDetails.locator("label").filter({ hasText: /^Aperçu avec/ }).locator("input").fill("2");
-    await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*330[,.]85/);
+    await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*\$?\s*330[,.]85/);
     await payoutDetails.locator("label").filter({ hasText: /^Notes de paiement/ }).locator("textarea").fill(FULL_CLASS_CONFIG.payoutNotes);
     await classForm.getByRole("textbox", { name: "Critères d'éligibilité", exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
     await classForm.getByRole("button", { name: "Créer la classe", exact: true }).click();
@@ -326,11 +326,11 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await resultBlock.locator(".results-block-header").click();
     const resultClass = resultBlock.locator(".results-classRecord").filter({ has: page.getByRole("heading", { name: FULL_CLASS_CONFIG.className, exact: true }) });
     await resultClass.getByTitle("Ouvrir").click();
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Brut\s*300[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Après trophée\s*270[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Frais NRHA\s*13[,.]50/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Retenue\s*25[,.]65/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Bourse nette\s*330[,.]85/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Brut\s*\$?\s*300[,.]00/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Après trophée\s*\$?\s*270[,.]00/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Frais NRHA\s*\$?\s*13[,.]50/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Retenue\s*\$?\s*25[,.]65/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Bourse nette\s*\$?\s*330[,.]85/);
     await expect(resultClass.locator(".results-table")).toContainText(/198[,.]51/);
     await expect(resultClass.locator(".results-table")).toContainText(/132[,.]34/);
 
@@ -368,9 +368,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     await page.goto(`/shows/${state.showSlug}`);
     await expect(page.getByRole("heading", { name: state.showName, exact: true })).toBeVisible();
-    await expect(page.locator("body")).toContainText("330,85");
-    await expect(page.locator("body")).toContainText("198,51");
-    await expect(page.locator("body")).toContainText("132,34");
+    await expect(page.locator("body")).toContainText(/330[,.]85/);
+    await expect(page.locator("body")).toContainText(/198[,.]51/);
+    await expect(page.locator("body")).toContainText(/132[,.]34/);
   });
 
   await showScoreContext?.close();
