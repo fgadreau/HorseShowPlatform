@@ -145,7 +145,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await classForm.getByRole("spinbutton", { name: "Frais de juge", exact: true }).fill(String(FULL_CLASS_CONFIG.judgeFee));
 
     const payoutFields = classForm.getByRole("group", { name: "Bourses / Payouts" });
-    await payoutFields.getByText("Configurer les bourses / payouts", { exact: true }).click();
+    const payoutDetails = payoutFields.locator("details.payout-settings-details");
+    await payoutDetails.locator("summary").click();
+    await expect(payoutDetails).toHaveAttribute("open", "");
     await payoutFields.getByRole("combobox", { name: "Type de paiement", exact: true }).selectOption("house_custom");
     await payoutFields.getByRole("spinbutton", { name: "Added money", exact: true }).fill(String(FULL_CLASS_CONFIG.addedMoney));
     await payoutFields.getByRole("spinbutton", { name: "Trophée / plaque", exact: true }).fill(String(FULL_CLASS_CONFIG.trophyFee));
