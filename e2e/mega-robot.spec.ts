@@ -590,7 +590,7 @@ function moneyPattern(amount: number) {
   for (let end = integer.length; end > 0; end -= 3) {
     groups.unshift(integer.slice(Math.max(0, end - 3), end));
   }
-  return new RegExp(`${groups.join("[\\s\\u00a0\\u202f]?")}[,.]${decimal}`);
+  return new RegExp(`${groups.join("[\\s\\u00a0\\u202f,.]?")}[,.]${decimal}`);
 }
 
 async function verifyShowScoreDayTabs(
