@@ -72,8 +72,21 @@ async function createOrganizationFixture({
   password: string;
   slug: string;
 }) {
-  const { data: discipline, error: disciplineError } = await admin.from("disciplines").select("id").limit(1).single<{ id: string }>();
-  if (disciplineError) throw disciplineError;
+  const { data: nrhaBody, error: nrhaBodyError } = await admin
+    .from("governing_bodies")
+    .select("id")
+    .eq("code", "NRHA")
+    .single<{ id: string }>();
+  if (nrhaBodyError) throw nrhaBodyError;
+
+  const { data: availableDiscipline, error: availableDisciplineError } = await admin
+    .from("discipline_governing_bodies")
+    .select("discipline_id")
+    .eq("governing_body_id", nrhaBody.id)
+    .eq("is_active", true)
+    .limit(1)
+    .single<{ discipline_id: string }>();
+  if (availableDisciplineError) throw availableDisciplineError;
 
   const userClient = createE2EUserClient();
   const { error: signInError } = await userClient.auth.signInWithPassword({ email, password });
@@ -85,12 +98,35 @@ async function createOrganizationFixture({
     target_primary_contact_email: `contact.${slug}@example.test`,
     target_timezone: "America/Toronto",
     target_currency: "CAD",
-    target_discipline_ids: [discipline.id],
-    target_default_discipline_id: discipline.id,
+    target_discipline_ids: [availableDiscipline.discipline_id],
+    target_default_discipline_id: availableDiscipline.discipline_id,
     target_requires_host_membership: false,
   }).single<{ id: string }>();
   await userClient.auth.signOut();
   if (error) throw error;
+
+  const { data: organizationDiscipline, error: organizationDisciplineError } = await admin
+    .from("organization_disciplines")
+    .select("id")
+    .eq("organization_id", data.id)
+    .eq("discipline_id", availableDiscipline.discipline_id)
+    .single<{ id: string }>();
+  if (organizationDisciplineError) throw organizationDisciplineError;
+
+  const { error: governingBodyLinkError } = await admin.from("organization_discipline_governing_bodies").upsert({
+    organization_discipline_id: organizationDiscipline.id,
+    governing_body_id: nrhaBody.id,
+    is_default: true,
+    is_active: true,
+  });
+  if (governingBodyLinkError) throw governingBodyLinkError;
+
+  const { error: organizationUpdateError } = await admin
+    .from("organizations")
+    .update({ short_name: "AQR" })
+    .eq("id", data.id);
+  if (organizationUpdateError) throw organizationUpdateError;
+
   return data.id;
 }
 

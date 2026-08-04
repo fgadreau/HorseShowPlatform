@@ -1,9 +1,16 @@
 # Méga robot de tests préproduction
 
 Le robot Playwright crée un utilisateur et une association jetables, utilise les
-vrais formulaires HSP, puis supprime uniquement les données de son exécution. Il couvre
-actuellement la connexion, la création et l'ouverture
-d'un concours, une annonce publique et la saisie de contacts variés.
+vrais formulaires HSP et ShowScore, puis supprime uniquement les données de son
+exécution. Il couvre le parcours métier complet : création du concours, contacts,
+bloc et classe, inscriptions, ordre de passage, saisie annonceur, approbation du
+secrétariat, championnat, calcul des bourses et publication des résultats.
+
+La classe testée est configurée comme une vraie classe sanctionnée : frais
+d'inscription et de juge, argent ajouté, trophée, retenue de l'organisateur,
+redevance à l'association sanctionneuse, critères d'admissibilité et grille de
+répartition des prix. Le robot vérifie les montants dans l'interface et dans la
+base avant et après le retour de ShowScore vers HSP.
 
 ## Garde-fous
 
@@ -56,6 +63,7 @@ depuis le gestionnaire de secrets CI :
 
 ```text
 E2E_BASE_URL=https://<url-preprod-hsp>
+E2E_SHOWSCORE_URL=https://<url-preprod-showscore>
 E2E_DEPLOY_ENV=staging
 E2E_ALLOW_WRITES=true
 E2E_SUPABASE_URL=https://<ref-preprod>.supabase.co
@@ -64,6 +72,7 @@ E2E_SUPABASE_SERVICE_ROLE_KEY=<secret preprod, serveur seulement>
 E2E_SUPABASE_PROJECT_REF=<ref-preprod>
 E2E_PRODUCTION_SUPABASE_PROJECT_REF=<ref-prod>
 VERCEL_AUTOMATION_BYPASS_SECRET=<secret automation du projet Vercel>
+SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET=<optionnel si ShowScore est protégé>
 ```
 
 Le dernier secret est transmis à Vercel par les en-têtes
@@ -77,7 +86,9 @@ npm run test:e2e:smoke
 npm run test:e2e:mega
 ```
 
-`smoke` crée trois contacts représentatifs. `mega` en crée 25 par défaut.
+`smoke` crée trois contacts représentatifs. `mega` en crée 25 par défaut. Les
+deux modes exécutent le parcours HSP → ShowScore → HSP au complet; la taille du
+jeu de contacts est la principale différence.
 `E2E_DATASET_SIZE` permet de choisir de 1 à 100 contacts. Les valeurs sont
 reproductibles pour un `runId` et incluent accents, apostrophes, Unicode,
 coordonnées réalistes et une longueur limite de champ.

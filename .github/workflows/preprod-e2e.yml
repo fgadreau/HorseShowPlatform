@@ -44,6 +44,7 @@ jobs:
     env:
       E2E_ALLOW_WRITES: "true"
       E2E_BASE_URL: ${{ vars.PREPROD_HSP_URL }}
+      E2E_SHOWSCORE_URL: ${{ vars.PREPROD_SHOWSCORE_URL }}
       E2E_DEPLOY_ENV: staging
       E2E_MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'mega') || 'smoke' }}
       E2E_PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
