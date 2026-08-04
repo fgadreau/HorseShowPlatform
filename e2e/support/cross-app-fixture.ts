@@ -11,24 +11,34 @@ export const FULL_CLASS_CONFIG = {
   entryFee: 150,
   judgeFee: 25,
   payoutNotes: "[E2E] Trophée, redevance NRHA et retenue validés avant publication.",
+  payoutMaxEntries: 100,
   payoutPercentages: "60, 40",
   retainagePercent: 10,
   sanctioningFeePercent: 5,
   trophyFee: 30,
 } as const;
 
-export const EXPECTED_PAYOUT = {
-  addedMoney: 100,
-  awards: [198.51, 132.34],
-  baseAfterTrophy: 270,
-  finalNetEntryFee: 230.85,
-  grossEntryFees: 300,
-  netEntryFee: 256.5,
-  netPurse: 330.85,
-  retainageAmount: 25.65,
-  sanctioningFeeAmount: 13.5,
-  trophyFee: 30,
-} as const;
+export function buildExpectedPayout(entryCount: number) {
+  const grossEntryFees = money(FULL_CLASS_CONFIG.entryFee * entryCount);
+  const baseAfterTrophy = money(grossEntryFees - FULL_CLASS_CONFIG.trophyFee);
+  const sanctioningFeeAmount = money(baseAfterTrophy * (FULL_CLASS_CONFIG.sanctioningFeePercent / 100));
+  const netEntryFee = money(baseAfterTrophy - sanctioningFeeAmount);
+  const retainageAmount = money(netEntryFee * (FULL_CLASS_CONFIG.retainagePercent / 100));
+  const finalNetEntryFee = money(netEntryFee - retainageAmount);
+  const netPurse = money(finalNetEntryFee + FULL_CLASS_CONFIG.addedMoney);
+
+  return {
+    addedMoney: FULL_CLASS_CONFIG.addedMoney,
+    baseAfterTrophy,
+    finalNetEntryFee,
+    grossEntryFees,
+    netEntryFee,
+    netPurse,
+    retainageAmount,
+    sanctioningFeeAmount,
+    trophyFee: FULL_CLASS_CONFIG.trophyFee,
+  };
+}
 
 export type CrossAppFixture = {
   blockId: string;
@@ -93,14 +103,15 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
     .single<{ id: string; organization_discipline_id: string }>();
   if (classError) throw classError;
 
-  const scenarios = buildContactScenarios(state, 3);
-  const participantScenarios = [scenarios[0], scenarios[2]];
+  const participantScenarios = buildContactScenarios(state);
   const { data: contacts, error: contactsError } = await admin
     .from("contacts")
     .select("id,email,first_name,last_name")
     .in("email", participantScenarios.map((scenario) => scenario.email));
   if (contactsError) throw contactsError;
-  if ((contacts ?? []).length !== 2) throw new Error("Les deux contacts E2E requis pour les inscriptions sont introuvables.");
+  if ((contacts ?? []).length !== participantScenarios.length) {
+    throw new Error(`${participantScenarios.length} contacts E2E sont requis pour les inscriptions; ${(contacts ?? []).length} ont été trouvés.`);
+  }
 
   const contactByEmail = new Map((contacts ?? []).map((contact) => [contact.email, contact]));
   const orderedContacts = participantScenarios.map((scenario) => {
@@ -108,9 +119,9 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
     if (!contact) throw new Error(`Contact E2E introuvable: ${scenario.email}`);
     return contact;
   });
-  const horseIds = [crypto.randomUUID(), crypto.randomUUID()];
-  const entryIds = [crypto.randomUUID(), crypto.randomUUID()];
-  const horseNames = [`[E2E] Argent QA — ${state.runId}`, `[E2E] Éclair Préprod — ${state.runId}`];
+  const horseIds = participantScenarios.map(() => crypto.randomUUID());
+  const entryIds = participantScenarios.map(() => crypto.randomUUID());
+  const horseNames = participantScenarios.map((_, index) => `[E2E] Cheval Préprod ${index + 1} — ${state.runId}`);
   const healthDocumentDate = new Date().toISOString().slice(0, 10);
   const healthDocuments = horseIds.flatMap((horseId, index) => [
     {
@@ -155,7 +166,7 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
       breed: "Quarter Horse",
       color: index === 0 ? "Alezan" : "Bai",
       gender: "G",
-      birth_year: 2017 + index,
+      birth_year: 2010 + (index % 10),
       registration_number: `E2E-${state.runId}-${index + 1}`,
       registration_status: "registered",
       primary_owner_contact_id: orderedContacts[index].id,
@@ -272,7 +283,11 @@ export async function assertFullClassConfiguration(fixture: CrossAppFixture) {
   expect(classRecord.eligibility_rules).toMatchObject({ notes: FULL_CLASS_CONFIG.eligibilityNotes });
   expect(classRecord.payout_rules).toMatchObject({
     custom_brackets: [
-      expect.objectContaining({ min_entries: "1", max_entries: "5", percentages: FULL_CLASS_CONFIG.payoutPercentages }),
+      expect.objectContaining({
+        min_entries: "1",
+        max_entries: String(FULL_CLASS_CONFIG.payoutMaxEntries),
+        percentages: FULL_CLASS_CONFIG.payoutPercentages,
+      }),
     ],
   });
 
@@ -293,4 +308,8 @@ export async function assertFullClassConfiguration(fixture: CrossAppFixture) {
     reporting_class_code: FULL_CLASS_CONFIG.classCode,
     eligibility_profile_code: "category_1_ancillary_year_end",
   });
+}
+
+function money(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }

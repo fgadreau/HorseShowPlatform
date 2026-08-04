@@ -12,10 +12,15 @@ redevance à l'association sanctionneuse, critères d'admissibilité et grille d
 répartition des prix. Le robot vérifie les montants dans l'interface et dans la
 base avant et après le retour de ShowScore vers HSP.
 
-Pour rendre les inscriptions réellement admissibles, les deux chevaux du
-parcours reçoivent aussi un Coggins et un vaccin combiné approuvés ainsi qu'une
+Pour rendre les inscriptions réellement admissibles, chaque cavalier reçoit un
+cheval distinct avec un Coggins et un vaccin combiné approuvés ainsi qu'une
 validation d'identité. Le robot ne contourne donc pas les contrôles de santé et
 d'identification nécessaires avant la sortie de l'ordre de passage.
+
+Les deux meilleurs scores sont à égalité afin de vérifier le partage des deux
+premières parts de la bourse. À partir de cinq cavaliers, le robot ajoute aussi
+un `No score` et un `Scratch`. Ces inscriptions demeurent dans les revenus de la
+classe, mais elles ne sont pas ajoutées aux lignes actives du championnat.
 
 Dans ShowScore, il change aussi de journée par les onglets de la gestion du
 show, des blocs, de l'annonceur, des scribes, du secrétariat, de l'horaire et du
@@ -99,10 +104,10 @@ npm run test:e2e:smoke
 npm run test:e2e:mega
 ```
 
-`smoke` crée trois contacts représentatifs. `mega` en crée 25 par défaut. Les
-deux modes exécutent le parcours HSP → ShowScore → HSP au complet; la taille du
-jeu de contacts est la principale différence.
-`E2E_DATASET_SIZE` permet de choisir de 1 à 100 contacts. Les valeurs sont
+`smoke` fait traverser le parcours à trois cavaliers représentatifs. `mega` en
+fait traverser 25 par défaut. Chaque cavalier possède son contact, son cheval,
+ses documents, son inscription, son passage ShowScore et son résultat HSP.
+`E2E_DATASET_SIZE` permet de choisir de 1 à 100 cavaliers. Les valeurs sont
 reproductibles pour un `runId` et incluent accents, apostrophes, Unicode,
 coordonnées réalistes et une longueur limite de champ.
 
