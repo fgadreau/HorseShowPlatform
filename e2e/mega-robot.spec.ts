@@ -120,15 +120,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await page.getByRole("button", { name: state.showName }).click();
     await page.getByRole("button", { name: "Bloc libre", exact: true }).first().click();
 
-    const blockForm = page.getByTestId("block-create-form");
-    await blockForm.getByLabel("Manège / arène", { exact: true }).fill("Arène E2E");
-    await blockForm.getByLabel("Juge(s)", { exact: true }).fill("Juge E2E");
-    await blockForm.getByLabel("Mode de départ", { exact: true }).selectOption("fixed");
-    await blockForm.getByLabel("Heure", { exact: true }).fill("09:00");
-    await selectSearchOption(blockForm.getByLabel("Patron", { exact: true }), "Reining #1");
-    await blockForm.getByLabel("Nom du bloc", { exact: true }).fill(blockName);
-    await blockForm.getByLabel("Libellé d'horaire", { exact: true }).fill("Open — annonceur");
-    await blockForm.getByLabel("Fermeture des inscriptions", { exact: true }).fill(pastDateTimeLocal());
+    const blockForm = page.getByRole("dialog").getByTestId("block-create-form");
+    await blockForm.getByRole("textbox", { name: "Manège / arène", exact: true }).fill("Arène E2E");
+    await blockForm.getByRole("textbox", { name: "Juge(s)", exact: true }).fill("Juge E2E");
+    await blockForm.getByRole("combobox", { name: "Mode de départ", exact: true }).selectOption("fixed");
+    await blockForm.getByRole("textbox", { name: "Heure", exact: true }).fill("09:00");
+    await selectSearchOption(blockForm.getByRole("combobox", { name: "Patron", exact: true }), "Reining #1");
+    await blockForm.getByRole("textbox", { name: "Nom du bloc", exact: true }).fill(blockName);
+    await blockForm.getByRole("textbox", { name: "Libellé d'horaire", exact: true }).fill("Open — annonceur");
+    await blockForm.getByRole("textbox", { name: /^Fermeture des inscriptions/ }).fill(pastDateTimeLocal());
     await blockForm.getByRole("button", { name: "Créer le bloc", exact: true }).click();
     await expect(blockForm).toBeHidden();
 
