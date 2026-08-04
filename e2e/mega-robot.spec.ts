@@ -117,7 +117,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
   await test.step("configuration complète du bloc et de la classe", async () => {
     await navigateTo(page, "blocks");
-    await page.getByRole("button", { name: new RegExp(state.showName) }).click();
+    await page.getByRole("button", { name: state.showName }).click();
     await page.getByRole("button", { name: "Bloc libre", exact: true }).first().click();
 
     const blockForm = page.getByTestId("block-create-form");
