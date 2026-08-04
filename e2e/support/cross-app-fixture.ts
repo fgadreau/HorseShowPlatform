@@ -99,6 +99,41 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
   const entryIds = [crypto.randomUUID(), crypto.randomUUID()];
   const horseNames = [`[E2E] Argent QA — ${state.runId}`, `[E2E] Éclair Préprod — ${state.runId}`];
   const healthDocumentDate = new Date().toISOString().slice(0, 10);
+  const healthDocuments = horseIds.flatMap((horseId, index) => [
+    {
+      id: crypto.randomUUID(),
+      horse_id: horseId,
+      document_category: "health",
+      document_type: "coggins_eia",
+      status: "approved",
+      verification_source: "manual",
+      certificate_number: `E2E-COGGINS-${state.runId}-${index + 1}`,
+      issuer_name: "Clinique vétérinaire E2E",
+      test_or_administered_on: healthDocumentDate,
+      result: "negative",
+      horse_name: horseNames[index],
+      reviewed_by_user_id: state.profileId,
+      reviewed_at: new Date().toISOString(),
+      created_by_user_id: state.profileId,
+      uploaded_by_organization_id: state.organizationId,
+    },
+    {
+      id: crypto.randomUUID(),
+      horse_id: horseId,
+      document_category: "health",
+      document_type: "combo_vaccine",
+      status: "approved",
+      verification_source: "manual",
+      certificate_number: `E2E-VACCIN-${state.runId}-${index + 1}`,
+      issuer_name: "Clinique vétérinaire E2E",
+      test_or_administered_on: healthDocumentDate,
+      horse_name: horseNames[index],
+      reviewed_by_user_id: state.profileId,
+      reviewed_at: new Date().toISOString(),
+      created_by_user_id: state.profileId,
+      uploaded_by_organization_id: state.organizationId,
+    },
+  ]);
 
   const { error: horseError } = await admin.from("horses").insert(
     horseIds.map((id, index) => ({
@@ -139,42 +174,30 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
   );
   if (horseContactError) throw horseContactError;
 
-  const { error: healthDocumentError } = await admin.from("horse_documents").insert(
-    horseIds.flatMap((horseId, index) => [
-      {
-        horse_id: horseId,
-        document_category: "health",
-        document_type: "coggins_eia",
-        status: "approved",
-        verification_source: "manual",
-        certificate_number: `E2E-COGGINS-${state.runId}-${index + 1}`,
-        issuer_name: "Clinique vétérinaire E2E",
-        test_or_administered_on: healthDocumentDate,
-        result: "negative",
-        horse_name: horseNames[index],
-        reviewed_by_user_id: state.profileId,
-        reviewed_at: new Date().toISOString(),
-        created_by_user_id: state.profileId,
-        uploaded_by_organization_id: state.organizationId,
-      },
-      {
-        horse_id: horseId,
-        document_category: "health",
-        document_type: "combo_vaccine",
-        status: "approved",
-        verification_source: "manual",
-        certificate_number: `E2E-VACCIN-${state.runId}-${index + 1}`,
-        issuer_name: "Clinique vétérinaire E2E",
-        test_or_administered_on: healthDocumentDate,
-        horse_name: horseNames[index],
-        reviewed_by_user_id: state.profileId,
-        reviewed_at: new Date().toISOString(),
-        created_by_user_id: state.profileId,
-        uploaded_by_organization_id: state.organizationId,
-      },
-    ]),
-  );
+  const { error: healthDocumentError } = await admin.from("horse_documents").insert(healthDocuments);
   if (healthDocumentError) throw healthDocumentError;
+
+  const { error: healthValidationError } = await admin.from("horse_document_validations").insert(
+    healthDocuments.map((document) => ({
+      horse_document_id: document.id,
+      horse_id: document.horse_id,
+      version: 1,
+      status: "verified",
+      source: "manual",
+      comparison_profile: "health_document_horse",
+      extracted_horse_name: document.horse_name,
+      horse_identity_snapshot: { name: document.horse_name },
+      comparison_result: { name: "match" },
+      evidence: [{ field: "horse_name" }],
+      source_payload: {},
+      warnings: [],
+      verdict: "match",
+      score: 100,
+      confidence: "certain",
+      created_by_user_id: state.profileId,
+    })),
+  );
+  if (healthValidationError) throw healthValidationError;
 
   const { error: entryError } = await admin.from("entries").insert(
     entryIds.map((id, index) => ({
