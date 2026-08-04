@@ -12,12 +12,30 @@ plus de changement SQL directement sur ce projet.
 | Environnement | Branche Git | HSP | ShowScore | Supabase |
 | --- | --- | --- | --- | --- |
 | Local | branche de travail | localhost | localhost | Supabase local |
-| Préproduction | `staging` | URL Preview/Préprod HSP | URL Preview/Préprod ShowScore | projet PREPROD partagé |
+| Préproduction | `preprod` | URL stable de la branche `preprod` | URL stable de la branche `preprod` | projet PREPROD partagé |
 | Production | `main` | domaines publics HSP | domaines publics ShowScore | projet PROD actuel |
 
 Les deux applications d'un environnement doivent toujours pointer vers le même
 projet Supabase. Elles ne partagent toutefois aucune base, aucun compte Auth,
 aucun Storage ni aucun secret entre PREPROD et PROD.
+
+## Chemin de livraison
+
+Les branches de travail sont proposées à `preprod` par pull request. Une fusion
+sur `preprod` met à jour son URL Vercel permanente et lance automatiquement le
+smoke test Playwright. La production est ensuite promue par une pull request
+distincte de `preprod` vers `main`; aucune branche de travail ne doit être
+fusionnée directement dans `main`.
+
+```text
+branche de travail -> PR vers preprod -> validation préprod
+                  -> PR preprod vers main -> production
+```
+
+La branche `preprod` interdit les suppressions, les force-push et les mises à
+jour directes : toute modification doit passer par une pull request. La PR de
+promotion vers `main` demeure en brouillon tant que la répétition fonctionnelle
+et les migrations ne sont pas approuvées.
 
 ## Garde-fous de compilation
 
@@ -105,8 +123,9 @@ La préproduction doit valider au minimum :
   migration.
 
 Le robot Playwright décrit dans [E2E_TEST_ROBOT.md](E2E_TEST_ROBOT.md) fournit
-le smoke test à appeler après déploiement et automatise le jeu de données variées nocturne. Il doit
-être vert en mode `mega` avant toute répétition finale vers PROD.
+le smoke test automatique après chaque promotion sur `preprod` et automatise le
+jeu de données variées nocturne. Il doit être vert en mode `mega` avant toute
+répétition finale vers PROD.
 
 La production ne reçoit aucune migration tant que tous ces contrôles ne sont
 pas verts et que les deux applications de préproduction n'utilisent pas le même

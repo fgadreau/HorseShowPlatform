@@ -94,8 +94,14 @@ Ne jamais activer cette option dans l'exécution nocturne.
 
 ## Automatisation GitHub
 
-Le workflow `.github/workflows/preprod-e2e.yml` lance le mode `mega` chaque nuit,
+Le workflow `.github/workflows/preprod-e2e.yml` lance un `smoke` à chaque mise à
+jour de la branche permanente `preprod`, lance le mode `mega` chaque nuit,
 permet un déclenchement manuel `smoke` ou `mega` et expose `workflow_call` pour
-être appelé par le déploiement préprod. Les variables non sensibles
-sont configurées dans GitHub Variables et les clés dans GitHub Secrets. Le
-rapport Playwright est téléversé comme artefact même en cas d'échec.
+être appelé par un autre déploiement. Les variables non sensibles sont
+configurées dans GitHub Variables et les clés dans GitHub Secrets. Le rapport
+Playwright est téléversé comme artefact même en cas d'échec.
+
+Le déclenchement nocturne est défini sur la branche par défaut `main`, mais sa
+cible demeure toujours l'URL et le projet Supabase de `preprod`. Les garde-fous
+comparent également la référence Supabase avec celle de PROD avant toute
+écriture.
