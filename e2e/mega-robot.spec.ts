@@ -235,6 +235,12 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}?day=${crossAppFixture.showDayId}`,
     );
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture);
+    const activeDayActions = showScorePage.locator(
+      `[data-show-day-actions="${crossAppFixture.showDayId}"]`,
+    );
+    await expect(activeDayActions).toBeVisible();
+    await expect(activeDayActions.getByRole("button", { name: "Modifier", exact: true })).toBeVisible();
+    await expect(activeDayActions.getByRole("button", { name: "Supprimer", exact: true })).toBeVisible();
 
     await showScorePage.goto(
       `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/days/${crossAppFixture.showDayId}`,
