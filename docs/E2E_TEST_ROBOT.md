@@ -17,9 +17,12 @@ parcours reçoivent aussi un Coggins et un vaccin combiné approuvés ainsi qu'u
 validation d'identité. Le robot ne contourne donc pas les contrôles de santé et
 d'identification nécessaires avant la sortie de l'ordre de passage.
 
-Dans ShowScore, il change aussi de journée par les onglets de la gestion du
-show, des blocs, de l'annonceur, des scribes, du secrétariat, de l'horaire et du
-suivi du temps. Un marqueur navigateur confirme que ces changements se font
+Dans ShowScore, la gestion du show et de ses blocs forme une seule page. Le
+robot confirme que les blocs de la journée active sont déjà présents sous les
+onglets, que le lien intermédiaire `Ouvrir les blocs` a disparu et que les
+anciennes URL de journée redirigent vers cette page canonique. Il change aussi
+de journée dans cette gestion unifiée, l'annonceur, les scribes, le secrétariat,
+l'horaire et le suivi du temps. Un marqueur navigateur confirme ces changements
 dans la page courante, sans rechargement complet, puis le robot revient à la
 journée contenant la classe avant de poursuivre le parcours. Dans la gestion
 du show, il confirme aussi que la barre compacte de la journée active conserve
