@@ -232,24 +232,46 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(state.showName);
 
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup`);
+    const runCountField = showScorePage
+      .getByText("Nombre de runs", { exact: true })
+      .locator("..")
+      .getByRole("spinbutton");
+    await expect(runCountField).toHaveValue("2");
     const liveSource = showScorePage.getByLabel("Source des données live", { exact: true });
     showScorePage.once("dialog", (dialog) => dialog.accept());
     await liveSource.selectOption("announcer");
     await expect(liveSource).toHaveValue("announcer");
     const admin = createE2EAdminClient();
     await expect.poll(async () => {
-      const { data, error } = await admin
-        .from("show_score_block_setups")
-        .select("live_data_source")
-        .eq("block_id", crossAppFixture!.blockId)
-        .single<{ live_data_source: string }>();
-      if (error) throw error;
-      return data.live_data_source;
-    }).toBe("announcer");
+      const [{ data: setup, error: setupError }, { data: session, error: sessionError }] = await Promise.all([
+        admin
+          .from("show_score_block_setups")
+          .select("live_data_source")
+          .eq("block_id", crossAppFixture!.blockId)
+          .single<{ live_data_source: string }>(),
+        admin
+          .from("show_score_announcer_live_sessions")
+          .select("runs")
+          .eq("class_id", crossAppFixture!.blockId)
+          .maybeSingle<{ runs: Array<Record<string, unknown>> }>(),
+      ]);
+      if (setupError) throw setupError;
+      if (sessionError) throw sessionError;
+      return {
+        source: setup.live_data_source,
+        runCount: session?.runs?.length ?? 0,
+      };
+    }).toEqual({ source: "announcer", runCount: 2 });
 
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/announcer`);
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await expect(showScorePage.locator("body")).toContainText(/Source\s*:\s*annonceur/i);
+    await expect(showScorePage.locator("body")).toContainText(/Runs\s*:\s*2/i);
+    const announcerClass = showScorePage.locator(`[data-announcer-class-id="${crossAppFixture.blockId}"]`);
+    const announcerClassHeader = announcerClass.locator('[role="button"][aria-expanded]');
+    if ((await announcerClassHeader.getAttribute("aria-expanded")) !== "true") {
+      await announcerClassHeader.click();
+    }
     await scoreNextAnnouncerRun(showScorePage, "72,5");
     await scoreNextAnnouncerRun(showScorePage, "70");
     await showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true }).click();
