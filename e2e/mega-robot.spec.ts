@@ -349,7 +349,8 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .click();
     await showScorePage.getByRole("button", { name: "Analyser les résultats ShowScore", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("2 inscrits · 2 résultats scorés");
-    await expect(showScorePage.locator("body")).toContainText(/championnat 1100 · Open/);
+    await expect(showScorePage.locator("body")).toContainText(/Code import 1100 → championnat 1100/);
+    await expect(showScorePage.locator("body")).toContainText("1 classes sélectionnées · 2 lignes actives · 0 lignes ignorées");
     await showScorePage.getByRole("button", { name: "Ajouter au championnat", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText(crossAppFixture.participantNames[0]);
     await showScorePage.getByRole("button", { name: "Publier provisoire", exact: true }).click();
