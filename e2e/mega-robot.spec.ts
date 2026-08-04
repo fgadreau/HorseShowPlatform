@@ -97,11 +97,18 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
         await form.getByLabel("Code postal", { exact: true }).fill(contact.postalCode);
         await form.getByLabel("Pays", { exact: true }).fill(contact.country);
         await form.getByLabel("Date de naissance", { exact: true }).fill(contact.dateOfBirth);
-        const contactResponsePromise = page.waitForResponse((response) =>
-          response.request().method() === "POST" && /\/rest\/v1\/contacts(?:\?|$)/.test(response.url()),
-        );
+        const contactResponsePromise = waitForContactCreateResponse(page);
         await form.getByRole("button", { name: "Créer le contact", exact: true }).click();
-        const contactResponse = await contactResponsePromise;
+        const createDifferentContact = form.getByRole("button", { name: "Ce sont des fiches différentes — créer quand même", exact: true });
+        let contactResponse = await Promise.race([
+          contactResponsePromise,
+          createDifferentContact.waitFor({ state: "visible" }).then(() => null),
+        ]);
+        if (!contactResponse) {
+          const confirmedContactResponsePromise = waitForContactCreateResponse(page);
+          await createDifferentContact.click();
+          contactResponse = await confirmedContactResponsePromise;
+        }
         const contactPayload = contactResponse.request().postDataJSON() as { created_by_user_id?: string };
         expect(contactPayload.created_by_user_id).toBe(state.profileId);
         expect(contactResponse.ok(), await contactResponse.text()).toBeTruthy();
@@ -221,20 +228,66 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await showScorePage.getByRole("button", { name: "Se connecter", exact: true }).click();
     await expect(showScorePage).toHaveURL(/\/associations/);
 
-    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup`);
+    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows`);
+    await expect(showScorePage.locator("body")).toContainText(state.showName);
+
+    await showScorePage.goto(
+      `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/days/${crossAppFixture.showDayId}`,
+    );
+    await expect(showScorePage.locator("body")).toContainText(blockName);
+    const setupLink = showScorePage.locator(
+      `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
+    );
+    await expect(setupLink).toHaveText("Ouvrir setup");
+    await setupLink.click();
+    const runCountField = showScorePage
+      .getByText("Nombre de runs", { exact: true })
+      .locator("..")
+      .getByRole("spinbutton");
+    await expect(runCountField).toHaveValue("2");
     const liveSource = showScorePage.getByLabel("Source des données live", { exact: true });
     showScorePage.once("dialog", (dialog) => dialog.accept());
     await liveSource.selectOption("announcer");
     await expect(liveSource).toHaveValue("announcer");
+    const admin = createE2EAdminClient();
+    await expect.poll(async () => {
+      const [{ data: setup, error: setupError }, { data: session, error: sessionError }] = await Promise.all([
+        admin
+          .from("show_score_block_setups")
+          .select("live_data_source")
+          .eq("block_id", crossAppFixture!.blockId)
+          .single<{ live_data_source: string }>(),
+        admin
+          .from("show_score_announcer_live_sessions")
+          .select("runs")
+          .eq("class_id", crossAppFixture!.blockId)
+          .maybeSingle<{ runs: Array<Record<string, unknown>> }>(),
+      ]);
+      if (setupError) throw setupError;
+      if (sessionError) throw sessionError;
+      return {
+        source: setup.live_data_source,
+        runCount: session?.runs?.length ?? 0,
+      };
+    }).toEqual({ source: "announcer", runCount: 2 });
 
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/announcer`);
-    await expect(showScorePage.locator("body")).toContainText("Contrôle live par l’annonceur");
+    await expect(showScorePage.locator("body")).toContainText(blockName);
+    await expect(showScorePage.locator("body")).toContainText(/Source\s*:\s*annonceur/i);
+    await expect(showScorePage.locator("body")).toContainText(/Runs\s*:\s*2/i);
+    const announcerClass = showScorePage.locator(`[data-announcer-class-id="${crossAppFixture.blockId}"]`);
+    const announcerClassHeader = announcerClass.locator('[role="button"][aria-expanded]');
+    if ((await announcerClassHeader.getAttribute("aria-expanded")) !== "true") {
+      await announcerClassHeader.click();
+    }
     await scoreNextAnnouncerRun(showScorePage, "72,5");
     await scoreNextAnnouncerRun(showScorePage, "70");
-    await showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText("Bloc terminé par l’annonceur");
+    const completeBlock = showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true });
+    if (!(await completeBlock.isVisible())) {
+      await announcerClassHeader.click();
+    }
+    await completeBlock.click();
 
-    const admin = createE2EAdminClient();
     await expect.poll(async () => {
       const { data, error } = await admin
         .from("show_score_announcer_live_sessions")
@@ -290,11 +343,16 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await showScorePage.getByRole("button", { name: "Modifier", exact: true }).click();
     await showScorePage.getByLabel("Titre", { exact: true }).fill(`[E2E] Championnat ${state.runId}`);
     await showScorePage.getByRole("button", { name: "Terminer", exact: true }).click();
+    await showScorePage
+      .getByRole("button")
+      .filter({ hasText: "Importer depuis ShowScore" })
+      .click();
     await showScorePage.getByRole("button", { name: "Analyser les résultats ShowScore", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("2 inscrits · 2 résultats scorés");
-    await expect(showScorePage.locator("body")).toContainText(/championnat 1100 · Open/);
+    await expect(showScorePage.locator("body")).toContainText(/Code import 1100 → championnat 1100/);
+    await expect(showScorePage.locator("body")).toContainText("1 classes sélectionnées · 2 lignes actives · 0 lignes ignorées");
     await showScorePage.getByRole("button", { name: "Ajouter au championnat", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText(crossAppFixture.participantNames[0]);
+    await expect(showScorePage.locator("body")).toContainText(/2\s*Équipes/);
     await showScorePage.getByRole("button", { name: "Publier provisoire", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("Championnat enregistré.");
 
@@ -310,8 +368,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     await showScorePage.goto(`${config.showScoreUrl}/public/associations/${state.organizationId}/championnat`);
     await expect(showScorePage.locator("body")).toContainText("Open");
+    const publicClassCard = showScorePage.locator("article").filter({ hasText: "Omnium NRHA (Open)" });
+    await publicClassCard.getByRole("button").first().click();
     for (const participantName of crossAppFixture.participantNames) {
-      await expect(showScorePage.locator("body")).toContainText(participantName);
+      await expect(publicClassCard).toContainText(participantName);
     }
   });
 
@@ -408,4 +468,10 @@ function pastDateTimeLocal() {
 
 function expectMoney(actual: unknown, expected: number) {
   expect(Number(actual)).toBeCloseTo(expected, 2);
+}
+
+function waitForContactCreateResponse(page: Page) {
+  return page.waitForResponse((response) =>
+    response.request().method() === "POST" && /\/rest\/v1\/contacts(?:\?|$)/.test(response.url()),
+  );
 }
