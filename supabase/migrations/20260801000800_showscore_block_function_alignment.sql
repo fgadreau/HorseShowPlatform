@@ -137,6 +137,33 @@ as $$
   );
 $$;
 
+-- The scanned document table keeps its legacy API name until the ShowScore
+-- client migration is complete, but each document belongs to a scored block.
+create or replace function public.showscore_scanned_scoresheet_is_public(
+  target_class_id uuid
+)
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1
+    from public.blocks target_block
+    join public.shows target_show
+      on target_show.id = target_block.show_id
+    join public.block_result_publications result_publication
+      on result_publication.block_id = target_block.id
+    where target_block.id = target_class_id
+      and target_block.results_are_public = true
+      and target_show.status = 'open'
+      and target_show.show_results_public = true
+      and result_publication.status = 'published'
+      and result_publication.result_groups <> '[]'::jsonb
+  );
+$$;
+
 create or replace function public.showscore_public_live_class_exists(target_class_id uuid)
 returns boolean
 language sql

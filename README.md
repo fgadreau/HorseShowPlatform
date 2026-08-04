@@ -9,6 +9,10 @@ MVP starter for a multi-tenant horse show management platform.
 - Stripe and Resend through Supabase Edge Functions in later phases
 - Vercel for frontend deployment
 
+La production et la préproduction utilisent des projets Supabase distincts.
+Voir [docs/PREPRODUCTION.md](docs/PREPRODUCTION.md) avant tout déploiement de
+schéma partagé avec ShowScore.
+
 ## Local Setup
 
 1. Install dependencies:

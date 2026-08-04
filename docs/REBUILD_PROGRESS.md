@@ -4,7 +4,16 @@
 
 **Les Blocs 1 — Fondations et 3 — Documents et conformité de santé sont terminés et validés. Le Bloc 2 est validé pour I1 à I6 et I8; I7 demeure volontairement reporté jusqu'à la conception du module complet de rapports. La prochaine étape est la fermeture générale de la refonte et la préparation du déploiement.**
 
-Aucune donnée distante n'a été supprimée et aucune migration n'a été déployée. Le Supabase local a toutefois été remis à zéro avec les 97 migrations et le nouveau seed afin de valider réellement les trois blocs.
+La PROD demeure inchangée. Le schéma complet a été déployé sur le projet
+Supabase PREPROD vide après un reset local et un dry-run réussis; aucune donnée
+de production n'y a été copiée. La chaîne canonique compte maintenant 100
+migrations : `0001–0076`, trois migrations ShowScore datées, puis les 21 lots du
+chantier datés du 1er août 2026.
+
+Les références courtes `0077–0097` conservées dans le journal historique
+ci-dessous désignent ces 21 lots dans leur ordre de conception. Leurs fichiers
+canoniques portent désormais les versions `20260801000100–20260801002100` afin
+de les ordonner après les migrations ShowScore déjà présentes en PROD.
 
 Les changements sont également suivis dans `SHOWSCORE_REBUILD_IMPACT_REGISTER.md` : les adaptations techniques sont permises, mais aucun changement fonctionnel ShowScore n'est implicite.
 

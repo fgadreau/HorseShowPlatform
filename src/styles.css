@@ -19,6 +19,40 @@ body {
   background: #eef2f1;
 }
 
+.environment-banner {
+  align-items: center;
+  background: #fef3c7;
+  border-bottom: 2px solid #f59e0b;
+  color: #78350f;
+  display: flex;
+  font-size: 13px;
+  gap: 12px;
+  justify-content: center;
+  min-height: 34px;
+  padding: 6px 16px;
+  position: sticky;
+  top: 0;
+  z-index: 10000;
+}
+
+.environment-banner strong {
+  letter-spacing: 0.04em;
+}
+
+.environment-banner-error {
+  background: #fee2e2;
+  border-bottom-color: #dc2626;
+  color: #7f1d1d;
+}
+
+@media (max-width: 640px) {
+  .environment-banner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 2px;
+  }
+}
+
 button,
 input,
 textarea,
