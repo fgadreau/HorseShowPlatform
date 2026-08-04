@@ -285,11 +285,11 @@ function PeopleView({
             <p>{uiText(locale, "Ouvre le bon formulaire sans quitter la recherche de contacts et chevaux.", "Open the right form without leaving contact and horse search.")}</p>
           </div>
           <div className="row-actions">
-            <button className="primary-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingContact}>
+            <button className="primary-button" data-testid="create-contact-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingContact}>
               <Plus size={18} />
               {uiText(locale, "Contact", "Contact")}
             </button>
-            <button className="primary-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingHorse}>
+            <button className="primary-button" data-testid="create-horse-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingHorse}>
               <Plus size={18} />
               {uiText(locale, "Cheval", "Horse")}
             </button>
@@ -309,6 +309,7 @@ function PeopleView({
           <ContactForm
             locale={locale}
             allowCredentialReview
+            createdByUserId={createdByUserId}
             externalCredentialIssuers={externalCredentialIssuers}
             externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}

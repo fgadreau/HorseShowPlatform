@@ -1878,9 +1878,11 @@ export async function createContact(input: ContactInput) {
     }
   }
 
-  const { data, error } = await client
+  const contactId = crypto.randomUUID();
+  const { error } = await client
     .from("contacts")
     .insert({
+      id: contactId,
       type: input.type,
       first_name: input.first_name.trim(),
       middle_name: input.middle_name?.trim() || null,
@@ -1897,9 +1899,7 @@ export async function createContact(input: ContactInput) {
       zip_code: input.zip_code?.trim() || null,
       country: normalizeCountry(input.country),
       date_of_birth: input.date_of_birth || null,
-    })
-    .select("*")
-    .single<Contact>();
+    });
 
   if (error) {
     if (error.code === "23505" && normalizedEmail) {
@@ -1943,18 +1943,20 @@ export async function createContact(input: ContactInput) {
 
   await ensureContactOrganizationLink({
     organization_id: input.organization_id,
-    contact_id: data.id,
+    contact_id: contactId,
     source: "created_here",
     created_by_user_id: input.created_by_user_id,
   });
   await ensureContactRoles({
     organization_id: input.organization_id,
-    contact_id: data.id,
+    contact_id: contactId,
     roles,
     source: input.roles?.length ? "manual" : "contact_type",
   });
-  await syncContactExternalIdentifiers(data.id, input.external_memberships);
+  await syncContactExternalIdentifiers(contactId, input.external_memberships);
 
+  const { data, error: readError } = await client.from("contacts").select("*").eq("id", contactId).single<Contact>();
+  if (readError) throw readError;
   return data;
 }
 

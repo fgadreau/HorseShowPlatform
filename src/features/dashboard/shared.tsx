@@ -864,7 +864,7 @@ export function buildShowReadinessItems(
       actionLabel: showBlocks.length ? uiText(locale, "Ajuster", "Adjust") : uiText(locale, "Ajouter", "Add"),
     },
     {
-      key: "blocks",
+      key: "classes",
       title: uiText(locale, "Classes", "Classes"),
       detail: showClasses.length ? uiText(locale, `${showClasses.length} classe${showClasses.length === 1 ? "" : "s"} disponible${showClasses.length === 1 ? "" : "s"}.`, `${showClasses.length} class${showClasses.length === 1 ? "" : "es"} available.`) : uiText(locale, "Aucune classe disponible.", "No blocks available."),
       done: showClasses.length > 0,

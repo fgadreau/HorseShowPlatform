@@ -548,7 +548,7 @@ function ContactForm({
           <p>{description ?? (organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first."))}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="contact-create-form" onSubmit={handleSubmit}>
         <div className="segmented-control compact-segmented">
           <button className={creationMode === "manual" ? "active" : ""} type="button" onClick={() => setCreationMode("manual")}>
             {uiText(locale, "Création manuelle", "Manual creation")}

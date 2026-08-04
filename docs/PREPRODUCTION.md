@@ -104,6 +104,10 @@ La préproduction doit valider au minimum :
 - comparaison des comptes et relations avant/après sur une répétition de la
   migration.
 
+Le robot Playwright décrit dans [E2E_TEST_ROBOT.md](E2E_TEST_ROBOT.md) fournit
+le smoke test à appeler après déploiement et automatise le jeu de données variées nocturne. Il doit
+être vert en mode `mega` avant toute répétition finale vers PROD.
+
 La production ne reçoit aucune migration tant que tous ces contrôles ne sont
 pas verts et que les deux applications de préproduction n'utilisent pas le même
 commit de contrat.

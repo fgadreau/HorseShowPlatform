@@ -1354,7 +1354,7 @@ function NavigationSection({
       {items.map((item) => {
         const Icon = item.icon;
         return (
-          <button className={activeView === item.key ? "active" : ""} key={item.key} type="button" onClick={() => onViewChange(item.key)}>
+          <button className={activeView === item.key ? "active" : ""} data-view={item.key} key={item.key} type="button" onClick={() => onViewChange(item.key)}>
             <Icon size={18} />
             {t.nav[item.labelKey]}
           </button>

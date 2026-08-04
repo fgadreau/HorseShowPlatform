@@ -97,7 +97,7 @@ function ShowsView({
             <p>{organization ? uiText(locale, "Démarre un brouillon, puis complète la préparation quand tu veux.", "Start a draft, then finish readiness when you are ready.") : uiText(locale, "Crée une association d'abord.", "Create an organization first.")}</p>
           </div>
         </div>
-        <button className="primary-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
+        <button className="primary-button" data-testid="create-show-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
           <Plus size={18} />
           {uiText(locale, "Créer un concours", "Create show")}
         </button>
@@ -132,7 +132,7 @@ function ShowsView({
           {shows.map((show) => {
             const announcementCount = showAnnouncements.filter((a) => a.show_id === show.id).length;
             return (
-              <div className="table-row" key={show.id}>
+              <div className="table-row" data-show-slug={show.slug} key={show.id}>
                 <div>
                   <strong>{show.name}</strong>
                   {show.is_public ? (
@@ -197,8 +197,9 @@ function ShowsView({
             <form className="form-grid announcement-form" onSubmit={handleCreateAnnouncement}>
               <h3>{uiText(locale, "Nouvelle annonce", "New announcement")}</h3>
               <div className="form-field">
-                <label>{uiText(locale, "Titre", "Title")}</label>
+                <label htmlFor="show-announcement-title">{uiText(locale, "Titre", "Title")}</label>
                 <input
+                  id="show-announcement-title"
                   type="text"
                   value={announcementTitle}
                   placeholder={uiText(locale, "ex. Changement d'heure — Dimanche", "e.g. Time change — Sunday")}
@@ -207,8 +208,9 @@ function ShowsView({
                 />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Message", "Message")}</label>
+                <label htmlFor="show-announcement-message">{uiText(locale, "Message", "Message")}</label>
                 <textarea
+                  id="show-announcement-message"
                   value={announcementBody}
                   placeholder={uiText(locale, "Détails de l'annonce...", "Announcement details...")}
                   required

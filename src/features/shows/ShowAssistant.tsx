@@ -196,7 +196,7 @@ function ShowAssistant({
 
   return (
     <div className="modal-backdrop">
-      <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" role="dialog">
+      <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" data-testid="show-assistant" role="dialog">
         <div className="assistant-modal-header">
           <div>
             <p className="eyebrow">{uiText(locale, "Assistant", "Assistant")}</p>

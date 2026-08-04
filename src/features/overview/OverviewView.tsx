@@ -272,7 +272,7 @@ function OrganizationForm({ disciplines, locale = "fr", onCreateOrganization }: 
           <p>{uiText(locale, "Point de départ pour les concours, contacts, inscriptions et facturation.", "Root workspace for shows, contacts, entries and billing.")}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="organization-create-form" onSubmit={handleSubmit}>
         <label>
           {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
