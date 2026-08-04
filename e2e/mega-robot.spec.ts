@@ -136,29 +136,29 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await blockCard.locator(".schedule-block-trigger").click();
     await blockCard.getByRole("button", { name: "+ Classe", exact: true }).click();
 
-    const classForm = page.getByTestId("class-create-form");
-    const nrhaCheckbox = classForm.getByLabel("National Reining Horse Association", { exact: true });
+    const classForm = page.getByRole("dialog").getByTestId("class-create-form");
+    const nrhaCheckbox = classForm.getByRole("checkbox", { name: "National Reining Horse Association", exact: true });
     if (!(await nrhaCheckbox.isChecked())) await nrhaCheckbox.check();
-    await classForm.getByLabel("Politique de dossard", { exact: true }).selectOption("horse_rider_team");
-    await selectSearchOption(classForm.getByLabel("Classe NRHA", { exact: true }), `${FULL_CLASS_CONFIG.classCode} ${FULL_CLASS_CONFIG.className}`);
-    await classForm.getByLabel("Frais d'inscription", { exact: true }).fill(String(FULL_CLASS_CONFIG.entryFee));
-    await classForm.getByLabel("Frais de juge", { exact: true }).fill(String(FULL_CLASS_CONFIG.judgeFee));
+    await classForm.getByRole("combobox", { name: "Politique de dossard", exact: true }).selectOption("horse_rider_team");
+    await selectSearchOption(classForm.getByRole("combobox", { name: "Classe NRHA", exact: true }), `${FULL_CLASS_CONFIG.classCode} ${FULL_CLASS_CONFIG.className}`);
+    await classForm.getByRole("spinbutton", { name: "Frais d'inscription", exact: true }).fill(String(FULL_CLASS_CONFIG.entryFee));
+    await classForm.getByRole("spinbutton", { name: "Frais de juge", exact: true }).fill(String(FULL_CLASS_CONFIG.judgeFee));
 
     const payoutFields = classForm.getByRole("group", { name: "Bourses / Payouts" });
     await payoutFields.getByText("Configurer les bourses / payouts", { exact: true }).click();
-    await payoutFields.getByLabel("Type de paiement", { exact: true }).selectOption("house_custom");
-    await payoutFields.getByLabel("Added money", { exact: true }).fill(String(FULL_CLASS_CONFIG.addedMoney));
-    await payoutFields.getByLabel("Trophée / plaque", { exact: true }).fill(String(FULL_CLASS_CONFIG.trophyFee));
-    await payoutFields.getByLabel("Retenue personnalisée (%)", { exact: true }).fill(String(FULL_CLASS_CONFIG.retainagePercent));
-    await payoutFields.getByLabel("Frais d'organisme (%)", { exact: true }).fill(String(FULL_CLASS_CONFIG.sanctioningFeePercent));
+    await payoutFields.getByRole("combobox", { name: "Type de paiement", exact: true }).selectOption("house_custom");
+    await payoutFields.getByRole("spinbutton", { name: "Added money", exact: true }).fill(String(FULL_CLASS_CONFIG.addedMoney));
+    await payoutFields.getByRole("spinbutton", { name: "Trophée / plaque", exact: true }).fill(String(FULL_CLASS_CONFIG.trophyFee));
+    await payoutFields.getByRole("spinbutton", { name: /^Retenue personnalisée/ }).fill(String(FULL_CLASS_CONFIG.retainagePercent));
+    await payoutFields.getByRole("spinbutton", { name: /^Frais d'organisme/ }).fill(String(FULL_CLASS_CONFIG.sanctioningFeePercent));
     const payoutRow = payoutFields.locator(".payout-rule-row").nth(1);
     await payoutRow.locator("input").nth(0).fill("1");
     await payoutRow.locator("input").nth(1).fill("5");
     await payoutRow.locator("input").nth(2).fill(FULL_CLASS_CONFIG.payoutPercentages);
-    await payoutFields.getByLabel("Aperçu avec", { exact: true }).fill("2");
+    await payoutFields.getByRole("spinbutton", { name: "Aperçu avec", exact: true }).fill("2");
     await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*330[,.]85/);
-    await payoutFields.getByLabel("Notes de paiement", { exact: true }).fill(FULL_CLASS_CONFIG.payoutNotes);
-    await classForm.getByLabel("Critères d'éligibilité", { exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
+    await payoutFields.getByRole("textbox", { name: "Notes de paiement", exact: true }).fill(FULL_CLASS_CONFIG.payoutNotes);
+    await classForm.getByRole("textbox", { name: "Critères d'éligibilité", exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
     await classForm.getByRole("button", { name: "Créer la classe", exact: true }).click();
     await expect(classForm).toBeHidden();
 
