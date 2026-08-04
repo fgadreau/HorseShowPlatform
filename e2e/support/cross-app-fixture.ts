@@ -38,6 +38,7 @@ export type CrossAppFixture = {
   organizationDisciplineId: string;
   participantNames: string[];
   showDayId: string;
+  showDayIds: string[];
   showId: string;
 };
 
@@ -71,6 +72,18 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
     .eq("name", blockName)
     .single<{ id: string; show_day_id: string }>();
   if (blockError) throw blockError;
+
+  const { data: showDays, error: showDaysError } = await admin
+    .from("show_days")
+    .select("id")
+    .eq("show_id", show.id)
+    .order("sort_order", { ascending: true })
+    .order("day_date", { ascending: true });
+  if (showDaysError) throw showDaysError;
+  const showDayIds = (showDays ?? []).map((day) => day.id);
+  if (showDayIds.length < 2) {
+    throw new Error("Le test des onglets ShowScore requiert au moins deux journées.");
+  }
 
   const { data: classRecord, error: classError } = await admin
     .from("classes")
@@ -229,6 +242,7 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
     organizationDisciplineId: classRecord.organization_discipline_id,
     participantNames: orderedContacts.map((contact) => `${contact.first_name} ${contact.last_name}`),
     showDayId: block.show_day_id,
+    showDayIds,
     showId: show.id,
   };
 }

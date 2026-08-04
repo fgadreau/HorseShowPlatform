@@ -17,6 +17,12 @@ parcours reçoivent aussi un Coggins et un vaccin combiné approuvés ainsi qu'u
 validation d'identité. Le robot ne contourne donc pas les contrôles de santé et
 d'identification nécessaires avant la sortie de l'ordre de passage.
 
+Dans ShowScore, il change aussi de journée par les onglets de la gestion du
+show, des blocs, de l'annonceur, des scribes, du secrétariat, de l'horaire et du
+suivi du temps. Un marqueur navigateur confirme que ces changements se font
+dans la page courante, sans rechargement complet, puis le robot revient à la
+journée contenant la classe avant de poursuivre le parcours.
+
 ## Garde-fous
 
 Une exécution avec écriture est refusée sauf si toutes ces conditions sont vraies :
