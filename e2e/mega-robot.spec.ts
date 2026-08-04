@@ -11,6 +11,10 @@ import { buildContactScenarios, futureDate } from "./support/data-factory";
 import { readE2EConfig } from "./support/environment";
 import { readRunState } from "./support/run-state";
 
+// A retry would reuse the same disposable organization before global teardown
+// and collide with the show, contacts and entries created by the first attempt.
+test.describe.configure({ retries: 0 });
+
 test("le méga robot complète un vrai parcours de préproduction", async ({ browser, page }) => {
   test.slow();
   const state = readRunState();
@@ -112,7 +116,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   });
 
   await test.step("configuration complète du bloc et de la classe", async () => {
-    await navigateTo(page, "classes");
+    await navigateTo(page, "blocks");
     await page.getByRole("button", { name: new RegExp(state.showName) }).click();
     await page.getByRole("button", { name: "Bloc libre", exact: true }).first().click();
 
