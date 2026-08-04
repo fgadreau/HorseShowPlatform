@@ -343,6 +343,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await showScorePage.getByRole("button", { name: "Modifier", exact: true }).click();
     await showScorePage.getByLabel("Titre", { exact: true }).fill(`[E2E] Championnat ${state.runId}`);
     await showScorePage.getByRole("button", { name: "Terminer", exact: true }).click();
+    await showScorePage
+      .getByRole("button")
+      .filter({ hasText: "Importer depuis ShowScore" })
+      .click();
     await showScorePage.getByRole("button", { name: "Analyser les résultats ShowScore", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("2 inscrits · 2 résultats scorés");
     await expect(showScorePage.locator("body")).toContainText(/championnat 1100 · Open/);
