@@ -97,11 +97,18 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
         await form.getByLabel("Code postal", { exact: true }).fill(contact.postalCode);
         await form.getByLabel("Pays", { exact: true }).fill(contact.country);
         await form.getByLabel("Date de naissance", { exact: true }).fill(contact.dateOfBirth);
-        const contactResponsePromise = page.waitForResponse((response) =>
-          response.request().method() === "POST" && /\/rest\/v1\/contacts(?:\?|$)/.test(response.url()),
-        );
+        const contactResponsePromise = waitForContactCreateResponse(page);
         await form.getByRole("button", { name: "Créer le contact", exact: true }).click();
-        const contactResponse = await contactResponsePromise;
+        const createDifferentContact = form.getByRole("button", { name: "Ce sont des fiches différentes — créer quand même", exact: true });
+        let contactResponse = await Promise.race([
+          contactResponsePromise,
+          createDifferentContact.waitFor({ state: "visible" }).then(() => null),
+        ]);
+        if (!contactResponse) {
+          const confirmedContactResponsePromise = waitForContactCreateResponse(page);
+          await createDifferentContact.click();
+          contactResponse = await confirmedContactResponsePromise;
+        }
         const contactPayload = contactResponse.request().postDataJSON() as { created_by_user_id?: string };
         expect(contactPayload.created_by_user_id).toBe(state.profileId);
         expect(contactResponse.ok(), await contactResponse.text()).toBeTruthy();
@@ -408,4 +415,10 @@ function pastDateTimeLocal() {
 
 function expectMoney(actual: unknown, expected: number) {
   expect(Number(actual)).toBeCloseTo(expected, 2);
+}
+
+function waitForContactCreateResponse(page: Page) {
+  return page.waitForResponse((response) =>
+    response.request().method() === "POST" && /\/rest\/v1\/contacts(?:\?|$)/.test(response.url()),
+  );
 }
