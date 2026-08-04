@@ -368,8 +368,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     await showScorePage.goto(`${config.showScoreUrl}/public/associations/${state.organizationId}/championnat`);
     await expect(showScorePage.locator("body")).toContainText("Open");
+    const publicClassCard = showScorePage.locator("article").filter({ hasText: "Omnium NRHA (Open)" });
+    await publicClassCard.getByRole("button").first().click();
     for (const participantName of crossAppFixture.participantNames) {
-      await expect(showScorePage.locator("body")).toContainText(participantName);
+      await expect(publicClassCard).toContainText(participantName);
     }
   });
 
