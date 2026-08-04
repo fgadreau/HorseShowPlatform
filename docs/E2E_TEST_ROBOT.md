@@ -21,7 +21,9 @@ Dans ShowScore, il change aussi de journée par les onglets de la gestion du
 show, des blocs, de l'annonceur, des scribes, du secrétariat, de l'horaire et du
 suivi du temps. Un marqueur navigateur confirme que ces changements se font
 dans la page courante, sans rechargement complet, puis le robot revient à la
-journée contenant la classe avant de poursuivre le parcours.
+journée contenant la classe avant de poursuivre le parcours. Dans la gestion
+du show, il confirme aussi que la barre compacte de la journée active conserve
+les actions `Modifier` et `Supprimer`.
 
 ## Garde-fous
 
