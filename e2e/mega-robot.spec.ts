@@ -231,7 +231,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows`);
     await expect(showScorePage.locator("body")).toContainText(state.showName);
 
-    await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup`);
+    await showScorePage.goto(
+      `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/days/${crossAppFixture.showDayId}`,
+    );
+    await expect(showScorePage.locator("body")).toContainText(blockName);
+    const setupLink = showScorePage.locator(
+      `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
+    );
+    await expect(setupLink).toHaveText("Ouvrir setup");
+    await setupLink.click();
     const runCountField = showScorePage
       .getByText("Nombre de runs", { exact: true })
       .locator("..")
