@@ -260,9 +260,18 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(activeDayActions).toBeVisible();
     await expect(activeDayActions.getByRole("button", { name: "Modifier", exact: true })).toBeVisible();
     await expect(activeDayActions.getByRole("button", { name: "Supprimer", exact: true })).toBeVisible();
+    const activeDayContent = showScorePage.locator(
+      `[data-show-day-content="${crossAppFixture.showDayId}"]`,
+    );
+    await expect(activeDayContent).toBeVisible();
+    await expect(activeDayContent).toContainText(blockName);
+    await expect(showScorePage.getByRole("link", { name: "Ouvrir les blocs", exact: true })).toHaveCount(0);
 
     await showScorePage.goto(
       `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/days/${crossAppFixture.showDayId}`,
+    );
+    await expect(showScorePage).toHaveURL(
+      new RegExp(`/shows/${crossAppFixture.showId}\\?day=${crossAppFixture.showDayId}$`),
     );
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
