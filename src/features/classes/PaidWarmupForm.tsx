@@ -55,6 +55,8 @@ function PaidWarmupForm({
   const [arena, setArena] = useState(warmup?.arena ?? "");
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(warmup?.schedule_start_mode ?? "unscheduled");
   const [scheduleStartTime, setScheduleStartTime] = useState(warmup?.schedule_start_time ?? "");
+  const canonicalWarmupBlock = blocks.find((block) => block.id === warmup?.block_id || block.id === warmup?.id);
+  const [followsBlockId, setFollowsBlockId] = useState(canonicalWarmupBlock?.follows_block_id ?? "");
   const [durationMinutesPerRider, setDurationMinutesPerRider] = useState(String(warmup?.duration_minutes_per_rider ?? 5));
   const [dragInterval, setDragInterval] = useState(warmup?.drag_interval == null ? "" : String(warmup.drag_interval));
   const [dragDurationMinutes, setDragDurationMinutes] = useState(String(warmup?.drag_duration_minutes ?? 8));
@@ -84,11 +86,22 @@ function PaidWarmupForm({
   const selectedEntries = selectedEntryIds
     .map((entryId) => findById(entries, entryId))
     .filter((entry): entry is Entry => Boolean(entry));
+  const precedingBlockChoices = blocks
+    .filter(
+      (block) =>
+        block.id !== warmup?.block_id &&
+        block.id !== warmup?.id &&
+        block.show_id === showId &&
+        block.show_day_id === showDayId &&
+        (block.arena ?? "").trim().toLocaleLowerCase() === arena.trim().toLocaleLowerCase(),
+    )
+    .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     const nextDay = showDays.find((day) => day.show_id === nextShowId);
     setShowDayId(nextDay?.id ?? "");
+    setFollowsBlockId("");
     setSelectedEntryIds((current) => current.filter((entryId) => findById(entries, entryId)?.show_id === nextShowId));
   }
 
@@ -143,6 +156,7 @@ function PaidWarmupForm({
         drag_duration_minutes: numericValue(dragDurationMinutes) ?? 8,
         schedule_start_mode: scheduleStartMode,
         schedule_start_time: scheduleStartMode === "fixed" ? scheduleStartTime : null,
+        follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
         is_public_live: isPublicLive,
         active_entry_id: warmup?.active_entry_id ?? null,
         active_started_at: warmup?.active_started_at ?? null,
@@ -179,7 +193,7 @@ function PaidWarmupForm({
         </label>
         <label>
           {uiText(locale, "Journée", "Day")}
-          <SearchSelect items={dayItems} placeholder={uiText(locale, "Choisir une journée", "Choose a day")} value={showDayId} onChange={setShowDayId} />
+          <SearchSelect items={dayItems} placeholder={uiText(locale, "Choisir une journée", "Choose a day")} value={showDayId} onChange={(nextDayId) => { setShowDayId(nextDayId); setFollowsBlockId(""); }} />
         </label>
       </div>
 
@@ -190,14 +204,14 @@ function PaidWarmupForm({
         </label>
         <label>
           Arène
-          <input value={arena} onChange={(event) => setArena(event.target.value)} />
+          <input value={arena} onChange={(event) => { setArena(event.target.value); setFollowsBlockId(""); }} />
         </label>
       </div>
 
       <div className="form-grid three">
         <label>
           {uiText(locale, "Départ", "Start")}
-          <select value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+          <select value={scheduleStartMode} onChange={(event) => { const nextMode = event.target.value as ScheduleStartMode; setScheduleStartMode(nextMode); if (nextMode !== "after_previous") setFollowsBlockId(""); }}>
             <option value="unscheduled">{uiText(locale, "À préciser", "To confirm")}</option>
             <option value="fixed">{uiText(locale, "Heure fixe", "Fixed time")}</option>
             <option value="after_previous">{uiText(locale, "Après le bloc précédent", "After previous block")}</option>
@@ -207,6 +221,15 @@ function PaidWarmupForm({
           Heure
           <input disabled={scheduleStartMode !== "fixed"} type="time" value={scheduleStartTime} onChange={(event) => setScheduleStartTime(event.target.value)} />
         </label>
+        {scheduleStartMode === "after_previous" ? (
+          <label>
+            {uiText(locale, "À la suite de", "After block")}
+            <select required value={followsBlockId} onChange={(event) => setFollowsBlockId(event.target.value)}>
+              <option value="">{uiText(locale, "Choisir le bloc précédent", "Choose the preceding block")}</option>
+              {precedingBlockChoices.map((block) => <option key={block.id} value={block.id}>{block.name}</option>)}
+            </select>
+          </label>
+        ) : null}
         <label className="checkbox-line compact-checkbox">
           <input checked={isPublicLive} type="checkbox" onChange={(event) => setIsPublicLive(event.target.checked)} />
           Public live

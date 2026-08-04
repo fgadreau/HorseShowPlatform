@@ -661,6 +661,14 @@ function canManuallyOrderClass(block: Pick<Block, "schedule_start_mode" | "sched
 }
 
 function compareScheduleClasses(a: Block, b: Block) {
+  if (a.follows_block_id === b.id) {
+    return 1;
+  }
+
+  if (b.follows_block_id === a.id) {
+    return -1;
+  }
+
   const aFixed = classHasFixedStart(a);
   const bFixed = classHasFixedStart(b);
 
@@ -675,11 +683,58 @@ function compareScheduleClasses(a: Block, b: Block) {
   return a.sort_order - b.sort_order || a.name.localeCompare(b.name);
 }
 
+function sortScheduleBlocks(blocks: Block[]) {
+  const source = [...blocks];
+  const blockById = new Map(source.map((block) => [block.id, block]));
+  const followersByBlockId = new Map<string, Block[]>();
+
+  for (const block of source) {
+    if (!block.follows_block_id || !blockById.has(block.follows_block_id)) {
+      continue;
+    }
+
+    const followers = followersByBlockId.get(block.follows_block_id) ?? [];
+    followers.push(block);
+    followersByBlockId.set(block.follows_block_id, followers);
+  }
+
+  for (const followers of followersByBlockId.values()) {
+    followers.sort(compareScheduleClasses);
+  }
+
+  const roots = source
+    .filter((block) => !block.follows_block_id || !blockById.has(block.follows_block_id))
+    .sort(compareScheduleClasses);
+  const ordered: Block[] = [];
+  const visited = new Set<string>();
+
+  function appendWithFollowers(block: Block) {
+    if (visited.has(block.id)) {
+      return;
+    }
+
+    visited.add(block.id);
+    ordered.push(block);
+
+    for (const follower of followersByBlockId.get(block.id) ?? []) {
+      appendWithFollowers(follower);
+    }
+  }
+
+  roots.forEach(appendWithFollowers);
+  source.sort(compareScheduleClasses).forEach(appendWithFollowers);
+  return ordered;
+}
+
 function timeInputValue(time: string | null | undefined) {
   return time ? time.slice(0, 5) : "";
 }
 
-function classScheduleStartLabel(block: Pick<Block, "schedule_start_mode" | "scheduled_time">, locale: Locale = "fr") {
+function classScheduleStartLabel(
+  block: Pick<Block, "schedule_start_mode" | "scheduled_time" | "follows_block_id">,
+  locale: Locale = "fr",
+  blocks: Pick<Block, "id" | "name">[] = [],
+) {
   const mode = scheduleStartModeForClass(block);
 
   if (mode === "fixed" && block.scheduled_time) {
@@ -687,7 +742,10 @@ function classScheduleStartLabel(block: Pick<Block, "schedule_start_mode" | "sch
   }
 
   if (mode === "after_previous") {
-    return uiText(locale, "À la suite du bloc précédent", "After previous block");
+    const precedingBlock = blocks.find((candidate) => candidate.id === block.follows_block_id);
+    return precedingBlock
+      ? uiText(locale, `À la suite de « ${precedingBlock.name} »`, `After “${precedingBlock.name}”`)
+      : uiText(locale, "À la suite du bloc précédent", "After previous block");
   }
 
   return uiText(locale, "Heure indéfinie", "Start undefined");
@@ -795,6 +853,7 @@ export {
   classHasFixedStart,
   canManuallyOrderClass,
   compareScheduleClasses,
+  sortScheduleBlocks,
   timeInputValue,
   classScheduleStartLabel,
   scheduleStartModeLabel,

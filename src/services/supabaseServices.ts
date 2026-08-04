@@ -3913,6 +3913,7 @@ export async function createBlock(input: BlockInput) {
       judge_display_name: input.judge_display_name || null,
       schedule_start_mode: input.schedule_start_mode ?? (input.scheduled_time ? "fixed" : "unscheduled"),
       scheduled_time: input.scheduled_time ?? null,
+      follows_block_id: input.schedule_start_mode === "after_previous" ? input.follows_block_id ?? null : null,
       sort_order: input.sort_order ?? 1,
       schedule_status: input.schedule_status ?? "open",
       schedule_is_public: input.schedule_is_public ?? true,
@@ -6535,6 +6536,17 @@ export async function saveShowScorePaidWarmup(input: ShowScorePaidWarmupInput) {
     throw error;
   }
 
+  if (Object.prototype.hasOwnProperty.call(input, "follows_block_id")) {
+    const { error: dependencyError } = await client
+      .from("blocks")
+      .update({ follows_block_id: input.schedule_start_mode === "after_previous" ? input.follows_block_id ?? null : null })
+      .eq("id", data.block_id);
+
+    if (dependencyError) {
+      throw dependencyError;
+    }
+  }
+
   return data;
 }
 
@@ -6549,6 +6561,17 @@ export async function updateShowScorePaidWarmup(id: string, input: ShowScorePaid
 
   if (error) {
     throw error;
+  }
+
+  if (Object.prototype.hasOwnProperty.call(input, "follows_block_id")) {
+    const { error: dependencyError } = await client
+      .from("blocks")
+      .update({ follows_block_id: input.schedule_start_mode === "after_previous" ? input.follows_block_id ?? null : null })
+      .eq("id", data.block_id);
+
+    if (dependencyError) {
+      throw dependencyError;
+    }
   }
 
   return data;

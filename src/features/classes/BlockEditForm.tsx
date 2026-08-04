@@ -42,6 +42,7 @@ function BlockEditForm({
   const [entriesCloseAt, setEntriesCloseAt] = useState(datetimeLocalInputValue(block.entries_close_at));
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(scheduleStartModeForClass(block));
   const [scheduledTime, setScheduledTime] = useState(timeInputValue(block.scheduled_time));
+  const [followsBlockId, setFollowsBlockId] = useState(block.follows_block_id ?? "");
   const [status, setStatus] = useState<Block["schedule_status"]>(block.schedule_status);
   const [busy, setBusy] = useState(false);
   const selectedShowDays = showDays.filter((day) => day.show_id === block.show_id);
@@ -55,6 +56,15 @@ function BlockEditForm({
       (candidate.arena ?? "") === arena.trim() &&
       (candidate.pattern ?? "") === pattern,
   );
+  const precedingBlockChoices = blocks
+    .filter(
+      (candidate) =>
+        candidate.id !== block.id &&
+        candidate.show_id === block.show_id &&
+        candidate.show_day_id === (showDayId || null) &&
+        (candidate.arena ?? "").trim().toLocaleLowerCase() === arena.trim().toLocaleLowerCase(),
+    )
+    .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -73,6 +83,7 @@ function BlockEditForm({
         entries_close_at: datetimeLocalToIso(entriesCloseAt),
         schedule_start_mode: scheduleStartMode,
         scheduled_time: scheduleStartMode === "fixed" ? scheduledTime || null : null,
+        follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
         schedule_status: status,
       });
     } finally {
@@ -96,7 +107,7 @@ function BlockEditForm({
         <div className="form-grid">
           <label>
             {uiText(locale, "Journée", "Day")}
-            <select value={showDayId} onChange={(event) => { setShowDayId(event.target.value); setConcurrentBlockId(""); }}>
+            <select value={showDayId} onChange={(event) => { setShowDayId(event.target.value); setConcurrentBlockId(""); setFollowsBlockId(""); }}>
               <option value="">{uiText(locale, "Aucune journée", "No day")}</option>
               {selectedShowDays.map((day) => (
                 <option key={day.id} value={day.id}>
@@ -122,7 +133,7 @@ function BlockEditForm({
           <div className="form-grid">
             <label>
               {uiText(locale, "Mode de départ", "Start mode")}
-              <select value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+              <select value={scheduleStartMode} onChange={(event) => { const nextMode = event.target.value as ScheduleStartMode; setScheduleStartMode(nextMode); if (nextMode !== "after_previous") setFollowsBlockId(""); }}>
                 <option value="unscheduled">{scheduleStartModeLabel("unscheduled", locale)}</option>
                 <option value="fixed">{scheduleStartModeLabel("fixed", locale)}</option>
                 <option value="after_previous">{scheduleStartModeLabel("after_previous", locale)}</option>
@@ -132,6 +143,17 @@ function BlockEditForm({
               {uiText(locale, "Heure", "Time")}
               <input disabled={scheduleStartMode !== "fixed"} required={scheduleStartMode === "fixed"} type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} />
             </label>
+            {scheduleStartMode === "after_previous" ? (
+              <label>
+                {uiText(locale, "À la suite de", "After block")}
+                <select required value={followsBlockId} onChange={(event) => setFollowsBlockId(event.target.value)}>
+                  <option value="">{uiText(locale, "Choisir le bloc précédent", "Choose the preceding block")}</option>
+                  {precedingBlockChoices.map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>{candidate.name}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
         </fieldset>
         <div className="form-grid">
@@ -147,7 +169,7 @@ function BlockEditForm({
         <div className="form-grid">
           <label>
             {uiText(locale, "Manège / arène", "Arena")}
-            <input value={arena} onChange={(event) => { setArena(event.target.value); setConcurrentBlockId(""); }} />
+            <input value={arena} onChange={(event) => { setArena(event.target.value); setConcurrentBlockId(""); setFollowsBlockId(""); }} />
           </label>
           <label>
             {uiText(locale, "Juge(s)", "Judge(s)")}

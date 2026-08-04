@@ -1104,6 +1104,7 @@ export type Block = {
   judge_display_name: string | null;
   schedule_start_mode: ScheduleStartMode;
   scheduled_time: string | null;
+  follows_block_id?: string | null;
   estimated_duration: string | null;
   sort_order: number;
   schedule_status: "open" | "closed" | "running" | "finished";
@@ -1623,6 +1624,7 @@ export type BlockInput = {
   judge_display_name?: string;
   schedule_start_mode?: ScheduleStartMode;
   scheduled_time?: string | null;
+  follows_block_id?: string | null;
   sort_order?: number;
   schedule_status?: Block["schedule_status"];
   schedule_is_public?: boolean;
@@ -1647,6 +1649,7 @@ export type BlockUpdateInput = {
   judge_display_name?: string | null;
   schedule_start_mode?: ScheduleStartMode;
   scheduled_time?: string | null;
+  follows_block_id?: string | null;
   sort_order?: number;
   schedule_status?: Block["schedule_status"];
   schedule_is_public?: boolean;
@@ -1828,6 +1831,7 @@ export type ShowScorePaidWarmupInput = {
   drag_duration_minutes?: number;
   schedule_start_mode?: ScheduleStartMode | null;
   schedule_start_time?: string | null;
+  follows_block_id?: string | null;
   is_public_live?: boolean;
   active_entry_id?: string | null;
   active_started_at?: string | null;

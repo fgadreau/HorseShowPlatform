@@ -59,6 +59,7 @@ function BlockForm({
   const [concurrentClassId, setConcurrentClassId] = useState("");
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>("unscheduled");
   const [scheduledTime, setScheduledTime] = useState("");
+  const [followsBlockId, setFollowsBlockId] = useState("");
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShowDays = showDays.filter((day) => day.show_id === selectedShowId);
@@ -70,6 +71,14 @@ function BlockForm({
   const selectedTemplate = findById(blockTemplates, templateId);
   const selectedTemplateClasses = selectedTemplate ? classTemplates.filter((classRecord) => classRecord.block_template_id === selectedTemplate.id) : [];
   const concurrentClassChoices = blocks.filter((block) => block.show_id === selectedShowId && block.show_day_id === selectedShowDayId);
+  const precedingBlockChoices = blocks
+    .filter(
+      (block) =>
+        block.show_id === selectedShowId &&
+        block.show_day_id === selectedShowDayId &&
+        (!arena.trim() || (block.arena ?? "").trim().toLocaleLowerCase() === arena.trim().toLocaleLowerCase()),
+    )
+    .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
   const selectedConcurrentClass = findById(blocks, concurrentClassId) ?? null;
   const patternLockedToConcurrent = Boolean(selectedConcurrentClass);
   const nextSortOrder = Math.max(0, ...blocks.filter((block) => block.show_day_id === selectedShowDayId).map((block) => block.sort_order)) + 10;
@@ -79,6 +88,7 @@ function BlockForm({
     setShowDayId("");
     setSlateId("");
     setConcurrentClassId("");
+    setFollowsBlockId("");
   }
 
   function handleCreationModeChange(nextMode: "preset" | "custom") {
@@ -104,6 +114,7 @@ function BlockForm({
 
   function handleConcurrentClassChange(nextClassId: string) {
     setConcurrentClassId(nextClassId);
+    setFollowsBlockId("");
 
     const nextConcurrentClass = findById(blocks, nextClassId);
     if (nextConcurrentClass) {
@@ -137,6 +148,7 @@ function BlockForm({
         concurrent_block_id: selectedConcurrentClass?.id ?? null,
         schedule_start_mode: scheduleStartMode,
         scheduled_time: scheduleStartMode === "fixed" ? scheduledTime || null : null,
+        follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
         judge_display_name: judgeDisplayName.trim() || undefined,
         sort_order: nextSortOrder,
       });
@@ -181,6 +193,7 @@ function BlockForm({
       setConcurrentClassId("");
       setScheduleStartMode("unscheduled");
       setScheduledTime("");
+      setFollowsBlockId("");
       onCreated?.();
     } finally {
       setBusy(false);
@@ -217,7 +230,7 @@ function BlockForm({
           </label>
           <label>
             {uiText(locale, "Journée", "Day")}
-            <select disabled={!organization || !selectedShowDays.length} value={selectedShowDayId} onChange={(event) => setShowDayId(event.target.value)}>
+            <select disabled={!organization || !selectedShowDays.length} value={selectedShowDayId} onChange={(event) => { setShowDayId(event.target.value); setFollowsBlockId(""); }}>
               {!selectedShowDays.length ? <option value="">{uiText(locale, "Aucune journée", "No day")}</option> : null}
               {selectedShowDays.map((day) => (
                 <option key={day.id} value={day.id}>
@@ -241,7 +254,7 @@ function BlockForm({
         <div className="form-grid">
           <label>
             {uiText(locale, "Manège / arène", "Arena")}
-            <input disabled={!organization || !shows.length || patternLockedToConcurrent} value={arena} onChange={(event) => setArena(event.target.value)} />
+            <input disabled={!organization || !shows.length || patternLockedToConcurrent} value={arena} onChange={(event) => { setArena(event.target.value); setFollowsBlockId(""); }} />
             {patternLockedToConcurrent ? <span className="input-help">{uiText(locale, "Synchronisé avec le bloc concurrent.", "Synced with the concurrent block.")}</span> : null}
           </label>
           <label>
@@ -254,7 +267,7 @@ function BlockForm({
           <div className="form-grid">
             <label>
               {uiText(locale, "Mode de départ", "Start mode")}
-              <select disabled={!organization || !shows.length} value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+              <select disabled={!organization || !shows.length} value={scheduleStartMode} onChange={(event) => { const nextMode = event.target.value as ScheduleStartMode; setScheduleStartMode(nextMode); if (nextMode !== "after_previous") setFollowsBlockId(""); }}>
                 <option value="unscheduled">{scheduleStartModeLabel("unscheduled", locale)}</option>
                 <option value="fixed">{scheduleStartModeLabel("fixed", locale)}</option>
                 <option value="after_previous">{scheduleStartModeLabel("after_previous", locale)}</option>
@@ -264,6 +277,17 @@ function BlockForm({
               {uiText(locale, "Heure", "Time")}
               <input disabled={!organization || !shows.length || scheduleStartMode !== "fixed"} required={scheduleStartMode === "fixed"} type="time" value={scheduledTime} onChange={(event) => setScheduledTime(event.target.value)} />
             </label>
+            {scheduleStartMode === "after_previous" ? (
+              <label>
+                {uiText(locale, "À la suite de", "After block")}
+                <select disabled={!organization || !shows.length} required value={followsBlockId} onChange={(event) => setFollowsBlockId(event.target.value)}>
+                  <option value="">{uiText(locale, "Choisir le bloc précédent", "Choose the preceding block")}</option>
+                  {precedingBlockChoices.map((block) => (
+                    <option key={block.id} value={block.id}>{block.name}{block.arena ? ` — ${block.arena}` : ""}</option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
           </div>
         </fieldset>
         {creationMode === "preset" ? (

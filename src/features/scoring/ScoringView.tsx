@@ -7,7 +7,7 @@ import type { Locale } from "../../lib/i18n";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
 import type { Block, Contact, ClassRecord, Entry, EntryImportBatch, Horse, Show, ShowDay, ShowScoreBlockSetup, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
-import { classEntriesCloseLabel, showDayLabel } from "../classes/classUtils";
+import { classEntriesCloseLabel, classScheduleStartLabel, showDayLabel } from "../classes/classUtils";
 import { classEntriesAreClosed } from "../dashboard/shared";
 
 const aqrAuditImportEnabled = import.meta.env.VITE_AQR_AUDIT_IMPORT_ENABLED !== "false";
@@ -393,7 +393,7 @@ function ScoringView({
                   </div>
                   <div>
                     <span>{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
-                    <span className="muted-line">{formatPaidWarmupSchedule(warmup, locale)}</span>
+                    <span className="muted-line">{formatPaidWarmupSchedule(warmup, locale, blocks)}</span>
                   </div>
                   <div>
                     <strong>{warmupEntries.length}</strong>
@@ -589,7 +589,12 @@ function normalizePaidWarmupEntries(entries: ShowScorePaidWarmup["entries"]) {
     .sort((first, second) => first.order - second.order);
 }
 
-function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale) {
+function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale, blocks: Block[]) {
+  const canonicalBlock = blocks.find((block) => block.id === warmup.block_id || block.id === warmup.id);
+  if (canonicalBlock) {
+    return classScheduleStartLabel(canonicalBlock, locale, blocks);
+  }
+
   if (warmup.schedule_start_mode === "after_previous") {
     return uiText(locale, "Après le bloc", "After block");
   }

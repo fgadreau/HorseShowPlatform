@@ -4,6 +4,7 @@ import { formatCurrency, formatDate } from "../../lib/display";
 import { fetchPublicShow, type PublicShowContext } from "../../services/supabaseServices";
 import type { Block, ClassRecord, PayoutCalculation, PayoutResultSnapshotRow, ShowDay } from "../../types/domain";
 import { showScorePatternLabel } from "../classes/showScorePatterns";
+import { classScheduleStartLabel, sortScheduleBlocks } from "../classes/classUtils";
 
 function totalAddedMoney(classes: ClassRecord[]) {
   return classes.reduce((sum, d) => sum + (d.added_money ?? 0), 0);
@@ -23,12 +24,7 @@ function showDateRange(startDate: string, endDate: string) {
 }
 
 function ScheduleDay({ day, blocks, classes }: { day: ShowDay; blocks: Block[]; classes: ClassRecord[] }) {
-  const dayClasses = blocks
-    .filter((c) => c.show_day_id === day.id)
-    .sort((a, b) => {
-      if (a.scheduled_time && b.scheduled_time) return a.scheduled_time.localeCompare(b.scheduled_time);
-      return a.sort_order - b.sort_order;
-    });
+  const dayClasses = sortScheduleBlocks(blocks.filter((block) => block.show_day_id === day.id));
 
   return (
     <div className="public-schedule-day">
@@ -46,7 +42,7 @@ function ScheduleDay({ day, blocks, classes }: { day: ShowDay; blocks: Block[]; 
                 <Clock size={14} />
                 <span>
                   <strong>{block.name}</strong>
-                  {[block.display_label, block.scheduled_time ? block.scheduled_time.slice(0, 5) : null].filter(Boolean).join(" · ")}
+                  {[block.display_label, classScheduleStartLabel(block, "fr", blocks)].filter(Boolean).join(" · ")}
                 </span>
               </div>
             );
@@ -60,7 +56,7 @@ function ScheduleDay({ day, blocks, classes }: { day: ShowDay; blocks: Block[]; 
               <div className="public-class-block-header">
                 <strong>{block.name}</strong>
                 <div className="public-class-block-meta">
-                  {block.scheduled_time ? <span><Clock size={12} />{block.scheduled_time.slice(0, 5)}</span> : null}
+                  <span><Clock size={12} />{classScheduleStartLabel(block, "fr", blocks)}</span>
                   {block.pattern ? <span>Pattern {showScorePatternLabel(block.pattern)}</span> : null}
                   {blockAddedMoney > 0 ? <span className="public-money-badge"><DollarSign size={12} />{formatCurrency(blockAddedMoney, "CAD")} added</span> : null}
                 </div>

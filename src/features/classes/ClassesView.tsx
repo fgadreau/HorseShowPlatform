@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, Plus } from "lucide-react";
+import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Plus } from "lucide-react";
 import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
 import { classLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
@@ -17,9 +17,10 @@ import { ClassEditForm } from "./ClassEditForm";
 import { SlateForm } from "./SlateForm";
 import { EventBlockForm } from "./EventBlockForm";
 import { PaidWarmupForm } from "./PaidWarmupForm";
-import { sanctionLabel, payoutClassSummary, payoutTemplateClassSummary, classScheduleStartLabel, compareScheduleClasses, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, hasGoverningBodyCode, nrhaClassTypeLabel, nrhaClassTypeFromAssignments } from "./classUtils";
+import { sanctionLabel, payoutClassSummary, payoutTemplateClassSummary, classScheduleStartLabel, sortScheduleBlocks, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, hasGoverningBodyCode, nrhaClassTypeLabel, nrhaClassTypeFromAssignments } from "./classUtils";
 import { showScorePatternLabel } from "./showScorePatterns";
 import { EligibilityRequirementsEditor } from "./EligibilityRequirementsEditor";
+import { ShowbillExport } from "./ShowbillExport";
 
 function ClassesView({
   locale,
@@ -123,6 +124,7 @@ function ClassesView({
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingSlate, setEditingSlate] = useState<Slate | null>(null);
   const [editingPaidWarmup, setEditingPaidWarmup] = useState<ShowScorePaidWarmup | null>(null);
+  const [showbillShow, setShowbillShow] = useState<Show | null>(null);
   const [editingRequirements, setEditingRequirements] = useState<{ scopeType: "block" | "class" | "block_template" | "class_template"; id: string; name: string } | null>(null);
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
   const [expandedScheduleBlockId, setExpandedScheduleBlockId] = useState<string | null>(null);
@@ -156,8 +158,8 @@ function ClassesView({
       grouped.set(block.show_day_id, dayClasses);
     }
 
-    for (const dayClasses of grouped.values()) {
-      dayClasses.sort(compareScheduleClasses);
+    for (const [dayId, dayClasses] of grouped) {
+      grouped.set(dayId, sortScheduleBlocks(dayClasses));
     }
 
     return grouped;
@@ -224,8 +226,8 @@ function ClassesView({
       grouped.set(block.show_id, showClasses);
     }
 
-    for (const showClasses of grouped.values()) {
-      showClasses.sort(compareScheduleClasses);
+    for (const [showId, showClasses] of grouped) {
+      grouped.set(showId, sortScheduleBlocks(showClasses));
     }
 
     return grouped;
@@ -377,7 +379,7 @@ function ClassesView({
               <span className="muted-line">
                 {[
                   blockClasses.length ? uiText(locale, `${blockClasses.length} classe${blockClasses.length === 1 ? "" : "s"}`, `${blockClasses.length} class${blockClasses.length === 1 ? "" : "es"}`) : uiText(locale, "Aucune classe", "No blocks"),
-                  classScheduleStartLabel(block, locale),
+                  classScheduleStartLabel(block, locale, blocks),
                   block.display_label,
                   block.slate_id ? `${uiText(locale, "Slate", "Slate")}: ${findById(slates, block.slate_id)?.name ?? uiText(locale, "inconnue", "unknown")}` : null,
                   block.pattern ? `Pattern ${showScorePatternLabel(block.pattern)}` : null,
@@ -472,7 +474,7 @@ function ClassesView({
     const movableClasses = dayClasses.filter(canManuallyOrderClass).sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
     const movableIndex = movableClasses.findIndex((candidate) => candidate.id === block.id);
     const canMove = canManuallyOrderClass(block) && movableIndex >= 0;
-    const timeLabel = block.scheduled_time ? block.scheduled_time.slice(0, 5) : null;
+    const timeLabel = classScheduleStartLabel(block, locale, blocks);
 
     return (
       <article className="schedule-block schedule-event-block" key={block.id}>
@@ -515,7 +517,10 @@ function ClassesView({
   }
 
   function renderPaidWarmupBlock(warmup: ShowScorePaidWarmup) {
-    const timeLabel = formatPaidWarmupSchedule(warmup, locale);
+    const canonicalBlock = blocks.find((block) => block.id === warmup.block_id || block.id === warmup.id);
+    const timeLabel = canonicalBlock
+      ? classScheduleStartLabel(canonicalBlock, locale, blocks)
+      : formatPaidWarmupSchedule(warmup, locale);
 
     return (
       <article className="schedule-block schedule-event-block paid-warmup-schedule-block" key={warmup.id}>
@@ -674,6 +679,19 @@ function ClassesView({
           { label: "Paid warmups", value: String(showScorePaidWarmups.length) },
         ]}
       />
+
+      {showbillShow ? (
+        <ModalDialog className="showbill-modal" description={uiText(locale, "Aperçu imprimable et export compatible Google Sheets.", "Printable preview and Google Sheets-compatible export.")} eyebrow="Showbill" title={showbillShow.name} onClose={() => setShowbillShow(null)}>
+          <ShowbillExport
+            blocks={blocks}
+            classes={classes}
+            locale={locale}
+            organization={organization}
+            show={showbillShow}
+            showDays={showDays}
+          />
+        </ModalDialog>
+      ) : null}
 
       {creatingBlockTemplate ? (
         <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc récurrent", "New recurring block")} onClose={() => setCreatingBlockTemplate(false)}>
@@ -988,9 +1006,15 @@ function ClassesView({
                       </span>
                     </span>
                   </button>
-                  <span className="schedule-count-pill">
-                    {showStatusLabel(show.status, locale)}
-                  </span>
+                  <div className="row-actions">
+                    <button className="ghost-button" type="button" onClick={() => setShowbillShow(show)}>
+                      <FileSpreadsheet size={17} />
+                      Showbill
+                    </button>
+                    <span className="schedule-count-pill">
+                      {showStatusLabel(show.status, locale)}
+                    </span>
+                  </div>
                 </div>
                 {isShowExpanded ? (
                   <div className="show-schedule-body">
@@ -1097,13 +1121,50 @@ function ClassesView({
 
 type DayScheduleItem =
   | { type: "class"; block: Block }
-  | { type: "paidWarmup"; warmup: ShowScorePaidWarmup };
+  | { type: "paidWarmup"; warmup: ShowScorePaidWarmup; block?: Block };
 
 function buildDayScheduleItems(blocks: Block[], paidWarmups: ShowScorePaidWarmup[]): DayScheduleItem[] {
-  return [
-    ...blocks.map((block) => ({ type: "class" as const, block })),
-    ...paidWarmups.map((warmup) => ({ type: "paidWarmup" as const, warmup })),
-  ].sort(compareDayScheduleItems);
+  const paidWarmupBlockIds = new Set(paidWarmups.flatMap((warmup) => [warmup.id, warmup.block_id].filter(Boolean)));
+  const source: DayScheduleItem[] = [
+    ...blocks.filter((block) => block.block_type !== "paid_warmup" || !paidWarmupBlockIds.has(block.id)).map((block) => ({ type: "class" as const, block })),
+    ...paidWarmups.map((warmup) => ({
+      type: "paidWarmup" as const,
+      warmup,
+      block: blocks.find((block) => block.id === warmup.block_id || block.id === warmup.id),
+    })),
+  ];
+  const itemById = new Map(source.map((item) => [scheduleItemId(item), item]));
+  const followers = new Map<string, DayScheduleItem[]>();
+
+  for (const item of source) {
+    const precedingId = scheduleItemFollowsBlockId(item);
+    if (!precedingId || !itemById.has(precedingId)) continue;
+    followers.set(precedingId, [...(followers.get(precedingId) ?? []), item]);
+  }
+
+  for (const items of followers.values()) items.sort(compareDayScheduleItems);
+  const roots = source.filter((item) => !scheduleItemFollowsBlockId(item) || !itemById.has(scheduleItemFollowsBlockId(item)!)).sort(compareDayScheduleItems);
+  const ordered: DayScheduleItem[] = [];
+  const visited = new Set<string>();
+  const append = (item: DayScheduleItem) => {
+    const id = scheduleItemId(item);
+    if (visited.has(id)) return;
+    visited.add(id);
+    ordered.push(item);
+    (followers.get(id) ?? []).forEach(append);
+  };
+
+  roots.forEach(append);
+  source.sort(compareDayScheduleItems).forEach(append);
+  return ordered;
+}
+
+function scheduleItemId(item: DayScheduleItem) {
+  return item.type === "class" ? item.block.id : item.block?.id || item.warmup.block_id || item.warmup.id;
+}
+
+function scheduleItemFollowsBlockId(item: DayScheduleItem) {
+  return item.type === "class" ? item.block.follows_block_id : item.block?.follows_block_id;
 }
 
 function compareDayScheduleItems(first: DayScheduleItem, second: DayScheduleItem) {

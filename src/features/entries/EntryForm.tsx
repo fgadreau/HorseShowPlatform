@@ -603,7 +603,7 @@ function EntryForm({
                 <div className="entry-showbill-block-header">
                   <div>
                     <strong>{block.block.display_label || block.block.name}</strong>
-                    <span>{[classScheduleStartLabel(block.block, locale), block.block.arena].filter(Boolean).join(" · ")}</span>
+                    <span>{[classScheduleStartLabel(block.block, locale, blocks), block.block.arena].filter(Boolean).join(" · ")}</span>
                   </div>
                 </div>
                 <div className="entry-showbill-class-list">
