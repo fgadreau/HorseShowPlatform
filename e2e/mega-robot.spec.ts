@@ -236,15 +236,25 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     showScorePage.once("dialog", (dialog) => dialog.accept());
     await liveSource.selectOption("announcer");
     await expect(liveSource).toHaveValue("announcer");
+    const admin = createE2EAdminClient();
+    await expect.poll(async () => {
+      const { data, error } = await admin
+        .from("show_score_block_setups")
+        .select("live_data_source")
+        .eq("block_id", crossAppFixture!.blockId)
+        .single<{ live_data_source: string }>();
+      if (error) throw error;
+      return data.live_data_source;
+    }).toBe("announcer");
 
     await showScorePage.goto(`${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/announcer`);
-    await expect(showScorePage.locator("body")).toContainText("Contrôle live par l’annonceur");
+    await expect(showScorePage.locator("body")).toContainText(blockName);
+    await expect(showScorePage.locator("body")).toContainText(/Source\s*:\s*annonceur/i);
     await scoreNextAnnouncerRun(showScorePage, "72,5");
     await scoreNextAnnouncerRun(showScorePage, "70");
     await showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("Bloc terminé par l’annonceur");
 
-    const admin = createE2EAdminClient();
     await expect.poll(async () => {
       const { data, error } = await admin
         .from("show_score_announcer_live_sessions")
