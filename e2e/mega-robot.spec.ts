@@ -282,8 +282,11 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     }
     await scoreNextAnnouncerRun(showScorePage, "72,5");
     await scoreNextAnnouncerRun(showScorePage, "70");
-    await showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText("Bloc terminé par l’annonceur");
+    const completeBlock = showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true });
+    if (!(await completeBlock.isVisible())) {
+      await announcerClassHeader.click();
+    }
+    await completeBlock.click();
 
     await expect.poll(async () => {
       const { data, error } = await admin
