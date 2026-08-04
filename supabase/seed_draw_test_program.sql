@@ -9,16 +9,16 @@
 
 begin;
 
-delete from public.show_score_class_setups
+delete from public.show_score_block_setups
 where show_id = '4d000000-0000-0000-0000-000000000001';
 
 delete from public.entries
 where show_id = '4d000000-0000-0000-0000-000000000001';
 
-delete from public.divisions
+delete from public.classes
 where show_id = '4d000000-0000-0000-0000-000000000001';
 
-delete from public.classes
+delete from public.blocks
 where show_id = '4d000000-0000-0000-0000-000000000001';
 
 delete from public.show_days
@@ -102,55 +102,42 @@ set
   start_time = excluded.start_time,
   updated_at = now();
 
-insert into public.classes (
+insert into public.blocks (
   id,
   organization_id,
   show_id,
   show_day_id,
   name,
-  code,
-  block_label,
+  display_label,
   arena,
   pattern,
-  sanctioning_body_codes,
-  back_number_policy,
-  nrha_slate_number,
   entries_close_at,
-  late_entries_allowed,
-  late_entry_fee_percent,
-  entry_fee,
-  status,
-  is_public,
+  schedule_status,
+  schedule_is_public,
   sort_order
 )
 values
-  ('4dc00000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test 1100 Open', '1100', 'Block A', 'Main Arena', '8', array['NRHA'], 'horse', 'Slate 1', '2026-06-03 18:00:00-04', true, 50, 125.00, 'open', true, 1),
-  ('4dc00000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test Mixed Non Pro', '5300', 'Block B', 'Main Arena', '6', array['NRHA'], 'horse', 'Slate 1', '2026-06-03 18:00:00-04', true, 50, 115.00, 'open', true, 2),
-  ('4dc00000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test Short Edge', 'EDGE', 'Block C', 'Main Arena', '5', array['AQR'], 'horse', 'Slate 1', '2026-06-03 18:00:00-04', true, 50, 75.00, 'open', true, 3)
+  ('4dc00000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test 1100 Open', 'Block A', 'Main Arena', '8', '2026-06-03 18:00:00-04', 'open', true, 1),
+  ('4dc00000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test Mixed Non Pro', 'Block B', 'Main Arena', '6', '2026-06-03 18:00:00-04', 'open', true, 2),
+  ('4dc00000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4d100000-0000-0000-0000-000000000001', 'Draw Test Short Edge', 'Block C', 'Main Arena', '5', '2026-06-03 18:00:00-04', 'open', true, 3)
 on conflict (id) do update
 set
   name = excluded.name,
-  code = excluded.code,
-  block_label = excluded.block_label,
+  display_label = excluded.display_label,
   arena = excluded.arena,
   pattern = excluded.pattern,
-  sanctioning_body_codes = excluded.sanctioning_body_codes,
-  back_number_policy = excluded.back_number_policy,
-  nrha_slate_number = excluded.nrha_slate_number,
   entries_close_at = excluded.entries_close_at,
-  late_entries_allowed = excluded.late_entries_allowed,
-  late_entry_fee_percent = excluded.late_entry_fee_percent,
-  entry_fee = excluded.entry_fee,
-  status = excluded.status,
-  is_public = excluded.is_public,
+  schedule_status = excluded.schedule_status,
+  schedule_is_public = excluded.schedule_is_public,
   sort_order = excluded.sort_order,
   updated_at = now();
 
-insert into public.divisions (
+insert into public.classes (
   id,
   organization_id,
   show_id,
-  class_id,
+  block_id,
+  organization_discipline_id,
   name,
   code,
   entry_fee,
@@ -159,14 +146,13 @@ insert into public.divisions (
   added_money,
   retainage_percent,
   trophy_or_plaque_fee,
-  sanctioning_body_codes,
-  eligibility_rules
+  sort_order
 )
 values
-  ('4dd00000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000001', '1100 Open', '1100', 125.00, 10.00, 'nrha_schedule_a', 500.00, 35.00, 25.00, array['NRHA'], '{"nrha_class_type":"category_1"}'::jsonb),
-  ('4dd00000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000002', '5300 Non Pro', '5300', 115.00, 10.00, 'nrha_schedule_a', 300.00, 35.00, 20.00, array['NRHA'], '{"nrha_class_type":"category_5"}'::jsonb),
-  ('4dd00000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000002', '5310 Intermediate Non Pro', '5310', 95.00, 10.00, 'house_custom', 150.00, 30.00, 10.00, array['NRHA'], '{"nrha_class_type":"category_5"}'::jsonb),
-  ('4dd00000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000003', 'Short Edge', 'EDGE', 75.00, 0.00, 'none', 0.00, null, 0.00, array['AQR'], '{}'::jsonb)
+  ('4dd00000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000001', '1100 Open', '1100', 125.00, 10.00, 'nrha_schedule_a', 500.00, 35.00, 25.00, 1),
+  ('4dd00000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000001', '5300 Non Pro', '5300', 115.00, 10.00, 'nrha_schedule_a', 300.00, 35.00, 20.00, 1),
+  ('4dd00000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000001', '5310 Intermediate Non Pro', '5310', 95.00, 10.00, 'house_custom', 150.00, 30.00, 10.00, 2),
+  ('4dd00000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', '4d000000-0000-0000-0000-000000000001', '4dc00000-0000-0000-0000-000000000003', '33000000-0000-0000-0000-000000000001', 'Short Edge', 'EDGE', 75.00, 0.00, 'none', 0.00, null, 0.00, 1)
 on conflict (id) do update
 set
   name = excluded.name,
@@ -177,13 +163,38 @@ set
   added_money = excluded.added_money,
   retainage_percent = excluded.retainage_percent,
   trophy_or_plaque_fee = excluded.trophy_or_plaque_fee,
-  sanctioning_body_codes = excluded.sanctioning_body_codes,
-  eligibility_rules = excluded.eligibility_rules,
+  sort_order = excluded.sort_order,
   updated_at = now();
+
+insert into public.class_governing_bodies (
+  class_id,
+  governing_body_id,
+  reporting_class_code,
+  eligibility_profile_code,
+  sanction_metadata
+)
+select
+  mapping.class_id::uuid,
+  body.id,
+  mapping.reporting_class_code,
+  mapping.eligibility_profile_code,
+  '{"seed":"draw_test_program"}'::jsonb
+from (
+  values
+    ('4dd00000-0000-0000-0000-000000000001', 'NRHA', '1100', 'category_1_ancillary_year_end'),
+    ('4dd00000-0000-0000-0000-000000000002', 'NRHA', '5300', 'category_5_ancillary_non_year_end'),
+    ('4dd00000-0000-0000-0000-000000000003', 'NRHA', '5310', 'category_5_ancillary_non_year_end'),
+    ('4dd00000-0000-0000-0000-000000000004', 'AQR', 'EDGE', null)
+) mapping(class_id, body_code, reporting_class_code, eligibility_profile_code)
+join public.governing_bodies body on body.code = mapping.body_code
+on conflict (class_id, governing_body_id) do update
+set reporting_class_code = excluded.reporting_class_code,
+    eligibility_profile_code = excluded.eligibility_profile_code,
+    sanction_metadata = excluded.sanction_metadata,
+    updated_at = now();
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -194,7 +205,6 @@ insert into public.contacts (
 )
 select
   md5('draw-test-rider-' || n)::uuid,
-  '30000000-0000-0000-0000-000000000001',
   'rider',
   'Draw Rider',
   lpad(n::text, 2, '0'),
@@ -214,7 +224,6 @@ set
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -225,7 +234,6 @@ insert into public.contacts (
 )
 select
   md5('draw-test-owner-' || n)::uuid,
-  '30000000-0000-0000-0000-000000000001',
   'owner',
   'Draw Owner',
   lpad(n::text, 2, '0'),
@@ -243,41 +251,32 @@ set
   type = excluded.type,
   updated_at = now();
 
-do $$
-begin
-  if to_regclass('public.contact_roles') is not null then
-    insert into public.contact_roles (organization_id, contact_id, role, source)
-    select '30000000-0000-0000-0000-000000000001', md5('draw-test-rider-' || n)::uuid, 'rider', 'manual'
-    from generate_series(1, 30) as n
-    on conflict (organization_id, contact_id, role) do update
-    set source = excluded.source;
+insert into public.directory_contacts (organization_discipline_id, contact_id, source, created_by_user_id)
+select '33000000-0000-0000-0000-000000000001', md5('draw-test-rider-' || n)::uuid, 'manual', '20000000-0000-0000-0000-000000000002'
+from generate_series(1, 30) as n
+on conflict (organization_discipline_id, contact_id) do update
+set source = excluded.source;
 
-    insert into public.contact_roles (organization_id, contact_id, role, source)
-    select '30000000-0000-0000-0000-000000000001', md5('draw-test-owner-' || n)::uuid, 'owner', 'manual'
-    from generate_series(1, 95) as n
-    on conflict (organization_id, contact_id, role) do update
-    set source = excluded.source;
-  end if;
+insert into public.contact_roles (organization_id, contact_id, role, source)
+select '30000000-0000-0000-0000-000000000001', md5('draw-test-rider-' || n)::uuid, 'rider', 'manual'
+from generate_series(1, 30) as n
+on conflict (organization_id, contact_id, role) do update
+set source = excluded.source;
 
-  if to_regclass('public.contact_organization_links') is not null then
-    insert into public.contact_organization_links (organization_id, contact_id, source, created_by_user_id)
-    select '30000000-0000-0000-0000-000000000001', md5('draw-test-rider-' || n)::uuid, 'created_here', '20000000-0000-0000-0000-000000000002'
-    from generate_series(1, 30) as n
-    on conflict (organization_id, contact_id) do update
-    set source = excluded.source;
+insert into public.directory_contacts (organization_discipline_id, contact_id, source, created_by_user_id)
+select '33000000-0000-0000-0000-000000000001', md5('draw-test-owner-' || n)::uuid, 'manual', '20000000-0000-0000-0000-000000000002'
+from generate_series(1, 95) as n
+on conflict (organization_discipline_id, contact_id) do update
+set source = excluded.source;
 
-    insert into public.contact_organization_links (organization_id, contact_id, source, created_by_user_id)
-    select '30000000-0000-0000-0000-000000000001', md5('draw-test-owner-' || n)::uuid, 'created_here', '20000000-0000-0000-0000-000000000002'
-    from generate_series(1, 95) as n
-    on conflict (organization_id, contact_id) do update
-    set source = excluded.source;
-  end if;
-end;
-$$;
+insert into public.contact_roles (organization_id, contact_id, role, source)
+select '30000000-0000-0000-0000-000000000001', md5('draw-test-owner-' || n)::uuid, 'owner', 'manual'
+from generate_series(1, 95) as n
+on conflict (organization_id, contact_id, role) do update
+set source = excluded.source;
 
 insert into public.horses (
   id,
-  organization_id,
   name,
   breed,
   color,
@@ -291,7 +290,6 @@ insert into public.horses (
 )
 select
   md5('draw-test-horse-' || n)::uuid,
-  '30000000-0000-0000-0000-000000000001',
   'Draw Test Horse ' || lpad(n::text, 2, '0'),
   'Quarter Horse',
   case when n % 3 = 0 then 'Sorrel' when n % 3 = 1 then 'Bay' else 'Chestnut' end,
@@ -316,20 +314,13 @@ set
   primary_owner_contact_id = excluded.primary_owner_contact_id,
   updated_at = now();
 
-do $$
-begin
-  if to_regclass('public.horse_organization_links') is not null then
-    insert into public.horse_organization_links (organization_id, horse_id, source, created_by_user_id)
-    select '30000000-0000-0000-0000-000000000001', md5('draw-test-horse-' || n)::uuid, 'created_here', '20000000-0000-0000-0000-000000000002'
-    from generate_series(1, 95) as n
-    on conflict (organization_id, horse_id) do update
-    set source = excluded.source;
-  end if;
-end;
-$$;
+insert into public.directory_horses (organization_discipline_id, horse_id, source, created_by_user_id)
+select '33000000-0000-0000-0000-000000000001', md5('draw-test-horse-' || n)::uuid, 'manual', '20000000-0000-0000-0000-000000000002'
+from generate_series(1, 95) as n
+on conflict (organization_discipline_id, horse_id) do update
+set source = excluded.source;
 
 insert into public.horse_contacts (
-  organization_id,
   horse_id,
   contact_id,
   role,
@@ -339,7 +330,6 @@ insert into public.horse_contacts (
   can_pay_invoices
 )
 select
-  '30000000-0000-0000-0000-000000000001',
   md5('draw-test-horse-' || n)::uuid,
   md5('draw-test-owner-' || n)::uuid,
   'owner',
@@ -456,7 +446,7 @@ with open_regular as (
     ((n - 1) % 14) + 1 as rider_n,
     false as is_late,
     'active'::varchar as status,
-    '4dd00000-0000-0000-0000-000000000001'::uuid as division_id,
+    '4dd00000-0000-0000-0000-000000000001'::uuid as class_id,
     125.00::numeric as base_fee,
     125.00::numeric as total_fees
   from generate_series(1, 42) as n
@@ -468,7 +458,7 @@ open_late as (
     14 + n as rider_n,
     true as is_late,
     'active'::varchar as status,
-    '4dd00000-0000-0000-0000-000000000001'::uuid as division_id,
+    '4dd00000-0000-0000-0000-000000000001'::uuid as class_id,
     125.00::numeric as base_fee,
     187.50::numeric as total_fees
   from generate_series(1, 3) as n
@@ -480,7 +470,7 @@ open_inactive as (
     n as rider_n,
     false as is_late,
     case when n = 1 then 'cancelled' else 'scratched' end::varchar as status,
-    '4dd00000-0000-0000-0000-000000000001'::uuid as division_id,
+    '4dd00000-0000-0000-0000-000000000001'::uuid as class_id,
     125.00::numeric as base_fee,
     125.00::numeric as total_fees
   from generate_series(1, 2) as n
@@ -492,7 +482,7 @@ mixed_regular as (
     ((n - 1) % 10) + 1 as rider_n,
     false as is_late,
     'active'::varchar as status,
-    case when n <= 15 then '4dd00000-0000-0000-0000-000000000002'::uuid else '4dd00000-0000-0000-0000-000000000003'::uuid end as division_id,
+    case when n <= 15 then '4dd00000-0000-0000-0000-000000000002'::uuid else '4dd00000-0000-0000-0000-000000000003'::uuid end as class_id,
     case when n <= 15 then 115.00::numeric else 95.00::numeric end as base_fee,
     case when n <= 15 then 115.00::numeric else 95.00::numeric end as total_fees
   from generate_series(1, 30) as n
@@ -504,7 +494,7 @@ mixed_late as (
     20 + n as rider_n,
     true as is_late,
     'active'::varchar as status,
-    case when n = 1 then '4dd00000-0000-0000-0000-000000000002'::uuid else '4dd00000-0000-0000-0000-000000000003'::uuid end as division_id,
+    case when n = 1 then '4dd00000-0000-0000-0000-000000000002'::uuid else '4dd00000-0000-0000-0000-000000000003'::uuid end as class_id,
     case when n = 1 then 115.00::numeric else 95.00::numeric end as base_fee,
     case when n = 1 then 172.50::numeric else 142.50::numeric end as total_fees
   from generate_series(1, 2) as n
@@ -516,7 +506,7 @@ short_edge as (
     case when n <= 3 then 23 else 20 + n end as rider_n,
     false as is_late,
     'active'::varchar as status,
-    '4dd00000-0000-0000-0000-000000000004'::uuid as division_id,
+    '4dd00000-0000-0000-0000-000000000004'::uuid as class_id,
     75.00::numeric as base_fee,
     75.00::numeric as total_fees
   from generate_series(1, 7) as n
@@ -539,7 +529,7 @@ insert into public.entries (
   organization_id,
   show_id,
   horse_id,
-  division_id,
+  class_id,
   created_by_user_id,
   owner_contact_id,
   rider_contact_id,
@@ -558,7 +548,7 @@ select
   '30000000-0000-0000-0000-000000000001',
   '4d000000-0000-0000-0000-000000000001',
   md5('draw-test-horse-' || horse_n)::uuid,
-  division_id,
+  class_id,
   '20000000-0000-0000-0000-000000000002',
   md5('draw-test-owner-' || horse_n)::uuid,
   md5('draw-test-rider-' || rider_n)::uuid,
@@ -575,7 +565,7 @@ from planned_entries
 on conflict (id) do update
 set
   horse_id = excluded.horse_id,
-  division_id = excluded.division_id,
+  class_id = excluded.class_id,
   owner_contact_id = excluded.owner_contact_id,
   rider_contact_id = excluded.rider_contact_id,
   payer_contact_id = excluded.payer_contact_id,
@@ -591,12 +581,12 @@ set
 commit;
 
 select
-  c.name as class_name,
+  b.name as block_name,
   count(e.id) filter (where e.status not in ('cancelled', 'scratched', 'scratched_pending_refund')) as active_entries,
   count(e.id) filter (where e.is_late and e.status not in ('cancelled', 'scratched', 'scratched_pending_refund')) as late_entries
-from public.classes c
-join public.divisions d on d.class_id = c.id
-left join public.entries e on e.division_id = d.id
-where c.show_id = '4d000000-0000-0000-0000-000000000001'
-group by c.id, c.name, c.sort_order
-order by c.sort_order;
+from public.blocks b
+join public.classes c on c.block_id = b.id
+left join public.entries e on e.class_id = c.id
+where b.show_id = '4d000000-0000-0000-0000-000000000001'
+group by b.id, b.name, b.sort_order
+order by b.sort_order;

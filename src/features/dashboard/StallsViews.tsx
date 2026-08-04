@@ -1,10 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import type { ComponentType } from "react";
 import { ClipboardList, Plus, Warehouse } from "lucide-react";
 import { ContactPicker, EmptyState, FormActions, Metric, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
-import { getHorseCogginsValidity, getHorseVaccineValidity, organizationRequiresHealthVerification, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import type { Locale } from "../../lib/i18n";
 import {
   createContact,
@@ -16,6 +15,7 @@ import {
   updateStallOption,
 } from "../../services/supabaseServices";
 import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -48,12 +48,6 @@ type TackBillingMode = "split_horses" | "single_contact";
 
 type AssociationReservationTab = "reservations" | "new-reservation" | "options";
 type PersonalReservationTab = "my-reservations" | "new-reservation" | "available-options";
-
-type StallHorseHealthValidity = {
-  coggins: HorseCogginsValidity;
-  vaccine: HorseVaccineValidity;
-  valid: boolean;
-};
 
 export function StallsView({
   locale,
@@ -1182,28 +1176,17 @@ function StallBookingForm({
   const [busy, setBusy] = useState(false);
   const selectedShowId = showId || firstStallOption?.show_id || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
-  const healthRequired = organizationRequiresHealthVerification(organization);
-
-  function horseHealthValidity(horseId: string): StallHorseHealthValidity {
-    const coggins = getHorseCogginsValidity({
-      documents: horseHealthDocuments,
-      horseId,
-      organization,
-      referenceDate: selectedShow?.start_date ?? null,
-    });
-    const vaccine = getHorseVaccineValidity({
-      documents: horseHealthDocuments,
-      horseId,
-      organization,
-      referenceDate: selectedShow?.start_date ?? null,
-    });
-
-    return {
-      coggins,
-      vaccine,
-      valid: coggins.valid && vaccine.valid,
-    };
-  }
+  const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
+  const healthComplianceOverview = useHorseHealthComplianceOverview({
+    horseIds: selectedShow && organization ? horses.map((horse) => horse.id) : [],
+    organizationId: selectedShow ? organization?.id : undefined,
+    referenceDate: selectedShow?.start_date ?? "1970-01-01",
+    refreshToken: healthComplianceRevision,
+  });
+  const healthComplianceByHorseId = useMemo(
+    () => new Map(healthComplianceOverview.results.map((result) => [result.horse_id, result])),
+    [healthComplianceOverview.results],
+  );
 
   const stallChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isStallReservationOption(option));
   const tackChoices = stallOptions.filter((option) => option.show_id === selectedShowId && isTackStallOption(option));
@@ -1228,14 +1211,17 @@ function StallBookingForm({
   });
   const reservedHorseIdsKey = Array.from(reservedHorseBookingById.keys()).sort().join("|");
   const selectedReservedHorseCount = selectedHorseIds.filter((horseId) => reservedHorseBookingById.has(horseId)).length;
-  const availableHorseCount = horses.filter((horse) => !reservedHorseBookingById.has(horse.id) && (!healthRequired || horseHealthValidity(horse.id).valid)).length;
+  const availableHorseCount = horses.filter((horse) => !reservedHorseBookingById.has(horse.id) && healthComplianceByHorseId.get(horse.id)?.can_proceed).length;
   const selectedHorses = selectedHorseIds
     .filter((horseId) => !reservedHorseBookingById.has(horseId))
     .map((horseId) => findById(horses, horseId))
     .filter((horse): horse is Horse => Boolean(horse));
   const selectedInvalidHealth = selectedHorses
-    .map((horse) => ({ horse, validity: horseHealthValidity(horse.id) }))
-    .filter((item) => healthRequired && !item.validity.valid);
+    .map((horse) => ({ horse, compliance: healthComplianceByHorseId.get(horse.id) ?? null }))
+    .filter((item) => !item.compliance?.can_proceed);
+  const selectedHealthWarnings = selectedHorses
+    .map((horse) => ({ horse, compliance: healthComplianceByHorseId.get(horse.id) ?? null }))
+    .filter((item) => item.compliance?.can_proceed && !["compliant", "not_required"].includes(item.compliance.compliance_status));
   const selectedHorseBillingTargets = selectedHorses.map((horse) => ({
     horse,
     payerContactId: horsePayerContactIds[horse.id] || horse.primary_owner_contact_id,
@@ -1324,7 +1310,7 @@ function StallBookingForm({
     : stallChoices.length
       ? `${stallChoices.length} produit${stallChoices.length === 1 ? "" : "s"} stall pour ce concours.`
       : uiText(locale, "Aucun produit stall pour ce concours.", "No stall product for this show.");
-  const formMessage = reservationCreateMessage({
+  const baseFormMessage = reservationCreateMessage({
     locale,
     canCreate,
     allowedTackQuantity,
@@ -1362,6 +1348,13 @@ function StallBookingForm({
     totalPrice,
     currency,
   });
+  const formMessage = canCreate && selectedHealthWarnings.length
+    ? uiText(
+        locale,
+        `Avertissement santé pour ${selectedHealthWarnings.map((item) => item.horse.name).join(", ")}; la politique de l'association permet quand même la réservation.`,
+        `Health warning for ${selectedHealthWarnings.map((item) => item.horse.name).join(", ")}; the association policy still allows this reservation.`,
+      )
+    : baseFormMessage;
   const hasTackSection = Boolean(tackChoices.length);
   const hasCampingSection = Boolean(campingChoices.length);
   const campingSectionNumber = 4 + (hasTackSection ? 1 : 0);
@@ -1621,7 +1614,7 @@ function StallBookingForm({
   }
 
   function toggleHorse(horseId: string) {
-    if (reservedHorseBookingById.has(horseId) || (healthRequired && !horseHealthValidity(horseId).valid)) {
+    if (reservedHorseBookingById.has(horseId) || !healthComplianceByHorseId.get(horseId)?.can_proceed) {
       return;
     }
 
@@ -1749,14 +1742,14 @@ function StallBookingForm({
             </span>
           </div>
           {!horses.length ? <EmptyState label={uiText(locale, "Ajoute d'abord les chevaux avant de réserver des stalls.", "Add horses before reserving stalls.")} /> : null}
-          {horses.length && !availableHorseCount ? <EmptyState label={uiText(locale, "Tous les chevaux ont déjà un stall pour ce concours.", "All horses already have a stall for this show.")} /> : null}
+          {horses.length && !availableHorseCount ? <EmptyState label={uiText(locale, "Aucun cheval n'est actuellement disponible: vérifie les réservations et la conformité santé.", "No horse is currently available: check reservations and health compliance.")} /> : null}
           <div className="horse-reservation-list">
             {horses.map((horse) => {
               const reservedBooking = reservedHorseBookingById.get(horse.id);
               const reservedOption = reservedBooking ? findById(stallOptions, reservedBooking.stall_option_id) : null;
               const alreadyReserved = Boolean(reservedBooking);
-              const healthValidity = horseHealthValidity(horse.id);
-              const healthUnavailable = healthRequired && !healthValidity.valid;
+              const healthCompliance = healthComplianceByHorseId.get(horse.id) ?? null;
+              const healthUnavailable = !healthCompliance?.can_proceed;
               const selected = selectedHorseIds.includes(horse.id);
               const beddingSelected = beddingHorseIds.includes(horse.id);
 
@@ -1768,12 +1761,18 @@ function StallBookingForm({
                       <strong>
                         {horse.name}
                         {alreadyReserved ? <em className="horse-reservation-status">{uiText(locale, "Déjà réservé", "Already reserved")}</em> : null}
-                        {healthUnavailable ? <em className="horse-reservation-status">{stallHealthValidityTagLabel(healthValidity)}</em> : null}
+                        {healthCompliance && !["compliant", "not_required"].includes(healthCompliance.compliance_status) ? <em className="horse-reservation-status">{healthComplianceStatusLabel(healthCompliance.compliance_status, locale)}</em> : null}
                       </strong>
                       <small>
                         {alreadyReserved
                           ? uiText(locale, `Stall déjà réservé: ${reservedOption?.name ?? "Stall"}`, `Stall already reserved: ${reservedOption?.name ?? "Stall"}`)
-                          : `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallHealthValidityMessage(healthValidity)}`}
+                          : `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${
+                              healthCompliance
+                                ? healthComplianceReasonSummary(healthCompliance, locale)
+                                : healthComplianceOverview.loading
+                                  ? uiText(locale, "Vérification santé…", "Checking health…")
+                                  : uiText(locale, "Conformité santé indisponible", "Health compliance unavailable")
+                            }`}
                       </small>
                     </span>
                   </label>
@@ -2133,14 +2132,18 @@ function StallBookingEditForm({
   const selectedOption = findById(optionChoices, optionId) ?? findById(stallOptions, booking.stall_option_id);
   const selectedHorse = findById(horses, horseId) ?? null;
   const selectedShow = findById(shows, booking.show_id) ?? null;
-  const selectedHealthValidity = selectedHorse
-    ? getStallHorseHealthValidity({
-        documents: horseHealthDocuments,
-        horseId: selectedHorse.id,
-        organization,
-        referenceDate: selectedShow?.start_date ?? null,
-      })
-    : null;
+  const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
+  const healthComplianceOverview = useHorseHealthComplianceOverview({
+    horseIds: selectedShow && organization ? horses.map((horse) => horse.id) : [],
+    organizationId: selectedShow ? organization?.id : undefined,
+    referenceDate: selectedShow?.start_date ?? "1970-01-01",
+    refreshToken: healthComplianceRevision,
+  });
+  const healthComplianceByHorseId = useMemo(
+    () => new Map(healthComplianceOverview.results.map((result) => [result.horse_id, result])),
+    [healthComplianceOverview.results],
+  );
+  const selectedHealthCompliance = selectedHorse ? healthComplianceByHorseId.get(selectedHorse.id) ?? null : null;
   const dayOptions = showDays.filter((day) => day.show_id === booking.show_id);
   const selectedOptionUsesDailyReservations = optionUsesDailyReservations(selectedOption ?? null);
   const selectedStartDayId = selectedOptionUsesDailyReservations ? validDayId(startDayId, dayOptions) || selectedOption?.show_day_start_id || dayOptions[0]?.id || "" : "";
@@ -2153,9 +2156,7 @@ function StallBookingEditForm({
   const quantityTooHigh = Boolean(selectedOption && status !== "cancelled" && quantityNumber > editableAvailability);
   const healthBlocksBooking = Boolean(
       selectedHorse &&
-      organizationRequiresHealthVerification(organization) &&
-      selectedHealthValidity &&
-      !selectedHealthValidity.valid &&
+      !selectedHealthCompliance?.can_proceed &&
       !["cancelled", "completed"].includes(status),
   );
   const blockingInvoices = blockingReservationInvoices({
@@ -2201,8 +2202,10 @@ function StallBookingEditForm({
         <div>
           <h2>{uiText(locale, "Modifier la réservation", "Edit reservation")}</h2>
           <p>
-            {healthBlocksBooking && selectedHealthValidity
-              ? stallHealthValidityMessage(selectedHealthValidity)
+            {healthBlocksBooking
+              ? selectedHealthCompliance
+                ? healthComplianceReasonSummary(selectedHealthCompliance, locale)
+                : healthComplianceOverview.error || uiText(locale, "Calcul de la conformité santé…", "Calculating health compliance…")
               : blocksBalance
                 ? blockingInvoiceMessage
                 : quantityTooHigh
@@ -2257,17 +2260,18 @@ function StallBookingEditForm({
             <SearchSelect
               allowEmpty
               items={horses.map((horse) => {
-                const validity = getStallHorseHealthValidity({
-                  documents: horseHealthDocuments,
-                  horseId: horse.id,
-                  organization,
-                  referenceDate: selectedShow?.start_date ?? null,
-                });
+                const compliance = healthComplianceByHorseId.get(horse.id);
 
                 return {
                   id: horse.id,
                   label: horse.name,
-                  detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${stallHealthValidityMessage(validity)}`,
+                  detail: `${contactLabel(findById(contacts, horse.primary_owner_contact_id))} - ${
+                    compliance
+                      ? `${healthComplianceStatusLabel(compliance.compliance_status, locale)} · ${healthComplianceReasonSummary(compliance, locale)}`
+                      : healthComplianceOverview.loading
+                        ? uiText(locale, "Vérification santé…", "Checking health…")
+                        : uiText(locale, "Conformité santé indisponible", "Health compliance unavailable")
+                  }`,
                 };
               })}
               placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
@@ -2275,7 +2279,7 @@ function StallBookingEditForm({
               onChange={setHorseId}
             />
           </label>
-          {selectedHealthValidity ? <p className={`inline-health-message ${stallHealthValidityTone(selectedHealthValidity)}`}>{stallHealthValidityMessage(selectedHealthValidity)}</p> : null}
+          {selectedHealthCompliance ? <p className={`inline-health-message ${healthComplianceTone(selectedHealthCompliance.compliance_status) === "success" ? "success" : selectedHealthCompliance.can_proceed ? "info" : "error"}`}>{healthComplianceReasonSummary(selectedHealthCompliance, locale)}</p> : null}
           <div className="form-grid">
             <ContactPicker
               contacts={contacts}
@@ -2662,103 +2666,6 @@ function reservationCreateMessage({
   }
 
   return uiText(locale, "Compléter les informations de réservation.", "Complete reservation information.");
-}
-
-function getStallHorseHealthValidity(input: {
-  documents: HorseHealthDocument[];
-  horseId: string;
-  organization: Organization | null | undefined;
-  referenceDate?: string | null;
-}): StallHorseHealthValidity {
-  const coggins = getHorseCogginsValidity(input);
-  const vaccine = getHorseVaccineValidity(input);
-
-  return {
-    coggins,
-    vaccine,
-    valid: coggins.valid && vaccine.valid,
-  };
-}
-
-function stallHealthValidityMessage(validity: StallHorseHealthValidity) {
-  if (!validity.coggins.valid) {
-    return stallSingleHealthValidityMessage("Coggins", validity.coggins);
-  }
-
-  if (!validity.vaccine.valid) {
-    return stallSingleHealthValidityMessage("Vaccin", validity.vaccine);
-  }
-
-  if (validity.coggins.status === "not_required" && validity.vaccine.status === "not_required") {
-    return "Documents santé non exigés";
-  }
-
-  const parts = [
-    validity.coggins.expiresOn ? `Coggins valide jusqu'au ${formatDate(validity.coggins.expiresOn)}` : null,
-    validity.vaccine.expiresOn ? `Vaccin valide jusqu'au ${formatDate(validity.vaccine.expiresOn)}` : null,
-  ].filter(Boolean);
-
-  return parts.length ? parts.join(" / ") : "Documents santé valides";
-}
-
-function stallSingleHealthValidityMessage(label: string, validity: Pick<HorseCogginsValidity, "expiresOn" | "status" | "valid">) {
-  if (validity.status === "not_required") {
-    return `${label} non exigé`;
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return `${label} valide jusqu'au ${formatDate(validity.expiresOn)}`;
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `${label} expiré le ${formatDate(validity.expiresOn)}`;
-  }
-
-  if (validity.status === "pending_review") {
-    return `${label} en révision`;
-  }
-
-  if (validity.status === "rejected") {
-    return `${label} refusé`;
-  }
-
-  return `${label} manquant`;
-}
-
-function stallHealthValidityTagLabel(validity: StallHorseHealthValidity) {
-  if (!validity.coggins.valid) {
-    return stallSingleHealthValidityTagLabel("Coggins", validity.coggins);
-  }
-
-  if (!validity.vaccine.valid) {
-    return stallSingleHealthValidityTagLabel("Vaccin", validity.vaccine);
-  }
-
-  return "Santé valide";
-}
-
-function stallSingleHealthValidityTagLabel(label: string, validity: Pick<HorseCogginsValidity, "expiresOn" | "status">) {
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `${label} expiré ${formatDate(validity.expiresOn)}`;
-  }
-
-  if (validity.status === "pending_review") {
-    return `${label} en révision`;
-  }
-
-  if (validity.status === "rejected") {
-    return `${label} refusé`;
-  }
-
-  return `${label} manquant`;
-}
-
-function stallHealthValidityTone(validity: StallHorseHealthValidity) {
-  if (validity.valid) {
-    return "success";
-  }
-
-  return validity.coggins.status === "pending_review" || validity.vaccine.status === "pending_review" ? "info" : "error";
 }
 
 function isStallReservationOption(option: StallOption) {

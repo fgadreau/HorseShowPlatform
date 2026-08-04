@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, deleteContact, updateContact, verifyNrhaMember } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ContactOrganizationMembership, ExternalCredentialIssuer, ExternalCredentialProduct, Organization, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -12,9 +12,10 @@ import { ContactEditForm } from "./ContactEditForm";
 function MyContactsView({
   locale,
   contacts,
-  contactExternalMemberships,
+  contactExternalIdentifiers,
   contactOrganizationMemberships,
-  externalOrganizations,
+  externalCredentialIssuers,
+  externalCredentialProducts,
   membershipRequirements,
   organizationMembershipTypes,
   organizations,
@@ -28,10 +29,11 @@ function MyContactsView({
 }: {
   locale: Locale;
   contacts: Contact[];
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
-  externalOrganizations: ExternalOrganization[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   organizationMembershipTypes: OrganizationMembershipType[];
   organizations: Organization[];
   organization: Organization | null;
@@ -149,7 +151,8 @@ function MyContactsView({
             createdByUserId={profileId}
             defaultType={defaultContactType}
             linkedUserId={profileId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             organization={organization}
             title={contacts.length ? uiText(locale, "Ajouter un cavalier / contact", "Add rider / contact") : uiText(locale, "Créer mon premier contact", "Create my first contact")}
@@ -166,8 +169,9 @@ function MyContactsView({
           <ContactEditForm
             locale={locale}
             contact={editingContact}
-            contactExternalMemberships={contactExternalMemberships}
-            externalOrganizations={externalOrganizations}
+            contactExternalIdentifiers={contactExternalIdentifiers}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
             onVerifyNrhaMember={onVerifyNrhaMember}

@@ -1,8 +1,9 @@
-import type { ClassRecord, Division, ShowScoreClassSetup } from "../types/domain";
+import type { Block, ClassRecord, ShowScoreBlockSetup } from "../types/domain";
 
 export const AQR_AUDIT_IMPORT_SOURCE = "showscore_draw_aqr_audit";
 
 export const SHOWSCORE_RUN_TECHNICAL_FIELDS = [
+  // Noms de compatibilité du payload ShowScore. Les valeurs sont des IDs de classes HSP.
   "runId",
   "blockRunId",
   "entryId",
@@ -38,14 +39,14 @@ export type NormalizedShowScoreDrawRun = {
 
 export type AqrAuditRunPreview = {
   run: NormalizedShowScoreDrawRun;
-  matchedDivisions: Division[];
+  matchedClasses: ClassRecord[];
   errors: string[];
   warnings: string[];
 };
 
 export type AqrAuditClassPreview = {
-  classRecord: ClassRecord;
-  setup: ShowScoreClassSetup;
+  block: Block;
+  setup: ShowScoreBlockSetup;
   runs: AqrAuditRunPreview[];
   entryCount: number;
   errors: string[];
@@ -64,13 +65,13 @@ export type AqrAuditImportPreview = {
 export function previewShowScoreDrawEntryImport(input: {
   showId: string;
   classIds?: string[];
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
 }): AqrAuditImportPreview {
   const selectedClassIds = input.classIds?.length ? new Set(input.classIds) : null;
-  const classesById = new Map(input.classes.map((classRecord) => [classRecord.id, classRecord]));
-  const divisionsByClassId = groupBy(input.divisions, (division) => division.class_id);
+  const classesById = new Map(input.blocks.map((block) => [block.id, block]));
+  const classesByBlockId = groupBy(input.classes, (classRecord) => classRecord.block_id);
   const classPreviews: AqrAuditClassPreview[] = [];
   const errors: string[] = [];
   const warnings: string[] = [];
@@ -78,13 +79,13 @@ export function previewShowScoreDrawEntryImport(input: {
   const setups = input.showScoreClassSetups
     .filter((setup) => setup.show_id === input.showId)
     .filter((setup) => setup.is_draw_imported)
-    .filter((setup) => !selectedClassIds || selectedClassIds.has(setup.class_id));
+    .filter((setup) => !selectedClassIds || selectedClassIds.has(setup.block_id));
 
   for (const setup of setups) {
-    const classRecord = classesById.get(setup.class_id);
+    const block = classesById.get(setup.block_id);
 
-    if (!classRecord) {
-      errors.push(`Bloc ShowScore ${setup.class_id} introuvable dans HSP.`);
+    if (!block) {
+      errors.push(`Bloc ShowScore ${setup.block_id} introuvable dans HSP.`);
       continue;
     }
 
@@ -92,17 +93,17 @@ export function previewShowScoreDrawEntryImport(input: {
     const classWarnings: string[] = [];
 
     if (setup.finalized) {
-      classErrors.push(`${classRecord.name}: setup ShowScore finalise.`);
+      classErrors.push(`${block.name}: setup ShowScore finalise.`);
     }
 
     if (setup.started_at || setup.locked_at) {
-      classErrors.push(`${classRecord.name}: pointage ShowScore deja demarre ou verrouille.`);
+      classErrors.push(`${block.name}: pointage ShowScore deja demarre ou verrouille.`);
     }
 
-    const classDivisions = divisionsByClassId.get(classRecord.id) ?? [];
+    const blockClasses = classesByBlockId.get(block.id) ?? [];
     const runPreviews = setup.runs.map((run, index) => {
       const normalizedRun = normalizeShowScoreDrawRun(run, index);
-      const matchedDivisions = matchRunDivisions(normalizedRun, classRecord, classDivisions);
+      const matchedClasses = matchRunClasses(normalizedRun, block, blockClasses);
       const runErrors: string[] = [];
       const runWarnings: string[] = [];
 
@@ -114,17 +115,17 @@ export function previewShowScoreDrawEntryImport(input: {
         runErrors.push(`Draw ${formatDrawLabel(normalizedRun)}: proprietaire/cavalier manquant.`);
       }
 
-      if (!matchedDivisions.length) {
+      if (!matchedClasses.length) {
         runErrors.push(`Draw ${formatDrawLabel(normalizedRun)}: aucun code de classe HSP reconnu (${normalizedRun.classCodes.join(", ") || "aucun code"}).`);
       }
 
-      if (!normalizedRun.classCodes.length && classDivisions.length === 1) {
-        runWarnings.push(`Draw ${formatDrawLabel(normalizedRun)}: division unique utilisee par defaut.`);
+      if (!normalizedRun.classCodes.length && blockClasses.length === 1) {
+        runWarnings.push(`Draw ${formatDrawLabel(normalizedRun)}: classRecord unique utilisee par defaut.`);
       }
 
       return {
         run: normalizedRun,
-        matchedDivisions,
+        matchedClasses,
         errors: runErrors,
         warnings: runWarnings,
       };
@@ -136,10 +137,10 @@ export function previewShowScoreDrawEntryImport(input: {
     warnings.push(...classWarnings);
 
     classPreviews.push({
-      classRecord,
+      block,
       setup,
       runs: runPreviews,
-      entryCount: runPreviews.reduce((sum, runPreview) => sum + runPreview.matchedDivisions.length, 0),
+      entryCount: runPreviews.reduce((sum, runPreview) => sum + runPreview.matchedClasses.length, 0),
       errors: classErrors,
       warnings: classWarnings,
     });
@@ -178,34 +179,30 @@ export function normalizeShowScoreDrawRun(run: Record<string, unknown>, index = 
   };
 }
 
-export function matchRunDivisions(
+export function matchRunClasses(
   run: NormalizedShowScoreDrawRun,
-  classRecord: ClassRecord,
-  classDivisions: Division[],
+  block: Block,
+  blockClasses: ClassRecord[],
 ) {
-  if (!run.classCodes.length && classDivisions.length === 1) {
-    return classDivisions;
+  if (!run.classCodes.length && blockClasses.length === 1) {
+    return blockClasses;
   }
 
   const normalizedCodes = new Set(run.classCodes.map(normalizeCode).filter(Boolean));
-  const matched = classDivisions.filter((division) => {
-    const candidates = [division.code, division.name].map((value) => normalizeCode(value ?? ""));
+  const matched = blockClasses.filter((classRecord) => {
+    const candidates = [classRecord.code, classRecord.name].map((value) => normalizeCode(value ?? ""));
     return candidates.some((candidate) => candidate && normalizedCodes.has(candidate));
   });
-
-  if (!matched.length && classDivisions.length === 1 && normalizedCodes.has(normalizeCode(classRecord.code ?? ""))) {
-    return classDivisions;
-  }
 
   return matched;
 }
 
 export function buildAqrExternalSourceKey(input: {
+  blockId: string;
   classId: string;
-  divisionId: string;
   run: NormalizedShowScoreDrawRun;
 }) {
-  return `${input.classId}:${input.run.sourceRunId}:${input.divisionId}`;
+  return `${input.blockId}:${input.run.sourceRunId}:${input.classId}`;
 }
 
 export function isAqrScratchRun(run: NormalizedShowScoreDrawRun) {

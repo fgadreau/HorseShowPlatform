@@ -1,122 +1,124 @@
 import { useState } from "react";
-import { Plus, Search, X } from "lucide-react";
-import { EmptyState, Metric, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, errorMessage, findById, formatDate, horseLabel } from "../../lib/display";
+import { X } from "lucide-react";
+import { EmptyState, Metric, ViewIntro } from "../../components/ui";
+import { contactLabel, findById, formatDate, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { getHorseHealthDocumentFileUrl, createContact, createHorse, createUploadedHorseHealthDocument, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import { organizationCogginsValidityMonths, organizationRequiresHealthVerification } from "../../lib/health";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, Show } from "../../types/domain";
-import { uiText, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone, cogginsValidityMessage, healthDocumentDateLabel, healthDocumentDateValue, healthDocumentTypeLabel, healthVerificationSourceLabel, healthReviewNote, isVaccineHealthDocument, latestHorseHealthDocument, latestHorseVaccineDocument, horseHealthDisplay, horseExternalReferenceChips, InlineHealthMessage, horseHealthResultMessage, todayDateValue, buildHealthAlerts, horseHealthStatusLabel } from "../dashboard/shared";
+import { createContact, createOrganizationHealthDocumentReview, createUploadedHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthComplianceOverview, HorseHealthDocument, Organization, Show } from "../../types/domain";
+import { uiText, todayDateValue } from "../dashboard/shared";
 import { HorseEditForm } from "../horses/HorseEditForm";
+import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "./HealthComplianceSummary";
 
 function HealthCenterView({
   locale,
   canManageHealthDocuments,
+  complianceRevision,
   contacts,
   contactRoles,
   createdByUserId,
-  externalOrganizations,
+  externalCredentialIssuers,
   horseContacts,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horses,
   organization,
-  profileId,
   shows,
   onCreateContact,
   onCreateHorseHealthDocument,
-  onReviewHorseHealthDocument,
+  onReviewOrganizationHealthDocuments,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
 }: {
   locale: Locale;
   canManageHealthDocuments: boolean;
+  complianceRevision?: string;
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId: string;
-  externalOrganizations: ExternalOrganization[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   horseContacts: HorseContact[];
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   organization: Organization | null;
-  profileId: string;
   shows: Show[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+  onReviewOrganizationHealthDocuments: (inputs: Parameters<typeof createOrganizationHealthDocumentReview>[0][]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
 }) {
-  const [busyDocumentId, setBusyDocumentId] = useState("");
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
-  const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
-  const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
-  const [fileErrorMessageByDocumentId, setFileErrorMessageByDocumentId] = useState<Record<string, string>>({});
-  const [reviewDateByDocumentId, setReviewDateByDocumentId] = useState<Record<string, string>>({});
+  const [busyReviewKey, setBusyReviewKey] = useState("");
   const today = todayDateValue();
-  const pendingDocuments = [...horseHealthDocuments]
-    .filter((document) => document.status === "pending_review")
-    .sort((a, b) => healthDocumentDateValue(b).localeCompare(healthDocumentDateValue(a)));
   const upcomingShows = [...shows]
     .filter((show) => show.status !== "archived" && show.end_date >= today)
     .sort((a, b) => a.start_date.localeCompare(b.start_date));
-  const referenceShow = upcomingShows[0] ?? [...shows].filter((show) => show.status !== "archived").sort((a, b) => a.start_date.localeCompare(b.start_date))[0] ?? null;
-  const healthAlerts = buildHealthAlerts({
-    documents: horseHealthDocuments,
-    horses,
-    organization,
-    referenceShow,
-    today,
+  const referenceShow = upcomingShows[0] ?? null;
+  const referenceDate = referenceShow?.start_date ?? today;
+  const compliance = useHorseHealthComplianceOverview({
+    horseIds: horses.map((horse) => horse.id),
+    organizationId: organization?.id,
+    referenceDate,
+    refreshToken: complianceRevision,
   });
   const currentEditingHorse = editingHorse ? findById(horses, editingHorse.id) ?? editingHorse : null;
+  const currentResults = compliance.results.filter((result) => result.compliance_status === "compliant" || result.compliance_status === "not_required");
+  const pendingResults = compliance.results.filter((result) => result.compliance_status === "pending_review");
+  const requiredResults = compliance.results.filter((result) => result.compliance_status === "non_compliant");
+  const groups = [
+    {
+      key: "current",
+      title: uiText(locale, "À jour", "Up to date"),
+      description: uiText(locale, "Toutes les exigences de l'association sont satisfaites.", "All association requirements are satisfied."),
+      tone: "success" as const,
+      results: currentResults,
+    },
+    {
+      key: "pending",
+      title: uiText(locale, "En attente", "Pending"),
+      description: uiText(locale, "Une identification ou une révision doit être complétée.", "An identification or review still needs completion."),
+      tone: "warning" as const,
+      results: pendingResults,
+    },
+    {
+      key: "required",
+      title: uiText(locale, "Mise à jour requise", "Update required"),
+      description: uiText(locale, "Un document est manquant, expiré, différent ou refusé.", "A document is missing, expired, mismatched, or rejected."),
+      tone: "error" as const,
+      results: requiredResults,
+    },
+  ];
 
-  async function handleReview(document: HorseHealthDocument, status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
-    const reviewDate = reviewDateByDocumentId[document.id] ?? document.test_or_administered_on ?? "";
-
-    if (status === "approved" && isVaccineHealthDocument(document) && !reviewDate) {
-      return;
-    }
-
-    setBusyDocumentId(document.id);
-
-    try {
-      await onReviewHorseHealthDocument(document.id, {
-        status,
-        reviewed_by_user_id: profileId,
-        review_notes: healthReviewNote(document, status),
-        test_or_administered_on: status === "approved" && isVaccineHealthDocument(document) ? reviewDate || null : undefined,
-      });
-    } finally {
-      setBusyDocumentId("");
-    }
+  function reviewableDocumentIds(result: HorseHealthComplianceOverview) {
+    return [...new Set(
+      Object.values(result.requirements)
+        .filter((requirement) => requirement.document_id && (requirement.status === "review_pending" || requirement.status === "review_rejected"))
+        .map((requirement) => requirement.document_id as string),
+    )];
   }
 
-  async function handleOpenStoredDocument(document: HorseHealthDocument) {
-    if (!document.document_url) {
+  async function handleAssociationReview(result: HorseHealthComplianceOverview, status: "approved" | "rejected") {
+    const documentIds = reviewableDocumentIds(result);
+    if (!organization || !documentIds.length) {
       return;
     }
 
-    const documentWindow = window.open("about:blank", "_blank");
-    setFileBusyDocumentId(document.id);
-    setFileErrorDocumentId("");
-    setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: "" }));
-
+    const reviewKey = `${result.horse_id}:${status}`;
+    setBusyReviewKey(reviewKey);
     try {
-      const signedUrl = await getHorseHealthDocumentFileUrl(document.document_url);
-      if (documentWindow) {
-        documentWindow.location.href = signedUrl;
-      } else {
-        window.open(signedUrl, "_blank", "noopener,noreferrer");
-      }
-    } catch (error) {
-      documentWindow?.close();
-      setFileErrorDocumentId(document.id);
-      setFileErrorMessageByDocumentId((current) => ({ ...current, [document.id]: errorMessage(error) }));
+      await onReviewOrganizationHealthDocuments(documentIds.map((horseDocumentId) => ({
+        organization_id: organization.id,
+        horse_document_id: horseDocumentId,
+        status,
+        review_notes: status === "approved"
+          ? uiText(locale, "Document accepté par l'association.", "Document accepted by the association.")
+          : uiText(locale, "Mise à jour demandée par l'association.", "Update requested by the association."),
+      })));
     } finally {
-      setFileBusyDocumentId("");
+      setBusyReviewKey("");
     }
   }
 
@@ -124,19 +126,19 @@ function HealthCenterView({
     <div className="content-grid">
       <ViewIntro
         eyebrow={uiText(locale, "Santé", "Health")}
-        title={uiText(locale, "Centre de validation", "Validation center")}
-        description={uiText(locale, "Traite les documents en révision et surveille les échéances avant les réservations et inscriptions.", "Review health documents and monitor deadlines before reservations and entries.")}
+        title={uiText(locale, "Centre de conformité", "Compliance center")}
+        description={uiText(locale, "Consulte la conformité calculée pour chaque cheval selon la politique de l'association et la date choisie.", "Review calculated compliance for every horse using the association policy and reference date.")}
         stats={[
-          { label: uiText(locale, "À valider", "To review"), value: String(pendingDocuments.length) },
-          { label: uiText(locale, "Alertes", "Alerts"), value: String(healthAlerts.length) },
-          { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
+          { label: uiText(locale, "À jour", "Up to date"), value: compliance.loading ? "…" : String(currentResults.length) },
+          { label: uiText(locale, "En attente", "Pending"), value: compliance.loading ? "…" : String(pendingResults.length) },
+          { label: uiText(locale, "À mettre à jour", "Needs update"), value: compliance.loading ? "…" : String(requiredResults.length) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric detail={uiText(locale, "Documents en attente d'un gestionnaire.", "Documents waiting for a manager review.")} label={uiText(locale, "À valider", "To review")} value={String(pendingDocuments.length)} />
-        <Metric detail={referenceShow ? `${uiText(locale, "Référence", "Reference")}: ${referenceShow.name}` : uiText(locale, "Aucun concours actif.", "No active show.")} label={uiText(locale, "Échéances", "Deadlines")} value={String(healthAlerts.length)} />
-        <Metric detail={organizationRequiresHealthVerification(organization) ? uiText(locale, "Coggins et vaccin obligatoires.", "Coggins and vaccine required.") : uiText(locale, "Vérification désactivée.", "Verification disabled.")} label={uiText(locale, "Règle santé", "Health rule")} value={`${organizationCogginsValidityMonths(organization)} ${uiText(locale, "mois", "months")}`} />
+        <Metric detail={uiText(locale, "Documents valides ou non requis.", "Documents valid or not required.")} label={uiText(locale, "À jour", "Up to date")} value={compliance.loading ? "…" : String(currentResults.length)} />
+        <Metric detail={uiText(locale, "Identification ou révision locale.", "Identity or local review pending.")} label={uiText(locale, "En attente", "Pending")} value={compliance.loading ? "…" : String(pendingResults.length)} />
+        <Metric detail={referenceShow ? `${referenceShow.name} · ${formatDate(referenceDate)}` : formatDate(referenceDate)} label={uiText(locale, "Date de référence", "Reference date")} value={compliance.loading ? "…" : String(requiredResults.length)} />
       </section>
 
       {currentEditingHorse ? (
@@ -146,7 +148,7 @@ function HealthCenterView({
               <div>
                 <p className="eyebrow">{uiText(locale, "Santé", "Health")}</p>
                 <h2 id="health-horse-edit-title">{uiText(locale, "Modifier le cheval", "Edit horse")}</h2>
-                <p>{uiText(locale, "Corrige la fiche, puis relance la validation GVL au besoin.", "Correct the record, then rerun GVL validation if needed.")}</p>
+                <p>{uiText(locale, "Ajoute ou identifie les documents indiqués dans les raisons de conformité.", "Add or identify the documents listed in the compliance reasons.")}</p>
               </div>
               <button className="icon-button" type="button" aria-label={uiText(locale, "Fermer l'édition du cheval", "Close horse editor")} onClick={() => setEditingHorse(null)}>
                 <X size={18} />
@@ -154,20 +156,18 @@ function HealthCenterView({
             </div>
             <HorseEditForm
               locale={locale}
-              canManageHealthDocuments={canManageHealthDocuments}
               contacts={contacts}
               contactRoles={contactRoles}
               createdByUserId={createdByUserId}
-              externalOrganizations={externalOrganizations}
+              externalCredentialIssuers={externalCredentialIssuers}
               horse={currentEditingHorse}
               horseContacts={horseContacts}
-              horseExternalMemberships={horseExternalMemberships}
+              horseExternalIdentifiers={horseExternalIdentifiers}
               horseHealthDocuments={horseHealthDocuments}
               organization={organization}
               onCancel={() => setEditingHorse(null)}
               onCreateContact={onCreateContact}
               onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-              onReviewHorseHealthDocument={onReviewHorseHealthDocument}
               onUpdateHorse={async (id, input) => {
                 await onUpdateHorse(id, input);
                 setEditingHorse(null);
@@ -182,129 +182,74 @@ function HealthCenterView({
       <section className="panel span-2">
         <div className="panel-header">
           <div>
-            <h2>{uiText(locale, "Documents à valider", "Documents to review")}</h2>
-            <p>{pendingDocuments.length ? uiText(locale, `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} en attente.`, `${pendingDocuments.length} document${pendingDocuments.length === 1 ? "" : "s"} pending.`) : uiText(locale, "Aucun document en révision manuelle.", "No documents in manual review.")}</p>
+            <h2>{uiText(locale, "Conformité par cheval", "Compliance by horse")}</h2>
+            <p>
+              {referenceShow
+                ? uiText(locale, `Évaluée au ${formatDate(referenceDate)} pour ${referenceShow.name}.`, `Evaluated on ${formatDate(referenceDate)} for ${referenceShow.name}.`)
+                : uiText(locale, `Évaluée aujourd'hui, le ${formatDate(referenceDate)}.`, `Evaluated today, ${formatDate(referenceDate)}.`)}
+            </p>
           </div>
         </div>
-        <div className="table health-review-table">
-          <div className="table-row table-head">
-            <span>Document</span>
-            <span>{uiText(locale, "Cheval", "Horse")}</span>
-            <span>Source</span>
-            <span>Action</span>
-          </div>
-          {pendingDocuments.map((document) => {
-            const horse = findById(horses, document.horse_id);
-            const owner = findById(contacts, horse?.primary_owner_contact_id);
-            const busy = busyDocumentId === document.id;
-            const reviewDate = reviewDateByDocumentId[document.id] ?? document.test_or_administered_on ?? "";
-            const needsReviewDate = isVaccineHealthDocument(document);
 
-            return (
-              <div className="table-row" key={document.id}>
-              <div>
-                  <strong>{healthDocumentTypeLabel(document.document_type, locale)}</strong>
-                  <span className="muted-line">
-                    {healthDocumentDateLabel(document, locale)}
-                    {document.result ? ` - ${document.result}` : ""}
-                  </span>
-                  {document.review_notes ? <span className="muted-line">{document.review_notes}</span> : null}
-                  {needsReviewDate ? (
-                    <label className="compact-label">
-                      {uiText(locale, "Date vaccin validée", "Validated vaccine date")}
-                      <input
-                        type="date"
-                        value={reviewDate}
-                        onChange={(event) =>
-                          setReviewDateByDocumentId((current) => ({
-                            ...current,
-                            [document.id]: event.target.value,
-                          }))
-                        }
-                      />
-                    </label>
-                  ) : null}
-                </div>
-                <div>
-                  <strong>{horseLabel(horse)}</strong>
-                  <span className="muted-line">{contactLabel(owner)}</span>
-                  {document.horse_name ? (
-                    <span className="muted-line">
-                      Doc: {document.horse_name}
-                      {document.horse_date_of_birth ? ` - ${formatDate(document.horse_date_of_birth)}` : ""}
-                    </span>
-                  ) : null}
-                </div>
-                <div>
-                  <span className={`badge ${document.status}`}>{horseHealthStatusLabel(document.status, locale)}</span>
-                  <span className="muted-line">{healthVerificationSourceLabel(document.verification_source, locale)}</span>
-                  {document.warnings.length ? <span className="muted-line">{document.warnings.join(", ")}</span> : null}
-                </div>
-                <div className="row-actions">
-                  {horse ? (
-                    <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
-                      {uiText(locale, "Modifier le cheval", "Edit horse")}
-                    </button>
-                  ) : null}
-                  {document.source_url ? (
-                    <a className="text-button" href={document.source_url} rel="noreferrer" target="_blank">
-                      Lien GVL
-                    </a>
-                  ) : null}
-                  {document.document_url ? (
-                    <button className="text-button" disabled={fileBusyDocumentId === document.id} type="button" onClick={() => void handleOpenStoredDocument(document)}>
-                      {fileBusyDocumentId === document.id ? "Ouverture..." : "PDF"}
-                    </button>
-                  ) : null}
-                  <button className="text-button" disabled={busy || (needsReviewDate && !reviewDate)} type="button" onClick={() => void handleReview(document, "approved")}>
-                    {uiText(locale, "Approuver", "Approve")}
-                  </button>
-                  <button className="text-button danger-text" disabled={busy} type="button" onClick={() => void handleReview(document, "rejected")}>
-                    {uiText(locale, "Refuser", "Reject")}
-                  </button>
-                  {fileErrorDocumentId === document.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[document.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
-                </div>
-              </div>
-            );
-          })}
-          {!pendingDocuments.length ? <EmptyState label={uiText(locale, "Aucun document santé en attente de validation.", "No health documents awaiting review.")} /> : null}
-        </div>
-      </section>
+        {compliance.error ? <div className="notice error">{compliance.error}</div> : null}
+        {compliance.loading ? <EmptyState label={uiText(locale, "Calcul de la conformité en cours…", "Calculating compliance…")} /> : null}
 
-      <section className="panel span-2">
-        <div className="panel-header">
-          <div>
-            <h2>{uiText(locale, "Échéances santé", "Health deadlines")}</h2>
-            <p>{referenceShow ? uiText(locale, `Calculées avec la date d'arrivée du concours ${referenceShow.name}.`, `Calculated from the arrival date for ${referenceShow.name}.`) : uiText(locale, "Crée un concours pour calculer les échéances par date d'arrivée.", "Create a show to calculate deadlines from arrival dates.")}</p>
+        {!compliance.loading && !compliance.error ? (
+          <div className="health-compliance-board">
+            {groups.map((group) => (
+              <section className={`health-compliance-group ${group.tone}`} key={group.key}>
+                <header>
+                  <div>
+                    <h3>{group.title}</h3>
+                    <p>{group.description}</p>
+                  </div>
+                  <strong>{group.results.length}</strong>
+                </header>
+                <div className="health-compliance-rows">
+                  {group.results.map((result) => {
+                    const horse = findById(horses, result.horse_id);
+                    const owner = findById(contacts, horse?.primary_owner_contact_id);
+                    const reviewableIds = reviewableDocumentIds(result);
+                    const hasPendingReview = Object.values(result.requirements).some((requirement) => requirement.status === "review_pending");
+                    const reviewBusy = busyReviewKey.startsWith(`${result.horse_id}:`);
+
+                    return (
+                      <article className={`health-compliance-row ${healthComplianceTone(result.compliance_status)}`} key={`${result.horse_id}:${result.organization_id}`}>
+                        <div className="horse-list-identity">
+                          <strong>{horseLabel(horse)}</strong>
+                          <span>{contactLabel(owner)}</span>
+                        </div>
+                        <div className="horse-list-status">
+                          <span className={`horse-summary-pill ${healthComplianceTone(result.compliance_status)}`}>{healthComplianceStatusLabel(result.compliance_status, locale)}</span>
+                          <span className="muted-line">{healthComplianceReasonSummary(result, locale)}</span>
+                          {!result.can_proceed ? <span className="muted-line strong-line">{uiText(locale, "La politique bloque la poursuite.", "The policy blocks proceeding.")}</span> : null}
+                        </div>
+                        <div className="row-actions">
+                          {horse ? (
+                            <button className="text-button" type="button" onClick={() => setEditingHorse(horse)}>
+                              {uiText(locale, "Voir le cheval", "View horse")}
+                            </button>
+                          ) : null}
+                          {canManageHealthDocuments && reviewableIds.length ? (
+                            <button className="text-button" disabled={reviewBusy} type="button" onClick={() => void handleAssociationReview(result, "approved")}>
+                              {uiText(locale, "Accepter pour l'association", "Accept for association")}
+                            </button>
+                          ) : null}
+                          {canManageHealthDocuments && hasPendingReview ? (
+                            <button className="text-button danger-text" disabled={reviewBusy} type="button" onClick={() => void handleAssociationReview(result, "rejected")}>
+                              {uiText(locale, "Demander une mise à jour", "Request update")}
+                            </button>
+                          ) : null}
+                        </div>
+                      </article>
+                    );
+                  })}
+                  {!group.results.length ? <EmptyState label={uiText(locale, "Aucun cheval dans ce groupe.", "No horse in this group.")} /> : null}
+                </div>
+              </section>
+            ))}
           </div>
-        </div>
-        <div className="table health-alert-table">
-          <div className="table-row table-head">
-            <span>{uiText(locale, "Cheval", "Horse")}</span>
-            <span>{uiText(locale, "Statut", "Status")}</span>
-            <span>{uiText(locale, "Référence", "Reference")}</span>
-            <span>Action</span>
-          </div>
-          {healthAlerts.map((alert) => (
-            <div className="table-row" key={alert.key}>
-              <div>
-                <strong>{alert.horse.name}</strong>
-                <span className="muted-line">{contactLabel(findById(contacts, alert.horse.primary_owner_contact_id))}</span>
-              </div>
-              <div>
-                <span className={`badge ${alert.tone}`}>{alert.label}</span>
-                <span className="muted-line">{alert.detail}</span>
-              </div>
-              <span>{alert.referenceLabel}</span>
-              <div className="row-actions">
-                <button className="text-button" type="button" onClick={() => setEditingHorse(alert.horse)}>
-                  {uiText(locale, "Modifier le cheval", "Edit horse")}
-                </button>
-              </div>
-            </div>
-          ))}
-          {!healthAlerts.length ? <EmptyState label={uiText(locale, "Aucune échéance santé à surveiller pour l'instant.", "No health deadlines to watch right now.")} /> : null}
-        </div>
+        ) : null}
       </section>
     </div>
   );

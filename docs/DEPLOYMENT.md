@@ -1,5 +1,8 @@
 # Deployment Checklist
 
+> La stratégie active est décrite dans [PREPRODUCTION.md](PREPRODUCTION.md).
+> Ne pas appliquer les migrations de refonte directement en production.
+
 ## GitHub
 
 The repository remote is:
@@ -41,8 +44,11 @@ npx supabase functions deploy nrha-horse-lookup
 Required frontend values:
 
 ```bash
+VITE_DEPLOY_ENV=
 VITE_SUPABASE_URL=
 VITE_SUPABASE_PUBLISHABLE_KEY=
+VITE_SUPABASE_PROJECT_REF=
+VITE_PRODUCTION_SUPABASE_PROJECT_REF=
 ```
 
 Supabase Auth URL configuration should include local and production URLs:
@@ -77,12 +83,18 @@ Output directory: dist
 Install command: npm install
 ```
 
-Environment variables for Production, Preview and Development:
+Environment variables pour Production, Preview et Development :
 
 ```bash
 VITE_SUPABASE_URL
 VITE_SUPABASE_PUBLISHABLE_KEY
+VITE_DEPLOY_ENV
+VITE_SUPABASE_PROJECT_REF
+VITE_PRODUCTION_SUPABASE_PROJECT_REF
 ```
+
+Les variables Preview doivent pointer vers PREPROD et les variables Production
+vers PROD. La compilation bloque automatiquement toute inversion.
 
 Add custom domains in Vercel Project Settings > Domains:
 

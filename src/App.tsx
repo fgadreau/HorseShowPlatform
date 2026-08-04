@@ -12,37 +12,42 @@ import type { Locale } from "./lib/i18n";
 import { supabase } from "./lib/supabase";
 import {
   cancelManualSale,
-  createClass,
+  createBlock,
+  createBlockTemplate,
   createClassTemplate,
-  createClassTemplateDivision,
   createBackNumberRange,
   claimHorseBackNumber,
   createContact,
   createContactOrganizationMembership,
-  createDivision,
+  createClass,
   createEntry,
   createHorse,
   createUploadedHorseHealthDocument,
   createOrganization,
+  createOrganizationHealthDocumentReview,
   createOrganizationMembershipType,
   createOrganizationProduct,
   createManualSale,
   createShow,
+  createSlate,
   createShowAnnouncement,
   deleteShowAnnouncement,
+  deleteSlate,
   createStallBooking,
   createStallOption,
-  deleteClass,
+  deleteBlock,
+  deleteBlockTemplate,
   deleteClassTemplate,
-  deleteClassTemplateDivision,
   deleteBackNumber,
   deleteEntry,
   deleteContact,
-  deleteDivision,
+  deleteClass,
   deleteHorse,
   cleanupShowScoreDrawEntryImportBatch,
   deleteStallBooking,
   loadAppContext,
+  linkContactToDirectory,
+  linkHorseToDirectory,
   prepareShowScoreClassSetup,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
@@ -52,14 +57,14 @@ import {
   assignNextBackNumber,
   releaseBackNumber,
   replaceNrhaRiderRankings,
-  reviewHorseHealthDocument,
-  setOrganizationExternalMembershipRequirement,
-  updateClass,
+  setOrganizationExternalCredentialRequirement,
+  setOrganizationHealthPolicy,
+  updateBlock,
+  updateBlockTemplate,
   updateClassTemplate,
-  updateClassTemplateDivision,
   updateBackNumberStatus,
   updateContact,
-  updateDivision,
+  updateClass,
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
@@ -68,10 +73,13 @@ import {
   updatePayoutAwardPayee,
   updatePayoutCalculationStatus,
   updateShow,
+  updateSlate,
   updateShowScorePaidWarmup,
   updateStallBooking,
   updateStallOption,
   updateUserProfile,
+  unlinkContactFromDirectory,
+  unlinkHorseFromDirectory,
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
   verifyNrhaHorse,
@@ -169,11 +177,11 @@ export default function App() {
     }
 
     if (!selectedOrganizationId || !context.organizations.some((organization) => organization.id === selectedOrganizationId)) {
-      setSelectedOrganizationId(context.organizations[0].id);
+      setSelectedOrganizationId(context.loadedOrganizationId ?? context.organizations[0].id);
     }
   }, [context, selectedOrganizationId]);
 
-  async function refreshContext(activeSession = session) {
+  async function refreshContext(activeSession = session, organizationId = selectedOrganizationId) {
     if (!activeSession?.user) {
       return;
     }
@@ -182,7 +190,7 @@ export default function App() {
     setNotice(null);
 
     try {
-      const nextContext = await loadAppContext(activeSession.user);
+      const nextContext = await loadAppContext(activeSession.user, organizationId || undefined);
       setContext(nextContext);
       setContextLoadError("");
     } catch (error) {
@@ -242,7 +250,10 @@ export default function App() {
       notice={notice}
       selectedOrganizationId={selectedOrganizationId}
       t={t}
-      onChangeOrganization={setSelectedOrganizationId}
+      onChangeOrganization={(organizationId) => {
+        setSelectedOrganizationId(organizationId);
+        void refreshContext(session, organizationId);
+      }}
       onLocaleChange={handleLocaleChange}
       onCreateBackNumberRange={async (input) => {
         const created = await createBackNumberRange(input);
@@ -317,6 +328,21 @@ export default function App() {
         setNotice({ tone: "success", message: "Show updated." });
         await refreshContext();
       }}
+      onCreateSlate={async (input) => {
+        await createSlate(input);
+        setNotice({ tone: "success", message: "Slate créée." });
+        await refreshContext();
+      }}
+      onUpdateSlate={async (id, input) => {
+        await updateSlate(id, input);
+        setNotice({ tone: "success", message: "Slate mise à jour." });
+        await refreshContext();
+      }}
+      onDeleteSlate={async (id) => {
+        await deleteSlate(id);
+        setNotice({ tone: "success", message: "Slate supprimée; ses blocs sont maintenant sans slate." });
+        await refreshContext();
+      }}
       onCreateContact={async (input) => {
         const contact = await createContact(input);
         setNotice({ tone: "success", message: "Contact created." });
@@ -328,6 +354,26 @@ export default function App() {
         setNotice({ tone: "success", message: "Carte de membre vendue et facture draft mise à jour." });
         await refreshContext();
         return membership;
+      }}
+      onLinkContactToDirectory={async (input) => {
+        await linkContactToDirectory(input);
+        setNotice({ tone: "success", message: "Contact ajouté au répertoire." });
+        await refreshContext();
+      }}
+      onUnlinkContactFromDirectory={async (organizationDisciplineId, contactId) => {
+        await unlinkContactFromDirectory(organizationDisciplineId, contactId);
+        setNotice({ tone: "success", message: "Contact retiré du répertoire; sa fiche globale est conservée." });
+        await refreshContext();
+      }}
+      onLinkHorseToDirectory={async (input) => {
+        await linkHorseToDirectory(input);
+        setNotice({ tone: "success", message: "Cheval ajouté au répertoire." });
+        await refreshContext();
+      }}
+      onUnlinkHorseFromDirectory={async (organizationDisciplineId, horseId) => {
+        await unlinkHorseFromDirectory(organizationDisciplineId, horseId);
+        setNotice({ tone: "success", message: "Cheval retiré du répertoire; sa fiche globale est conservée." });
+        await refreshContext();
       }}
       onCreateManualSale={async (input) => {
         const sale = await createManualSale(input);
@@ -360,7 +406,11 @@ export default function App() {
         const document = await createUploadedHorseHealthDocument(input);
         setNotice({
           tone: "info",
-          message: document.document_type === "combo_vaccine" ? "Certificat de vaccin ajoute pour revision." : "Document sante ajoute pour revision.",
+          message: document.document_category === "registration"
+            ? "Document d'enregistrement ajoute au cheval."
+            : document.document_type === "combo_vaccine"
+              ? "Certificat de vaccin ajoute pour revision."
+              : "Document sante ajoute pour revision.",
         });
         await refreshContext();
         return document;
@@ -370,12 +420,11 @@ export default function App() {
         setNotice({ tone: "success", message: "Horse updated." });
         await refreshContext();
       }}
-      onReviewHorseHealthDocument={async (id, input) => {
-        const document = await reviewHorseHealthDocument(id, input);
-        setNotice({
-          tone: document.status === "rejected" ? "info" : "success",
-          message: document.status === "rejected" ? "Document sante refuse." : "Document sante approuve.",
-        });
+      onReviewOrganizationHealthDocuments={async (inputs) => {
+        for (const input of inputs) {
+          await createOrganizationHealthDocumentReview(input);
+        }
+        setNotice({ tone: "success", message: "Révision de l'association enregistrée." });
         await refreshContext();
       }}
       onVerifyGvlCogginsDocument={async (input) => {
@@ -395,64 +444,64 @@ export default function App() {
         setNotice({ tone: "success", message: "Horse and related test data deleted." });
         await refreshContext();
       }}
-	      onCreateClass={async (input) => {
-	        const classRecord = await createClass(input);
+	      onCreateBlock={async (input) => {
+	        const block = await createBlock(input);
 	        setNotice({ tone: "success", message: "Bloc créé." });
 	        await refreshContext();
-	        return classRecord;
+	        return block;
+	      }}
+	      onCreateBlockTemplate={async (input) => {
+	        await createBlockTemplate(input);
+	        setNotice({ tone: "success", message: "Bloc preset créé." });
+	        await refreshContext();
+	      }}
+	      onDeleteBlockTemplate={async (id) => {
+	        await deleteBlockTemplate(id);
+	        setNotice({ tone: "success", message: "Bloc preset supprimé." });
+	        await refreshContext();
+	      }}
+	      onUpdateBlockTemplate={async (id, input) => {
+	        await updateBlockTemplate(id, input);
+	        setNotice({ tone: "success", message: "Bloc preset mis à jour." });
+	        await refreshContext();
 	      }}
 	      onCreateClassTemplate={async (input) => {
 	        await createClassTemplate(input);
-	        setNotice({ tone: "success", message: "Bloc preset créé." });
+	        setNotice({ tone: "success", message: "Classe de bloc preset créée." });
 	        await refreshContext();
 	      }}
 	      onDeleteClassTemplate={async (id) => {
 	        await deleteClassTemplate(id);
-	        setNotice({ tone: "success", message: "Bloc preset supprimé." });
+	        setNotice({ tone: "success", message: "Classe de bloc preset supprimée." });
 	        await refreshContext();
 	      }}
 	      onUpdateClassTemplate={async (id, input) => {
 	        await updateClassTemplate(id, input);
-	        setNotice({ tone: "success", message: "Bloc preset mis à jour." });
-	        await refreshContext();
-	      }}
-	      onCreateClassTemplateDivision={async (input) => {
-	        await createClassTemplateDivision(input);
-	        setNotice({ tone: "success", message: "Classe de bloc preset créée." });
-	        await refreshContext();
-	      }}
-	      onDeleteClassTemplateDivision={async (id) => {
-	        await deleteClassTemplateDivision(id);
-	        setNotice({ tone: "success", message: "Classe de bloc preset supprimée." });
-	        await refreshContext();
-	      }}
-	      onUpdateClassTemplateDivision={async (id, input) => {
-	        await updateClassTemplateDivision(id, input);
 	        setNotice({ tone: "success", message: "Classe de bloc preset mise à jour." });
+	        await refreshContext();
+	      }}
+	      onDeleteBlock={async (id) => {
+	        await deleteBlock(id);
+	        setNotice({ tone: "success", message: "Bloc supprimé." });
+	        await refreshContext();
+	      }}
+	      onUpdateBlock={async (id, input) => {
+	        await updateBlock(id, input);
+	        setNotice({ tone: "success", message: "Bloc mis à jour." });
+	        await refreshContext();
+	      }}
+	      onCreateClass={async (input) => {
+	        await createClass(input);
+	        setNotice({ tone: "success", message: "Classe créée." });
 	        await refreshContext();
 	      }}
 	      onDeleteClass={async (id) => {
 	        await deleteClass(id);
-	        setNotice({ tone: "success", message: "Bloc supprimé." });
+	        setNotice({ tone: "success", message: "Classe supprimée." });
 	        await refreshContext();
 	      }}
 	      onUpdateClass={async (id, input) => {
 	        await updateClass(id, input);
-	        setNotice({ tone: "success", message: "Bloc mis à jour." });
-	        await refreshContext();
-	      }}
-	      onCreateDivision={async (input) => {
-	        await createDivision(input);
-	        setNotice({ tone: "success", message: "Classe créée." });
-	        await refreshContext();
-	      }}
-	      onDeleteDivision={async (id) => {
-	        await deleteDivision(id);
-	        setNotice({ tone: "success", message: "Classe supprimée." });
-	        await refreshContext();
-	      }}
-	      onUpdateDivision={async (id, input) => {
-	        await updateDivision(id, input);
 	        setNotice({ tone: "success", message: "Classe mise à jour." });
         await refreshContext();
       }}
@@ -496,16 +545,16 @@ export default function App() {
         setNotice({ tone: "success", message: "Reservation deleted and invoice draft updated." });
         await refreshContext();
       }}
-      onPrepareShowScoreClass={async (classRecord) => {
+      onPrepareShowScoreClass={async (block) => {
         if (!context) {
           return;
         }
 
         try {
           const setup = await prepareShowScoreClassSetup({
-            classRecord,
+            classRecord: block,
             contacts: context.contacts,
-            divisions: context.divisions,
+            classes: context.classes,
             entries: context.entries,
             horses: context.horses,
           });
@@ -594,8 +643,13 @@ export default function App() {
       onRefresh={() => refreshContext()}
       onSignOut={handleSignOut}
       onSetExternalMembershipRequirement={async (input) => {
-        await setOrganizationExternalMembershipRequirement(input);
+        await setOrganizationExternalCredentialRequirement(input);
         setNotice({ tone: "success", message: "Membership requirement updated." });
+        await refreshContext();
+      }}
+      onSetOrganizationHealthPolicy={async (input) => {
+        await setOrganizationHealthPolicy(input);
+        setNotice({ tone: "success", message: "Politique de santé mise à jour." });
         await refreshContext();
       }}
       onUpdateOrganizationHealthSettings={async (id, input) => {

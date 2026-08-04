@@ -7,7 +7,7 @@ export const associationNavigation: NavItem[] = [
   { key: "shows", labelKey: "shows", icon: CalendarDays },
   { key: "people", labelKey: "people", icon: Users },
   { key: "health", labelKey: "health", icon: HeartPulse },
-  { key: "classes", labelKey: "classes", icon: BookOpen },
+  { key: "blocks", labelKey: "blocks", icon: BookOpen },
   { key: "entries", labelKey: "entries", icon: ClipboardList },
   { key: "back-numbers", labelKey: "backNumbers", icon: Hash },
   { key: "stalls", labelKey: "stalls", icon: Warehouse },

@@ -1,6 +1,6 @@
 import type {
   Contact,
-  Division,
+  ClassRecord,
   Entry,
   EntryResult,
   Horse,
@@ -31,7 +31,7 @@ export type PayoutAwardDraft = Pick<PayoutAward, "entry_id" | "rank" | "percenta
 export type PayoutCalculationDraft = Pick<
   PayoutCalculation,
   | "show_id"
-  | "division_id"
+  | "class_id"
   | "import_batch_id"
   | "status"
   | "currency"
@@ -58,7 +58,7 @@ export type BuiltPayoutDraft = {
 
 type BuildPayoutDraftInput = {
   contacts: Contact[];
-  division: Division;
+  classRecord: ClassRecord;
   entries: Entry[];
   entryResults: EntryResult[];
   existingAwards?: PayoutAward[];
@@ -154,7 +154,7 @@ export const defaultPayoutScheduleBrackets: PayoutScheduleBracket[] = [
 
 export function buildPayoutDraft({
   contacts,
-  division,
+  classRecord,
   entries,
   entryResults,
   existingAwards = [],
@@ -164,21 +164,21 @@ export function buildPayoutDraft({
   payoutSchedules,
   show,
 }: BuildPayoutDraftInput): BuiltPayoutDraft {
-  const divisionEntries = entries.filter((entry) => entry.division_id === division.id);
-  const financialEntries = divisionEntries.filter((entry) => entry.status === "active" || entry.status === "completed");
+  const classEntries = entries.filter((entry) => entry.class_id === classRecord.id);
+  const financialEntries = classEntries.filter((entry) => entry.status === "active" || entry.status === "completed");
   const importBatchId = resolvePayoutImportBatchId(financialEntries);
   const entryCount = financialEntries.length;
-  const scheduleType = division.payout_schedule_type ?? "none";
+  const scheduleType = classRecord.payout_schedule_type ?? "none";
   const hasPayout = scheduleType !== "none";
   const isNrhaSchedule = scheduleType === "nrha_schedule_a" || scheduleType === "nrha_schedule_b";
-  const youthExempt = isNrhaSchedule && payoutRulesBoolean(division.payout_rules, "nrha_youth_fee_exempt");
-  const entryFee = money(division.entry_fee ?? 0);
+  const youthExempt = isNrhaSchedule && payoutRulesBoolean(classRecord.payout_rules, "nrha_youth_fee_exempt");
+  const entryFee = money(classRecord.entry_fee ?? 0);
   const grossEntryFees = money(entryFee * entryCount);
-  const appliedTrophyFee = youthExempt ? 0 : money(division.trophy_or_plaque_fee ?? 0);
+  const appliedTrophyFee = youthExempt ? 0 : money(classRecord.trophy_or_plaque_fee ?? 0);
   const baseAfterTrophy = money(grossEntryFees - appliedTrophyFee);
-  const addedMoney = money(division.added_money ?? 0);
-  const sanctioningFeePercent = youthExempt ? 0 : isNrhaSchedule ? 5 : numberOrDefault(division.sanctioning_fee_percent, 0);
-  const retainagePercent = youthExempt ? 0 : scheduleType === "jackpot_100" && division.retainage_percent == null ? 0 : numberOrDefault(division.retainage_percent, 0);
+  const addedMoney = money(classRecord.added_money ?? 0);
+  const sanctioningFeePercent = youthExempt ? 0 : isNrhaSchedule ? 5 : numberOrDefault(classRecord.sanctioning_fee_percent, 0);
+  const retainagePercent = youthExempt ? 0 : scheduleType === "jackpot_100" && classRecord.retainage_percent == null ? 0 : numberOrDefault(classRecord.retainage_percent, 0);
   const netNegative = baseAfterTrophy < 0;
   const nrhaFeeAmount = netNegative ? 0 : money(baseAfterTrophy * (sanctioningFeePercent / 100));
   const netEntryFee = money(baseAfterTrophy - nrhaFeeAmount);
@@ -186,7 +186,7 @@ export function buildPayoutDraft({
   const finalNetEntryFee = netNegative ? 0 : money(netEntryFee - retainageAmount);
   const netPurse = hasPayout ? money((netNegative ? 0 : finalNetEntryFee) + addedMoney) : 0;
   const schedule = resolveSchedule(scheduleType, payoutSchedules);
-  const percentages = hasPayout ? resolvePercentages(scheduleType, entryCount, division.payout_rules, schedule, payoutScheduleBrackets) : [];
+  const percentages = hasPayout ? resolvePercentages(scheduleType, entryCount, classRecord.payout_rules, schedule, payoutScheduleBrackets) : [];
   const rankedGroups = buildRankedGroups(financialEntries, entryResults);
   const existingAwardByEntryId = new Map(existingAwards.map((award) => [award.entry_id, award]));
   const awards = buildAwards({
@@ -201,13 +201,13 @@ export function buildPayoutDraft({
   const resultSnapshot = buildResultRows({
     awardByEntryId,
     contacts,
-    entries: divisionEntries,
+    entries: classEntries,
     entryResults,
     horses,
     rankedGroups,
   });
   const sourceSnapshot = buildSourceSnapshot({
-    division,
+    classRecord,
     entryResults,
     financialEntries,
     schedule,
@@ -218,8 +218,8 @@ export function buildPayoutDraft({
   return {
     awards,
     calculation: {
-      show_id: division.show_id,
-      division_id: division.id,
+      show_id: classRecord.show_id,
+      class_id: classRecord.id,
       import_batch_id: importBatchId,
       status: "draft",
       currency: show?.default_currency ?? organization?.currency ?? "CAD",
@@ -268,8 +268,8 @@ export function payoutDraftMatchesCalculation(draft: BuiltPayoutDraft, calculati
   return stableJson(draft.calculation.source_snapshot) === stableJson(calculation.source_snapshot);
 }
 
-export function payoutNeedsScheduleBHint(division: Pick<Division, "added_money" | "payout_schedule_type">) {
-  return division.payout_schedule_type === "nrha_schedule_a" && Number(division.added_money ?? 0) >= 2000;
+export function payoutNeedsScheduleBHint(classRecord: Pick<ClassRecord, "added_money" | "payout_schedule_type">) {
+  return classRecord.payout_schedule_type === "nrha_schedule_a" && Number(classRecord.added_money ?? 0) >= 2000;
 }
 
 function buildNrhaDefaultBrackets(scheduleId: string, thresholds: readonly (readonly [number, number | null])[]) {
@@ -462,14 +462,14 @@ function buildResultRows({
 }
 
 function buildSourceSnapshot({
-  division,
+  classRecord,
   entryResults,
   financialEntries,
   schedule,
   scheduleType,
   youthExempt,
 }: {
-  division: Division;
+  classRecord: ClassRecord;
   entryResults: EntryResult[];
   financialEntries: Entry[];
   schedule: PayoutSchedule | null;
@@ -480,15 +480,15 @@ function buildSourceSnapshot({
 
   return {
     algorithm_version: 1,
-    division: {
-      added_money: money(division.added_money ?? 0),
-      entry_fee: money(division.entry_fee ?? 0),
-      id: division.id,
-      payout_rules: division.payout_rules ?? {},
+    classRecord: {
+      added_money: money(classRecord.added_money ?? 0),
+      entry_fee: money(classRecord.entry_fee ?? 0),
+      id: classRecord.id,
+      payout_rules: classRecord.payout_rules ?? {},
       payout_schedule_type: scheduleType,
-      retainage_percent: division.retainage_percent ?? null,
-      sanctioning_fee_percent: division.sanctioning_fee_percent ?? null,
-      trophy_or_plaque_fee: money(division.trophy_or_plaque_fee ?? 0),
+      retainage_percent: classRecord.retainage_percent ?? null,
+      sanctioning_fee_percent: classRecord.sanctioning_fee_percent ?? null,
+      trophy_or_plaque_fee: money(classRecord.trophy_or_plaque_fee ?? 0),
       youth_exempt: youthExempt,
     },
     entries: financialEntries
@@ -499,7 +499,7 @@ function buildSourceSnapshot({
       }))
       .sort((a, b) => a.id.localeCompare(b.id)),
     results: entryResults
-      .filter((result) => result.division_id === division.id && financialEntryIds.has(result.entry_id))
+      .filter((result) => result.class_id === classRecord.id && financialEntryIds.has(result.entry_id))
       .map((result) => ({
         entry_id: result.entry_id,
         final_score: result.final_score == null ? null : Number(result.final_score),

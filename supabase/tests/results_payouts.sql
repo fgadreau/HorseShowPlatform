@@ -109,6 +109,13 @@ set name = excluded.name,
     tax_rate = excluded.tax_rate,
     updated_at = now();
 
+-- Les documents manuels de ce fixture sont acceptes sans lecture d'identite;
+-- le test demeure centre sur les resultats et les payouts.
+update public.organization_health_policies
+set identity_validation_requirement = 'none'
+where organization_id = '30640000-0000-0000-0000-000000000001'
+  and effective_from = '1900-01-01';
+
 insert into public.organization_members (id, organization_id, user_id, role)
 values (
   '31640000-0000-0000-0000-000000000001',
@@ -118,6 +125,28 @@ values (
 )
 on conflict (organization_id, user_id) do update
 set role = excluded.role;
+
+insert into public.organization_disciplines (
+  id,
+  organization_id,
+  discipline_id,
+  is_default,
+  is_active,
+  created_by_user_id
+)
+select
+  '33640000-0000-0000-0000-000000000001',
+  '30640000-0000-0000-0000-000000000001',
+  discipline.id,
+  true,
+  true,
+  (select id from public.user_profiles where user_id = '10640000-0000-0000-0000-000000000001')
+from public.disciplines discipline
+where discipline.code = 'REINING'
+on conflict (organization_id, discipline_id) do update
+set is_default = true,
+    is_active = true,
+    updated_at = now();
 
 insert into public.shows (
   id,
@@ -157,20 +186,18 @@ set name = excluded.name,
     is_public = excluded.is_public,
     updated_at = now();
 
-insert into public.classes (
+insert into public.blocks (
   id,
   organization_id,
   show_id,
   show_day_id,
   name,
-  code,
   arena,
   pattern,
   sort_order,
-  entry_fee,
-  judge_name,
-  status,
-  is_public
+  judge_display_name,
+  schedule_status,
+  schedule_is_public
 )
 values (
   '50640000-0000-0000-0000-000000000001',
@@ -178,37 +205,39 @@ values (
   '40640000-0000-0000-0000-000000000001',
   null,
   'Open Reining',
-  'OR-1',
   'Main',
   '8',
   1,
-  150.00,
   'Results Judge',
   'open',
   true
 )
 on conflict (id) do update
 set name = excluded.name,
-    is_public = excluded.is_public,
+    schedule_is_public = excluded.schedule_is_public,
     updated_at = now();
 
-insert into public.divisions (
+insert into public.classes (
   id,
   organization_id,
   show_id,
-  class_id,
+  block_id,
+  organization_discipline_id,
   name,
   level,
-  entry_fee
+  entry_fee,
+  sort_order
 )
 values (
   '60640000-0000-0000-0000-000000000001',
   '30640000-0000-0000-0000-000000000001',
   '40640000-0000-0000-0000-000000000001',
   '50640000-0000-0000-0000-000000000001',
+  '33640000-0000-0000-0000-000000000001',
   'Open',
   1,
-  150.00
+  150.00,
+  1
 )
 on conflict (id) do update
 set name = excluded.name,
@@ -217,7 +246,6 @@ set name = excluded.name,
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -225,8 +253,8 @@ insert into public.contacts (
   created_by_user_id
 )
 values
-  ('70640000-0000-0000-0000-000000000001', '30640000-0000-0000-0000-000000000001', 'owner', 'Results', 'Owner', 'results-owner@example.test', (select id from public.user_profiles where user_id = '10640000-0000-0000-0000-000000000001')),
-  ('70640000-0000-0000-0000-000000000002', '30640000-0000-0000-0000-000000000001', 'rider', 'Results', 'Rider', 'results-rider@example.test', (select id from public.user_profiles where user_id = '10640000-0000-0000-0000-000000000001'))
+  ('70640000-0000-0000-0000-000000000001', 'owner', 'Results', 'Owner', 'results-owner@example.test', (select id from public.user_profiles where user_id = '10640000-0000-0000-0000-000000000001')),
+  ('70640000-0000-0000-0000-000000000002', 'rider', 'Results', 'Rider', 'results-rider@example.test', (select id from public.user_profiles where user_id = '10640000-0000-0000-0000-000000000001'))
 on conflict (id) do update
 set first_name = excluded.first_name,
     last_name = excluded.last_name,
@@ -235,7 +263,6 @@ set first_name = excluded.first_name,
 
 insert into public.horses (
   id,
-  organization_id,
   name,
   breed,
   color,
@@ -246,7 +273,6 @@ insert into public.horses (
 )
 values (
   '80640000-0000-0000-0000-000000000001',
-  '30640000-0000-0000-0000-000000000001',
   'Results Test Whiz',
   'Quarter Horse',
   'Bay',
@@ -260,9 +286,9 @@ set name = excluded.name,
     primary_owner_contact_id = excluded.primary_owner_contact_id,
     updated_at = now();
 
-insert into public.horse_health_documents (
+insert into public.horse_documents (
   id,
-  organization_id,
+  uploaded_by_organization_id,
   horse_id,
   document_type,
   status,
@@ -321,7 +347,7 @@ insert into public.entries (
   organization_id,
   show_id,
   horse_id,
-  division_id,
+  class_id,
   created_by_user_id,
   owner_contact_id,
   rider_contact_id,
@@ -393,7 +419,7 @@ select results_payouts_test.as_user('10640000-0000-0000-0000-000000000001');
 insert into public.payout_calculations (
   id,
   show_id,
-  division_id,
+  class_id,
   status,
   currency,
   entry_count,

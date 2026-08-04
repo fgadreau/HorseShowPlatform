@@ -1,17 +1,22 @@
 import { useEffect, useMemo, useState } from "react";
 import { ShieldCheck } from "lucide-react";
+import { evaluateTeamEligibility, eligibilityPolicyFromAssignment, type GoverningBodyEligibilityEvidence } from "../../lib/eligibilityEngine";
 import type { Locale } from "../../lib/i18n";
 import type { ReadinessItem, ReadinessResult } from "../../lib/readiness";
 import { verifyNrhaEligibility } from "../../services/supabaseServices";
 import type { NrhaEligibilityVerification } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactExternalMembership, Division, ExternalOrganization, Horse, HorseExternalMembership, NrhaRiderRanking, NrhaRiderRankingListType, Show } from "../../types/domain";
-import { findNrhaApprovedClass, nrhaClassTypeFromRules } from "../classes/classUtils";
+import type { Block, Contact, ContactExternalIdentifier, ClassRecord, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, NrhaRiderRanking, NrhaRiderRankingListType, Organization, Show } from "../../types/domain";
+import { findNrhaApprovedClass, hasGoverningBodyCode, nrhaClassTypeFromAssignments } from "../classes/classUtils";
 import { InlineHealthMessage, uiText } from "../dashboard/shared";
 
 type NrhaEligibilityMessage = {
   key: string;
   message: string;
   tone: "success" | "info" | "error";
+  eligibilityStatus?: "eligible" | "ineligible" | "unavailable";
+  sourceMode?: "live_external" | "cache" | "local";
+  checkedAt?: string | null;
+  expiresAt?: string | null;
 };
 
 type NrhaEligibilityGate = {
@@ -25,28 +30,30 @@ type NrhaEligibilityGate = {
 };
 
 function NrhaEligibilityCheck({
+  block,
+  contactExternalIdentifiers,
   classRecord,
-  contactExternalMemberships,
-  division,
-  externalOrganizations,
+  externalCredentialIssuers,
   horse,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   locale = "fr",
   nrhaRiderRankings,
+  organization,
   onStatusChange,
   riderContact,
   show,
   skip = false,
   onVerifyNrhaEligibility,
 }: {
+  block: Block | null;
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   classRecord: ClassRecord | null;
-  contactExternalMemberships: ContactExternalMembership[];
-  division: Division | null;
-  externalOrganizations: ExternalOrganization[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   horse: Horse | null;
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   locale?: Locale;
   nrhaRiderRankings: NrhaRiderRanking[];
+  organization: Organization | null;
   onStatusChange?: (status: NrhaEligibilityGate) => void;
   riderContact: Contact | null;
   skip?: boolean;
@@ -56,55 +63,56 @@ function NrhaEligibilityCheck({
   const [busy, setBusy] = useState(false);
   const [resultMessage, setResultMessage] = useState<NrhaEligibilityMessage | null>(null);
   const nrhaOrganization = useMemo(
-    () => externalOrganizations.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null,
-    [externalOrganizations],
+    () => externalCredentialIssuers.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA") ?? null,
+    [externalCredentialIssuers],
   );
   const horseNrhaReference = useMemo(
     () =>
       nrhaOrganization && horse
-        ? horseExternalMemberships.find(
+        ? horseExternalIdentifiers.find(
             (membership) =>
               membership.horse_id === horse.id &&
-              membership.external_organization_id === nrhaOrganization.id &&
-              membership.reference_type === "competition_license",
+              membership.external_credential_issuer_id === nrhaOrganization.id &&
+              membership.identifier_type === "competition_license",
           ) ?? null
         : null,
-    [horse, horseExternalMemberships, nrhaOrganization],
+    [horse, horseExternalIdentifiers, nrhaOrganization],
   );
   const riderNrhaMembership = useMemo(
     () =>
       nrhaOrganization && riderContact
-        ? contactExternalMemberships.find(
+        ? contactExternalIdentifiers.find(
             (membership) =>
               membership.contact_id === riderContact.id &&
-              membership.external_organization_id === nrhaOrganization.id,
+              membership.external_credential_issuer_id === nrhaOrganization.id,
           ) ?? null
         : null,
-    [contactExternalMemberships, nrhaOrganization, riderContact],
+    [contactExternalIdentifiers, nrhaOrganization, riderContact],
   );
   const context = buildNrhaEligibilityContext({
+    block,
     classRecord,
-    division,
     horse,
-    horseReferenceNumber: horseNrhaReference?.reference_number ?? "",
+    horseReferenceNumber: horseNrhaReference?.identifier_value ?? "",
     locale,
     memberExpiresOn: riderNrhaMembership?.expires_on ?? null,
-    memberNumber: riderNrhaMembership?.membership_number ?? "",
+    memberNumber: riderNrhaMembership?.identifier_value ?? "",
     memberStatus: riderNrhaMembership?.status ?? null,
     riderContact,
     show,
+    organization,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
   const category26RankingGate = buildNrhaCategory26RankingGate({
+    block,
     classRecord,
-    division,
     key: context.key,
     locale,
     nrhaRiderRankings,
     riderContact,
     show,
   });
-  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip, category26RankingGate);
+  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip, category26RankingGate);
 
   useEffect(() => {
     onStatusChange?.(gate);
@@ -131,93 +139,150 @@ function NrhaEligibilityCheck({
     }
   }
 
-  if (skip || !context.applies) {
+  if (skip || !gate.applies) {
     return null;
   }
 
   return (
     <div className="entry-verification-row">
-      <button className="ghost-button" disabled={!context.request || busy} type="button" onClick={handleVerify}>
-        <ShieldCheck size={18} />
-        {busy ? uiText(locale, "Vérification...", "Checking...") : uiText(locale, "Vérifier NRHA", "Check NRHA")}
-      </button>
+      {context.applies ? (
+        <button className="ghost-button" disabled={!context.request || busy} type="button" onClick={handleVerify}>
+          <ShieldCheck size={18} />
+          {busy ? uiText(locale, "Vérification...", "Checking...") : uiText(locale, "Vérifier NRHA", "Check NRHA")}
+        </button>
+      ) : null}
       <InlineHealthMessage value={gate.message} />
     </div>
   );
 }
 
 function buildNrhaEligibilityGateForEntry({
+  block,
+  contactExternalIdentifiers,
   classRecord,
-  contactExternalMemberships,
-  division,
-  externalOrganizations,
+  externalCredentialIssuers,
   horse,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   locale = "fr",
   nrhaRiderRankings,
+  organization,
   resultMessage,
   riderContact,
   show,
   skip = false,
 }: {
+  block: Block | null;
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   classRecord: ClassRecord | null;
-  contactExternalMemberships: ContactExternalMembership[];
-  division: Division | null;
-  externalOrganizations: ExternalOrganization[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
   horse: Horse | null;
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   locale?: Locale;
   nrhaRiderRankings: NrhaRiderRanking[];
+  organization: Organization | null;
   resultMessage?: NrhaEligibilityMessage | null;
   riderContact: Contact | null;
   show: Show | null;
   skip?: boolean;
 }): NrhaEligibilityGate {
-  const nrhaOrganization = externalOrganizations.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null;
+  const nrhaOrganization = externalCredentialIssuers.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA") ?? null;
   const horseNrhaReference =
     nrhaOrganization && horse
-      ? horseExternalMemberships.find(
+      ? horseExternalIdentifiers.find(
           (membership) =>
             membership.horse_id === horse.id &&
-            membership.external_organization_id === nrhaOrganization.id &&
-            membership.reference_type === "competition_license",
+            membership.external_credential_issuer_id === nrhaOrganization.id &&
+            membership.identifier_type === "competition_license",
         ) ?? null
       : null;
   const riderNrhaMembership =
     nrhaOrganization && riderContact
-      ? contactExternalMemberships.find(
+      ? contactExternalIdentifiers.find(
           (membership) =>
             membership.contact_id === riderContact.id &&
-            membership.external_organization_id === nrhaOrganization.id,
+            membership.external_credential_issuer_id === nrhaOrganization.id,
         ) ?? null
       : null;
   const context = buildNrhaEligibilityContext({
+    block,
     classRecord,
-    division,
     horse,
-    horseReferenceNumber: horseNrhaReference?.reference_number ?? "",
+    horseReferenceNumber: horseNrhaReference?.identifier_value ?? "",
     locale,
     memberExpiresOn: riderNrhaMembership?.expires_on ?? null,
-    memberNumber: riderNrhaMembership?.membership_number ?? "",
+    memberNumber: riderNrhaMembership?.identifier_value ?? "",
     memberStatus: riderNrhaMembership?.status ?? null,
     riderContact,
     show,
+    organization,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
   const category26RankingGate = buildNrhaCategory26RankingGate({
+    block,
     classRecord,
-    division,
     key: context.key,
     locale,
     nrhaRiderRankings,
     riderContact,
     show,
   });
-  const gate = buildNrhaEligibilityGate(context, visibleResultMessage, locale, skip, category26RankingGate);
+  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip, category26RankingGate);
 
   return {
     ...gate,
     request: context.request,
+  };
+}
+
+function buildClassEligibilityGate(
+  classRecord: ClassRecord | null,
+  nrhaContext: ReturnType<typeof buildNrhaEligibilityContext>,
+  resultMessage: NrhaEligibilityMessage | null,
+  locale: Locale,
+  skip: boolean,
+  category26RankingGate: NrhaCategory26RankingGate,
+): NrhaEligibilityGate {
+  if (skip) {
+    return { applies: false, canProceed: true, eligible: null, key: nrhaContext.key, message: null, verified: false };
+  }
+
+  const nrhaGate = buildNrhaEligibilityGate(nrhaContext, resultMessage, locale, false, category26RankingGate);
+  const nrhaAssignment = classRecord?.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA") ?? null;
+  const evidence: GoverningBodyEligibilityEvidence[] = [];
+
+  if (nrhaAssignment?.eligibility_profile_code) {
+    const evidenceStatus = resultMessage?.eligibilityStatus
+      ?? (nrhaGate.verified ? (nrhaGate.canProceed ? "eligible" : "ineligible") : nrhaGate.message?.tone === "error" ? "ineligible" : "pending");
+    evidence.push({
+      governingBodyId: nrhaAssignment.governing_body_id,
+      status: evidenceStatus,
+      reasons: nrhaGate.message
+        ? [{ code: evidenceStatus === "unavailable" ? "source_unavailable" : "nrha_eligibility", message: nrhaGate.message.message, subject: "team", blocking: !nrhaGate.canProceed }]
+        : [],
+      sourceMode: resultMessage?.sourceMode ?? "local",
+      checkedAt: resultMessage?.checkedAt ?? null,
+      expiresAt: resultMessage?.expiresAt ?? null,
+    });
+  }
+
+  const combined = evaluateTeamEligibility({
+    assignments: classRecord?.governing_body_assignments ?? [],
+    evidence,
+    supportedGoverningBodyCodes: ["NRHA"],
+  });
+  const blockingDecision = combined.decisions.find((decision) => !decision.canProceed && decision.status !== "not_required");
+  const warningDecision = combined.decisions.find((decision) => decision.status === "unavailable" && decision.canProceed);
+  const messageText = blockingDecision?.reasons[0]?.message ?? warningDecision?.reasons[0]?.message ?? nrhaGate.message?.message ?? null;
+  const tone = blockingDecision ? (blockingDecision.status === "pending" ? "info" : "error") : warningDecision ? "info" : nrhaGate.message?.tone ?? "success";
+
+  return {
+    applies: combined.applies,
+    canProceed: combined.canProceed,
+    eligible: combined.applies ? combined.canProceed : null,
+    key: nrhaContext.key,
+    message: messageText ? { key: nrhaContext.key, message: messageText, tone } : null,
+    request: nrhaContext.request,
+    verified: combined.applies && !combined.decisions.some((decision) => decision.status === "pending"),
   };
 }
 
@@ -299,12 +364,12 @@ function withNrhaEligibilityReadiness(
 
   const nrhaItem: ReadinessItem = {
     blocking: !gate.canProceed,
-    detail: gate.message?.message ?? uiText(locale, "Vérification NRHA requise.", "NRHA check required."),
-    key: `entry.nrha.${gate.key}`,
+    detail: gate.message?.message ?? uiText(locale, "Vérification d'admissibilité requise.", "Eligibility check required."),
+    key: `entry.eligibility.${gate.key}`,
     status: gate.canProceed ? "ready" : gate.message?.tone === "info" ? "pending" : "blocked",
-    title: uiText(locale, "Éligibilité NRHA", "NRHA eligibility"),
+    title: uiText(locale, "Admissibilité sportive", "Sport eligibility"),
   };
-  const items = [...readiness.items.filter((item) => !item.key.startsWith("entry.nrha.")), nrhaItem];
+  const items = [...readiness.items.filter((item) => !item.key.startsWith("entry.nrha.") && !item.key.startsWith("entry.eligibility.")), nrhaItem];
   const blockingItems = items.filter((item) => item.blocking);
   const hasBlocked = blockingItems.some((item) => item.status === "blocked");
   const hasPending = blockingItems.some((item) => item.status === "pending");
@@ -333,24 +398,25 @@ function sameNrhaEligibilityGate(a: NrhaEligibilityGate | null, b: NrhaEligibili
 }
 
 function buildNrhaEligibilityContext(input: {
+  block: Block | null;
   classRecord: ClassRecord | null;
-  division: Division | null;
   horse: Horse | null;
   horseReferenceNumber: string;
   locale: Locale;
   memberExpiresOn: string | null;
   memberNumber: string;
-  memberStatus: ContactExternalMembership["status"] | null;
+  memberStatus: ContactExternalIdentifier["status"] | null;
   riderContact: Contact | null;
   show: Show | null;
+  organization: Organization | null;
 }) {
-  const classCode = nrhaClassCodeForEligibility(input.division, input.classRecord);
-  const applies = nrhaApplies(input.division, input.classRecord, classCode);
+  const classCode = nrhaClassCodeForEligibility(input.classRecord, input.block);
+  const applies = nrhaApplies(input.classRecord, input.block, classCode);
   const competitionLicenseNumber = integerFromReference(input.horseReferenceNumber);
   const memberNumber = integerFromReference(input.memberNumber);
   const date = input.show?.start_date?.slice(0, 10) ?? "";
   const key = [
-    input.division?.id ?? "",
+    input.classRecord?.id ?? "",
     input.horse?.id ?? "",
     input.riderContact?.id ?? "",
     classCode ?? "",
@@ -363,13 +429,13 @@ function buildNrhaEligibilityContext(input: {
     return { applies, key, message: null, request: null };
   }
 
-  if (!input.horse || !input.division || !input.show) {
+  if (!input.horse || !input.classRecord || !input.show || !input.organization) {
     return {
       applies,
       key,
       message: {
         tone: "info" as const,
-        message: uiText(input.locale, "Choisis un cheval, une classe NRHA et un concours pour lancer la vérification.", "Choose a horse, NRHA class and show before checking eligibility."),
+        message: uiText(input.locale, "Choisis un cheval, une classe NRHA, un concours et une association pour lancer la vérification.", "Choose a horse, NRHA class, show and organization before checking eligibility."),
       },
       request: null,
     };
@@ -449,6 +515,18 @@ function buildNrhaEligibilityContext(input: {
       competitionLicenseNumber,
       date,
       memberNumber,
+      decisionContext: {
+        organizationId: input.organization.id,
+        showId: input.show.id,
+        classId: input.classRecord.id,
+        governingBodyId: input.classRecord.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA")?.governing_body_id ?? "",
+        horseId: input.horse.id,
+        riderContactId: input.riderContact.id,
+        referenceDate: date,
+        eligibilityProfileCode: nrhaClassTypeForEligibility(input.classRecord, input.block, classCode),
+        cacheTtlHours: eligibilityPolicyFromAssignment(input.classRecord.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA")!).cacheTtlHours,
+        sourceUnavailablePolicy: eligibilityPolicyFromAssignment(input.classRecord.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA")!).sourceUnavailablePolicy,
+      },
     },
   };
 }
@@ -482,16 +560,16 @@ const nrhaCategory26NonProClassLevels = new Map([
 ]);
 
 function buildNrhaCategory26RankingGate(input: {
+  block: Block | null;
   classRecord: ClassRecord | null;
-  division: Division | null;
   key: string;
   locale: Locale;
   nrhaRiderRankings: NrhaRiderRanking[];
   riderContact: Contact | null;
   show: Show | null;
 }): NrhaCategory26RankingGate {
-  const classCode = nrhaClassCodeForEligibility(input.division, input.classRecord);
-  const classType = nrhaClassTypeForEligibility(input.division, input.classRecord, classCode);
+  const classCode = nrhaClassCodeForEligibility(input.classRecord, input.block);
+  const classType = nrhaClassTypeForEligibility(input.classRecord, input.block, classCode);
   const family = classCode && nrhaCategory26OpenClassLevels.has(classCode) ? "open" : classCode && nrhaCategory26NonProClassLevels.has(classCode) ? "non_pro" : null;
   const classLevel = family === "open" && classCode ? nrhaCategory26OpenClassLevels.get(classCode) ?? null : family === "non_pro" && classCode ? nrhaCategory26NonProClassLevels.get(classCode) ?? null : null;
   const applies = Boolean(classLevel && (classType === "category_2_aged_show" || classType === "category_6_closed_aged_show"));
@@ -560,12 +638,12 @@ function buildNrhaCategory26RankingGate(input: {
   };
 }
 
-function nrhaClassCodeForEligibility(division: Division | null, classRecord: ClassRecord | null) {
-  return integerFromExactReference(division?.code) ?? integerFromExactReference(classRecord?.code) ?? integerFromExactReference(classRecord?.nrha_slate_number);
+function nrhaClassCodeForEligibility(classRecord: ClassRecord | null, _block: Block | null) {
+  return integerFromExactReference(classRecord?.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA")?.reporting_class_code);
 }
 
-function nrhaClassTypeForEligibility(division: Division | null, classRecord: ClassRecord | null, classCode: number | null) {
-  return nrhaClassTypeFromRules(division?.eligibility_rules) || nrhaClassTypeFromRules(classRecord?.eligibility_rules) || findNrhaApprovedClass(String(classCode ?? ""))?.nrhaClassType || "";
+function nrhaClassTypeForEligibility(classRecord: ClassRecord | null, _block: Block | null, classCode: number | null) {
+  return nrhaClassTypeFromAssignments(classRecord?.governing_body_assignments) || findNrhaApprovedClass(String(classCode ?? ""))?.nrhaClassType || "";
 }
 
 function findNrhaRiderRanking(
@@ -625,17 +703,8 @@ function normalizeNrhaRiderName(value: string) {
     .trim();
 }
 
-function nrhaApplies(division: Division | null, classRecord: ClassRecord | null, classCode: number | null) {
-  const sanctioningCodes = [...(division?.sanctioning_body_codes ?? []), ...(classRecord?.sanctioning_body_codes ?? [])];
-  const labels = [division?.name, classRecord?.name, division?.code, classRecord?.code, classRecord?.nrha_slate_number].filter(Boolean).join(" ");
-
-  return (
-    sanctioningCodes.includes("NRHA") ||
-    division?.payout_schedule_type?.startsWith("nrha_") ||
-    Boolean(classRecord?.nrha_slate_number?.trim()) ||
-    Boolean(findNrhaApprovedClass(String(classCode ?? ""))) ||
-    /\bNRHA\b/i.test(labels)
-  );
+function nrhaApplies(classRecord: ClassRecord | null, _block: Block | null, _classCode: number | null) {
+  return hasGoverningBodyCode(classRecord?.governing_body_assignments, "NRHA");
 }
 
 function integerFromReference(value: string) {
@@ -673,6 +742,22 @@ function formatNrhaEligibilityMessage(
       key,
       tone: "success",
       message: `${uiText(locale, "NRHA: équipe admissible.", "NRHA: team eligible.")}${reasonText}`,
+      eligibilityStatus: "eligible",
+      sourceMode: verification.cache?.source ?? "live_external",
+      checkedAt: verification.cache?.checkedAt ?? null,
+      expiresAt: verification.cache?.expiresAt ?? null,
+    };
+  }
+
+  if (verification.status === "unavailable") {
+    return {
+      key,
+      tone: "info",
+      message: `${uiText(locale, "NRHA: source temporairement indisponible.", "NRHA: source temporarily unavailable.")}${reasonText}`,
+      eligibilityStatus: "unavailable",
+      sourceMode: "live_external",
+      checkedAt: verification.cache?.checkedAt ?? null,
+      expiresAt: verification.cache?.expiresAt ?? null,
     };
   }
 
@@ -680,9 +765,22 @@ function formatNrhaEligibilityMessage(
     key,
     tone: "error",
     message: `${uiText(locale, "NRHA: équipe non admissible.", "NRHA: team not eligible.")}${reasonText}`,
+    eligibilityStatus: "ineligible",
+    sourceMode: verification.cache?.source ?? "live_external",
+    checkedAt: verification.cache?.checkedAt ?? null,
+    expiresAt: verification.cache?.expiresAt ?? null,
   };
 }
 
 export { NrhaEligibilityCheck, sameNrhaEligibilityGate, withNrhaEligibilityReadiness };
 export { buildNrhaEligibilityGateForEntry, formatNrhaEligibilityMessage };
 export type { NrhaEligibilityGate, NrhaEligibilityMessage };
+
+// Generic names used by the entry workflow. The NRHA names remain temporary
+// compatibility exports while NRHA is the first live governing-body adapter.
+export const ClassEligibilityCheck = NrhaEligibilityCheck;
+export const buildClassEligibilityGateForEntry = buildNrhaEligibilityGateForEntry;
+export const sameClassEligibilityGate = sameNrhaEligibilityGate;
+export const withClassEligibilityReadiness = withNrhaEligibilityReadiness;
+export type ClassEligibilityGate = NrhaEligibilityGate;
+export type ClassEligibilityMessage = NrhaEligibilityMessage;

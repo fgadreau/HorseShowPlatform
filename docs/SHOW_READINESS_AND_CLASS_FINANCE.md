@@ -191,7 +191,7 @@ Regle souhaitee:
 
 Modele conceptuel:
 
-- `external_organizations.type = provincial_sport_org` ou `insurance_membership`.
+- `external_credential_issuers.issuer_type = provincial_territorial_sport_organization` avec `country_code` et `subdivision_code`.
 - `requirement_group.type = at_least_one`.
 - `requirement_group.members = [Cheval Quebec, Ontario Equestrian, ...]`.
 
@@ -378,9 +378,9 @@ Le taux global de l'association ne suffit pas. Il faut aussi savoir quels produi
 
 Noms indicatifs a raffiner avant implementation:
 
-- `external_organizations`
-- `external_membership_requirements`
-- `requirement_groups`
+- `external_credential_issuers`
+- `organization_external_credential_requirements`
+- `requirement_group_code` et `match_rule`
 - `organization_membership_products`
 - `class_preset_catalogs`
 - `class_preset_items`

@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { CheckCircle2, Plus, Search, ShieldCheck } from "lucide-react";
+import { ExternalImportDataPanel } from "../../components/ExternalImportDataPanel";
 import { ContactPicker, SearchSelect } from "../../components/ui";
 import { contactLabel, errorMessage, findById, formatDate, horseLabel, numericValue } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, reviewHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { NrhaHorseLookupVerification, NrhaHorseRecord } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
-import { uiText, birthYearFromDateValue, buildHorseExternalMembershipFields, buildExternalMembershipFields, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, isVaccineHealthDocument, healthReviewNote, todayDateValue, InlineHealthMessage, horseHealthResultMessage, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone } from "../dashboard/shared";
-import { formatImportedSex, integerFromReference, mapNrhaSex, normalizeNrhaDate, nrhaHorseDataImportRows, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
+import { createContact, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { ContactIdentityCandidate, HorseIdentityCandidate, NrhaHorseLookupVerification, NrhaHorseRecord } from "../../services/supabaseServices";
+import type { Contact, ContactExternalIdentifier, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import { uiText, birthYearFromDateValue, buildHorseExternalIdentifierFields, buildExternalMembershipFields, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, isVaccineHealthDocument, healthReviewNote, todayDateValue, InlineHealthMessage, horseHealthResultMessage } from "../dashboard/shared";
+import { compareNrhaHorseIdentity, formatImportedSex, integerFromReference, mapNrhaSex, normalizeNrhaDate, nrhaHorseDataImportRows, nrhaHorseImportDecisionPayload, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload, type NrhaHorseDataImportRow, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
+import { HorseIdentityCandidateReview } from "../people/IdentityCandidateReview";
 
 type HorseCreationMode = "manual" | "import";
 type ImportOwnerMode = "existing" | "new";
@@ -26,12 +28,18 @@ function HorseForm({
   contacts,
   contactRoles,
   createdByUserId,
-  externalOrganizations = [],
+  externalCredentialIssuers = [],
   membershipRequirements = [],
   organization,
   onCreateContact,
   onCreateHorse,
   onCreateHorseHealthDocument,
+  onDismissContactIdentityCandidate,
+  onDismissIdentityCandidate,
+  onSearchContactIdentityCandidates,
+  onSearchIdentityCandidates,
+  onUseExistingContact,
+  onUseExistingHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
   onCreated,
@@ -40,12 +48,18 @@ function HorseForm({
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId?: string;
-  externalOrganizations?: ExternalOrganization[];
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers?: ExternalCredentialIssuer[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
+  onDismissContactIdentityCandidate?: (candidate: ContactIdentityCandidate) => Promise<void>;
+  onDismissIdentityCandidate?: (candidate: HorseIdentityCandidate) => Promise<void>;
+  onSearchContactIdentityCandidates?: (input: Parameters<typeof createContact>[0]) => Promise<ContactIdentityCandidate[]>;
+  onSearchIdentityCandidates?: (input: Parameters<typeof createHorse>[0]) => Promise<HorseIdentityCandidate[]>;
+  onUseExistingContact?: (candidate: ContactIdentityCandidate) => Promise<void>;
+  onUseExistingHorse?: (candidate: HorseIdentityCandidate) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onCreated?: (horse: Horse) => void;
@@ -57,6 +71,7 @@ function HorseForm({
   const [breed, setBreed] = useState("");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [registrationStatus, setRegistrationStatus] = useState<Horse["registration_status"]>("unknown");
   const [registrationNumber, setRegistrationNumber] = useState("");
   const [sireName, setSireName] = useState("");
   const [damName, setDamName] = useState("");
@@ -69,6 +84,8 @@ function HorseForm({
   const [nrhaHorseBusy, setNrhaHorseBusy] = useState(false);
   const [nrhaHorseMessage, setNrhaHorseMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaHorseVerification, setNrhaHorseVerification] = useState<NrhaHorseVerificationState | null>(null);
+  const [nrhaHorseLookup, setNrhaHorseLookup] = useState<NrhaHorseLookupVerification | null>(null);
+  const [nrhaHorseImportEvidence, setNrhaHorseImportEvidence] = useState<Record<string, unknown> | null>(null);
   const [nrhaImportReferenceNumber, setNrhaImportReferenceNumber] = useState("");
   const [nrhaImportName, setNrhaImportName] = useState("");
   const [nrhaImportBusy, setNrhaImportBusy] = useState(false);
@@ -89,6 +106,8 @@ function HorseForm({
   const [importOwnerCountry, setImportOwnerCountry] = useState("");
   const [importOwnerDateOfBirth, setImportOwnerDateOfBirth] = useState("");
   const [importOwnerMembershipNumbers, setImportOwnerMembershipNumbers] = useState<Record<string, string>>({});
+  const [identityCandidates, setIdentityCandidates] = useState<HorseIdentityCandidate[]>([]);
+  const [pendingHorseInput, setPendingHorseInput] = useState<Parameters<typeof createHorse>[0] | null>(null);
   const [busy, setBusy] = useState(false);
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
@@ -96,12 +115,12 @@ function HorseForm({
   const selectedOwnerContact = findById(contacts, selectedOwnerId) ?? null;
   const defaultAgentId = currentUserContact && selectedOwnerId !== currentUserContact.id ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
-  const externalReferenceFields = useMemo(() => buildHorseExternalMembershipFields(externalOrganizations), [externalOrganizations]);
-  const nrhaExternalOrganization = externalReferenceFields.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA") ?? null;
-  const nrhaOrganizationId = nrhaExternalOrganization?.id ?? null;
+  const externalReferenceFields = useMemo(() => buildHorseExternalIdentifierFields(externalCredentialIssuers), [externalCredentialIssuers]);
+  const nrhaExternalCredentialIssuer = externalReferenceFields.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA") ?? null;
+  const nrhaOrganizationId = nrhaExternalCredentialIssuer?.id ?? null;
   const importOwnerExternalMembershipFields = useMemo(
-    () => buildExternalMembershipFields("owner", externalOrganizations, membershipRequirements),
-    [externalOrganizations, membershipRequirements],
+    () => buildExternalMembershipFields("owner", externalCredentialIssuers, membershipRequirements),
+    [externalCredentialIssuers, membershipRequirements],
   );
   const currentNrhaReferenceNumber = nrhaOrganizationId ? externalReferenceNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
   const verifiedNrhaHorse =
@@ -123,9 +142,12 @@ function HorseForm({
           !importOwnerExternalMembershipFields.some((field) => field.required && !importOwnerMembershipNumbers[field.organization.id]?.trim()))),
   );
   const canCreateHorse = creationMode === "manual" ? Boolean(organization && selectedOwnerId) : canCreateImportedHorse;
-  const nrhaHorseDataRows = verifiedNrhaHorse
+  const activeNrhaHorseOfficialValues = nrhaHorseLookup
+    ? nrhaOfficialHorseValues(nrhaHorseLookup, { licenseNumber: integerFromReference(currentNrhaReferenceNumber), name })
+    : verifiedNrhaHorse?.officialValues ?? null;
+  const nrhaHorseDataRows = activeNrhaHorseOfficialValues
     ? nrhaHorseDataImportRows(
-        verifiedNrhaHorse.officialValues,
+        activeNrhaHorseOfficialValues,
         {
           damName,
           dateOfBirth,
@@ -151,11 +173,8 @@ function HorseForm({
       return;
     }
 
-    setBusy(true);
     setHealthMessage(null);
-
-    try {
-      const horse = await onCreateHorse({
+    await reviewOrCreateHorse({
         organization_id: organization.id,
         name,
         primary_owner_contact_id: selectedOwnerId,
@@ -163,43 +182,71 @@ function HorseForm({
         breed,
         gender: gender || null,
         date_of_birth: dateOfBirth || null,
-        registration_number: registrationNumber,
+        registration_status: registrationStatus,
+        registration_number: registrationStatus === "grade" ? "" : registrationNumber,
         sire_name: sireName,
         dam_name: damName,
         created_by_user_id: createdByUserId,
         external_memberships: externalReferenceFields.map((organization) => ({
-          external_organization_id: organization.id,
-          reference_type: horseReferenceTypeForOrganization(organization),
-          reference_number: externalReferenceNumbers[organization.id] ?? "",
+          external_credential_issuer_id: organization.id,
+          identifier_type: horseReferenceTypeForOrganization(organization),
+          identifier_value: registrationStatus === "grade" && organization.issuer_type === "breed_registry" ? "" : externalReferenceNumbers[organization.id] ?? "",
           status: verifiedNrhaHorse && organization.id === verifiedNrhaHorse.organizationId ? "active" : "unknown",
           verified_at: verifiedNrhaHorse && organization.id === verifiedNrhaHorse.organizationId ? new Date().toISOString() : null,
-          verification_payload: verifiedNrhaHorse && organization.id === verifiedNrhaHorse.organizationId ? verifiedNrhaHorse.payload : undefined,
-          verification_source: verifiedNrhaHorse && organization.id === verifiedNrhaHorse.organizationId ? "nrha_api" : null,
+          verification_payload: organization.id === nrhaOrganizationId ? verifiedNrhaHorse?.payload ?? nrhaHorseImportEvidence ?? undefined : undefined,
+          verification_source: organization.id === nrhaOrganizationId && (verifiedNrhaHorse || nrhaHorseImportEvidence) ? "nrha_api" : null,
         })),
       });
+  }
 
-      await createInitialHealthDocuments(horse, name, dateOfBirth || null);
+  async function reviewOrCreateHorse(input: Parameters<typeof createHorse>[0]) {
+    setBusy(true);
 
-      setName("");
-      setOwnerContactId("");
-      setAgentContactId(null);
-      setBreed("");
-      setGender("");
-      setDateOfBirth("");
-      setRegistrationNumber("");
-      setSireName("");
-      setDamName("");
-      setGvlCogginsUrl("");
-      setCogginsPdfFile(null);
-      setPreparedGvlUrl("");
-      setVaccineCertificateFile(null);
-      setVaccineAdministeredOn("");
-      setExternalReferenceNumbers({});
-      setNrhaHorseMessage(null);
-      setNrhaHorseVerification(null);
-      setNrhaImportMessage(null);
-      setNrhaImportResult(null);
-      onCreated?.(horse);
+    try {
+      if (onSearchIdentityCandidates) {
+        const candidates = await onSearchIdentityCandidates(input);
+
+        if (candidates.length) {
+          setPendingHorseInput(input);
+          setIdentityCandidates(candidates);
+          return;
+        }
+      }
+
+      await finishHorseCreation(input);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finishHorseCreation(input: Parameters<typeof createHorse>[0]) {
+    const horse = await onCreateHorse(input);
+    await createInitialHealthDocuments(horse, input.name, input.date_of_birth || null);
+    resetHorseCreationState();
+    onCreated?.(horse);
+  }
+
+  async function handleUseExistingHorse(candidate: HorseIdentityCandidate) {
+    if (!onUseExistingHorse) return;
+    setBusy(true);
+
+    try {
+      await onUseExistingHorse(candidate);
+      resetHorseCreationState();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateDistinctHorse() {
+    if (!pendingHorseInput) return;
+    setBusy(true);
+
+    try {
+      if (onDismissIdentityCandidate) {
+        await Promise.all(identityCandidates.map((candidate) => onDismissIdentityCandidate(candidate)));
+      }
+      await finishHorseCreation(pendingHorseInput);
     } finally {
       setBusy(false);
     }
@@ -211,7 +258,7 @@ function HorseForm({
     setNrhaImportMessage(null);
     setNrhaImportResult(null);
 
-    if (!nrhaExternalOrganization || !nrhaOrganizationId) {
+    if (!nrhaExternalCredentialIssuer || !nrhaOrganizationId) {
       setNrhaImportMessage({
         tone: "error",
         message: uiText(locale, "L'organisation externe NRHA doit être configurée avant l'import.", "The NRHA external organization must be configured before import."),
@@ -273,7 +320,7 @@ function HorseForm({
       setDamName(importedHorse.damName?.trim() ?? "");
       setExternalReferenceNumbers((current) => ({
         ...current,
-        [nrhaExternalOrganization.id]: referenceNumber,
+        [nrhaExternalCredentialIssuer.id]: referenceNumber,
       }));
       setImportOwnerContactId(suggestedOwner?.id ?? "");
       setImportOwnerMode(suggestedOwner ? "existing" : "new");
@@ -311,7 +358,7 @@ function HorseForm({
   }
 
   async function handleCreateImportedHorse() {
-    if (!organization || !nrhaImportResult || !nrhaExternalOrganization || !nrhaOrganizationId) {
+    if (!organization || !nrhaImportResult || !nrhaExternalCredentialIssuer || !nrhaOrganizationId) {
       return;
     }
 
@@ -366,8 +413,8 @@ function HorseForm({
               date_of_birth: importOwnerDateOfBirth,
               created_by_user_id: createdByUserId,
               external_memberships: importOwnerExternalMembershipFields.map((field) => ({
-                external_organization_id: field.organization.id,
-                membership_number: importOwnerMembershipNumbers[field.organization.id] ?? "",
+                external_credential_issuer_id: field.organization.id,
+                identifier_value: importOwnerMembershipNumbers[field.organization.id] ?? "",
                 status: field.organization.id === nrhaOrganizationId && importedHorse.ownerMemberNumber ? "active" : "unknown",
               })),
             });
@@ -385,7 +432,23 @@ function HorseForm({
       const importedFoalDate = normalizeNrhaDate(importedHorse.foalDate ?? nrhaImportResult.verification.officialFoalDate ?? "");
       const importedReferenceNumber = nrhaImportResult.referenceNumber;
       const importedAgentId = currentUserContact && ownerContactIdForImport !== currentUserContact.id ? currentUserContact.id : "";
-      const horse = await onCreateHorse({
+      const officialValues = nrhaOfficialHorseValues(nrhaImportResult.verification, { licenseNumber: integerFromReference(importedReferenceNumber), name: importedName });
+      const importedOwnerName = ownerContact ? contactLabel(ownerContact) : [importOwnerFirstName, importOwnerLastName].filter(Boolean).join(" ");
+      const importRows = nrhaHorseDataImportRows(officialValues, {
+        damName: "", dateOfBirth: "", gender: "", name: "", nrhaReferenceNumber: "", ownerName: "", registrationNumber: "", sireName: "",
+      }, locale);
+      const importComparison = compareNrhaHorseIdentity({
+        damName: importedHorse.damName?.trim() ?? "",
+        dateOfBirth: importedFoalDate,
+        gender: mapNrhaSex(importedHorse.sex),
+        name: importedName,
+        nrhaReferenceNumber: importedReferenceNumber,
+        ownerName: importedOwnerName,
+        registrationNumber: importedReferenceNumber,
+        sireName: importedHorse.sireName?.trim() ?? "",
+      }, officialValues);
+      const importPayload = nrhaHorseImportDecisionPayload(nrhaImportResult.verification, importRows, importRows.map((row) => row.key), importComparison);
+      await reviewOrCreateHorse({
         organization_id: organization.id,
         name: importedName,
         primary_owner_contact_id: ownerContactIdForImport,
@@ -394,24 +457,20 @@ function HorseForm({
         gender: mapNrhaSex(importedHorse.sex) || null,
         date_of_birth: importedFoalDate || null,
         registration_number: importedReferenceNumber,
+        registration_status: "registered",
         sire_name: importedHorse.sireName?.trim() ?? "",
         dam_name: importedHorse.damName?.trim() ?? "",
         created_by_user_id: createdByUserId,
-        external_memberships: externalReferenceFields.map((externalOrganization) => ({
-          external_organization_id: externalOrganization.id,
-          reference_type: horseReferenceTypeForOrganization(externalOrganization),
-          reference_number: externalOrganization.id === nrhaExternalOrganization.id ? importedReferenceNumber : externalReferenceNumbers[externalOrganization.id] ?? "",
-          status: externalOrganization.id === nrhaExternalOrganization.id ? "active" : "unknown",
-          verified_at: externalOrganization.id === nrhaExternalOrganization.id ? new Date().toISOString() : null,
-          verification_payload: externalOrganization.id === nrhaExternalOrganization.id ? verificationPayload(nrhaImportResult.verification) : undefined,
-          verification_source: externalOrganization.id === nrhaExternalOrganization.id ? "nrha_api" : null,
+        external_memberships: externalReferenceFields.map((externalCredentialIssuer) => ({
+          external_credential_issuer_id: externalCredentialIssuer.id,
+          identifier_type: horseReferenceTypeForOrganization(externalCredentialIssuer),
+          identifier_value: externalCredentialIssuer.id === nrhaExternalCredentialIssuer.id ? importedReferenceNumber : externalReferenceNumbers[externalCredentialIssuer.id] ?? "",
+          status: externalCredentialIssuer.id === nrhaExternalCredentialIssuer.id ? "active" : "unknown",
+          verified_at: externalCredentialIssuer.id === nrhaExternalCredentialIssuer.id ? new Date().toISOString() : null,
+          verification_payload: externalCredentialIssuer.id === nrhaExternalCredentialIssuer.id ? importPayload : undefined,
+          verification_source: externalCredentialIssuer.id === nrhaExternalCredentialIssuer.id ? "nrha_api" : null,
         })),
       });
-
-      await createInitialHealthDocuments(horse, importedName, importedFoalDate || null);
-
-      resetHorseCreationState();
-      onCreated?.(horse);
     } catch (error) {
       setNrhaImportMessage({
         tone: "error",
@@ -495,6 +554,8 @@ function HorseForm({
     setExternalReferenceNumbers({});
     setNrhaHorseMessage(null);
     setNrhaHorseVerification(null);
+    setNrhaHorseLookup(null);
+    setNrhaHorseImportEvidence(null);
     setNrhaImportReferenceNumber("");
     setNrhaImportName("");
     setNrhaImportMessage(null);
@@ -514,20 +575,26 @@ function HorseForm({
     setImportOwnerCountry("");
     setImportOwnerDateOfBirth("");
     setImportOwnerMembershipNumbers({});
+    setIdentityCandidates([]);
+    setPendingHorseInput(null);
   }
 
   function clearNrhaHorseValidation() {
     setNrhaHorseMessage(null);
     setNrhaHorseVerification(null);
+    setNrhaHorseLookup(null);
+    setNrhaHorseImportEvidence(null);
   }
 
-  async function handleVerifyNrhaHorse(externalOrganization: ExternalOrganization) {
-    const referenceNumber = externalReferenceNumbers[externalOrganization.id]?.trim() ?? "";
+  async function handleVerifyNrhaHorse(externalCredentialIssuer: ExternalCredentialIssuer) {
+    const referenceNumber = externalReferenceNumbers[externalCredentialIssuer.id]?.trim() ?? "";
     const licenseNumber = integerFromReference(referenceNumber);
     const ownerName = selectedOwnerContact ? contactLabel(selectedOwnerContact) : "";
 
     setNrhaHorseMessage(null);
     setNrhaHorseVerification(null);
+    setNrhaHorseLookup(null);
+    setNrhaHorseImportEvidence(null);
 
     if (!licenseNumber) {
       setNrhaHorseMessage({
@@ -555,16 +622,30 @@ function HorseForm({
         ownerName,
       });
       const officialValues = nrhaOfficialHorseValues(verification, { licenseNumber, name });
+      const identityComparison = compareNrhaHorseIdentity(
+        {
+          damName,
+          dateOfBirth,
+          gender,
+          name,
+          nrhaReferenceNumber: referenceNumber,
+          ownerName,
+          registrationNumber,
+          sireName,
+        },
+        officialValues,
+      );
+      setNrhaHorseLookup(verification);
 
-      if (verification.status === "verified" && verification.matched) {
+      if (verification.status === "verified" && verification.matched && identityComparison.verdict === "match") {
         setNrhaHorseVerification({
           dateOfBirth,
           name: name.trim(),
-          organizationId: externalOrganization.id,
+          organizationId: externalCredentialIssuer.id,
           ownerContactId: selectedOwnerId,
           ownerName,
           officialValues,
-          payload: verificationPayload(verification),
+          payload: verificationPayload(verification, identityComparison),
           referenceNumber,
         });
         setNrhaHorseMessage({
@@ -576,7 +657,7 @@ function HorseForm({
 
       setNrhaHorseMessage({
         tone: "error",
-        message: nrhaHorseMismatchMessage(verification, locale),
+        message: nrhaHorseMismatchMessage(verification, locale, identityComparison),
       });
     } catch (error) {
       setNrhaHorseMessage({
@@ -588,26 +669,34 @@ function HorseForm({
     }
   }
 
-  function handleApplyNrhaHorseData() {
-    if (!verifiedNrhaHorse) {
+  function handleApplyNrhaHorseData(keys: NrhaHorseDataImportRow["key"][]) {
+    if (!nrhaHorseLookup || !activeNrhaHorseOfficialValues || !nrhaOrganizationId) {
       return;
     }
 
-    const values = verifiedNrhaHorse.officialValues;
+    const values = activeNrhaHorseOfficialValues;
+    const selectedKeys = new Set(keys);
+    const ownerName = selectedOwnerContact ? contactLabel(selectedOwnerContact) : "";
+    const beforeComparison = compareNrhaHorseIdentity({
+      damName, dateOfBirth, gender, name, nrhaReferenceNumber: currentNrhaReferenceNumber, ownerName, registrationNumber, sireName,
+    }, values);
+    const importPayload = nrhaHorseImportDecisionPayload(nrhaHorseLookup, nrhaHorseDataRows, selectedKeys, beforeComparison);
+    setNrhaHorseImportEvidence(importPayload);
+    const shouldApply = (key: NrhaHorseDataImportRow["key"]) => selectedKeys.has(key);
 
-    if (values.name) {
+    if (values.name && shouldApply("name")) {
       setName(values.name);
     }
 
-    if (values.dateOfBirth) {
+    if (values.dateOfBirth && shouldApply("dateOfBirth")) {
       setDateOfBirth(values.dateOfBirth);
     }
 
-    if (values.gender) {
+    if (values.gender && shouldApply("gender")) {
       setGender(values.gender);
     }
 
-    if (values.registrationNumber) {
+    if (values.registrationNumber && shouldApply("nrhaReferenceNumber")) {
       setRegistrationNumber(values.registrationNumber);
 
       if (nrhaOrganizationId) {
@@ -618,27 +707,40 @@ function HorseForm({
       }
     }
 
-    if (values.sireName) {
+    if (values.sireName && shouldApply("sireName")) {
       setSireName(values.sireName);
     }
 
-    if (values.damName) {
+    if (values.damName && shouldApply("damName")) {
       setDamName(values.damName);
     }
 
-    setNrhaHorseVerification((current) =>
-      current
-        ? {
-            ...current,
-            dateOfBirth: values.dateOfBirth || current.dateOfBirth,
-            name: values.name || current.name,
-            referenceNumber: values.registrationNumber || current.referenceNumber,
-          }
-        : current,
-    );
+    const intendedLocalValues = {
+      damName: values.damName && shouldApply("damName") ? values.damName : damName,
+      dateOfBirth: values.dateOfBirth && shouldApply("dateOfBirth") ? values.dateOfBirth : dateOfBirth,
+      gender: values.gender && shouldApply("gender") ? values.gender : gender,
+      name: values.name && shouldApply("name") ? values.name : name,
+      nrhaReferenceNumber: values.registrationNumber && shouldApply("nrhaReferenceNumber") ? values.registrationNumber : currentNrhaReferenceNumber,
+      ownerName,
+      registrationNumber: values.registrationNumber && shouldApply("nrhaReferenceNumber") ? values.registrationNumber : registrationNumber,
+      sireName: values.sireName && shouldApply("sireName") ? values.sireName : sireName,
+    };
+    const afterComparison = compareNrhaHorseIdentity(intendedLocalValues, values);
+    setNrhaHorseVerification(afterComparison.verdict === "match" ? {
+      dateOfBirth: intendedLocalValues.dateOfBirth,
+      name: intendedLocalValues.name.trim(),
+      organizationId: nrhaOrganizationId,
+      ownerContactId: selectedOwnerId,
+      ownerName,
+      officialValues: values,
+      payload: nrhaHorseImportDecisionPayload(nrhaHorseLookup, nrhaHorseDataRows, selectedKeys, afterComparison),
+      referenceNumber: intendedLocalValues.nrhaReferenceNumber,
+    } : null);
     setNrhaHorseMessage({
-      tone: "success",
-      message: uiText(locale, "Données NRHA importées dans la fiche cheval.", "NRHA data imported into the horse profile."),
+      tone: afterComparison.verdict === "match" ? "success" : "info",
+      message: afterComparison.verdict === "match"
+        ? uiText(locale, "Champs NRHA sélectionnés importés; la fiche concorde maintenant.", "Selected NRHA fields imported; the record now matches.")
+        : uiText(locale, "Champs NRHA sélectionnés importés. Les autres différences restent inchangées.", "Selected NRHA fields imported. Other differences remain unchanged."),
     });
   }
 
@@ -752,7 +854,7 @@ function HorseForm({
               contactRoles={contactRoles}
               createdByUserId={createdByUserId}
               disabled={!organization}
-              externalOrganizations={externalOrganizations}
+              externalCredentialIssuers={externalCredentialIssuers}
               label={uiText(locale, "Propriétaire", "Owner")}
               locale={locale}
               membershipRequirements={membershipRequirements}
@@ -764,6 +866,9 @@ function HorseForm({
                 clearNrhaHorseValidation();
               }}
               onCreateContact={onCreateContact}
+              onDismissIdentityCandidate={onDismissContactIdentityCandidate}
+              onSearchIdentityCandidates={onSearchContactIdentityCandidates}
+              onUseExistingContact={onUseExistingContact}
             />
             <ContactPicker
               allowEmpty
@@ -771,7 +876,7 @@ function HorseForm({
               contactRoles={contactRoles}
               createdByUserId={createdByUserId}
               disabled={!organization}
-              externalOrganizations={externalOrganizations}
+              externalCredentialIssuers={externalCredentialIssuers}
               label="Agent"
               locale={locale}
               membershipRequirements={membershipRequirements}
@@ -780,6 +885,9 @@ function HorseForm({
               value={selectedAgentId}
               onChange={setAgentContactId}
               onCreateContact={onCreateContact}
+              onDismissIdentityCandidate={onDismissContactIdentityCandidate}
+              onSearchIdentityCandidates={onSearchContactIdentityCandidates}
+              onUseExistingContact={onUseExistingContact}
             />
             <div className="form-grid">
               <label>
@@ -808,10 +916,35 @@ function HorseForm({
                 }}
               />
             </label>
-            <label>
-              {uiText(locale, "Enregistrement", "Registration")}
-              <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
-            </label>
+            <div className="form-grid">
+              <label>
+                {uiText(locale, "Statut d’enregistrement", "Registration status")}
+                <select
+                  disabled={!organization}
+                  value={registrationStatus}
+                  onChange={(event) => {
+                    const nextStatus = event.target.value as Horse["registration_status"];
+                    setRegistrationStatus(nextStatus);
+                    if (nextStatus === "grade") {
+                      setRegistrationNumber("");
+                      setExternalReferenceNumbers((current) => Object.fromEntries(Object.entries(current).filter(([issuerId]) => externalReferenceFields.find((issuer) => issuer.id === issuerId)?.issuer_type !== "breed_registry")));
+                    }
+                  }}
+                >
+                  <option value="unknown">{uiText(locale, "À préciser", "To be confirmed")}</option>
+                  <option value="registered">{uiText(locale, "Enregistré — un ou plusieurs registres", "Registered — one or more registries")}</option>
+                  <option value="grade">{uiText(locale, "Grade — sans enregistrement", "Grade — unregistered")}</option>
+                </select>
+              </label>
+              {registrationStatus !== "grade" ? (
+                <label>
+                  {uiText(locale, "Numéro principal (facultatif)", "Primary number (optional)")}
+                  <input disabled={!organization} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
+                </label>
+              ) : (
+                <span className="muted-line">{uiText(locale, "Aucun numéro d’enregistrement requis pour un cheval grade.", "No registration number is required for a grade horse.")}</span>
+              )}
+            </div>
             <div className="form-grid">
               <label>
                 {uiText(locale, "Père", "Sire")}
@@ -829,30 +962,30 @@ function HorseForm({
                   <strong>{uiText(locale, "Références externes du cheval", "External horse references")}</strong>
                   <span>{uiText(locale, "Ex.: licence de compétition NRHA. Si tu ajoutes un numéro NRHA, valide-le avec le nom, la naissance et le propriétaire.", "Example: NRHA competition license. If you add an NRHA number, validate it against name, birth date and owner.")}</span>
                 </div>
-                {externalReferenceFields.map((externalOrganization) => (
-                  <label key={externalOrganization.id}>
-                    {horseExternalReferenceLabel(externalOrganization)}
+                {externalReferenceFields.map((externalCredentialIssuer) => (
+                  <label key={externalCredentialIssuer.id}>
+                    {horseExternalReferenceLabel(externalCredentialIssuer)}
                     <input
-                      disabled={!organization}
-                      value={externalReferenceNumbers[externalOrganization.id] ?? ""}
+                      disabled={!organization || (registrationStatus === "grade" && externalCredentialIssuer.issuer_type === "breed_registry")}
+                      value={externalReferenceNumbers[externalCredentialIssuer.id] ?? ""}
                       onChange={(event) => {
                         setExternalReferenceNumbers((current) => ({
                           ...current,
-                          [externalOrganization.id]: event.target.value,
+                          [externalCredentialIssuer.id]: event.target.value,
                         }));
 
-                        if (externalOrganization.code.toUpperCase() === "NRHA") {
+                        if (externalCredentialIssuer.code.toUpperCase() === "NRHA") {
                           clearNrhaHorseValidation();
                         }
                       }}
                     />
-                    {externalOrganization.code.toUpperCase() === "NRHA" ? (
+                    {externalCredentialIssuer.code.toUpperCase() === "NRHA" ? (
                       <div className="row-actions">
                         <button
                           className="ghost-button"
-                          disabled={busy || nrhaHorseBusy || !organization || !externalReferenceNumbers[externalOrganization.id]?.trim()}
+                          disabled={busy || nrhaHorseBusy || !organization || !externalReferenceNumbers[externalCredentialIssuer.id]?.trim()}
                           type="button"
-                          onClick={() => handleVerifyNrhaHorse(externalOrganization)}
+                          onClick={() => handleVerifyNrhaHorse(externalCredentialIssuer)}
                         >
                           <ShieldCheck size={18} />
                           {nrhaHorseBusy ? uiText(locale, "Validation...", "Validating...") : uiText(locale, "Valider NRHA", "Validate NRHA")}
@@ -862,27 +995,7 @@ function HorseForm({
                   </label>
                 ))}
                 <InlineHealthMessage value={nrhaHorseMessage} />
-                {nrhaHorseDataRows.length ? (
-                  <div className="nrha-data-import-panel">
-                    <div className="inline-form-header">
-                      <strong>{uiText(locale, "Données NRHA disponibles", "Available NRHA data")}</strong>
-                      <span>{uiText(locale, "Choisis d'importer les valeurs officielles qui manquent ou qui ont changé dans HSP.", "Choose to import official values missing or changed in HSP.")}</span>
-                    </div>
-                    <div className="nrha-data-import-list">
-                      {nrhaHorseDataRows.map((row) => (
-                        <div className="nrha-data-import-row" key={row.key}>
-                          <span>{row.label}</span>
-                          <strong>HSP: {row.current}</strong>
-                          <strong>NRHA: {row.official}</strong>
-                        </div>
-                      ))}
-                    </div>
-                    <button className="ghost-button" type="button" onClick={handleApplyNrhaHorseData}>
-                      <Plus size={18} />
-                      {uiText(locale, "Importer les données NRHA", "Import NRHA data")}
-                    </button>
-                  </div>
-                ) : null}
+                {nrhaHorseDataRows.length ? <ExternalImportDataPanel locale={locale} rows={nrhaHorseDataRows} sourceLabel="NRHA" onApply={handleApplyNrhaHorseData} /> : null}
               </div>
             ) : null}
           </>
@@ -1096,10 +1209,24 @@ function HorseForm({
           </div>
         )}
 
-        <button className="primary-button" disabled={busy || !canCreateHorse} type="submit">
-          <Plus size={18} />
-          {creationMode === "import" ? uiText(locale, "Créer le cheval importé", "Create imported horse") : uiText(locale, "Créer le cheval", "Create horse")}
-        </button>
+        {identityCandidates.length && pendingHorseInput ? (
+          <HorseIdentityCandidateReview
+            busy={busy}
+            candidates={identityCandidates}
+            locale={locale}
+            onCreateDistinct={handleCreateDistinctHorse}
+            onEdit={() => {
+              setIdentityCandidates([]);
+              setPendingHorseInput(null);
+            }}
+            onUseExisting={handleUseExistingHorse}
+          />
+        ) : (
+          <button className="primary-button" disabled={busy || !canCreateHorse} type="submit">
+            <Plus size={18} />
+            {creationMode === "import" ? uiText(locale, "Créer le cheval importé", "Create imported horse") : uiText(locale, "Créer le cheval", "Create horse")}
+          </button>
+        )}
       </form>
     </section>
   );

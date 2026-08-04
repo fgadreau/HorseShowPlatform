@@ -1,4 +1,4 @@
-import type { ClassRecord, Contact, Division, Horse, Show } from "../types/domain";
+import type { Block, Contact, ClassRecord, Horse, Show } from "../types/domain";
 
 export function findById<T extends { id: string }>(items: T[], id: string | null | undefined) {
   if (!id) {
@@ -24,13 +24,13 @@ export function showLabel(show: Show | undefined) {
   return show?.name ?? "Unknown show";
 }
 
-export function divisionLabel(division: Division | undefined, classes: ClassRecord[]) {
-  if (!division) {
+export function classLabel(classRecord: ClassRecord | undefined, blocks: Block[]) {
+  if (!classRecord) {
     return "Unknown class";
   }
 
-  const classRecord = findById(classes, division.class_id);
-  return classRecord ? `${classRecord.name} / ${division.name}` : division.name;
+  const block = findById(blocks, classRecord.block_id);
+  return block ? `${block.name} / ${classRecord.name}` : classRecord.name;
 }
 
 export function itemSearchLabel(item: { label: string; detail?: string }) {

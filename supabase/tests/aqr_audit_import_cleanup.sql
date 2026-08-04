@@ -117,6 +117,16 @@ set name = excluded.name,
     short_name = excluded.short_name,
     currency = excluded.currency;
 
+-- Ce scenario teste exclusivement le cycle import/nettoyage ShowScore. Il ne
+-- fournit volontairement aucun document sante; sa politique le declare donc.
+update public.organization_health_policies
+set coggins_required = false,
+    influenza_required = false,
+    rhino_required = false,
+    identity_validation_requirement = 'none'
+where organization_id = '30650000-0000-0000-0000-000000000001'
+  and effective_from = '1900-01-01';
+
 insert into public.organization_members (id, organization_id, user_id, role)
 values (
   '31650000-0000-0000-0000-000000000001',
@@ -126,6 +136,28 @@ values (
 )
 on conflict (organization_id, user_id) do update
 set role = excluded.role;
+
+insert into public.organization_disciplines (
+  id,
+  organization_id,
+  discipline_id,
+  is_default,
+  is_active,
+  created_by_user_id
+)
+select
+  '33650000-0000-0000-0000-000000000001',
+  '30650000-0000-0000-0000-000000000001',
+  discipline.id,
+  true,
+  true,
+  '20650000-0000-0000-0000-000000000001'
+from public.disciplines discipline
+where discipline.code = 'REINING'
+on conflict (organization_id, discipline_id) do update
+set is_default = true,
+    is_active = true,
+    updated_at = now();
 
 insert into public.shows (
   id,
@@ -163,20 +195,18 @@ on conflict (id) do update
 set name = excluded.name,
     status = excluded.status;
 
-insert into public.classes (
+insert into public.blocks (
   id,
   organization_id,
   show_id,
   show_day_id,
   name,
-  code,
   arena,
   pattern,
   sort_order,
-  entry_fee,
-  judge_name,
-  status,
-  is_public
+  judge_display_name,
+  schedule_status,
+  schedule_is_public
 )
 values (
   '50650000-0000-0000-0000-000000000001',
@@ -184,42 +214,44 @@ values (
   '40650000-0000-0000-0000-000000000001',
   null,
   'AQR Audit Open',
-  'AQR-OPEN',
   'Main',
   '8',
   1,
-  150,
   'AQR Judge',
   'open',
   true
 )
 on conflict (id) do update
 set name = excluded.name,
-    entry_fee = excluded.entry_fee;
+    pattern = excluded.pattern;
 
-insert into public.divisions (
+insert into public.classes (
   id,
   organization_id,
   show_id,
-  class_id,
+  block_id,
+  organization_discipline_id,
   name,
   code,
   level,
   entry_fee,
   judge_fee,
-  payout_schedule_type
+  payout_schedule_type,
+  sort_order
 )
 values (
   '60650000-0000-0000-0000-000000000001',
   '30650000-0000-0000-0000-000000000001',
   '40650000-0000-0000-0000-000000000001',
   '50650000-0000-0000-0000-000000000001',
+  '33650000-0000-0000-0000-000000000001',
   'Open',
   '1100',
   1,
   150,
   25,
-  'nrha_schedule_a'
+  'nrha_schedule_a',
+  1
 )
 on conflict (id) do update
 set entry_fee = excluded.entry_fee,
@@ -227,7 +259,6 @@ set entry_fee = excluded.entry_fee,
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -236,7 +267,6 @@ insert into public.contacts (
 )
 values (
   '70650000-0000-0000-0000-000000000001',
-  '30650000-0000-0000-0000-000000000001',
   'owner',
   'AQR',
   'Owner',
@@ -249,14 +279,12 @@ set first_name = excluded.first_name,
 
 insert into public.horses (
   id,
-  organization_id,
   name,
   primary_owner_contact_id,
   created_by_user_id
 )
 values (
   '80650000-0000-0000-0000-000000000001',
-  '30650000-0000-0000-0000-000000000001',
   'AQR Audit Horse',
   '70650000-0000-0000-0000-000000000001',
   '20650000-0000-0000-0000-000000000001'
@@ -264,8 +292,8 @@ values (
 on conflict (id) do update
 set name = excluded.name;
 
-insert into public.show_score_class_setups (
-  class_id,
+insert into public.show_score_block_setups (
+  block_id,
   organization_id,
   show_id,
   show_day_id,
@@ -284,7 +312,7 @@ values (
   '[]'::jsonb,
   true
 )
-on conflict (class_id) do update
+on conflict (block_id) do update
 set runs = excluded.runs,
     is_draw_imported = excluded.is_draw_imported;
 
@@ -314,7 +342,7 @@ insert into public.entries (
   organization_id,
   show_id,
   horse_id,
-  division_id,
+  class_id,
   created_by_user_id,
   owner_contact_id,
   rider_contact_id,
@@ -367,7 +395,7 @@ values (
   '91650000-0000-0000-0000-000000000001'
 );
 
-update public.show_score_class_setups
+update public.show_score_block_setups
 set runs = jsonb_set(
   runs,
   '{0}',
@@ -381,7 +409,7 @@ set runs = jsonb_set(
     'hspImportBatchId', '90650000-0000-0000-0000-000000000001'
   )
 )
-where class_id = '50650000-0000-0000-0000-000000000001';
+where block_id = '50650000-0000-0000-0000-000000000001';
 
 select aqr_audit_import_test.assert_count(
   'AQR import creates one draft invoice entry line',
@@ -426,9 +454,9 @@ where i.status = 'draft'
     where li.invoice_id = i.id
   );
 
-update public.show_score_class_setups
+update public.show_score_block_setups
 set runs = '[{"id":"source-run-1","order":1,"draw":1,"backNumber":"101","rider":"AQR Rider","horse":"AQR Audit Horse","owner":"AQR Owner","status":"active","classCodes":["1100"]}]'::jsonb
-where class_id = '50650000-0000-0000-0000-000000000001';
+where block_id = '50650000-0000-0000-0000-000000000001';
 
 update public.entry_import_batches
 set status = 'cleaned',
@@ -454,8 +482,8 @@ select aqr_audit_import_test.assert_count(
 select aqr_audit_import_test.assert_count(
   'AQR cleanup restores ShowScore run metadata',
   $$select count(*)
-    from public.show_score_class_setups
-    where class_id = '50650000-0000-0000-0000-000000000001'
+    from public.show_score_block_setups
+    where block_id = '50650000-0000-0000-0000-000000000001'
       and not (runs->0 ? 'runId')
       and not (runs->0 ? 'entryIds')
       and not (runs->0 ? 'hspImportBatchId')$$,
