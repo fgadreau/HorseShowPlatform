@@ -4,12 +4,13 @@ import { FileText, Shield, Upload } from "lucide-react";
 import { NoticeBanner, ViewIntro } from "../../components/ui";
 import { errorMessage } from "../../lib/display";
 import { parseNrhaRiderRankingPdf } from "../../lib/nrhaRiderRankingsPdf";
-import type { Organization } from "../../types/domain";
+import type { Discipline, DisciplineCredentialIssuer, DisciplineGoverningBody, ExternalCredentialIssuer, ExternalCredentialProduct, Organization, SanctioningBody } from "../../types/domain";
 import type { PlanTier } from "../../types/domain";
 import type { NrhaRiderRanking, NrhaRiderRankingListType } from "../../types/domain";
 import { replaceNrhaRiderRankings, setOrganizationPlan } from "../../services/supabaseServices";
 import { getPlanLabel, PLAN_FEATURES } from "../../utils/planFeatures";
 import type { Notice } from "../../types/ui";
+import { SportsConfigurationAdmin } from "./SportsConfigurationAdmin";
 
 const PLAN_OPTIONS: PlanTier[] = ["community", "professional", "premium"];
 const NRHA_RIDER_LIST_OPTIONS: Array<{ label: string; value: NrhaRiderRankingListType }> = [
@@ -22,12 +23,24 @@ export function PlatformAdminView({
   currentUserProfileId,
   nrhaRiderRankings,
   organizations,
+  disciplines,
+  disciplineCredentialIssuers,
+  disciplineGoverningBodies,
+  externalCredentialIssuers,
+  externalCredentialProducts,
+  governingBodies,
   onImportNrhaRiderRankings,
   onRefresh,
 }: {
   currentUserProfileId: string | null;
   nrhaRiderRankings: NrhaRiderRanking[];
   organizations: Organization[];
+  disciplines: Discipline[];
+  disciplineCredentialIssuers: DisciplineCredentialIssuer[];
+  disciplineGoverningBodies: DisciplineGoverningBody[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
+  governingBodies: SanctioningBody[];
   onImportNrhaRiderRankings: (input: Parameters<typeof replaceNrhaRiderRankings>[0]) => Promise<void>;
   onRefresh: () => void;
 }) {
@@ -113,6 +126,17 @@ export function PlatformAdminView({
       />
 
       {notice ? <NoticeBanner notice={notice} /> : null}
+
+      <SportsConfigurationAdmin
+        currentUserProfileId={currentUserProfileId}
+        disciplines={disciplines}
+        disciplineCredentialIssuers={disciplineCredentialIssuers}
+        disciplineGoverningBodies={disciplineGoverningBodies}
+        externalCredentialIssuers={externalCredentialIssuers}
+        externalCredentialProducts={externalCredentialProducts}
+        governingBodies={governingBodies}
+        onRefresh={onRefresh}
+      />
 
       <section className="span-2" style={sectionStyle}>
         <div style={sectionHeaderStyle}>

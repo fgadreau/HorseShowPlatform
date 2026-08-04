@@ -9,6 +9,7 @@ import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
 import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
+import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function MyEntriesView({
   locale,
@@ -67,6 +68,7 @@ function MyEntriesView({
 }) {
   const [creatingEntry, setCreatingEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const eligibilityAssessments = useEntryEligibilityAssessments(entries, shows);
 
   async function handleDeleteEntry(entry: Entry) {
     const horseName = horseLabel(findById(horses, entry.horse_id));
@@ -196,6 +198,7 @@ function MyEntriesView({
               </div>
               <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
               <div className="row-actions">
+                <EntryEligibilityStatus assessment={eligibilityAssessments[entry.id]} locale={locale} />
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
                   {uiText(locale, "Modifier", "Edit")}
                 </button>

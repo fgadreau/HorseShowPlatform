@@ -386,6 +386,7 @@ export type ExternalCredentialIssuerType =
   | "national_sport_organization"
   | "breed_registry"
   | "sanctioning_organization"
+  | "insurance_provider"
   | "other";
 
 export type ExternalCredentialIssuer = {
@@ -398,6 +399,22 @@ export type ExternalCredentialIssuer = {
   website_url: string | null;
   is_active: boolean;
   metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+};
+
+export type ExternalCredentialProduct = {
+  id: string;
+  external_credential_issuer_id: string;
+  code: string;
+  name: string;
+  credential_type: "membership" | "license" | "registration" | "certification" | "insurance" | "other";
+  includes_liability_insurance: boolean;
+  minimum_coverage_amount: number | null;
+  coverage_currency: string | null;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -488,6 +505,7 @@ export type ContactExternalIdentifier = {
   id: string;
   contact_id: string;
   external_credential_issuer_id: string;
+  credential_product_id: string | null;
   identifier_type: "membership" | "license" | "registration" | "certification" | "other";
   identifier_value: string;
   normalized_identifier_value: string;
@@ -509,6 +527,7 @@ export type HorseExternalIdentifier = {
   id: string;
   horse_id: string;
   external_credential_issuer_id: string;
+  credential_product_id: string | null;
   identifier_type: "competition_license" | "registration" | "membership" | "microchip" | "passport" | "other";
   identifier_value: string;
   normalized_identifier_value: string;
@@ -743,6 +762,137 @@ export type OrganizationDiscipline = {
   created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type DisciplineGoverningBody = {
+  discipline_id: string;
+  governing_body_id: string;
+  is_default: boolean;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DisciplineCredentialIssuer = {
+  discipline_id: string;
+  external_credential_issuer_id: string;
+  is_default: boolean;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrganizationDisciplineGoverningBody = {
+  organization_discipline_id: string;
+  governing_body_id: string;
+  is_default: boolean;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EligibilityRequirementScope = "organization_discipline" | "block" | "class" | "block_template" | "class_template";
+export type EligibilityRequirementType = "host_membership" | "external_contact_credential" | "horse_registration" | "rider_insurance";
+
+export type EligibilityRequirement = {
+  id: string;
+  organization_id: string;
+  scope_type: EligibilityRequirementScope;
+  organization_discipline_id: string | null;
+  block_id: string | null;
+  class_id: string | null;
+  block_template_id: string | null;
+  class_template_id: string | null;
+  requirement_type: EligibilityRequirementType;
+  subject_type: "rider" | "owner" | "horse";
+  external_credential_issuer_id: string | null;
+  credential_product_id: string | null;
+  credential_type: ExternalCredentialProduct["credential_type"] | null;
+  requirement_group_code: string | null;
+  match_rule: "all" | "at_least_one";
+  validity_rule: "present" | "active_on_reference_date";
+  enforcement_mode: "warning" | "blocking";
+  is_required: boolean;
+  is_active: boolean;
+  label: string | null;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EligibilityRequirementInput = Pick<EligibilityRequirement,
+  | "organization_id"
+  | "scope_type"
+  | "requirement_type"
+  | "subject_type"
+> & Partial<Pick<EligibilityRequirement,
+  | "organization_discipline_id"
+  | "block_id"
+  | "class_id"
+  | "block_template_id"
+  | "class_template_id"
+  | "external_credential_issuer_id"
+  | "credential_product_id"
+  | "credential_type"
+  | "requirement_group_code"
+  | "match_rule"
+  | "validity_rule"
+  | "enforcement_mode"
+  | "is_required"
+  | "is_active"
+  | "label"
+  | "settings"
+  | "created_by_user_id"
+>>;
+
+export type ContactInsuranceEvidence = {
+  id: string;
+  contact_id: string;
+  external_credential_issuer_id: string | null;
+  credential_product_id: string | null;
+  policy_number: string | null;
+  provider_name: string | null;
+  valid_from: string | null;
+  expires_on: string;
+  coverage_amount: number | null;
+  coverage_currency: string | null;
+  document_storage_path: string | null;
+  status: "pending" | "approved" | "expired" | "rejected" | "superseded";
+  reviewed_at: string | null;
+  reviewed_by_user_id: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type EntryEligibilityRequirementAssessment = {
+  entry_id: string;
+  reference_date: string;
+  can_proceed: boolean;
+  status: "not_required" | "compliant" | "warning" | "non_compliant";
+  groups: Array<{
+    code: string;
+    passed: boolean;
+    blocking: boolean;
+    checks: Array<{
+      id: string;
+      scope_type: EligibilityRequirementScope;
+      requirement_type: EligibilityRequirementType;
+      subject_type: "rider" | "owner" | "horse";
+      label: string | null;
+      passed: boolean;
+      enforcement_mode: "warning" | "blocking";
+    }>;
+  }>;
 };
 
 export type Slate = {
@@ -1229,6 +1379,9 @@ export type OrganizationInput = {
   primary_contact_email?: string;
   timezone?: string;
   currency?: string;
+  discipline_ids?: string[];
+  default_discipline_id?: string;
+  requires_host_membership?: boolean;
 };
 
 export type OrganizationSettingsInput = {
@@ -1337,6 +1490,7 @@ export type ContactUpdateInput = {
 
 export type ExternalContactIdentifierInput = {
   external_credential_issuer_id: string;
+  credential_product_id?: string | null;
   identifier_type?: ContactExternalIdentifier["identifier_type"];
   identifier_value: string;
   status?: ContactExternalIdentifier["status"];

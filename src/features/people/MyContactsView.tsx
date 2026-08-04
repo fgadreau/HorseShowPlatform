@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, deleteContact, updateContact, verifyNrhaMember } from "../../services/supabaseServices";
-import type { Contact, ContactExternalIdentifier, ContactOrganizationMembership, ExternalCredentialIssuer, Organization, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ContactOrganizationMembership, ExternalCredentialIssuer, ExternalCredentialProduct, Organization, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
@@ -15,6 +15,7 @@ function MyContactsView({
   contactExternalIdentifiers,
   contactOrganizationMemberships,
   externalCredentialIssuers,
+  externalCredentialProducts,
   membershipRequirements,
   organizationMembershipTypes,
   organizations,
@@ -31,6 +32,7 @@ function MyContactsView({
   contactExternalIdentifiers: ContactExternalIdentifier[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
   membershipRequirements: OrganizationExternalCredentialRequirement[];
   organizationMembershipTypes: OrganizationMembershipType[];
   organizations: Organization[];
@@ -150,6 +152,7 @@ function MyContactsView({
             defaultType={defaultContactType}
             linkedUserId={profileId}
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             organization={organization}
             title={contacts.length ? uiText(locale, "Ajouter un cavalier / contact", "Add rider / contact") : uiText(locale, "Créer mon premier contact", "Create my first contact")}
@@ -168,6 +171,7 @@ function MyContactsView({
             contact={editingContact}
             contactExternalIdentifiers={contactExternalIdentifiers}
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
             onVerifyNrhaMember={onVerifyNrhaMember}

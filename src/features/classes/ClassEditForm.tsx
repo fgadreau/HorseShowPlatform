@@ -4,7 +4,7 @@ import { FormActions, SearchSelect } from "../../components/ui";
 import { findById, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { updateClass } from "../../services/supabaseServices";
-import type { BackNumberPolicy, Block, ClassRecord, Discipline, OrganizationDiscipline, PayoutScheduleType, SanctioningBody } from "../../types/domain";
+import type { BackNumberPolicy, Block, ClassRecord, Discipline, OrganizationDiscipline, OrganizationDisciplineGoverningBody, PayoutScheduleType, SanctioningBody } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { governingBodyAssignmentsFromSelection, hasSelectedGoverningBodyCode, nrhaClassTypes, eligibilityRulesFromNotes, eligibilityNotesFromRules, nrhaClassTypeFromAssignments, nrhaEligibilityPolicyFromAssignments, applyNrhaApprovedClassChoice, NrhaApprovedClassSelect } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
@@ -17,6 +17,7 @@ function ClassEditForm({
   classRecord,
   disciplines,
   organizationDisciplines,
+  organizationDisciplineGoverningBodies,
   sanctioningBodies,
   onCancel,
   onUpdateClass,
@@ -26,6 +27,7 @@ function ClassEditForm({
   classRecord: ClassRecord;
   disciplines: Discipline[];
   organizationDisciplines: OrganizationDiscipline[];
+  organizationDisciplineGoverningBodies: OrganizationDisciplineGoverningBody[];
   sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
@@ -52,12 +54,16 @@ function ClassEditForm({
   const [eligibilityNotes, setEligibilityNotes] = useState(eligibilityNotesFromRules(classRecord.eligibility_rules));
   const [busy, setBusy] = useState(false);
   const selectedClass = findById(blocks, classId);
-  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, sanctioningBodies, "NRHA");
+  const availableSanctioningBodies = sanctioningBodies.filter((body) =>
+    governingBodyIds.includes(body.id)
+    || organizationDisciplineGoverningBodies.some((link) => link.organization_discipline_id === organizationDisciplineId && link.governing_body_id === body.id && link.is_active),
+  );
+  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, availableSanctioningBodies, "NRHA");
 
   function handleGoverningBodyIds(nextIds: string[]) {
     setGoverningBodyIds(nextIds);
 
-    if (!hasSelectedGoverningBodyCode(nextIds, sanctioningBodies, "NRHA")) {
+    if (!hasSelectedGoverningBodyCode(nextIds, availableSanctioningBodies, "NRHA")) {
       setNrhaClassType("");
     }
   }
@@ -135,13 +141,16 @@ function ClassEditForm({
           disciplines={disciplines}
           organizationDisciplines={organizationDisciplines}
           value={organizationDisciplineId}
-          onChange={setOrganizationDisciplineId}
+          onChange={(value) => {
+            setOrganizationDisciplineId(value);
+            setGoverningBodyIds(organizationDisciplineGoverningBodies.filter((link) => link.organization_discipline_id === value && link.is_active && link.is_default).map((link) => link.governing_body_id));
+          }}
         />
         <SanctioningFields
           locale={locale}
           backNumberPolicy={backNumberPolicy}
           label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
-          sanctioningBodies={sanctioningBodies}
+          sanctioningBodies={availableSanctioningBodies}
           governingBodyIds={governingBodyIds}
           eligibilityCacheTtlHours={eligibilityCacheTtlHours}
           sourceUnavailablePolicy={sourceUnavailablePolicy}

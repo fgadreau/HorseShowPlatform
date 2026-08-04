@@ -6,7 +6,7 @@ import { contactLabel, errorMessage } from "../../lib/display";
 import { defaultAcceptedExternalImportKeys } from "../../lib/externalImportProposal";
 import type { Locale } from "../../lib/i18n";
 import { updateContact, verifyNrhaMember } from "../../services/supabaseServices";
-import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, ExternalCredentialProduct, OrganizationExternalCredentialRequirement } from "../../types/domain";
 import { uiText, buildExternalMembershipFields, InlineHealthMessage } from "../dashboard/shared";
 import {
   integerFromMembershipNumber,
@@ -27,7 +27,9 @@ function ContactEditForm({
   locale = "fr",
   contact,
   contactExternalIdentifiers,
+  externalCredentialProducts = [],
   externalCredentialIssuers = [],
+  allowCredentialReview = false,
   membershipRequirements = [],
   onCancel,
   onUpdateContact,
@@ -36,7 +38,9 @@ function ContactEditForm({
   locale?: Locale;
   contact: Contact;
   contactExternalIdentifiers?: ContactExternalIdentifier[];
+  externalCredentialProducts?: ExternalCredentialProduct[];
   externalCredentialIssuers?: ExternalCredentialIssuer[];
+  allowCredentialReview?: boolean;
   membershipRequirements?: OrganizationExternalCredentialRequirement[];
   onCancel: () => void;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
@@ -58,6 +62,15 @@ function ContactEditForm({
   const [dateOfBirth, setDateOfBirth] = useState(contact.date_of_birth ?? "");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>(() =>
     Object.fromEntries((contactExternalIdentifiers ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_credential_issuer_id, membership.identifier_value])),
+  );
+  const [membershipProductIds, setMembershipProductIds] = useState<Record<string, string>>(() =>
+    Object.fromEntries((contactExternalIdentifiers ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_credential_issuer_id, membership.credential_product_id ?? ""])),
+  );
+  const [membershipStatuses, setMembershipStatuses] = useState<Record<string, ContactExternalIdentifier["status"]>>(() =>
+    Object.fromEntries((contactExternalIdentifiers ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_credential_issuer_id, membership.status])),
+  );
+  const [membershipExpiries, setMembershipExpiries] = useState<Record<string, string>>(() =>
+    Object.fromEntries((contactExternalIdentifiers ?? []).filter((membership) => membership.contact_id === contact.id).map((membership) => [membership.external_credential_issuer_id, membership.expires_on ?? ""])),
   );
   const [nrhaMemberBusy, setNrhaMemberBusy] = useState(false);
   const [nrhaMemberMessage, setNrhaMemberMessage] = useState<InlineHealthMessage | null>(null);
@@ -169,9 +182,10 @@ function ContactEditForm({
 
           return {
             external_credential_issuer_id: field.organization.id,
+            credential_product_id: membershipProductIds[field.organization.id] || null,
             identifier_value: membershipNumbers[field.organization.id] ?? "",
-            status: verifiedMembership ? nrhaMemberStatus(verifiedMembership.officialValues) : "unknown",
-            expires_on: verifiedMembership ? verifiedMembership.officialValues.expiresOn || null : null,
+            status: verifiedMembership ? nrhaMemberStatus(verifiedMembership.officialValues) : membershipStatuses[field.organization.id] ?? "pending",
+            expires_on: verifiedMembership ? verifiedMembership.officialValues.expiresOn || null : membershipExpiries[field.organization.id] || null,
             verified_at: verifiedMembership ? new Date().toISOString() : null,
             verification_payload: field.organization.id === nrhaOrganizationId ? verifiedMembership?.payload ?? nrhaMemberImportEvidence ?? existingNrhaImportEvidence ?? undefined : undefined,
             verification_source: field.organization.id === nrhaOrganizationId && (verifiedMembership || nrhaMemberImportEvidence || existingNrhaImportEvidence) ? "nrha_api" : null,
@@ -506,9 +520,10 @@ function ContactEditForm({
               <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
               <span>{uiText(locale, "Une validation NRHA existante est conservée seulement si les données protégées restent identiques.", "An existing NRHA validation is kept only if protected details remain identical.")}</span>
             </div>
-            {externalMembershipFields.map((field) => (
-              <label key={field.organization.id}>
-                {field.organization.code} #
+            {externalMembershipFields.map((field) => {
+              const issuerProducts = externalCredentialProducts.filter((product) => product.external_credential_issuer_id === field.organization.id && product.is_active);
+              return <div className="stack compact-stack nested-fieldset" key={field.organization.id}>
+              <label>{field.organization.code} #
                 <input
                   required={field.required}
                   value={membershipNumbers[field.organization.id] ?? ""}
@@ -532,7 +547,10 @@ function ContactEditForm({
                   </div>
                 ) : null}
               </label>
-            ))}
+              {issuerProducts.length ? <label>{uiText(locale, "Type de carte ou produit", "Membership or product type")}<select value={membershipProductIds[field.organization.id] ?? ""} onChange={(event) => setMembershipProductIds((current) => ({ ...current, [field.organization.id]: event.target.value }))}><option value="">Non précisé</option>{issuerProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.includes_liability_insurance ? ` — ${uiText(locale, "assurance incluse", "insurance included")}` : ""}</option>)}</select></label> : null}
+              {allowCredentialReview ? <div className="form-grid"><label>{uiText(locale, "Statut", "Status")}<select value={membershipStatuses[field.organization.id] ?? "pending"} onChange={(event) => setMembershipStatuses((current) => ({ ...current, [field.organization.id]: event.target.value as ContactExternalIdentifier["status"] }))}><option value="pending">À vérifier</option><option value="active">Active</option><option value="expired">Expirée</option><option value="inactive">Inactive</option><option value="revoked">Révoquée</option></select></label><label>{uiText(locale, "Expiration", "Expiry")}<input type="date" value={membershipExpiries[field.organization.id] ?? ""} onChange={(event) => setMembershipExpiries((current) => ({ ...current, [field.organization.id]: event.target.value }))} /></label></div> : null}
+              </div>;
+            })}
             <InlineHealthMessage value={displayedNrhaMemberMessage} />
             {nrhaMemberRows.length ? (
               <NrhaMemberDataPanel rows={nrhaMemberRows} locale={locale} onApply={handleApplyNrhaMemberData} />

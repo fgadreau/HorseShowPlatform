@@ -16,6 +16,7 @@ import type {
   BlockUpdateInput,
   Contact,
   ContactExternalIdentifier,
+  ContactInsuranceEvidence,
   ContactInput,
   ContactOrganizationMembership,
   ContactOrganizationMembershipInput,
@@ -24,6 +25,8 @@ import type {
   ContactRoleName,
   ContactUpdateInput,
   Discipline,
+  DisciplineCredentialIssuer,
+  DisciplineGoverningBody,
   DirectoryContact,
   DirectoryHorse,
   ClassRecord,
@@ -34,6 +37,9 @@ import type {
   Entry,
   EntryInput,
   EntryUpdateInput,
+  EligibilityRequirement,
+  EligibilityRequirementInput,
+  EntryEligibilityRequirementAssessment,
   ExternalHorseIdentifierInput,
   ExternalDataSource,
   ExternalSourceGoverningBody,
@@ -51,6 +57,7 @@ import type {
   HorseUpdateInput,
   ExternalContactIdentifierInput,
   ExternalCredentialIssuer,
+  ExternalCredentialProduct,
   GoverningBodyAssignment,
   GoverningBodyAssignmentInput,
   Invoice,
@@ -71,6 +78,7 @@ import type {
   OrganizationMembershipTypeUpdateInput,
   OrganizationMember,
   OrganizationDiscipline,
+  OrganizationDisciplineGoverningBody,
   OrganizationProduct,
   OrganizationProductInput,
   OrganizationProductUpdateInput,
@@ -135,6 +143,12 @@ export type AppContext = {
   showDays: ShowDay[];
   disciplines: Discipline[];
   organizationDisciplines: OrganizationDiscipline[];
+  organizationDisciplineGoverningBodies: OrganizationDisciplineGoverningBody[];
+  disciplineGoverningBodies: DisciplineGoverningBody[];
+  disciplineCredentialIssuers: DisciplineCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
+  eligibilityRequirements: EligibilityRequirement[];
+  contactInsuranceEvidence: ContactInsuranceEvidence[];
   slates: Slate[];
   showAnnouncements: ShowAnnouncement[];
   showScoreClassSetups: ShowScoreBlockSetup[];
@@ -361,15 +375,21 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     ...(horsesData ?? []).map((horse) => horse.primary_owner_contact_id),
     ...(horseContactsResult.data ?? []).map((horseContact) => horseContact.contact_id),
   ]));
-  const [contactsResult, contactExternalIdentifiersResult] = await Promise.all([
+  const [contactsResult, contactExternalIdentifiersResult, contactInsuranceEvidenceResult] = await Promise.all([
     scopeQueryToIds(client.from("contacts").select("*").order("created_at", { ascending: false }).returns<Contact[]>(), relatedContactIds, "id"),
     scopeQueryToIds(client.from("contact_external_identifiers").select("*").order("created_at", { ascending: false }).returns<ContactExternalIdentifier[]>(), relatedContactIds, "contact_id"),
+    scopeQueryToIds(client.from("contact_insurance_evidence").select("*").order("expires_on", { ascending: false }).returns<ContactInsuranceEvidence[]>(), relatedContactIds, "contact_id"),
   ]);
 
   const [
     showDaysResult,
     disciplinesResult,
     organizationDisciplinesResult,
+    organizationDisciplineGoverningBodiesResult,
+    disciplineGoverningBodiesResult,
+    disciplineCredentialIssuersResult,
+    externalCredentialProductsResult,
+    eligibilityRequirementsResult,
     slatesResult,
     contactRolesResult,
     externalCredentialIssuersResult,
@@ -409,6 +429,11 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     scopeQueryToOrganization(client.from("show_days").select("*").order("day_date", { ascending: true }).returns<ShowDay[]>(), loadedOrganizationId),
     client.from("disciplines").select("*").eq("is_active", true).order("name", { ascending: true }).returns<Discipline[]>(),
     scopeQueryToOrganization(client.from("organization_disciplines").select("*").eq("is_active", true).order("created_at", { ascending: true }).returns<OrganizationDiscipline[]>(), loadedOrganizationId),
+    client.from("organization_discipline_governing_bodies").select("*").eq("is_active", true).returns<OrganizationDisciplineGoverningBody[]>(),
+    client.from("discipline_governing_bodies").select("*").eq("is_active", true).returns<DisciplineGoverningBody[]>(),
+    client.from("discipline_credential_issuers").select("*").eq("is_active", true).returns<DisciplineCredentialIssuer[]>(),
+    client.from("external_credential_products").select("*").eq("is_active", true).order("name", { ascending: true }).returns<ExternalCredentialProduct[]>(),
+    scopeQueryToOrganization(client.from("eligibility_requirements").select("*").order("created_at", { ascending: true }).returns<EligibilityRequirement[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("slates").select("*").order("sort_order", { ascending: true }).returns<Slate[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(), loadedOrganizationId),
     client.from("external_credential_issuers").select("*").order("name", { ascending: true }).returns<ExternalCredentialIssuer[]>(),
@@ -477,6 +502,36 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
   if (organizationDisciplinesResult.error) {
     throw organizationDisciplinesResult.error;
   }
+  const organizationDisciplineGoverningBodies = organizationDisciplineGoverningBodiesResult.error
+    ? isMissingSchemaError(organizationDisciplineGoverningBodiesResult.error, "organization_discipline_governing_bodies")
+      ? []
+      : (() => { throw organizationDisciplineGoverningBodiesResult.error; })()
+    : organizationDisciplineGoverningBodiesResult.data ?? [];
+  const disciplineGoverningBodies = disciplineGoverningBodiesResult.error
+    ? isMissingSchemaError(disciplineGoverningBodiesResult.error, "discipline_governing_bodies")
+      ? []
+      : (() => { throw disciplineGoverningBodiesResult.error; })()
+    : disciplineGoverningBodiesResult.data ?? [];
+  const disciplineCredentialIssuers = disciplineCredentialIssuersResult.error
+    ? isMissingSchemaError(disciplineCredentialIssuersResult.error, "discipline_credential_issuers")
+      ? []
+      : (() => { throw disciplineCredentialIssuersResult.error; })()
+    : disciplineCredentialIssuersResult.data ?? [];
+  const externalCredentialProducts = externalCredentialProductsResult.error
+    ? isMissingSchemaError(externalCredentialProductsResult.error, "external_credential_products")
+      ? []
+      : (() => { throw externalCredentialProductsResult.error; })()
+    : externalCredentialProductsResult.data ?? [];
+  const eligibilityRequirements = eligibilityRequirementsResult.error
+    ? isMissingSchemaError(eligibilityRequirementsResult.error, "eligibility_requirements")
+      ? []
+      : (() => { throw eligibilityRequirementsResult.error; })()
+    : eligibilityRequirementsResult.data ?? [];
+  const contactInsuranceEvidence = contactInsuranceEvidenceResult.error
+    ? isMissingSchemaError(contactInsuranceEvidenceResult.error, "contact_insurance_evidence")
+      ? []
+      : (() => { throw contactInsuranceEvidenceResult.error; })()
+    : contactInsuranceEvidenceResult.data ?? [];
   if (slatesResult.error) {
     throw slatesResult.error;
   }
@@ -818,6 +873,12 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     showDays: showDaysResult.data ?? [],
     disciplines: disciplinesResult.data ?? [],
     organizationDisciplines: organizationDisciplinesResult.data ?? [],
+    organizationDisciplineGoverningBodies,
+    disciplineGoverningBodies,
+    disciplineCredentialIssuers,
+    externalCredentialProducts,
+    eligibilityRequirements,
+    contactInsuranceEvidence,
     slates: slatesResult.data ?? [],
     showAnnouncements,
     showScoreClassSetups,
@@ -1083,6 +1144,22 @@ export async function deleteShowAnnouncement(id: string) {
 
 export async function createOrganization(profileId: string, input: OrganizationInput) {
   const client = requireSupabase();
+  if (input.discipline_ids?.length && input.default_discipline_id) {
+    const { data, error } = await client.rpc("create_organization_with_disciplines", {
+      target_name: input.name,
+      target_slug: slugify(input.slug || input.name),
+      target_primary_contact_email: input.primary_contact_email || "",
+      target_timezone: input.timezone || "America/Toronto",
+      target_currency: input.currency || "CAD",
+      target_discipline_ids: input.discipline_ids,
+      target_default_discipline_id: input.default_discipline_id,
+      target_requires_host_membership: input.requires_host_membership ?? true,
+    }).single<Organization>();
+
+    if (error) throw error;
+    return data;
+  }
+
   const organizationId = crypto.randomUUID();
   const { error: organizationError } = await client.from("organizations").insert({
     id: organizationId,
@@ -1120,6 +1197,201 @@ export async function createOrganization(profileId: string, input: OrganizationI
   }
 
   return organization;
+}
+
+export async function createDiscipline(input: Pick<Discipline, "code" | "name"> & Partial<Pick<Discipline, "description">>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("disciplines").insert({
+    code: input.code.trim().toUpperCase(),
+    name: input.name.trim(),
+    description: input.description?.trim() || null,
+  }).select("*").single<Discipline>();
+  if (error) throw error;
+  return data;
+}
+
+export async function createGoverningBody(input: Pick<SanctioningBody, "code" | "name"> & Partial<Pick<SanctioningBody, "description" | "default_back_number_policy">>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("governing_bodies").insert({
+    code: input.code.trim().toUpperCase(),
+    name: input.name.trim(),
+    description: input.description?.trim() || null,
+    default_back_number_policy: input.default_back_number_policy ?? "horse",
+  }).select("*").single<SanctioningBody>();
+  if (error) throw error;
+  return data;
+}
+
+export async function createExternalCredentialIssuer(input: Pick<ExternalCredentialIssuer, "code" | "name" | "issuer_type"> & Partial<Pick<ExternalCredentialIssuer, "country_code" | "subdivision_code" | "website_url">>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("external_credential_issuers").insert({
+    code: input.code.trim().toUpperCase(),
+    name: input.name.trim(),
+    issuer_type: input.issuer_type,
+    country_code: input.country_code?.trim().toUpperCase() || null,
+    subdivision_code: input.subdivision_code?.trim().toUpperCase() || null,
+    website_url: input.website_url?.trim() || null,
+  }).select("*").single<ExternalCredentialIssuer>();
+  if (error) throw error;
+  return data;
+}
+
+export async function createExternalCredentialProduct(input: Pick<ExternalCredentialProduct, "external_credential_issuer_id" | "code" | "name" | "credential_type" | "includes_liability_insurance"> & Partial<Pick<ExternalCredentialProduct, "minimum_coverage_amount" | "coverage_currency">>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("external_credential_products").insert({
+    external_credential_issuer_id: input.external_credential_issuer_id,
+    code: input.code.trim().toUpperCase(),
+    name: input.name.trim(),
+    credential_type: input.credential_type,
+    includes_liability_insurance: input.includes_liability_insurance,
+    minimum_coverage_amount: input.minimum_coverage_amount ?? null,
+    coverage_currency: input.coverage_currency?.trim().toUpperCase() || null,
+  }).select("*").single<ExternalCredentialProduct>();
+  if (error) throw error;
+  return data;
+}
+
+export async function setDisciplineGoverningBody(input: {
+  discipline_id: string;
+  governing_body_id: string;
+  is_active: boolean;
+  is_default?: boolean;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("discipline_governing_bodies").upsert({
+    ...input,
+    is_default: input.is_default ?? false,
+  }, { onConflict: "discipline_id,governing_body_id" });
+  if (error) throw error;
+}
+
+export async function setDisciplineCredentialIssuer(input: {
+  discipline_id: string;
+  external_credential_issuer_id: string;
+  is_active: boolean;
+  is_default?: boolean;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("discipline_credential_issuers").upsert({
+    ...input,
+    is_default: input.is_default ?? false,
+  }, { onConflict: "discipline_id,external_credential_issuer_id" });
+  if (error) throw error;
+}
+
+export async function configureOrganizationDiscipline(input: {
+  organization_id: string;
+  discipline_id: string;
+  is_active: boolean;
+  is_default?: boolean;
+  requires_host_membership?: boolean;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("configure_organization_discipline", {
+    target_organization_id: input.organization_id,
+    target_discipline_id: input.discipline_id,
+    target_is_active: input.is_active,
+    target_is_default: input.is_default ?? false,
+    target_requires_host_membership: input.requires_host_membership ?? true,
+  }).single<OrganizationDiscipline>();
+  if (error) throw error;
+  return data;
+}
+
+export async function setOrganizationDisciplineGoverningBody(input: {
+  organization_discipline_id: string;
+  governing_body_id: string;
+  is_active: boolean;
+  is_default?: boolean;
+  created_by_user_id?: string | null;
+}) {
+  const client = requireSupabase();
+  const { error } = await client.from("organization_discipline_governing_bodies").upsert({
+    ...input,
+    is_default: input.is_default ?? false,
+  }, { onConflict: "organization_discipline_id,governing_body_id" });
+  if (error) throw error;
+}
+
+export async function createEligibilityRequirement(input: EligibilityRequirementInput) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("eligibility_requirements").insert({
+    ...input,
+    match_rule: input.match_rule ?? "all",
+    validity_rule: input.validity_rule ?? "active_on_reference_date",
+    enforcement_mode: input.enforcement_mode ?? "blocking",
+    is_required: input.is_required ?? true,
+    is_active: input.is_active ?? true,
+    settings: input.settings ?? {},
+  }).select("*").single<EligibilityRequirement>();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateEligibilityRequirement(id: string, input: Partial<EligibilityRequirementInput>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("eligibility_requirements").update(input).eq("id", id).select("*").single<EligibilityRequirement>();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteEligibilityRequirement(id: string) {
+  const client = requireSupabase();
+  const { error } = await client.from("eligibility_requirements").delete().eq("id", id);
+  if (error) throw error;
+}
+
+export async function createContactInsuranceEvidence(input: Omit<ContactInsuranceEvidence, "id" | "created_at" | "updated_at" | "reviewed_at" | "reviewed_by_user_id">) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("contact_insurance_evidence").insert(input).select("*").single<ContactInsuranceEvidence>();
+  if (error) throw error;
+  return data;
+}
+
+export async function uploadContactInsuranceDocument(input: { contact_id: string; file: File }) {
+  const client = requireSupabase();
+  const objectPath = `${input.contact_id}/${crypto.randomUUID()}-${safeStorageFileName(input.file.name)}`;
+  const { error } = await client.storage.from("rider-insurance-documents").upload(objectPath, input.file, {
+    contentType: input.file.type || undefined,
+  });
+  if (error) throw error;
+  return objectPath;
+}
+
+export async function getContactInsuranceDocumentFileUrl(objectPath: string) {
+  const client = requireSupabase();
+  if (/^https?:\/\//i.test(objectPath)) return objectPath;
+  const { data, error } = await client.storage.from("rider-insurance-documents").createSignedUrl(objectPath.replace(/^\/+/, ""), 10 * 60);
+  if (error) throw error;
+  return data.signedUrl;
+}
+
+export async function reviewContactInsuranceEvidence(id: string, input: {
+  status: "approved" | "rejected";
+  reviewed_by_user_id: string;
+  notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("contact_insurance_evidence").update({
+    status: input.status,
+    reviewed_at: new Date().toISOString(),
+    reviewed_by_user_id: input.reviewed_by_user_id,
+    notes: input.notes ?? null,
+  }).eq("id", id).select("*").single<ContactInsuranceEvidence>();
+  if (error) throw error;
+  return data;
+}
+
+export async function evaluateEntryEligibilityRequirements(entryId: string, referenceDate?: string) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("evaluate_entry_eligibility_requirements", {
+    target_entry_id: entryId,
+    target_reference_date: referenceDate,
+  }).returns<EntryEligibilityRequirementAssessment>();
+  if (error) throw error;
+  return data;
 }
 
 export async function updateOrganizationHealthSettings(
@@ -6530,6 +6802,7 @@ async function syncContactExternalIdentifiers(contactId: string, memberships?: E
         {
           contact_id: contactId,
           external_credential_issuer_id: membership.external_credential_issuer_id,
+          credential_product_id: membership.credential_product_id ?? null,
           identifier_type: membership.identifier_type ?? "membership",
           identifier_value: membership.identifier_value.trim(),
           status: membership.status ?? "unknown",

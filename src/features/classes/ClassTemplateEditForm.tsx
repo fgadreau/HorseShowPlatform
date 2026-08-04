@@ -4,7 +4,7 @@ import { FormActions, SearchSelect } from "../../components/ui";
 import { findById, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { updateClassTemplate } from "../../services/supabaseServices";
-import type { BackNumberPolicy, BlockTemplate, ClassTemplate, Discipline, OrganizationDiscipline, PayoutScheduleType, SanctioningBody } from "../../types/domain";
+import type { BackNumberPolicy, BlockTemplate, ClassTemplate, Discipline, OrganizationDiscipline, OrganizationDisciplineGoverningBody, PayoutScheduleType, SanctioningBody } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { governingBodyAssignmentsFromSelection, hasSelectedGoverningBodyCode, nrhaClassTypes, eligibilityRulesFromNotes, eligibilityNotesFromRules, nrhaClassTypeFromAssignments, nrhaEligibilityPolicyFromAssignments, applyNrhaApprovedClassChoice, NrhaApprovedClassSelect } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
@@ -17,6 +17,7 @@ function ClassTemplateEditForm({
   classTemplate,
   disciplines,
   organizationDisciplines,
+  organizationDisciplineGoverningBodies,
   sanctioningBodies,
   onCancel,
   onUpdateClassTemplate,
@@ -26,6 +27,7 @@ function ClassTemplateEditForm({
   classTemplate: ClassTemplate;
   disciplines: Discipline[];
   organizationDisciplines: OrganizationDiscipline[];
+  organizationDisciplineGoverningBodies: OrganizationDisciplineGoverningBody[];
   sanctioningBodies: SanctioningBody[];
   onCancel: () => void;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
@@ -54,12 +56,16 @@ function ClassTemplateEditForm({
   const [sourceUnavailablePolicy, setSourceUnavailablePolicy] = useState<"block" | "allow_with_warning">(initialEligibilityPolicy.sourceUnavailablePolicy);
   const [busy, setBusy] = useState(false);
   const selectedTemplate = findById(blockTemplates, templateId);
-  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, sanctioningBodies, "NRHA");
+  const availableSanctioningBodies = sanctioningBodies.filter((body) =>
+    governingBodyIds.includes(body.id)
+    || organizationDisciplineGoverningBodies.some((link) => link.organization_discipline_id === organizationDisciplineId && link.governing_body_id === body.id && link.is_active),
+  );
+  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, availableSanctioningBodies, "NRHA");
 
   function handleGoverningBodyIds(nextIds: string[]) {
     setGoverningBodyIds(nextIds);
 
-    if (!hasSelectedGoverningBodyCode(nextIds, sanctioningBodies, "NRHA")) {
+    if (!hasSelectedGoverningBodyCode(nextIds, availableSanctioningBodies, "NRHA")) {
       setNrhaClassType("");
     }
   }
@@ -98,7 +104,7 @@ function ClassTemplateEditForm({
         default_payout_notes: payoutNotes.trim() || null,
         governing_body_assignments: governingBodyAssignmentsFromSelection({
           selectedIds: governingBodyIds,
-          sanctioningBodies,
+          sanctioningBodies: availableSanctioningBodies,
           existingAssignments: classTemplate.governing_body_assignments,
           classCode: code,
           nrhaEligibilityProfileCode: nrhaClassType,
@@ -136,13 +142,16 @@ function ClassTemplateEditForm({
           disciplines={disciplines}
           organizationDisciplines={organizationDisciplines}
           value={organizationDisciplineId}
-          onChange={setOrganizationDisciplineId}
+          onChange={(value) => {
+            setOrganizationDisciplineId(value);
+            setGoverningBodyIds(organizationDisciplineGoverningBodies.filter((link) => link.organization_discipline_id === value && link.is_active && link.is_default).map((link) => link.governing_body_id));
+          }}
         />
         <SanctioningFields
           locale={locale}
           backNumberPolicy={backNumberPolicy}
           label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
-          sanctioningBodies={sanctioningBodies}
+          sanctioningBodies={availableSanctioningBodies}
           governingBodyIds={governingBodyIds}
           eligibilityCacheTtlHours={eligibilityCacheTtlHours}
           sourceUnavailablePolicy={sourceUnavailablePolicy}

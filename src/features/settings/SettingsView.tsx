@@ -10,6 +10,7 @@ import { createOrganizationMembershipType, createOrganizationProduct, setOrganiz
 import type { CogginsValidityRule, ExternalCredentialIssuer, HealthIdentityValidationRequirement, HealthPolicyEnforcementMode, Organization, OrganizationBackNumber, OrganizationExternalCredentialRequirement, OrganizationHealthPolicy, OrganizationMembershipType, OrganizationProduct, ProductCategory, SanctioningBody } from "../../types/domain";
 import { uiText, organizationBackNumberMode } from "../dashboard/shared";
 import { backNumberPolicyLabel } from "../classes/classUtils";
+import { DisciplineRequirementsSettings } from "./DisciplineRequirementsSettings";
 
 type OrganizationBillingFormState = {
   name: string;
@@ -247,6 +248,7 @@ function SettingsView({
   onUpdateOrganizationHealthSettings,
   onUpdateOrganizationMembershipType,
   onUpdateOrganizationProduct,
+  onRefresh,
   products,
 }: {
   locale?: Locale;
@@ -264,6 +266,7 @@ function SettingsView({
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
   onUpdateOrganizationMembershipType: (id: string, input: Parameters<typeof updateOrganizationMembershipType>[1]) => Promise<void>;
   onUpdateOrganizationProduct: (id: string, input: Parameters<typeof updateOrganizationProduct>[1]) => Promise<void>;
+  onRefresh: () => void;
   products: OrganizationProduct[];
 }) {
   const [busyRequirementId, setBusyRequirementId] = useState("");
@@ -555,6 +558,8 @@ function SettingsView({
         title={uiText(locale, "Profil et association", "Profile and association")}
         description={uiText(locale, "Vérifie le profil connecté, le rôle, la devise, les taxes et les règles de l'association.", "Review the signed-in profile, role, currency, taxes and association rules.")}
       />
+
+      {context && organization ? <DisciplineRequirementsSettings context={context} organization={organization} onRefresh={onRefresh} /> : null}
 
       <SettingsSection
         {...sectionToggleLabels}

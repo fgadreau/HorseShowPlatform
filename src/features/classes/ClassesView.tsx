@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../componen
 import { classLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createBlock, createBlockTemplate, createClassTemplate, createClass, createSlate, deleteBlock, deleteBlockTemplate, deleteClassTemplate, deleteClass, deleteSlate, saveShowScorePaidWarmup, updateBlock, updateBlockTemplate, updateClassTemplate, updateClass, updateShowScorePaidWarmup, updateSlate } from "../../services/supabaseServices";
-import type { Block, BlockConcurrencyGroupMember, BlockJudgeAssignment, BlockTemplate, ClassTemplate, Contact, ClassRecord, Discipline, Entry, EligibilityRules, Horse, Organization, OrganizationDiscipline, SanctioningBody, Show, ShowDay, ShowScorePaidWarmup, Slate } from "../../types/domain";
+import type { Block, BlockConcurrencyGroupMember, BlockJudgeAssignment, BlockTemplate, ClassTemplate, Contact, ClassRecord, Discipline, DisciplineCredentialIssuer, EligibilityRequirement, Entry, EligibilityRules, ExternalCredentialIssuer, ExternalCredentialProduct, Horse, Organization, OrganizationDiscipline, OrganizationDisciplineGoverningBody, SanctioningBody, Show, ShowDay, ShowScorePaidWarmup, Slate } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { BlockForm } from "./BlockForm";
 import { BlockTemplateForm } from "./BlockTemplateForm";
@@ -19,6 +19,7 @@ import { EventBlockForm } from "./EventBlockForm";
 import { PaidWarmupForm } from "./PaidWarmupForm";
 import { sanctionLabel, payoutClassSummary, payoutTemplateClassSummary, classScheduleStartLabel, compareScheduleClasses, showDayLabel, classEntriesCloseLabel, showPaymentSummary, showStatusLabel, canManuallyOrderClass, hasGoverningBodyCode, nrhaClassTypeLabel, nrhaClassTypeFromAssignments } from "./classUtils";
 import { showScorePatternLabel } from "./showScorePatterns";
+import { EligibilityRequirementsEditor } from "./EligibilityRequirementsEditor";
 
 function ClassesView({
   locale,
@@ -29,11 +30,16 @@ function ClassesView({
   blockTemplates,
   contacts,
   disciplines,
+  disciplineCredentialIssuers,
+  eligibilityRequirements,
+  externalCredentialIssuers,
+  externalCredentialProducts,
   classes,
   entries,
   horses,
   organization,
   organizationDisciplines,
+  organizationDisciplineGoverningBodies,
   sanctioningBodies,
   showDays,
   showScorePaidWarmups,
@@ -57,6 +63,8 @@ function ClassesView({
   onUpdateClass,
   onUpdateSlate,
   onUpdateShowScorePaidWarmup,
+  currentUserProfileId,
+  onRefresh,
 }: {
   locale: Locale;
   blocks: Block[];
@@ -66,11 +74,16 @@ function ClassesView({
   blockTemplates: BlockTemplate[];
   contacts: Contact[];
   disciplines: Discipline[];
+  disciplineCredentialIssuers: DisciplineCredentialIssuer[];
+  eligibilityRequirements: EligibilityRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
   classes: ClassRecord[];
   entries: Entry[];
   horses: Horse[];
   organization: Organization | null;
   organizationDisciplines: OrganizationDiscipline[];
+  organizationDisciplineGoverningBodies: OrganizationDisciplineGoverningBody[];
   sanctioningBodies: SanctioningBody[];
   showDays: ShowDay[];
   showScorePaidWarmups: ShowScorePaidWarmup[];
@@ -94,6 +107,8 @@ function ClassesView({
   onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
   onUpdateSlate: (id: string, input: Parameters<typeof updateSlate>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
+  currentUserProfileId: string;
+  onRefresh: () => Promise<void> | void;
 }) {
   const [creatingBlockTemplate, setCreatingBlockTemplate] = useState(false);
   const [creatingClassTemplate, setCreatingClassTemplate] = useState<{ templateId?: string } | null>(null);
@@ -108,6 +123,7 @@ function ClassesView({
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingSlate, setEditingSlate] = useState<Slate | null>(null);
   const [editingPaidWarmup, setEditingPaidWarmup] = useState<ShowScorePaidWarmup | null>(null);
+  const [editingRequirements, setEditingRequirements] = useState<{ scopeType: "block" | "class" | "block_template" | "class_template"; id: string; name: string } | null>(null);
   const [expandedShowId, setExpandedShowId] = useState<string | null>(null);
   const [expandedScheduleBlockId, setExpandedScheduleBlockId] = useState<string | null>(null);
   const [expandedTemplateId, setExpandedTemplateId] = useState<string | null>(null);
@@ -385,6 +401,9 @@ function ClassesView({
             <button className="text-button" type="button" onClick={() => setEditingBlock(block)}>
               {uiText(locale, "Modifier", "Edit")}
             </button>
+            <button className="text-button" type="button" onClick={() => setEditingRequirements({ scopeType: "block", id: block.id, name: block.name })}>
+              {uiText(locale, "Exigences", "Requirements")}
+            </button>
             <button className="text-button" type="button" onClick={() => setCreatingClass({ blockId: block.id })}>
               {uiText(locale, "+ Classe", "+ Class")}
             </button>
@@ -432,6 +451,9 @@ function ClassesView({
                 <div className="row-actions schedule-class-actions">
                   <button className="text-button" type="button" onClick={() => setEditingClass(classRecord)}>
                     {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button" type="button" onClick={() => setEditingRequirements({ scopeType: "class", id: classRecord.id, name: classRecord.name })}>
+                    {uiText(locale, "Exigences", "Requirements")}
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteClass(classRecord)}>
                     {uiText(locale, "Supprimer", "Delete")}
@@ -561,6 +583,9 @@ function ClassesView({
             <button className="text-button" type="button" onClick={() => setEditingBlockTemplate(template)}>
               {uiText(locale, "Modifier", "Edit")}
             </button>
+            <button className="text-button" type="button" onClick={() => setEditingRequirements({ scopeType: "block_template", id: template.id, name: template.name })}>
+              {uiText(locale, "Exigences", "Requirements")}
+            </button>
             <button className="text-button" type="button" onClick={() => setCreatingClassTemplate({ templateId: template.id })}>
               {uiText(locale, "+ Classe", "+ Class")}
             </button>
@@ -593,6 +618,9 @@ function ClassesView({
                   <button className="text-button" type="button" onClick={() => setEditingClassTemplate(classRecord)}>
                     {uiText(locale, "Modifier", "Edit")}
                   </button>
+                  <button className="text-button" type="button" onClick={() => setEditingRequirements({ scopeType: "class_template", id: classRecord.id, name: classRecord.name })}>
+                    {uiText(locale, "Exigences", "Requirements")}
+                  </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplate(classRecord)}>
                     {uiText(locale, "Supprimer", "Delete")}
                   </button>
@@ -604,6 +632,32 @@ function ClassesView({
         ) : null}
       </article>
     );
+  }
+
+  function requirementEditorContext(target: { scopeType: "block" | "class" | "block_template" | "class_template"; id: string }) {
+    const targetClasses = target.scopeType === "block"
+      ? classes.filter((classRecord) => classRecord.block_id === target.id)
+      : target.scopeType === "class"
+        ? classes.filter((classRecord) => classRecord.id === target.id)
+        : target.scopeType === "block_template"
+          ? classTemplates.filter((classRecord) => classRecord.block_template_id === target.id)
+          : classTemplates.filter((classRecord) => classRecord.id === target.id);
+    const directoryIds = Array.from(new Set(targetClasses.map((classRecord) => classRecord.organization_discipline_id)));
+    const disciplineIds = Array.from(new Set(directoryIds.map((directoryId) => organizationDisciplines.find((directory) => directory.id === directoryId)?.discipline_id).filter((id): id is string => Boolean(id))));
+    const blockId = target.scopeType === "class" ? (targetClasses[0] as ClassRecord | undefined)?.block_id : target.scopeType === "block" ? target.id : null;
+    const blockTemplateId = target.scopeType === "class_template" ? (targetClasses[0] as ClassTemplate | undefined)?.block_template_id : target.scopeType === "block_template" ? target.id : null;
+    const inheritedRequirements = eligibilityRequirements.filter((requirement) =>
+      requirement.is_active && requirement.is_required && (
+        (requirement.scope_type === "organization_discipline" && Boolean(requirement.organization_discipline_id) && directoryIds.includes(requirement.organization_discipline_id!))
+        || (target.scopeType === "class" && requirement.scope_type === "block" && requirement.block_id === blockId)
+        || (target.scopeType === "class_template" && requirement.scope_type === "block_template" && requirement.block_template_id === blockTemplateId)
+      ));
+    const ownRequirements = eligibilityRequirements.filter((requirement) =>
+      (target.scopeType === "block" && requirement.scope_type === "block" && requirement.block_id === target.id)
+      || (target.scopeType === "class" && requirement.scope_type === "class" && requirement.class_id === target.id)
+      || (target.scopeType === "block_template" && requirement.scope_type === "block_template" && requirement.block_template_id === target.id)
+      || (target.scopeType === "class_template" && requirement.scope_type === "class_template" && requirement.class_template_id === target.id));
+    return { disciplineIds, inheritedRequirements, ownRequirements };
   }
 
   return (
@@ -641,6 +695,7 @@ function ClassesView({
             disciplines={disciplines}
             organization={organization}
             organizationDisciplines={organizationDisciplines}
+            organizationDisciplineGoverningBodies={organizationDisciplineGoverningBodies}
             sanctioningBodies={sanctioningBodies}
             onCreateClassTemplate={onCreateClassTemplate}
             onCreated={() => setCreatingClassTemplate(null)}
@@ -709,7 +764,7 @@ function ClassesView({
 
       {creatingClass ? (
         <ModalDialog className="class-program-modal" description={uiText(locale, "Ajoute une classe d'inscription sous un bloc existant.", "Add an entry class under an existing block.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouvelle classe", "New class")} onClose={() => setCreatingClass(null)}>
-          <ClassForm locale={locale} blocks={blocks} defaultBlockId={creatingClass.blockId} disciplines={disciplines} organization={organization} organizationDisciplines={organizationDisciplines} sanctioningBodies={sanctioningBodies} shows={shows} onCreateClass={onCreateClass} onCreated={() => setCreatingClass(null)} />
+          <ClassForm locale={locale} blocks={blocks} defaultBlockId={creatingClass.blockId} disciplines={disciplines} organization={organization} organizationDisciplines={organizationDisciplines} organizationDisciplineGoverningBodies={organizationDisciplineGoverningBodies} sanctioningBodies={sanctioningBodies} shows={shows} onCreateClass={onCreateClass} onCreated={() => setCreatingClass(null)} />
         </ModalDialog>
       ) : null}
 
@@ -752,6 +807,7 @@ function ClassesView({
             classTemplate={editingClassTemplate}
             disciplines={disciplines}
             organizationDisciplines={organizationDisciplines}
+            organizationDisciplineGoverningBodies={organizationDisciplineGoverningBodies}
             sanctioningBodies={sanctioningBodies}
             onCancel={() => setEditingClassTemplate(null)}
             onUpdateClassTemplate={async (id, input) => {
@@ -780,6 +836,25 @@ function ClassesView({
         </ModalDialog>
       ) : null}
 
+      {editingRequirements && organization ? (() => {
+        const editorContext = requirementEditorContext(editingRequirements);
+        return <ModalDialog className="class-program-modal" description={editingRequirements.name} eyebrow={uiText(locale, "Admissibilité", "Eligibility")} title={editingRequirements.scopeType === "block" || editingRequirements.scopeType === "block_template" ? uiText(locale, "Exigences du bloc", "Block requirements") : uiText(locale, "Exigences de la classe", "Class requirements")} onClose={() => setEditingRequirements(null)}>
+          <EligibilityRequirementsEditor
+            createdByUserId={currentUserProfileId}
+            disciplineCredentialIssuers={disciplineCredentialIssuers}
+            disciplineIds={editorContext.disciplineIds}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
+            inheritedRequirements={editorContext.inheritedRequirements}
+            organization={organization}
+            ownRequirements={editorContext.ownRequirements}
+            scopeId={editingRequirements.id}
+            scopeType={editingRequirements.scopeType}
+            onRefresh={onRefresh}
+          />
+        </ModalDialog>;
+      })() : null}
+
       {editingClass ? (
         <ModalDialog className="class-program-modal" description={editingClass.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier la classe", "Edit class")} onClose={() => setEditingClass(null)}>
           <ClassEditForm
@@ -788,6 +863,7 @@ function ClassesView({
             classRecord={editingClass}
             disciplines={disciplines}
             organizationDisciplines={organizationDisciplines}
+            organizationDisciplineGoverningBodies={organizationDisciplineGoverningBodies}
             sanctioningBodies={sanctioningBodies}
             onCancel={() => setEditingClass(null)}
             onUpdateClass={async (id, input) => {

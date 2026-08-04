@@ -6,7 +6,7 @@ import { defaultAcceptedExternalImportKeys } from "../../lib/externalImportPropo
 import type { Locale } from "../../lib/i18n";
 import { createContact, verifyNrhaMember } from "../../services/supabaseServices";
 import type { ContactIdentityCandidate, NrhaMemberLookupVerification } from "../../services/supabaseServices";
-import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, ExternalCredentialProduct, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
 import { uiText, buildExternalMembershipFields, InlineHealthMessage } from "../dashboard/shared";
 import { compareNrhaMemberIdentity, integerFromMembershipNumber, nrhaMemberDataImportRows, nrhaMemberImportDecisionPayload, nrhaMemberMismatchMessage, nrhaMemberStatus, nrhaMemberVerificationPayload, nrhaOfficialMemberValues, type NrhaMemberDataImportRow, type NrhaMemberLocalValues, type NrhaMemberVerificationState } from "./nrhaMemberValidation";
 import { ContactIdentityCandidateReview } from "./IdentityCandidateReview";
@@ -23,7 +23,9 @@ function ContactForm({
   createdByUserId,
   defaultType = "owner",
   description,
+  externalCredentialProducts = [],
   externalCredentialIssuers = [],
+  allowCredentialReview = false,
   linkedUserId,
   membershipRequirements = [],
   organization,
@@ -39,7 +41,9 @@ function ContactForm({
   createdByUserId?: string;
   defaultType?: Contact["type"];
   description?: string;
+  externalCredentialProducts?: ExternalCredentialProduct[];
   externalCredentialIssuers?: ExternalCredentialIssuer[];
+  allowCredentialReview?: boolean;
   linkedUserId?: string;
   membershipRequirements?: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
@@ -66,6 +70,9 @@ function ContactForm({
   const [country, setCountry] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
+  const [membershipProductIds, setMembershipProductIds] = useState<Record<string, string>>({});
+  const [membershipStatuses, setMembershipStatuses] = useState<Record<string, ContactExternalIdentifier["status"]>>({});
+  const [membershipExpiries, setMembershipExpiries] = useState<Record<string, string>>({});
   const [nrhaMemberBusy, setNrhaMemberBusy] = useState(false);
   const [nrhaMemberMessage, setNrhaMemberMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaMemberLookup, setNrhaMemberLookup] = useState<NrhaMemberLookupVerification | null>(null);
@@ -149,9 +156,10 @@ function ContactForm({
         created_by_user_id: createdByUserId,
         external_memberships: externalMembershipFields.map((field) => ({
           external_credential_issuer_id: field.organization.id,
+          credential_product_id: membershipProductIds[field.organization.id] || null,
           identifier_value: membershipNumbers[field.organization.id] ?? "",
-          status: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? nrhaMemberStatus(verifiedNrhaMember.officialValues) : "unknown",
-          expires_on: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember.officialValues.expiresOn || null : null,
+          status: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? nrhaMemberStatus(verifiedNrhaMember.officialValues) : membershipStatuses[field.organization.id] ?? "pending",
+          expires_on: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember.officialValues.expiresOn || null : membershipExpiries[field.organization.id] || null,
           verified_at: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? new Date().toISOString() : null,
           verification_payload: field.organization.id === nrhaOrganizationId ? verifiedNrhaMember?.payload ?? nrhaMemberImportEvidence ?? undefined : undefined,
           verification_source: field.organization.id === nrhaOrganizationId && (verifiedNrhaMember || nrhaMemberImportEvidence) ? "nrha_api" : null,
@@ -698,9 +706,10 @@ function ContactForm({
                   <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
                   <span>{uiText(locale, "Les champs obligatoires dépendent de l'association active.", "Required fields depend on the active association.")}</span>
                 </div>
-                {externalMembershipFields.map((field) => (
-                  <label key={field.organization.id}>
-                    {field.organization.code} #
+                {externalMembershipFields.map((field) => {
+                  const issuerProducts = externalCredentialProducts.filter((product) => product.external_credential_issuer_id === field.organization.id && product.is_active);
+                  return <div className="stack compact-stack nested-fieldset" key={field.organization.id}>
+                  <label>{field.organization.code} #
                     <input
                       disabled={!organization}
                       required={field.required}
@@ -725,7 +734,10 @@ function ContactForm({
                       </div>
                     ) : null}
                   </label>
-                ))}
+                  {issuerProducts.length ? <label>{uiText(locale, "Type de carte ou produit", "Membership or product type")}<select value={membershipProductIds[field.organization.id] ?? ""} onChange={(event) => setMembershipProductIds((current) => ({ ...current, [field.organization.id]: event.target.value }))}><option value="">Non précisé</option>{issuerProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.includes_liability_insurance ? ` — ${uiText(locale, "assurance incluse", "insurance included")}` : ""}</option>)}</select></label> : null}
+                  {allowCredentialReview ? <div className="form-grid"><label>{uiText(locale, "Statut", "Status")}<select value={membershipStatuses[field.organization.id] ?? "pending"} onChange={(event) => setMembershipStatuses((current) => ({ ...current, [field.organization.id]: event.target.value as ContactExternalIdentifier["status"] }))}><option value="pending">À vérifier</option><option value="active">Active</option><option value="expired">Expirée</option><option value="inactive">Inactive</option><option value="revoked">Révoquée</option></select></label><label>{uiText(locale, "Expiration", "Expiry")}<input type="date" value={membershipExpiries[field.organization.id] ?? ""} onChange={(event) => setMembershipExpiries((current) => ({ ...current, [field.organization.id]: event.target.value }))} /></label></div> : null}
+                  </div>;
+                })}
                 <InlineHealthMessage value={nrhaMemberMessage} />
                 {nrhaMemberRows.length ? (
                   <NrhaMemberDataPanel rows={nrhaMemberRows} locale={locale} onApply={handleApplyNrhaMemberData} />

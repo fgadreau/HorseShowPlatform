@@ -5,7 +5,7 @@ import { SearchSelect } from "../../components/ui";
 import { findById, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createClass } from "../../services/supabaseServices";
-import type { BackNumberPolicy, Block, Discipline, Organization, OrganizationDiscipline, PayoutScheduleType, SanctioningBody, Show } from "../../types/domain";
+import type { BackNumberPolicy, Block, Discipline, Organization, OrganizationDiscipline, OrganizationDisciplineGoverningBody, PayoutScheduleType, SanctioningBody, Show } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { governingBodyAssignmentsFromSelection, hasSelectedGoverningBodyCode, nrhaClassTypes, eligibilityRulesFromNotes, eligibilityNotesFromRules, applyNrhaApprovedClassChoice, NrhaApprovedClassSelect } from "./classUtils";
 import { SanctioningFields } from "./SanctioningFields";
@@ -19,6 +19,7 @@ function ClassForm({
   disciplines,
   organization,
   organizationDisciplines,
+  organizationDisciplineGoverningBodies,
   sanctioningBodies,
   shows,
   onCreateClass,
@@ -30,13 +31,15 @@ function ClassForm({
   disciplines: Discipline[];
   organization: Organization | null;
   organizationDisciplines: OrganizationDiscipline[];
+  organizationDisciplineGoverningBodies: OrganizationDisciplineGoverningBody[];
   sanctioningBodies: SanctioningBody[];
   shows: Show[];
   onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
   onCreated?: () => void;
 }) {
+  const initialOrganizationDisciplineId = defaultOrganizationDisciplineId(organizationDisciplines);
   const [blockId, setBlockId] = useState(defaultBlockId ?? "");
-  const [organizationDisciplineId, setOrganizationDisciplineId] = useState(() => defaultOrganizationDisciplineId(organizationDisciplines));
+  const [organizationDisciplineId, setOrganizationDisciplineId] = useState(() => initialOrganizationDisciplineId);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [entryFee, setEntryFee] = useState("");
@@ -48,7 +51,7 @@ function ClassForm({
   const [sanctioningFeePercent, setSanctioningFeePercent] = useState("");
   const [payoutRules, setPayoutRules] = useState<Record<string, unknown>>({});
   const [payoutNotes, setPayoutNotes] = useState("");
-  const [governingBodyIds, setGoverningBodyIds] = useState<string[]>([]);
+  const [governingBodyIds, setGoverningBodyIds] = useState<string[]>(() => organizationDisciplineGoverningBodies.filter((link) => link.organization_discipline_id === initialOrganizationDisciplineId && link.is_active && link.is_default).map((link) => link.governing_body_id));
   const [backNumberPolicy, setBackNumberPolicy] = useState<BackNumberPolicy>("horse");
   const [nrhaClassType, setNrhaClassType] = useState("");
   const [eligibilityCacheTtlHours, setEligibilityCacheTtlHours] = useState(6);
@@ -57,12 +60,13 @@ function ClassForm({
   const [busy, setBusy] = useState(false);
   const selectedBlock = findById(blocks, blockId) ?? null;
   const selectedShow = selectedBlock ? findById(shows, selectedBlock.show_id) : null;
-  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, sanctioningBodies, "NRHA");
+  const availableSanctioningBodies = sanctioningBodies.filter((body) => organizationDisciplineGoverningBodies.some((link) => link.organization_discipline_id === organizationDisciplineId && link.governing_body_id === body.id && link.is_active));
+  const classIsNrha = hasSelectedGoverningBodyCode(governingBodyIds, availableSanctioningBodies, "NRHA");
 
   function handleGoverningBodyIds(nextIds: string[]) {
     setGoverningBodyIds(nextIds);
 
-    if (!hasSelectedGoverningBodyCode(nextIds, sanctioningBodies, "NRHA")) {
+    if (!hasSelectedGoverningBodyCode(nextIds, availableSanctioningBodies, "NRHA")) {
       setNrhaClassType("");
     }
   }
@@ -103,7 +107,7 @@ function ClassForm({
         payout_notes: payoutNotes.trim() || null,
         governing_body_assignments: governingBodyAssignmentsFromSelection({
           selectedIds: governingBodyIds,
-          sanctioningBodies,
+          sanctioningBodies: availableSanctioningBodies,
           classCode: code,
           nrhaEligibilityProfileCode: nrhaClassType,
           eligibilityCacheTtlHours,
@@ -123,7 +127,7 @@ function ClassForm({
       setSanctioningFeePercent("");
       setPayoutRules({});
       setPayoutNotes("");
-      setGoverningBodyIds([]);
+      setGoverningBodyIds(organizationDisciplineGoverningBodies.filter((link) => link.organization_discipline_id === initialOrganizationDisciplineId && link.is_active && link.is_default).map((link) => link.governing_body_id));
       setBackNumberPolicy("horse");
       setNrhaClassType("");
       setEligibilityCacheTtlHours(6);
@@ -161,14 +165,17 @@ function ClassForm({
           organizationDisciplines={organizationDisciplines}
           value={organizationDisciplineId}
           disabled={!organization || !blocks.length}
-          onChange={setOrganizationDisciplineId}
+          onChange={(value) => {
+            setOrganizationDisciplineId(value);
+            setGoverningBodyIds(organizationDisciplineGoverningBodies.filter((link) => link.organization_discipline_id === value && link.is_active && link.is_default).map((link) => link.governing_body_id));
+          }}
         />
         <SanctioningFields
           locale={locale}
           backNumberPolicy={backNumberPolicy}
           disabled={!organization || !blocks.length}
           label={uiText(locale, "Sanctions de la classe", "Class sanctioning")}
-          sanctioningBodies={sanctioningBodies}
+          sanctioningBodies={availableSanctioningBodies}
           governingBodyIds={governingBodyIds}
           eligibilityCacheTtlHours={eligibilityCacheTtlHours}
           sourceUnavailablePolicy={sourceUnavailablePolicy}

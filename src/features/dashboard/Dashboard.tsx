@@ -845,6 +845,7 @@ export function Dashboard({
             stallBookings={selectedOrganizationStallBookings}
             invoices={selectedOrganizationInvoices}
             unpaidBalance={unpaidBalance}
+            disciplines={disciplines}
             onCreateOrganization={onCreateOrganization}
           />
         ) : null}
@@ -883,6 +884,7 @@ export function Dashboard({
             locale={locale}
             contacts={selectedOrganizationContacts}
             contactExternalIdentifiers={contactExternalIdentifiers}
+            contactInsuranceEvidence={context?.contactInsuranceEvidence ?? []}
             contactOrganizationMemberships={selectedOrganizationContactMemberships}
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
@@ -890,6 +892,7 @@ export function Dashboard({
             directoryHorses={selectedOrganizationDirectoryHorses}
             disciplines={disciplines}
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
             horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
@@ -914,6 +917,7 @@ export function Dashboard({
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
             onVerifyNrhaMember={onVerifyNrhaMember}
+            onRefresh={onRefresh}
           />
         ) : null}
 
@@ -951,11 +955,16 @@ export function Dashboard({
             blockTemplates={selectedOrganizationBlockTemplates}
             contacts={selectedOrganizationContacts}
             disciplines={disciplines}
+            disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
+            eligibilityRequirements={context?.eligibilityRequirements ?? []}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
             classes={selectedShowClasses}
             entries={selectedShowEntries}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
             organizationDisciplines={selectedOrganizationDisciplines}
+            organizationDisciplineGoverningBodies={context?.organizationDisciplineGoverningBodies ?? []}
             sanctioningBodies={sanctioningBodies}
             showDays={selectedShowShowDays}
             showScorePaidWarmups={selectedShowShowScorePaidWarmups}
@@ -978,6 +987,8 @@ export function Dashboard({
             onUpdateClassTemplate={onUpdateClassTemplate}
             onUpdateClass={onUpdateClass}
             onUpdateSlate={onUpdateSlate}
+            currentUserProfileId={context?.profile.id ?? ""}
+            onRefresh={onRefresh}
             onUpdateShowScorePaidWarmup={onUpdateShowScorePaidWarmup}
           />
         ) : null}
@@ -1184,6 +1195,7 @@ export function Dashboard({
             contactExternalIdentifiers={contactExternalIdentifiers}
             contactOrganizationMemberships={personalContactMemberships}
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organizationMembershipTypes={organizationMembershipTypes}
             organizations={organizations}
@@ -1298,6 +1310,7 @@ export function Dashboard({
             onUpdateOrganizationHealthSettings={onUpdateOrganizationHealthSettings}
             onUpdateOrganizationMembershipType={onUpdateOrganizationMembershipType}
             onUpdateOrganizationProduct={onUpdateOrganizationProduct}
+            onRefresh={onRefresh}
             products={selectedOrganizationProducts}
           />
         ) : null}
@@ -1307,6 +1320,12 @@ export function Dashboard({
             currentUserProfileId={context?.profile.id ?? null}
             nrhaRiderRankings={nrhaRiderRankings}
             organizations={organizations}
+            disciplines={disciplines}
+            disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
+            disciplineGoverningBodies={context?.disciplineGoverningBodies ?? []}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
+            governingBodies={sanctioningBodies}
             onImportNrhaRiderRankings={onReplaceNrhaRiderRankings}
             onRefresh={onRefresh}
           />

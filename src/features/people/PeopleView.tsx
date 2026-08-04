@@ -5,7 +5,7 @@ import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "
 import type { Locale } from "../../lib/i18n";
 import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, dismissContactIdentityCandidate, dismissHorseIdentityCandidate, linkContactToDirectory, linkHorseToDirectory, searchContactIdentityCandidates, searchHorseIdentityCandidates, unlinkContactFromDirectory, unlinkHorseFromDirectory, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse, verifyNrhaMember } from "../../services/supabaseServices";
 import type { ContactIdentityCandidate, HorseIdentityCandidate } from "../../services/supabaseServices";
-import type { Contact, ContactExternalIdentifier, ContactOrganizationMembership, ContactRole, DirectoryContact, DirectoryHorse, Discipline, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationDiscipline, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
+import type { Contact, ContactExternalIdentifier, ContactInsuranceEvidence, ContactOrganizationMembership, ContactRole, DirectoryContact, DirectoryHorse, Discipline, ExternalCredentialIssuer, ExternalCredentialProduct, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationDiscipline, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
 import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseExternalReferenceChips, horseGenderLabel, todayDateValue } from "../dashboard/shared";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { ContactForm } from "./ContactForm";
@@ -13,11 +13,13 @@ import { ContactEditForm } from "./ContactEditForm";
 import { HorseForm } from "../horses/HorseForm";
 import { HorseEditForm } from "../horses/HorseEditForm";
 import { DirectoryCreationPicker, DirectoryDisciplinePicker } from "./DirectoryDisciplinePicker";
+import { InsuranceEvidenceForm } from "./InsuranceEvidenceForm";
 
 function PeopleView({
   locale,
   contacts,
   contactExternalIdentifiers,
+  contactInsuranceEvidence,
   contactOrganizationMemberships,
   contactRoles,
   createdByUserId,
@@ -25,6 +27,7 @@ function PeopleView({
   directoryHorses,
   disciplines,
   externalCredentialIssuers,
+  externalCredentialProducts,
   horseExternalIdentifiers,
   horseHealthDocuments,
   horses,
@@ -49,10 +52,12 @@ function PeopleView({
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
   onVerifyNrhaMember,
+  onRefresh,
 }: {
   locale: Locale;
   contacts: Contact[];
   contactExternalIdentifiers: ContactExternalIdentifier[];
+  contactInsuranceEvidence: ContactInsuranceEvidence[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   contactRoles: ContactRole[];
   createdByUserId: string;
@@ -60,6 +65,7 @@ function PeopleView({
   directoryHorses: DirectoryHorse[];
   disciplines: Discipline[];
   externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
   horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
@@ -84,12 +90,14 @@ function PeopleView({
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
+  onRefresh: () => Promise<void> | void;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [contactCreationDirectoryIds, setContactCreationDirectoryIds] = useState<Set<string>>(new Set());
   const [horseCreationDirectoryIds, setHorseCreationDirectoryIds] = useState<Set<string>>(new Set());
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [insuranceContact, setInsuranceContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [horseSearch, setHorseSearch] = useState("");
@@ -300,7 +308,9 @@ function PeopleView({
           />
           <ContactForm
             locale={locale}
+            allowCredentialReview
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={(input) => createContactInSelectedDirectories(input, contactCreationDirectoryIds)}
@@ -364,9 +374,11 @@ function PeopleView({
         <ModalDialog description={contactLabel(editingContact)} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Modifier le contact", "Edit contact")} onClose={() => setEditingContact(null)}>
           <ContactEditForm
             locale={locale}
+            allowCredentialReview
             contact={editingContact}
             contactExternalIdentifiers={contactExternalIdentifiers}
             externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
             onVerifyNrhaMember={onVerifyNrhaMember}
@@ -400,6 +412,25 @@ function PeopleView({
             }}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {insuranceContact ? (
+        <ModalDialog
+          className="class-program-modal"
+          description={contactLabel(insuranceContact)}
+          eyebrow={uiText(locale, "Admissibilité", "Eligibility")}
+          title={uiText(locale, "Preuves d’assurance", "Insurance evidence")}
+          onClose={() => setInsuranceContact(null)}
+        >
+          <InsuranceEvidenceForm
+            contact={insuranceContact}
+            createdByUserId={createdByUserId}
+            evidence={contactInsuranceEvidence.filter((item) => item.contact_id === insuranceContact.id)}
+            issuers={externalCredentialIssuers}
+            products={externalCredentialProducts}
+            onRefresh={onRefresh}
           />
         </ModalDialog>
       ) : null}
@@ -505,6 +536,9 @@ function PeopleView({
                   ) : null}
                   <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                     {uiText(locale, "Modifier", "Edit")}
+                  </button>
+                  <button className="text-button" type="button" onClick={() => setInsuranceContact(contact)}>
+                    {uiText(locale, "Assurance", "Insurance")}
                   </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
                     {uiText(locale, "Supprimer", "Delete")}
