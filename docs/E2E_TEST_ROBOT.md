@@ -12,6 +12,11 @@ redevance à l'association sanctionneuse, critères d'admissibilité et grille d
 répartition des prix. Le robot vérifie les montants dans l'interface et dans la
 base avant et après le retour de ShowScore vers HSP.
 
+Pour rendre les inscriptions réellement admissibles, les deux chevaux du
+parcours reçoivent aussi un Coggins et un vaccin combiné approuvés ainsi qu'une
+validation d'identité. Le robot ne contourne donc pas les contrôles de santé et
+d'identification nécessaires avant la sortie de l'ordre de passage.
+
 ## Garde-fous
 
 Une exécution avec écriture est refusée sauf si toutes ces conditions sont vraies :
