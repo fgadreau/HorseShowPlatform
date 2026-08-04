@@ -20,7 +20,9 @@ d'identification nécessaires avant la sortie de l'ordre de passage.
 Les deux meilleurs scores sont à égalité afin de vérifier le partage des deux
 premières parts de la bourse. À partir de cinq cavaliers, le robot ajoute aussi
 un `No score` et un `Scratch`. Ces inscriptions demeurent dans les revenus de la
-classe, mais elles ne sont pas ajoutées aux lignes actives du championnat.
+classe, mais elles ne sont pas ajoutées aux lignes actives du championnat. Les
+23 résultats scorés du mode méga sont importés et le robot vérifie les 10 équipes
+qui reçoivent effectivement des points selon la règle AQR.
 
 Dans ShowScore, il change aussi de journée par les onglets de la gestion du
 show, des blocs, de l'annonceur, des scribes, du secrétariat, de l'horaire et du

@@ -1,4 +1,4 @@
-import { expect, test, type BrowserContext, type Locator, type Page } from "@playwright/test";
+import { expect, test, type BrowserContext, type Dialog, type Locator, type Page } from "@playwright/test";
 import { createE2EAdminClient } from "./support/admin";
 import {
   FULL_CLASS_CONFIG,
@@ -28,6 +28,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     .filter((outcome): outcome is Extract<AnnouncerOutcome, { status: "scored" }> => outcome.status === "scored")
     .map((outcome) => outcome.score)
     .sort((a, b) => b - a);
+  const rankedTeamCount = Math.min(announcerScores.length, 10);
   const expectedPayout = buildExpectedPayout(participantCount);
   const expectedAwards = buildExpectedAwards(expectedPayout.netPurse, participantCount);
   const blockName = `[E2E] Bloc annonceur — ${state.runId}`;
@@ -214,9 +215,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     expect(setup.runs).toHaveLength(participantCount);
     expect(setup.block_classes).toEqual(expect.arrayContaining([expect.objectContaining({ code: FULL_CLASS_CONFIG.classCode })]));
     championshipParticipantNames = setup.runs
-      .slice(0, announcerScores.length)
+      .slice(0, rankedTeamCount)
       .map((run) => String(run.rider ?? "").trim());
-    expect(championshipParticipantNames).toHaveLength(announcerScores.length);
+    expect(championshipParticipantNames).toHaveLength(rankedTeamCount);
     expect(championshipParticipantNames.every(Boolean)).toBe(true);
   });
 
@@ -276,9 +277,13 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       .getByRole("spinbutton");
     await expect(runCountField).toHaveValue(String(participantCount));
     const liveSource = showScorePage.getByLabel("Source des données live", { exact: true });
-    showScorePage.once("dialog", (dialog) => dialog.accept());
+    const acceptLiveSourceDialog = (dialog: Dialog) => {
+      void dialog.accept();
+    };
+    showScorePage.once("dialog", acceptLiveSourceDialog);
     await liveSource.selectOption("announcer");
     await expect(liveSource).toHaveValue("announcer");
+    showScorePage.off("dialog", acceptLiveSourceDialog);
     const admin = createE2EAdminClient();
     await expect.poll(async () => {
       const [{ data: setup, error: setupError }, { data: session, error: sessionError }] = await Promise.all([
@@ -415,7 +420,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(/Code import 1100 → championnat 1100/);
     await expect(showScorePage.locator("body")).toContainText(`1 classes sélectionnées · ${announcerScores.length} lignes actives · 0 lignes ignorées`);
     await showScorePage.getByRole("button", { name: "Ajouter au championnat", exact: true }).click();
-    await expect(showScorePage.locator("body")).toContainText(new RegExp(`${announcerScores.length}\\s*Équipes`));
+    await expect(showScorePage.locator("body")).toContainText(new RegExp(`${rankedTeamCount}\\s*Équipes`));
     await showScorePage.getByRole("button", { name: "Publier provisoire", exact: true }).click();
     await expect(showScorePage.locator("body")).toContainText("Championnat enregistré.");
 
@@ -535,8 +540,13 @@ async function scoreNextAnnouncerRun(page: Page, score: string) {
 
 async function completeNextAnnouncerRunWithStatus(page: Page, status: "no_score" | "scratch") {
   const buttonName = status === "no_score" ? "No score" : "Scratch";
-  page.once("dialog", (dialog) => dialog.accept());
+  const confirmation = new Promise<void>((resolve, reject) => {
+    page.once("dialog", (dialog) => {
+      dialog.accept().then(resolve, reject);
+    });
+  });
   await page.getByRole("button", { name: buttonName, exact: true }).first().click();
+  await confirmation;
 }
 
 function pastDateTimeLocal() {
