@@ -495,7 +495,12 @@ async function verifyShowScoreDayTabs(
   const otherDayId = fixture.showDayIds.find((dayId) => dayId !== fixture.showDayId);
   if (!otherDayId) throw new Error("Une deuxième journée ShowScore est requise.");
 
-  const tabList = page.getByRole("tablist", { name: "Changer de journée du show", exact: true });
+  const dayNavigation = page.getByRole("navigation", {
+    name: "Changer de journée du show",
+    exact: true,
+  });
+  await expect(dayNavigation).toBeVisible();
+  const tabList = dayNavigation.getByRole("tablist");
   await expect(tabList).toBeVisible();
   await expect(tabList.getByRole("tab")).toHaveCount(fixture.showDayIds.length);
 
