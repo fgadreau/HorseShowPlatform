@@ -31,6 +31,14 @@ export async function cleanupPreviousE2ERun() {
       horseIds = [...new Set((horses.data ?? []).map((row) => row.horse_id))];
     }
 
+    if (horseIds.length) {
+      const { error: validationDeleteError } = await admin
+        .from("horse_document_validations")
+        .delete()
+        .in("horse_id", horseIds);
+      if (validationDeleteError) throw validationDeleteError;
+    }
+
     const { error } = await admin.from("organizations").delete().eq("id", organizationId).eq("slug", state.organizationSlug);
     if (error) throw error;
   }

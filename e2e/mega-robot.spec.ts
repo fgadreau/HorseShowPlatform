@@ -120,15 +120,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await page.getByRole("button", { name: state.showName }).click();
     await page.getByRole("button", { name: "Bloc libre", exact: true }).first().click();
 
-    const blockForm = page.getByTestId("block-create-form");
-    await blockForm.getByLabel("Manège / arène", { exact: true }).fill("Arène E2E");
-    await blockForm.getByLabel("Juge(s)", { exact: true }).fill("Juge E2E");
-    await blockForm.getByLabel("Mode de départ", { exact: true }).selectOption("fixed");
-    await blockForm.getByLabel("Heure", { exact: true }).fill("09:00");
-    await selectSearchOption(blockForm.getByLabel("Patron", { exact: true }), "Reining #1");
-    await blockForm.getByLabel("Nom du bloc", { exact: true }).fill(blockName);
-    await blockForm.getByLabel("Libellé d'horaire", { exact: true }).fill("Open — annonceur");
-    await blockForm.getByLabel("Fermeture des inscriptions", { exact: true }).fill(pastDateTimeLocal());
+    const blockForm = page.getByRole("dialog").getByTestId("block-create-form");
+    await blockForm.getByRole("textbox", { name: "Manège / arène", exact: true }).fill("Arène E2E");
+    await blockForm.getByRole("textbox", { name: "Juge(s)", exact: true }).fill("Juge E2E");
+    await blockForm.getByRole("combobox", { name: "Mode de départ", exact: true }).selectOption("fixed");
+    await blockForm.getByRole("textbox", { name: "Heure", exact: true }).fill("09:00");
+    await selectSearchOption(blockForm.getByRole("combobox", { name: "Patron", exact: true }), "Reining #1");
+    await blockForm.getByRole("textbox", { name: "Nom du bloc", exact: true }).fill(blockName);
+    await blockForm.getByRole("textbox", { name: "Libellé d'horaire", exact: true }).fill("Open — annonceur");
+    await blockForm.getByRole("textbox", { name: /^Fermeture des inscriptions/ }).fill(pastDateTimeLocal());
     await blockForm.getByRole("button", { name: "Créer le bloc", exact: true }).click();
     await expect(blockForm).toBeHidden();
 
@@ -136,29 +136,31 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await blockCard.locator(".schedule-block-trigger").click();
     await blockCard.getByRole("button", { name: "+ Classe", exact: true }).click();
 
-    const classForm = page.getByTestId("class-create-form");
-    const nrhaCheckbox = classForm.getByLabel("National Reining Horse Association", { exact: true });
+    const classForm = page.getByRole("dialog").getByTestId("class-create-form");
+    const nrhaCheckbox = classForm.getByRole("checkbox", { name: "National Reining Horse Association", exact: true });
     if (!(await nrhaCheckbox.isChecked())) await nrhaCheckbox.check();
-    await classForm.getByLabel("Politique de dossard", { exact: true }).selectOption("horse_rider_team");
-    await selectSearchOption(classForm.getByLabel("Classe NRHA", { exact: true }), `${FULL_CLASS_CONFIG.classCode} ${FULL_CLASS_CONFIG.className}`);
-    await classForm.getByLabel("Frais d'inscription", { exact: true }).fill(String(FULL_CLASS_CONFIG.entryFee));
-    await classForm.getByLabel("Frais de juge", { exact: true }).fill(String(FULL_CLASS_CONFIG.judgeFee));
+    await classForm.getByRole("combobox", { name: "Politique de dossard", exact: true }).selectOption("horse_rider_team");
+    await selectSearchOption(classForm.getByRole("combobox", { name: "Classe NRHA", exact: true }), `${FULL_CLASS_CONFIG.classCode} ${FULL_CLASS_CONFIG.className}`);
+    await classForm.getByRole("spinbutton", { name: "Frais d'inscription", exact: true }).fill(String(FULL_CLASS_CONFIG.entryFee));
+    await classForm.getByRole("spinbutton", { name: "Frais de juge", exact: true }).fill(String(FULL_CLASS_CONFIG.judgeFee));
 
     const payoutFields = classForm.getByRole("group", { name: "Bourses / Payouts" });
-    await payoutFields.getByText("Configurer les bourses / payouts", { exact: true }).click();
-    await payoutFields.getByLabel("Type de paiement", { exact: true }).selectOption("house_custom");
-    await payoutFields.getByLabel("Added money", { exact: true }).fill(String(FULL_CLASS_CONFIG.addedMoney));
-    await payoutFields.getByLabel("Trophée / plaque", { exact: true }).fill(String(FULL_CLASS_CONFIG.trophyFee));
-    await payoutFields.getByLabel("Retenue personnalisée (%)", { exact: true }).fill(String(FULL_CLASS_CONFIG.retainagePercent));
-    await payoutFields.getByLabel("Frais d'organisme (%)", { exact: true }).fill(String(FULL_CLASS_CONFIG.sanctioningFeePercent));
+    const payoutDetails = payoutFields.locator("details.payout-settings-details");
+    await payoutDetails.locator("summary").click();
+    await expect(payoutDetails).toHaveAttribute("open", "");
+    await payoutDetails.locator("label").filter({ hasText: /^Type de paiement/ }).locator("select").selectOption("house_custom");
+    await payoutDetails.locator("label").filter({ hasText: /^Added money/ }).locator("input").fill(String(FULL_CLASS_CONFIG.addedMoney));
+    await payoutDetails.locator("label").filter({ hasText: /^Trophée \/ plaque/ }).locator("input").fill(String(FULL_CLASS_CONFIG.trophyFee));
+    await payoutDetails.locator("label").filter({ hasText: /^Retenue personnalisée/ }).locator("input").fill(String(FULL_CLASS_CONFIG.retainagePercent));
+    await payoutDetails.locator("label").filter({ hasText: /^Frais d'organisme/ }).locator("input").fill(String(FULL_CLASS_CONFIG.sanctioningFeePercent));
     const payoutRow = payoutFields.locator(".payout-rule-row").nth(1);
     await payoutRow.locator("input").nth(0).fill("1");
     await payoutRow.locator("input").nth(1).fill("5");
     await payoutRow.locator("input").nth(2).fill(FULL_CLASS_CONFIG.payoutPercentages);
-    await payoutFields.getByLabel("Aperçu avec", { exact: true }).fill("2");
-    await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*330[,.]85/);
-    await payoutFields.getByLabel("Notes de paiement", { exact: true }).fill(FULL_CLASS_CONFIG.payoutNotes);
-    await classForm.getByLabel("Critères d'éligibilité", { exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
+    await payoutDetails.locator("label").filter({ hasText: /^Aperçu avec/ }).locator("input").fill("2");
+    await expect(payoutFields.locator(".payout-preview")).toContainText(/Bourse:\s*\$?\s*330[,.]85/);
+    await payoutDetails.locator("label").filter({ hasText: /^Notes de paiement/ }).locator("textarea").fill(FULL_CLASS_CONFIG.payoutNotes);
+    await classForm.getByRole("textbox", { name: "Critères d'éligibilité", exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
     await classForm.getByRole("button", { name: "Créer la classe", exact: true }).click();
     await expect(classForm).toBeHidden();
 
@@ -324,11 +326,11 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await resultBlock.locator(".results-block-header").click();
     const resultClass = resultBlock.locator(".results-classRecord").filter({ has: page.getByRole("heading", { name: FULL_CLASS_CONFIG.className, exact: true }) });
     await resultClass.getByTitle("Ouvrir").click();
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Brut\s*300[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Après trophée\s*270[,.]00/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Frais NRHA\s*13[,.]50/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Retenue\s*25[,.]65/);
-    await expect(resultClass.locator(".results-worksheet")).toContainText(/Bourse nette\s*330[,.]85/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Brut\s*\$?\s*300[,.]00/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Après trophée\s*\$?\s*270[,.]00/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Frais NRHA\s*\$?\s*13[,.]50/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Retenue\s*\$?\s*25[,.]65/);
+    await expect(resultClass.locator(".results-worksheet")).toContainText(/Bourse nette\s*\$?\s*330[,.]85/);
     await expect(resultClass.locator(".results-table")).toContainText(/198[,.]51/);
     await expect(resultClass.locator(".results-table")).toContainText(/132[,.]34/);
 
@@ -366,9 +368,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     await page.goto(`/shows/${state.showSlug}`);
     await expect(page.getByRole("heading", { name: state.showName, exact: true })).toBeVisible();
-    await expect(page.locator("body")).toContainText("330,85");
-    await expect(page.locator("body")).toContainText("198,51");
-    await expect(page.locator("body")).toContainText("132,34");
+    await expect(page.locator("body")).toContainText(/330[,.]85/);
+    await expect(page.locator("body")).toContainText(/198[,.]51/);
+    await expect(page.locator("body")).toContainText(/132[,.]34/);
   });
 
   await showScoreContext?.close();

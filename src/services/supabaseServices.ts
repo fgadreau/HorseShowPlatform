@@ -6372,6 +6372,18 @@ export async function prepareShowScoreClassSetup(input: {
   const judges = input.classRecord.judge_display_name
     ? [{ id: "judge-1", name: input.classRecord.judge_display_name, order: 1 }]
     : [{ id: "judge-1", name: "", order: 1 }];
+  const blockClasses = input.classes
+    .filter((classRecord) => classRecord.block_id === input.classRecord.id)
+    .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name))
+    .map((classRecord) => ({
+      id: classRecord.id,
+      classId: classRecord.id,
+      divisionId: classRecord.id,
+      blockId: input.classRecord.id,
+      code: classRecord.code || classRecord.name,
+      name: classRecord.name,
+      classNumber: classRecord.code || String(classRecord.sort_order),
+    }));
   const preparedAt = new Date().toISOString();
 
   const { data, error } = await client
@@ -6386,6 +6398,7 @@ export async function prepareShowScoreClassSetup(input: {
         custom_pattern: input.classRecord.custom_pattern,
         runs,
         judges,
+        block_classes: blockClasses,
         is_draw_imported: true,
       },
       { onConflict: "block_id" },
