@@ -281,6 +281,7 @@ function assertNoOutsideClassEntries(runs: ShowScoreRun[], classId: string) {
 function assertRunsIncludeDrawSheetFields(runs: ShowScoreRun[]) {
   assert(runs.every((run) => run.backNumber), "runs should include back numbers when entries have assigned dossards");
   assert(runs.every((run) => run.owner), "runs should include owner display names");
+  assert(runs.every((run) => run.classCodes.includes("1100")), "runs should include entered class codes for ShowScore result mapping");
   assert(runs.every((run) => run.divisionNames.some((name) => name.includes("Open"))), "runs should include entered class names");
 }
 
