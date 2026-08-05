@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - preprod
       - staging
       - rebuild/discipline-directories-health
 
@@ -12,6 +13,15 @@ permissions:
   contents: read
 
 jobs:
+  promotion-source:
+    if: github.event_name == 'pull_request' && github.base_ref == 'main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require preprod as the production source
+        env:
+          SOURCE_BRANCH: ${{ github.head_ref }}
+        run: test "$SOURCE_BRANCH" = "preprod"
+
   application:
     runs-on: ubuntu-latest
     steps:
@@ -27,3 +37,8 @@ jobs:
       - run: npm run test:identity
       - run: npm run test:governing
       - run: npm run test:eligibility
+      - name: Verify immutable production migration chain
+        if: github.event_name == 'pull_request' && github.base_ref == 'main'
+        run: |
+          git fetch origin main
+          npm run test:promotion

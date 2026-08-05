@@ -93,19 +93,21 @@ L'API REST PREPROD répond et la table `blocks` est vide, comme attendu.
 
 ## Blocage maintenu pour PROD
 
-Ne pas appliquer le chantier daté du 1er août 2026 à PROD. La migration
-`20260801000200_blocks_classes_core_rebuild.sql` contient encore un
-`truncate table public.organizations cascade`. Cette opération était acceptable
-uniquement pour initialiser la PREPROD vide.
+La reconstruction ne contient plus de `TRUNCATE TABLE` : elle capture les
+valeurs historiques, renomme les structures, effectue les backfills et valide
+les relations avant de retirer les anciennes colonnes. ShowScore utilise aussi
+le contrat canonique `blocks`, `block_id`, `show_score_block_setups` et
+`block_result_publications`.
 
-Avant le déploiement PROD, il faut :
+Le blocage restant est opérationnel et lié aux vraies données. Avant le
+déploiement PROD, il faut :
 
-1. remplacer la reconstruction destructive par une séquence création,
-   backfill, validation et bascule qui conserve les données;
-2. réinitialiser PREPROD depuis cette séquence finale et refaire les tests;
-3. adapter ShowScore à `blocks`, `block_id`, `show_score_block_setups` et
-   `block_result_publications`;
-4. réussir la répétition sur une copie temporaire, privée et anonymisée de PROD.
+1. réussir le workflow de répétition de production décrit dans
+   [PRODUCTION_PROMOTION.md](PRODUCTION_PROMOTION.md);
+2. appliquer la chaîne sur une copie temporaire, privée et anonymisée de PROD;
+3. comparer les comptes et relations avant/après, particulièrement pour les
+   blocs, classes, inscriptions, finances, identités et documents;
+4. prendre une sauvegarde vérifiée immédiatement avant la fenêtre réelle.
 
 ## Validation avant production
 
