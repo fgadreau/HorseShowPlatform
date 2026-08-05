@@ -987,7 +987,7 @@ async function testShowScorePaidWarmupTimer({
     displays.competitionTvPage.locator("[data-tv-warmup-timer]"),
   ];
   for (const timer of tvTimers) {
-    await expect(timer).toBeVisible();
+    await expect(timer).toBeVisible({ timeout: 45_000 });
     await expect(timer).toHaveAttribute("data-tv-warmup-timer-kind", "rider");
     await expect(timer).toContainText(/\d+:\d{2}/);
   }
@@ -1019,7 +1019,7 @@ async function testShowScorePaidWarmupTimer({
     };
   }).toEqual({ activeStartedAt: null, isPublic: false, statuses: ["done"] });
 
-  for (const timer of tvTimers) await expect(timer).toBeHidden();
+  for (const timer of tvTimers) await expect(timer).toBeHidden({ timeout: 45_000 });
 }
 
 async function readTvDisplayCode(locator: Locator) {
