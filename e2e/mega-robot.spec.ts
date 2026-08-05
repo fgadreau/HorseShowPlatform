@@ -3,7 +3,6 @@ import {
   test,
   type Browser,
   type BrowserContext,
-  type ConsoleMessage,
   type Dialog,
   type Locator,
   type Page,
@@ -80,10 +79,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   let publicDisplays: PublicDisplays | null = null;
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
-    if (
-      message.type() === "error" &&
-      !isExpectedPreDeployAqrAuditConsoleError(message)
-    ) {
+    if (message.type() === "error") {
       browserErrors.push(message.text());
     }
   });
@@ -788,18 +784,6 @@ function observePublicDisplayErrors(page: Page, display: string, browserErrors: 
   page.on("console", (message) => {
     if (message.type() === "error") browserErrors.push(`ShowScore ${display}: ${message.text()}`);
   });
-}
-
-function isExpectedPreDeployAqrAuditConsoleError(message: ConsoleMessage) {
-  if (!/Failed to load resource: the server responded with a status of (400|404)/.test(message.text())) {
-    return false;
-  }
-
-  const url = message.location().url;
-  return (
-    url.includes("/rest/v1/entry_import_batches") ||
-    url.includes("/rest/v1/payout_calculations")
-  );
 }
 
 async function assertPublicDisplayRun(displays: PublicDisplays, run: DisplayRun) {
