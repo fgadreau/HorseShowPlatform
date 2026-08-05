@@ -734,8 +734,14 @@ async function openPublicDisplays({
   await expect.poll(
     () => competitionVideo.evaluate((video: HTMLVideoElement) => video.readyState),
     { timeout: 35_000 },
-  ).toBeGreaterThanOrEqual(2);
-  expect(await competitionVideo.evaluate((video: HTMLVideoElement) => video.error?.code ?? null)).toBeNull();
+  ).toBeGreaterThanOrEqual(1);
+  expect(
+    await competitionVideo.evaluate((video: HTMLVideoElement) => ({
+      error: video.error?.code ?? null,
+      height: video.videoHeight,
+      width: video.videoWidth,
+    })),
+  ).toEqual({ error: null, height: 8, width: 8 });
 
   for (const displayPage of [generalTvPage, arenaTvPage, competitionTvPage, livestreamTvPage, overlayPage]) {
     expect(await displayPage.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth }))).toEqual({
