@@ -325,14 +325,6 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     tvDisplayCodes = await configureShowScoreTvViews(showScorePage);
-    warmupId = await configureShowScorePaidWarmup({
-      page: showScorePage,
-      organizationId: state.organizationId,
-      showId: crossAppFixture.showId,
-      showDayId: crossAppFixture.showDayId,
-      showScoreUrl: config.showScoreUrl,
-      warmupName,
-    });
     const setupLink = showScorePage.locator(
       `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
     );
@@ -384,6 +376,15 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       tvDisplayCodes,
     });
     await attachPublicDisplayScreenshots(testInfo, publicDisplays, "avant-le-premier-passage");
+
+    warmupId = await configureShowScorePaidWarmup({
+      page: showScorePage,
+      organizationId: state.organizationId,
+      showId: crossAppFixture.showId,
+      showDayId: crossAppFixture.showDayId,
+      showScoreUrl: config.showScoreUrl,
+      warmupName,
+    });
 
     await testShowScorePaidWarmupTimer({
       displays: publicDisplays,
