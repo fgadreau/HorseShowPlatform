@@ -35,6 +35,17 @@ journée contenant la classe avant de poursuivre le parcours. Dans la gestion
 du show, il confirme aussi que la barre compacte de la journée active conserve
 les actions `Modifier` et `Supprimer`.
 
+Le même parcours garde deux écrans publics ShowScore ouverts sans session
+utilisateur : l'affichage de manège TV et la source navigateur OBS, tous deux en
+1920 × 1080 et filtrés sur l'arène du bloc. Le robot vérifie le cavalier en piste,
+le premier score, le `No score`, le `Scratch` et l'état final du bloc. Un marqueur
+navigateur prouve que les mises à jour temps réel arrivent sans rechargement de
+page. Il vérifie aussi que le fond racine de la source OBS est transparent et
+joint au rapport Playwright des captures TV et OBS à chaque étape importante.
+Cette couverture valide les pages qui alimentent les appareils; elle ne prétend
+pas tester le panneau TV physique, le logiciel OBS installé ni l'encodage vidéo
+de l'ordinateur de diffusion.
+
 ## Garde-fous
 
 Une exécution avec écriture est refusée sauf si toutes ces conditions sont vraies :
