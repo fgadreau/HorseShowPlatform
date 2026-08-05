@@ -35,16 +35,23 @@ journée contenant la classe avant de poursuivre le parcours. Dans la gestion
 du show, il confirme aussi que la barre compacte de la journée active conserve
 les actions `Modifier` et `Supprimer`.
 
-Le même parcours garde deux écrans publics ShowScore ouverts sans session
-utilisateur : l'affichage de manège TV et la source navigateur OBS, tous deux en
-1920 × 1080 et filtrés sur l'arène du bloc. Le robot vérifie le cavalier en piste,
-le premier score, le `No score`, le `Scratch` et l'état final du bloc. Un marqueur
-navigateur prouve que les mises à jour temps réel arrivent sans rechargement de
-page. Il vérifie aussi que le fond racine de la source OBS est transparent et
-joint au rapport Playwright des captures TV et OBS à chaque étape importante.
-Cette couverture valide les pages qui alimentent les appareils; elle ne prétend
-pas tester le panneau TV physique, le logiciel OBS installé ni l'encodage vidéo
-de l'ordinateur de diffusion.
+Le même parcours garde cinq écrans publics ShowScore ouverts sans session
+utilisateur : TV générale, TV filtrée sur l'arène du bloc, TV du manège principal
+en mode compétition, TV livestream et source navigateur OBS. Le robot configure
+et téléverse un petit MP4 réel pour le manège principal, vérifie sa lecture, puis
+nettoie aussi ce média jetable. Il ouvre les trois vues TV principales par leurs
+codes courts afin de vérifier les redirections publiques.
+
+Tous les écrans sont validés en 1920 × 1080. Les TV générale, d'arène et de
+compétition doivent afficher le cavalier en piste, le premier score, le `No score`,
+le `Scratch` et l'état final du bloc. La TV livestream doit afficher son état
+d'attente programmé; un vrai différé YouTube de cinq minutes nécessite un direct
+externe avec DVR et demeure donc hors du jeu jetable. Un marqueur navigateur
+prouve que les mises à jour arrivent sans rechargement de page. Le robot vérifie
+aussi que le fond racine OBS est transparent et joint des captures de chaque vue
+au rapport Playwright. Cette couverture valide les pages qui alimentent les
+appareils; elle ne prétend pas tester les panneaux TV physiques, le logiciel OBS
+installé ni l'encodage vidéo de l'ordinateur de diffusion.
 
 ## Garde-fous
 
