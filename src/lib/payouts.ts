@@ -13,7 +13,6 @@ import type {
   PayoutScheduleType,
   Show,
 } from "../types/domain";
-import { AQR_AUDIT_IMPORT_SOURCE } from "./aqrAuditImport";
 
 type PayoutRuleBracket = {
   max_entries?: number | string | null;
@@ -32,7 +31,6 @@ export type PayoutCalculationDraft = Pick<
   PayoutCalculation,
   | "show_id"
   | "class_id"
-  | "import_batch_id"
   | "status"
   | "currency"
   | "entry_count"
@@ -166,7 +164,6 @@ export function buildPayoutDraft({
 }: BuildPayoutDraftInput): BuiltPayoutDraft {
   const classEntries = entries.filter((entry) => entry.class_id === classRecord.id);
   const financialEntries = classEntries.filter((entry) => entry.status === "active" || entry.status === "completed");
-  const importBatchId = resolvePayoutImportBatchId(financialEntries);
   const entryCount = financialEntries.length;
   const scheduleType = classRecord.payout_schedule_type ?? "none";
   const hasPayout = scheduleType !== "none";
@@ -220,7 +217,6 @@ export function buildPayoutDraft({
     calculation: {
       show_id: classRecord.show_id,
       class_id: classRecord.id,
-      import_batch_id: importBatchId,
       status: "draft",
       currency: show?.default_currency ?? organization?.currency ?? "CAD",
       entry_count: entryCount,
@@ -239,25 +235,6 @@ export function buildPayoutDraft({
     },
     percentages,
   };
-}
-
-function resolvePayoutImportBatchId(entries: Entry[]) {
-  if (!entries.length) {
-    return null;
-  }
-
-  const batchIds = [
-    ...new Set(
-      entries
-        .filter((entry) => entry.import_source === AQR_AUDIT_IMPORT_SOURCE)
-        .map((entry) => entry.import_batch_id)
-        .filter((batchId): batchId is string => Boolean(batchId)),
-    ),
-  ];
-
-  return batchIds.length === 1 && entries.every((entry) => entry.import_source === AQR_AUDIT_IMPORT_SOURCE && entry.import_batch_id === batchIds[0])
-    ? batchIds[0]
-    : null;
 }
 
 export function payoutDraftMatchesCalculation(draft: BuiltPayoutDraft, calculation: PayoutCalculation | null | undefined) {

@@ -1005,7 +1005,6 @@ export type PayoutCalculation = {
   id: string;
   show_id: string;
   class_id: string;
-  import_batch_id: string | null;
   status: PayoutCalculationStatus;
   currency: string;
   entry_count: number;
@@ -1286,10 +1285,6 @@ export type Entry = {
   show_id: string;
   horse_id: string;
   class_id: string;
-  import_source: string | null;
-  import_batch_id: string | null;
-  external_source_key: string | null;
-  source_payload: Record<string, unknown>;
   created_by_user_id: string;
   owner_contact_id: string;
   rider_contact_id: string | null;
@@ -1302,19 +1297,6 @@ export type Entry = {
   late_fee_percent: number;
   late_fee_amount: number;
   created_at: string;
-};
-
-export type EntryImportBatch = {
-  id: string;
-  organization_id: string;
-  show_id: string;
-  source: string;
-  status: "created" | "cleaned" | "failed";
-  created_by_user_id: string | null;
-  summary: Record<string, unknown>;
-  source_run_snapshots: Record<string, unknown>;
-  created_at: string;
-  cleaned_at: string | null;
 };
 
 export type StallOption = {
