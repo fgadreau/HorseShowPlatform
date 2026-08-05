@@ -1,4 +1,13 @@
-import { expect, test, type BrowserContext, type Dialog, type Locator, type Page } from "@playwright/test";
+import {
+  expect,
+  test,
+  type Browser,
+  type BrowserContext,
+  type Dialog,
+  type Locator,
+  type Page,
+  type TestInfo,
+} from "@playwright/test";
 import { createE2EAdminClient } from "./support/admin";
 import {
   FULL_CLASS_CONFIG,
@@ -19,7 +28,20 @@ type AnnouncerOutcome =
   | { score: number; status: "scored" }
   | { score: null; status: "no_score" | "scratch" };
 
-test("le méga robot complète un vrai parcours de préproduction", async ({ browser, page }) => {
+type DisplayRun = {
+  backNumber: string;
+  horse: string;
+  rider: string;
+};
+
+type PublicDisplays = {
+  context: BrowserContext;
+  overlayPage: Page;
+  sentinel: string;
+  tvPage: Page;
+};
+
+test("le méga robot complète un vrai parcours de préproduction", async ({ browser, page }, testInfo) => {
   test.slow();
   const state = readRunState();
   const participantCount = scenarioSize();
@@ -34,8 +56,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   const blockName = `[E2E] Bloc annonceur — ${state.runId}`;
   let crossAppFixture: CrossAppFixture | null = null;
   let championshipParticipantNames: string[] = [];
+  let displayRuns: DisplayRun[] = [];
   const browserErrors: string[] = [];
   let showScoreContext: BrowserContext | null = null;
+  let publicDisplays: PublicDisplays | null = null;
   page.on("pageerror", (error) => browserErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") browserErrors.push(message.text());
@@ -214,6 +238,13 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     expect(setup.is_draw_imported).toBe(true);
     expect(setup.runs).toHaveLength(participantCount);
     expect(setup.block_classes).toEqual(expect.arrayContaining([expect.objectContaining({ code: FULL_CLASS_CONFIG.classCode })]));
+    displayRuns = setup.runs.map((run) => ({
+      backNumber: String(run.backNumber ?? run.back_number ?? "").trim(),
+      horse: String(run.horse ?? "").trim(),
+      rider: String(run.rider ?? "").trim(),
+    }));
+    expect(displayRuns).toHaveLength(participantCount);
+    expect(displayRuns.every((run) => run.rider && run.horse && run.backNumber)).toBe(true);
     championshipParticipantNames = setup.runs
       .slice(0, rankedTeamCount)
       .map((run) => String(run.rider ?? "").trim());
@@ -315,6 +346,17 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       };
     }).toEqual({ source: "announcer", runCount: participantCount });
 
+    publicDisplays = await openPublicDisplays({
+      browser,
+      browserErrors,
+      showScoreUrl: config.showScoreUrl,
+      showScoreVercelProtectionBypass: config.showScoreVercelProtectionBypass,
+      organizationId: state.organizationId,
+      showId: crossAppFixture.showId,
+      showName: state.showName,
+    });
+    await attachPublicDisplayScreenshots(testInfo, publicDisplays, "avant-le-premier-passage");
+
     for (const managementView of ["scribe", "schedule", "time"]) {
       await showScorePage.goto(
         `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}/${managementView}?day=${crossAppFixture.showDayId}`,
@@ -336,7 +378,16 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     for (const [index, outcome] of announcerOutcomes.entries()) {
       await test.step(`résultat annonceur ${index + 1}/${participantCount}: ${outcome.status}${outcome.score == null ? "" : ` ${outcome.score}`}`, async () => {
         if (outcome.status === "scored") {
-          await scoreNextAnnouncerRun(showScorePage, String(outcome.score).replace(".", ","));
+          await scoreNextAnnouncerRun(
+            showScorePage,
+            String(outcome.score).replace(".", ","),
+            index === 0
+              ? async () => {
+                  await assertPublicDisplayRun(publicDisplays!, displayRuns[index]);
+                  await attachPublicDisplayScreenshots(testInfo, publicDisplays!, "cavalier-en-piste");
+                }
+              : undefined,
+          );
         } else {
           await completeNextAnnouncerRunWithStatus(showScorePage, outcome.status);
         }
@@ -349,6 +400,16 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
           if (error) throw error;
           return data.runs.filter((run) => ["scored", "no_score", "scratch"].includes(String(run.status))).length;
         }).toBe(index + 1);
+        if (index === 0) {
+          await assertPublicDisplayResult(publicDisplays!, displayRuns[index], String(outcome.score));
+          await attachPublicDisplayScreenshots(testInfo, publicDisplays!, "premier-score");
+        } else if (outcome.status === "no_score") {
+          await assertPublicDisplayResult(publicDisplays!, displayRuns[index], "NS");
+          await attachPublicDisplayScreenshots(testInfo, publicDisplays!, "no-score");
+        } else if (outcome.status === "scratch") {
+          await assertPublicDisplayResult(publicDisplays!, displayRuns[index], "SCR");
+          await attachPublicDisplayScreenshots(testInfo, publicDisplays!, "scratch");
+        }
       });
     }
     const completeBlock = showScorePage.getByRole("button", { name: "Marquer le bloc terminé", exact: true });
@@ -374,6 +435,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
           .sort(compareOutcomes),
       };
     }).toEqual({ completed: true, outcomes: [...announcerOutcomes].sort(compareOutcomes) });
+
+    await assertPublicDisplaysRemainOpen(publicDisplays);
+    await attachPublicDisplayScreenshots(testInfo, publicDisplays, "bloc-termine");
   });
 
   await test.step("approbation, publication et retour automatique des résultats dans HSP", async () => {
@@ -520,6 +584,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     }
   });
 
+  await publicDisplays?.context.close();
   await showScoreContext?.close();
 
   expect(browserErrors, `Erreurs JavaScript du navigateur:\n${browserErrors.join("\n")}`).toEqual([]);
@@ -535,16 +600,140 @@ async function selectSearchOption(locator: Locator, value: string) {
   await locator.press("Enter");
 }
 
-async function scoreNextAnnouncerRun(page: Page, score: string) {
+async function scoreNextAnnouncerRun(page: Page, score: string, onRunStarted?: () => Promise<void>) {
   const enterResult = page.getByRole("button", { name: "Entrer le résultat", exact: true });
   if (!(await enterResult.isVisible())) {
     await page.getByRole("button", { name: "Démarrer prochain", exact: true }).click();
+    await expect(enterResult).toBeVisible();
   }
+  await onRunStarted?.();
   await enterResult.click();
   const scoreInput = page.getByLabel("Juge E2E", { exact: true });
   await scoreInput.fill(score);
   await page.getByRole("button", { name: "Enregistrer le score", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
+}
+
+async function openPublicDisplays({
+  browser,
+  browserErrors,
+  showScoreUrl,
+  showScoreVercelProtectionBypass,
+  organizationId,
+  showId,
+  showName,
+}: {
+  browser: Browser;
+  browserErrors: string[];
+  showScoreUrl: string;
+  showScoreVercelProtectionBypass: string;
+  organizationId: string;
+  showId: string;
+  showName: string;
+}): Promise<PublicDisplays> {
+  const context = await browser.newContext({
+    extraHTTPHeaders: showScoreVercelProtectionBypass
+      ? {
+          "x-vercel-protection-bypass": showScoreVercelProtectionBypass,
+          "x-vercel-set-bypass-cookie": "true",
+        }
+      : undefined,
+    locale: "fr-CA",
+    timezoneId: "America/Toronto",
+    viewport: { width: 1920, height: 1080 },
+  });
+  await context.addInitScript(() => localStorage.setItem("showscore.language", "fr"));
+  const [tvPage, overlayPage] = await Promise.all([context.newPage(), context.newPage()]);
+  observePublicDisplayErrors(tvPage, "TV", browserErrors);
+  observePublicDisplayErrors(overlayPage, "OBS", browserErrors);
+
+  const arena = new URLSearchParams({ arena: "Arène E2E" }).toString();
+  const publicPath = `/public/associations/${organizationId}/shows/${showId}`;
+  await Promise.all([
+    tvPage.goto(`${showScoreUrl}${publicPath}/tv?${arena}`),
+    overlayPage.goto(`${showScoreUrl}${publicPath}/overlay?${arena}`),
+  ]);
+
+  await expect(tvPage).toHaveURL(new RegExp(`${publicPath}/tv\\?`));
+  await expect(overlayPage).toHaveURL(new RegExp(`${publicPath}/overlay\\?`));
+  await expect(tvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(overlayPage.locator("[data-overlay-layout]")).toBeVisible();
+  await expect(overlayPage.locator("[data-overlay-bottom-bar]")).toBeVisible();
+  await expect(tvPage.locator("body")).toContainText(showName);
+  await expect(overlayPage.locator("body")).toContainText(showName);
+
+  for (const displayPage of [tvPage, overlayPage]) {
+    expect(await displayPage.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth }))).toEqual({
+      height: 1080,
+      width: 1920,
+    });
+    expect(displayPage.url()).not.toContain("/login");
+    expect(
+      await displayPage.evaluate(() =>
+        Object.keys(localStorage).filter((key) => /^sb-.*-auth-token$/i.test(key)),
+      ),
+    ).toEqual([]);
+  }
+
+  expect(
+    await overlayPage.locator("[data-overlay-layout]").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { backgroundColor: style.backgroundColor, backgroundImage: style.backgroundImage };
+    }),
+  ).toEqual({ backgroundColor: "rgba(0, 0, 0, 0)", backgroundImage: "none" });
+
+  const sentinel = crypto.randomUUID();
+  await Promise.all([
+    tvPage.evaluate((value) => Reflect.set(window, "__e2ePublicDisplaySentinel", value), sentinel),
+    overlayPage.evaluate((value) => Reflect.set(window, "__e2ePublicDisplaySentinel", value), sentinel),
+  ]);
+
+  return { context, overlayPage, sentinel, tvPage };
+}
+
+function observePublicDisplayErrors(page: Page, display: "OBS" | "TV", browserErrors: string[]) {
+  page.on("pageerror", (error) => browserErrors.push(`ShowScore ${display}: ${error.message}`));
+  page.on("console", (message) => {
+    if (message.type() === "error") browserErrors.push(`ShowScore ${display}: ${message.text()}`);
+  });
+}
+
+async function assertPublicDisplayRun(displays: PublicDisplays, run: DisplayRun) {
+  await Promise.all([
+    expect(displays.tvPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+    expect(displays.tvPage.locator("body")).toContainText(run.horse, { timeout: 35_000 }),
+    expect(displays.overlayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+    expect(displays.overlayPage.locator("body")).toContainText(run.horse, { timeout: 35_000 }),
+  ]);
+  await assertPublicDisplaysRemainOpen(displays);
+}
+
+async function assertPublicDisplayResult(displays: PublicDisplays, run: DisplayRun, result: string) {
+  await Promise.all([
+    expect(displays.tvPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+    expect(displays.tvPage.locator("body")).toContainText(result, { timeout: 35_000 }),
+    expect(displays.overlayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+    expect(displays.overlayPage.locator("body")).toContainText(result, { timeout: 35_000 }),
+  ]);
+  await assertPublicDisplaysRemainOpen(displays);
+}
+
+async function assertPublicDisplaysRemainOpen(displays: PublicDisplays) {
+  await expect(displays.tvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(displays.overlayPage.locator("[data-overlay-layout]")).toBeVisible();
+  expect(await displays.tvPage.evaluate(() => Reflect.get(window, "__e2ePublicDisplaySentinel"))).toBe(displays.sentinel);
+  expect(await displays.overlayPage.evaluate(() => Reflect.get(window, "__e2ePublicDisplaySentinel"))).toBe(displays.sentinel);
+}
+
+async function attachPublicDisplayScreenshots(testInfo: TestInfo, displays: PublicDisplays, label: string) {
+  const [tvScreenshot, overlayScreenshot] = await Promise.all([
+    displays.tvPage.screenshot(),
+    displays.overlayPage.screenshot({ omitBackground: true }),
+  ]);
+  await Promise.all([
+    testInfo.attach(`TV 1920x1080 — ${label}`, { body: tvScreenshot, contentType: "image/png" }),
+    testInfo.attach(`OBS transparent 1920x1080 — ${label}`, { body: overlayScreenshot, contentType: "image/png" }),
+  ]);
 }
 
 async function completeNextAnnouncerRunWithStatus(page: Page, status: "no_score" | "scratch") {
