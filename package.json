@@ -12,6 +12,7 @@
     "test:identity": "tsc -p tsconfig.identity-test.json && cp scripts/draw-test-package.json .tmp/identity-tests/package.json && node .tmp/identity-tests/scripts/identity-comparison-test.js",
     "test:governing": "tsc -p tsconfig.governing-test.json && cp scripts/draw-test-package.json .tmp/governing-tests/package.json && node .tmp/governing-tests/scripts/governing-bodies-test.js",
     "test:eligibility": "tsc -p tsconfig.eligibility-test.json && cp scripts/draw-test-package.json .tmp/eligibility-tests/package.json && node .tmp/eligibility-tests/scripts/eligibility-engine-test.js",
+    "test:promotion": "node scripts/verify-production-migrations.mjs origin/main HEAD",
     "test:e2e": "playwright test",
     "test:e2e:local": "node scripts/run-e2e-local.mjs",
     "test:e2e:local:mega": "E2E_MODE=mega node scripts/run-e2e-local.mjs",
