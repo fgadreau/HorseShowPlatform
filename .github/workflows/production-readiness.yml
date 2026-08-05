@@ -53,21 +53,25 @@ jobs:
   production-migration-dry-run:
     needs: mega-preprod
     runs-on: ubuntu-latest
-    environment: Production
+    environment: production-readiness
     env:
-      PRODUCTION_DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
     steps:
       - name: Confirm the non-writing production check
         env:
           CONFIRMATION: ${{ inputs.confirmation }}
         run: test "$CONFIRMATION" = "DRY-RUN PROD"
       - name: Require the protected production connection
-        run: test -n "$PRODUCTION_DATABASE_URL"
+        run: test -n "$DATABASE_URL"
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Confirm the production project without printing credentials
+        run: node scripts/assert-database-target.mjs production
       - name: Show the production migration plan without applying it
-        run: npx supabase db push --dry-run --db-url "$PRODUCTION_DATABASE_URL"
+        run: npx supabase db push --dry-run --db-url "$DATABASE_URL"
