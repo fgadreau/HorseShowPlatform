@@ -35,11 +35,25 @@ type DisplayRun = {
 };
 
 type PublicDisplays = {
+  arenaTvPage: Page;
+  competitionTvPage: Page;
   context: BrowserContext;
+  generalTvPage: Page;
+  livestreamTvPage: Page;
   overlayPage: Page;
   sentinel: string;
-  tvPage: Page;
 };
+
+type TvDisplayCodes = {
+  competition: string;
+  general: string;
+  livestream: string;
+};
+
+// One valid 8 × 8 H.264 frame. Keeping the fixture inline lets CI exercise the
+// real resumable upload and browser playback without a third-party video URL.
+const TINY_MP4_BASE64 =
+  "AAAAIGZ0eXBpc29tAAACAGlzb21pc28yYXZjMW1wNDEAAAAIZnJlZQAAAr9tZGF0AAACoAYF//+c3EXpvebZSLeWLNgg2SPu73gyNjQgLSBjb3JlIDEyNSAtIEguMjY0L01QRUctNCBBVkMgY29kZWMgLSBDb3B5bGVmdCAyMDAzLTIwMTIgLSBodHRwOi8vd3d3LnZpZGVvbGFuLm9yZy94MjY0Lmh0bWwgLSBvcHRpb25zOiBjYWJhYz0xIHJlZj0zIGRlYmxvY2s9MTowOjAgYW5hbHlzZT0weDM6MHgxMTMgbWU9aGV4IHN1Ym1lPTcgcHN5PTEgcHN5X3JkPTEuMDA6MC4wMCBtaXhlZF9yZWY9MSBtZV9yYW5nZT0xNiBjaHJvbWFfbWU9MSB0cmVsbGlzPTEgOHg4ZGN0PTEgY3FtPTAgZGVhZHpvbmU9MjEsMTEgZmFzdF9wc2tpcD0xIGNocm9tYV9xcF9vZmZzZXQ9LTIgdGhyZWFkcz02IGxvb2thaGVhZF90aHJlYWRzPTEgc2xpY2VkX3RocmVhZHM9MCBucj0wIGRlY2ltYXRlPTEgaW50ZXJsYWNlZD0wIGJsdXJheV9jb21wYXQ9MCBjb25zdHJhaW5lZF9pbnRyYT0wIGJmcmFtZXM9MyBiX3B5cmFtaWQ9MiBiX2FkYXB0PTEgYl9iaWFzPTAgZGlyZWN0PTEgd2VpZ2h0Yj0xIG9wZW5fZ29wPTAgd2VpZ2h0cD0yIGtleWludD0yNTAga2V5aW50X21pbj0yNCBzY2VuZWN1dD00MCBpbnRyYV9yZWZyZXNoPTAgcmNfbG9va2FoZWFkPTQwIHJjPWNyZiBtYnRyZWU9MSBjcmY9MjMuMCBxY29tcD0wLjYwIHFwbWluPTAgcXBtYXg9NjkgcXBzdGVwPTQgaXBfcmF0aW89MS40MCBhcT0xOjEuMDAAgAAAAA9liIQAV/0TAAYdeBTXzg8AAALvbW9vdgAAAGxtdmhkAAAAAAAAAAAAAAAAAAAD6AAAACoAAQAAAQAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgAAAhl0cmFrAAAAXHRraGQAAAAPAAAAAAAAAAAAAAABAAAAAAAAACoAAAAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAAAAABAAAAAAAgAAAAIAAAAAAAkZWR0cwAAABxlbHN0AAAAAAAAAAEAAAAqAAAAAAABAAAAAAGRbWRpYQAAACBtZGhkAAAAAAAAAAAAAAAAAAAwAAAAAgBVxAAAAAAALWhkbHIAAAAAAAAAAHZpZGUAAAAAAAAAAAAAAABWaWRlb0hhbmRsZXIAAAABPG1pbmYAAAAUdm1oZAAAAAEAAAAAAAAAAAAAACRkaW5mAAAAHGRyZWYAAAAAAAAAAQAAAAx1cmwgAAAAAQAAAPxzdGJsAAAAmHN0c2QAAAAAAAAAAQAAAIhhdmMxAAAAAAAAAAEAAAAAAAAAAAAAAAAAAAAAAAgACABIAAAASAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAGP//AAAAMmF2Y0MBZAAK/+EAGWdkAAqs2V+WXAWyAAADAAIAAAMAYB4kSywBAAZo6+PLIsAAAAAYc3R0cwAAAAAAAAABAAAAAQAAAgAAAAAcc3RzYwAAAAAAAAABAAAAAQAAAAEAAAABAAAAFHN0c3oAAAAAAAACtwAAAAEAAAAUc3RjbwAAAAAAAAABAAAAMAAAAGJ1ZHRhAAAAWm1ldGEAAAAAAAAAIWhkbHIAAAAAAAAAAG1kaXJhcHBsAAAAAAAAAAAAAAAALWlsc3QAAAAlqXRvbwAAAB1kYXRhAAAAAQAAAABMYXZmNTQuNjMuMTA0";
 
 test("le méga robot complète un vrai parcours de préproduction", async ({ browser, page }, testInfo) => {
   test.slow();
@@ -57,6 +71,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   let crossAppFixture: CrossAppFixture | null = null;
   let championshipParticipantNames: string[] = [];
   let displayRuns: DisplayRun[] = [];
+  let tvDisplayCodes: TvDisplayCodes | null = null;
   const browserErrors: string[] = [];
   let showScoreContext: BrowserContext | null = null;
   let publicDisplays: PublicDisplays | null = null;
@@ -307,6 +322,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     );
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
+    tvDisplayCodes = await configureShowScoreTvViews(showScorePage);
     const setupLink = showScorePage.locator(
       `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
     );
@@ -355,6 +371,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       organizationId: state.organizationId,
       showId: crossAppFixture.showId,
       showName: state.showName,
+      tvDisplayCodes,
     });
     await attachPublicDisplayScreenshots(testInfo, publicDisplays, "avant-le-premier-passage");
 
@@ -623,6 +640,7 @@ async function openPublicDisplays({
   organizationId,
   showId,
   showName,
+  tvDisplayCodes,
 }: {
   browser: Browser;
   browserErrors: string[];
@@ -631,6 +649,7 @@ async function openPublicDisplays({
   organizationId: string;
   showId: string;
   showName: string;
+  tvDisplayCodes: TvDisplayCodes;
 }): Promise<PublicDisplays> {
   const context = await browser.newContext({
     extraHTTPHeaders: showScoreVercelProtectionBypass
@@ -644,26 +663,58 @@ async function openPublicDisplays({
     viewport: { width: 1920, height: 1080 },
   });
   await context.addInitScript(() => localStorage.setItem("showscore.language", "fr"));
-  const [tvPage, overlayPage] = await Promise.all([context.newPage(), context.newPage()]);
-  observePublicDisplayErrors(tvPage, "TV", browserErrors);
+  const [generalTvPage, arenaTvPage, competitionTvPage, livestreamTvPage, overlayPage] = await Promise.all([
+    context.newPage(),
+    context.newPage(),
+    context.newPage(),
+    context.newPage(),
+    context.newPage(),
+  ]);
+  observePublicDisplayErrors(generalTvPage, "TV générale", browserErrors);
+  observePublicDisplayErrors(arenaTvPage, "TV manège", browserErrors);
+  observePublicDisplayErrors(competitionTvPage, "TV compétition", browserErrors);
+  observePublicDisplayErrors(livestreamTvPage, "TV livestream", browserErrors);
   observePublicDisplayErrors(overlayPage, "OBS", browserErrors);
 
   const arena = new URLSearchParams({ arena: "Arène E2E" }).toString();
   const publicPath = `/public/associations/${organizationId}/shows/${showId}`;
   await Promise.all([
-    tvPage.goto(`${showScoreUrl}${publicPath}/tv?${arena}`),
+    generalTvPage.goto(`${showScoreUrl}/tv/${tvDisplayCodes.general}`),
+    arenaTvPage.goto(`${showScoreUrl}${publicPath}/tv?${arena}`),
+    competitionTvPage.goto(`${showScoreUrl}/tv/${tvDisplayCodes.competition}`),
+    livestreamTvPage.goto(`${showScoreUrl}/tv/${tvDisplayCodes.livestream}`),
     overlayPage.goto(`${showScoreUrl}${publicPath}/overlay?${arena}`),
   ]);
 
-  await expect(tvPage).toHaveURL(new RegExp(`${publicPath}/tv\\?`));
+  await expect(generalTvPage).toHaveURL(new RegExp(`${publicPath}/tv$`));
+  await expect(arenaTvPage).toHaveURL(new RegExp(`${publicPath}/tv\\?`));
+  await expect(competitionTvPage).toHaveURL(new RegExp(`${publicPath}/tv\\?`));
+  await expect(livestreamTvPage).toHaveURL(new RegExp(`${publicPath}/livestream/tv$`));
   await expect(overlayPage).toHaveURL(new RegExp(`${publicPath}/overlay\\?`));
-  await expect(tvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  expect(new URL(arenaTvPage.url()).searchParams.get("arena")).toBe("Arène E2E");
+  expect(new URL(competitionTvPage.url()).searchParams.get("mode")).toBe("competition");
+  expect(new URL(competitionTvPage.url()).searchParams.get("arena")).toBe("Arène E2E");
+  await expect(generalTvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(arenaTvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(competitionTvPage.locator('[data-tv-display-mode="competition-video"]')).toBeVisible();
+  await expect(competitionTvPage.locator('[data-tv-layout="competition-video"]')).toBeVisible();
+  await expect(livestreamTvPage.locator("[data-livestream-tv-page]")).toBeVisible();
+  await expect(livestreamTvPage.locator("[data-livestream-tv-waiting]")).toBeVisible();
   await expect(overlayPage.locator("[data-overlay-layout]")).toBeVisible();
   await expect(overlayPage.locator("[data-overlay-bottom-bar]")).toBeVisible();
-  await expect(tvPage.locator("body")).toContainText(showName);
-  await expect(overlayPage.locator("body")).toContainText(showName);
+  for (const displayPage of [generalTvPage, arenaTvPage, competitionTvPage, livestreamTvPage, overlayPage]) {
+    await expect(displayPage.locator("body")).toContainText(showName);
+  }
 
-  for (const displayPage of [tvPage, overlayPage]) {
+  const competitionVideo = competitionTvPage.locator("[data-tv-competition-video]");
+  await expect(competitionVideo).toHaveAttribute("src", /tv-display-media/);
+  await expect.poll(
+    () => competitionVideo.evaluate((video: HTMLVideoElement) => video.readyState),
+    { timeout: 35_000 },
+  ).toBeGreaterThanOrEqual(2);
+  expect(await competitionVideo.evaluate((video: HTMLVideoElement) => video.error?.code ?? null)).toBeNull();
+
+  for (const displayPage of [generalTvPage, arenaTvPage, competitionTvPage, livestreamTvPage, overlayPage]) {
     expect(await displayPage.evaluate(() => ({ height: window.innerHeight, width: window.innerWidth }))).toEqual({
       height: 1080,
       width: 1920,
@@ -684,15 +735,16 @@ async function openPublicDisplays({
   ).toEqual({ backgroundColor: "rgba(0, 0, 0, 0)", backgroundImage: "none" });
 
   const sentinel = crypto.randomUUID();
-  await Promise.all([
-    tvPage.evaluate((value) => Reflect.set(window, "__e2ePublicDisplaySentinel", value), sentinel),
-    overlayPage.evaluate((value) => Reflect.set(window, "__e2ePublicDisplaySentinel", value), sentinel),
-  ]);
+  await Promise.all(
+    [generalTvPage, arenaTvPage, competitionTvPage, livestreamTvPage, overlayPage].map((displayPage) =>
+      displayPage.evaluate((value) => Reflect.set(window, "__e2ePublicDisplaySentinel", value), sentinel),
+    ),
+  );
 
-  return { context, overlayPage, sentinel, tvPage };
+  return { arenaTvPage, competitionTvPage, context, generalTvPage, livestreamTvPage, overlayPage, sentinel };
 }
 
-function observePublicDisplayErrors(page: Page, display: "OBS" | "TV", browserErrors: string[]) {
+function observePublicDisplayErrors(page: Page, display: string, browserErrors: string[]) {
   page.on("pageerror", (error) => browserErrors.push(`ShowScore ${display}: ${error.message}`));
   page.on("console", (message) => {
     if (message.type() === "error") browserErrors.push(`ShowScore ${display}: ${message.text()}`);
@@ -701,8 +753,10 @@ function observePublicDisplayErrors(page: Page, display: "OBS" | "TV", browserEr
 
 async function assertPublicDisplayRun(displays: PublicDisplays, run: DisplayRun) {
   await Promise.all([
-    expect(displays.tvPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
-    expect(displays.tvPage.locator("body")).toContainText(run.horse, { timeout: 35_000 }),
+    ...liveTvPages(displays).flatMap((displayPage) => [
+      expect(displayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+      expect(displayPage.locator("body")).toContainText(run.horse, { timeout: 35_000 }),
+    ]),
     expect(displays.overlayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
     expect(displays.overlayPage.locator("body")).toContainText(run.horse, { timeout: 35_000 }),
   ]);
@@ -711,8 +765,10 @@ async function assertPublicDisplayRun(displays: PublicDisplays, run: DisplayRun)
 
 async function assertPublicDisplayResult(displays: PublicDisplays, run: DisplayRun, result: string) {
   await Promise.all([
-    expect(displays.tvPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
-    expect(displays.tvPage.locator("body")).toContainText(result, { timeout: 35_000 }),
+    ...liveTvPages(displays).flatMap((displayPage) => [
+      expect(displayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
+      expect(displayPage.locator("body")).toContainText(result, { timeout: 35_000 }),
+    ]),
     expect(displays.overlayPage.locator("body")).toContainText(run.rider, { timeout: 35_000 }),
     expect(displays.overlayPage.locator("body")).toContainText(result, { timeout: 35_000 }),
   ]);
@@ -720,21 +776,86 @@ async function assertPublicDisplayResult(displays: PublicDisplays, run: DisplayR
 }
 
 async function assertPublicDisplaysRemainOpen(displays: PublicDisplays) {
-  await expect(displays.tvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(displays.generalTvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(displays.arenaTvPage.locator("[data-tv-display-mode]")).toBeVisible();
+  await expect(displays.competitionTvPage.locator('[data-tv-display-mode="competition-video"]')).toBeVisible();
+  await expect(displays.livestreamTvPage.locator("[data-livestream-tv-page]")).toBeVisible();
   await expect(displays.overlayPage.locator("[data-overlay-layout]")).toBeVisible();
-  expect(await displays.tvPage.evaluate(() => Reflect.get(window, "__e2ePublicDisplaySentinel"))).toBe(displays.sentinel);
-  expect(await displays.overlayPage.evaluate(() => Reflect.get(window, "__e2ePublicDisplaySentinel"))).toBe(displays.sentinel);
+  for (const displayPage of allPublicDisplayPages(displays)) {
+    expect(await displayPage.evaluate(() => Reflect.get(window, "__e2ePublicDisplaySentinel"))).toBe(displays.sentinel);
+  }
 }
 
 async function attachPublicDisplayScreenshots(testInfo: TestInfo, displays: PublicDisplays, label: string) {
-  const [tvScreenshot, overlayScreenshot] = await Promise.all([
-    displays.tvPage.screenshot(),
+  const [generalTv, arenaTv, competitionTv, livestreamTv, overlayScreenshot] = await Promise.all([
+    displays.generalTvPage.screenshot(),
+    displays.arenaTvPage.screenshot(),
+    displays.competitionTvPage.screenshot(),
+    displays.livestreamTvPage.screenshot(),
     displays.overlayPage.screenshot({ omitBackground: true }),
   ]);
   await Promise.all([
-    testInfo.attach(`TV 1920x1080 — ${label}`, { body: tvScreenshot, contentType: "image/png" }),
+    testInfo.attach(`TV générale 1920x1080 — ${label}`, { body: generalTv, contentType: "image/png" }),
+    testInfo.attach(`TV manège 1920x1080 — ${label}`, { body: arenaTv, contentType: "image/png" }),
+    testInfo.attach(`TV compétition 1920x1080 — ${label}`, { body: competitionTv, contentType: "image/png" }),
+    testInfo.attach(`TV livestream 1920x1080 — ${label}`, { body: livestreamTv, contentType: "image/png" }),
     testInfo.attach(`OBS transparent 1920x1080 — ${label}`, { body: overlayScreenshot, contentType: "image/png" }),
   ]);
+}
+
+function liveTvPages(displays: PublicDisplays) {
+  return [displays.generalTvPage, displays.arenaTvPage, displays.competitionTvPage];
+}
+
+function allPublicDisplayPages(displays: PublicDisplays) {
+  return [...liveTvPages(displays), displays.livestreamTvPage, displays.overlayPage];
+}
+
+async function configureShowScoreTvViews(page: Page): Promise<TvDisplayCodes> {
+  await page.getByRole("button", { name: "Réglages Live / Vue en direct", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+
+  const livestreamPublic = dialog.getByRole("checkbox", {
+    name: "Publier la page Livestream du show",
+    exact: true,
+  });
+  if (!(await livestreamPublic.isChecked())) await livestreamPublic.check();
+  await dialog.locator('input[aria-label^="Lien du livestream pour le"]').first().fill(
+    "https://www.youtube.com/watch?v=jNQXAC9IVRw",
+  );
+
+  const competitionSettings = dialog.locator('[data-tv-settings="competition"]');
+  await competitionSettings.locator('input[type="text"]').fill("Arène E2E");
+  await competitionSettings.locator('input[type="file"]').setInputFiles({
+    name: "e2e-competition-arena.mp4",
+    mimeType: "video/mp4",
+    buffer: Buffer.from(TINY_MP4_BASE64, "base64"),
+  });
+  await expect(competitionSettings).toContainText("e2e-competition-arena.mp4");
+
+  await dialog.getByRole("button", { name: "Enregistrer", exact: true }).click();
+  await expect(competitionSettings).toContainText("Vidéo actuelle", { timeout: 60_000 });
+  await expect(competitionSettings).toContainText("e2e-competition-arena.mp4");
+
+  const codes = {
+    general: await readTvDisplayCode(dialog.locator("[data-tv-short-code]")),
+    competition: await readTvDisplayCode(dialog.locator("[data-tv-competition-short-code]")),
+    livestream: await readTvDisplayCode(dialog.locator("[data-tv-livestream-short-code]")),
+  };
+  await dialog.getByRole("button", { name: "Annuler", exact: true }).last().click();
+  await expect(dialog).toBeHidden();
+  return codes;
+}
+
+async function readTvDisplayCode(locator: Locator) {
+  await expect(locator).toBeVisible();
+  const code = String(await locator.getAttribute("data-tv-short-code")
+    ?? await locator.getAttribute("data-tv-competition-short-code")
+    ?? await locator.getAttribute("data-tv-livestream-short-code")
+    ?? "").trim();
+  expect(code).toMatch(/^[A-Z0-9]{6}$/);
+  return code;
 }
 
 async function completeNextAnnouncerRunWithStatus(page: Page, status: "no_score" | "scratch") {

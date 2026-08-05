@@ -13,6 +13,7 @@ export async function cleanupPreviousE2ERun() {
   let horseIds: string[] = [];
 
   if (organizationId) {
+    await cleanupTvDisplayVideos(admin, organizationId);
     const { data: directories, error: directoriesError } = await admin
       .from("organization_disciplines")
       .select("id")
@@ -55,6 +56,42 @@ export async function cleanupPreviousE2ERun() {
   const { error: userDeleteError } = await admin.auth.admin.deleteUser(state.userId);
   if (userDeleteError && !/not found/i.test(userDeleteError.message)) throw userDeleteError;
   fs.rmSync(E2E_STATE_PATH, { force: true });
+}
+
+async function cleanupTvDisplayVideos(admin: ReturnType<typeof createE2EAdminClient>, organizationId: string) {
+  const { data: shows, error: showsError } = await admin
+    .from("shows")
+    .select("tv_display_video_path")
+    .eq("organization_id", organizationId);
+  if (showsError) throw showsError;
+
+  const paths = new Set(
+    (shows ?? [])
+      .map((show) => String(show.tv_display_video_path ?? "").trim())
+      .filter((path) => path.startsWith(`${organizationId}/`)),
+  );
+  const bucket = admin.storage.from("tv-display-media");
+  const { data: showFolders, error: folderError } = await bucket.list(organizationId, { limit: 100 });
+  if (folderError) throw folderError;
+
+  for (const showFolder of showFolders ?? []) {
+    if (showFolder.id) {
+      paths.add(`${organizationId}/${showFolder.name}`);
+      continue;
+    }
+
+    const showPrefix = `${organizationId}/${showFolder.name}`;
+    const { data: mediaFiles, error: mediaError } = await bucket.list(showPrefix, { limit: 100 });
+    if (mediaError) throw mediaError;
+    for (const mediaFile of mediaFiles ?? []) {
+      if (mediaFile.id) paths.add(`${showPrefix}/${mediaFile.name}`);
+    }
+  }
+
+  if (!paths.size) return;
+
+  const { error } = await bucket.remove([...paths]);
+  if (error) throw error;
 }
 
 function assertDisposableState(state: ReturnType<typeof readRunState>) {
