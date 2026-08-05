@@ -1,0 +1,61 @@
+name: Production data rehearsal
+
+run-name: Data rehearsal on ${{ inputs.rehearsal_project_ref }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      rehearsal_project_ref:
+        description: Supabase ref of the private temporary production copy
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY TO REHEARSAL (never use the production ref)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  migrate-and-compare:
+    runs-on: ubuntu-latest
+    environment: production-readiness
+    env:
+      DATABASE_URL: ${{ secrets.REHEARSAL_DATABASE_URL }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ inputs.rehearsal_project_ref }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Require preprod and explicit rehearsal confirmation
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          test "$SOURCE_BRANCH" = "preprod"
+          test "$CONFIRMATION" = "APPLY TO REHEARSAL"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Refuse every production connection
+        run: node scripts/assert-database-target.mjs rehearsal
+      - name: Capture legacy data invariants
+        run: psql "$DATABASE_URL" --no-psqlrc --tuples-only --no-align --quiet --file scripts/production-rehearsal-snapshot.sql > rehearsal-before.json
+      - name: Apply migrations to the private rehearsal copy
+        run: npx supabase db push --db-url "$DATABASE_URL" --yes
+      - name: Capture canonical data invariants
+        run: psql "$DATABASE_URL" --no-psqlrc --tuples-only --no-align --quiet --file scripts/production-rehearsal-snapshot.sql > rehearsal-after.json
+      - name: Compare before and after
+        run: node scripts/compare-production-snapshots.mjs rehearsal-before.json rehearsal-after.json
+      - name: Upload rehearsal evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: production-data-rehearsal-${{ github.run_id }}
+          path: |
+            rehearsal-before.json
+            rehearsal-after.json
+          if-no-files-found: ignore
+          retention-days: 30
