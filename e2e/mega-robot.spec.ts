@@ -246,6 +246,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     expect(displayRuns).toHaveLength(participantCount);
     expect(displayRuns.every((run) => run.rider && run.horse && run.backNumber)).toBe(true);
     championshipParticipantNames = setup.runs
+      .filter((_, index) => announcerOutcomes[index]?.status === "scored")
       .slice(0, rankedTeamCount)
       .map((run) => String(run.rider ?? "").trim());
     expect(championshipParticipantNames).toHaveLength(rankedTeamCount);
