@@ -377,6 +377,10 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     });
     await attachPublicDisplayScreenshots(testInfo, publicDisplays, "avant-le-premier-passage");
 
+    await showScorePage.goto(
+      `${config.showScoreUrl}/associations/${state.organizationId}/shows/${crossAppFixture.showId}?day=${crossAppFixture.showDayId}`,
+    );
+    await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     warmupId = await configureShowScorePaidWarmup({
       page: showScorePage,
       organizationId: state.organizationId,
