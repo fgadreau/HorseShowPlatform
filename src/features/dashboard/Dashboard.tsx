@@ -122,7 +122,6 @@ import type {
   ClassRecord,
   EligibilityRules,
   Entry,
-  EntryImportBatch,
   ExternalCredentialIssuer,
   Horse,
   HorseContact,
@@ -229,8 +228,6 @@ export function Dashboard({
   onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
-  onSyncShowScoreDrawEntryImportBatch,
-  onCleanupShowScoreDrawEntryImportBatch,
   onSaveShowScorePaidWarmup,
   onDeleteShowScorePaidWarmup,
   onRefresh,
@@ -314,8 +311,6 @@ export function Dashboard({
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (block: Block) => Promise<void>;
-  onSyncShowScoreDrawEntryImportBatch: (showId: string, classIds?: string[]) => Promise<void>;
-  onCleanupShowScoreDrawEntryImportBatch: (batchId: string) => Promise<void>;
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
@@ -362,7 +357,6 @@ export function Dashboard({
   const showAnnouncements = context?.showAnnouncements ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const showScorePaidWarmups = context?.showScorePaidWarmups ?? [];
-  const entryImportBatches = context?.entryImportBatches ?? [];
   const entryResults = context?.entryResults ?? [];
   const payoutSchedules = context?.payoutSchedules ?? [];
   const payoutScheduleBrackets = context?.payoutScheduleBrackets ?? [];
@@ -442,9 +436,6 @@ export function Dashboard({
     : [];
   const selectedOrganizationShowScorePaidWarmups = selectedOrganization
     ? showScorePaidWarmups.filter((warmup) => warmup.organization_id === selectedOrganization.id)
-    : [];
-  const selectedOrganizationEntryImportBatches = selectedOrganization
-    ? entryImportBatches.filter((batch: EntryImportBatch) => batch.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
@@ -565,9 +556,6 @@ export function Dashboard({
   const selectedShowShowScorePaidWarmups = selectedShow
     ? selectedOrganizationShowScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShow.id)
     : selectedOrganizationShowScorePaidWarmups;
-  const selectedShowEntryImportBatches = selectedShow
-    ? selectedOrganizationEntryImportBatches.filter((batch) => batch.show_id === selectedShow.id)
-    : selectedOrganizationEntryImportBatches;
   const selectedShowEntryResults = selectedShow
     ? selectedOrganizationEntryResults.filter((result) => result.show_id === selectedShow.id)
     : selectedOrganizationEntryResults;
@@ -1076,16 +1064,13 @@ export function Dashboard({
               contacts={selectedOrganizationContacts}
               classes={selectedShowClasses}
               entries={selectedShowEntries}
-              entryImportBatches={selectedShowEntryImportBatches}
               horses={selectedOrganizationHorses}
               showDays={selectedShowShowDays}
               showScoreClassSetups={selectedShowShowScoreSetups}
               showScorePaidWarmups={selectedShowShowScorePaidWarmups}
               shows={activeShowList}
               onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
-              onCleanupShowScoreDrawEntryImportBatch={onCleanupShowScoreDrawEntryImportBatch}
               onPrepareShowScoreClass={onPrepareShowScoreClass}
-              onSyncShowScoreDrawEntryImportBatch={onSyncShowScoreDrawEntryImportBatch}
             />
           ) : (
             <UpgradePrompt feature="ShowScore Live Scoring" requiredPlan="professional" />

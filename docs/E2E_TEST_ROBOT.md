@@ -42,6 +42,13 @@ et téléverse un petit MP4 réel pour le manège principal, vérifie sa lecture
 nettoie aussi ce média jetable. Il ouvre les trois vues TV principales par leurs
 codes courts afin de vérifier les redirections publiques.
 
+Le robot crée aussi un paid warm-up complet dans ShowScore, configure son manège,
+sa durée, sa visibilité publique et son cavalier, puis le démarre depuis la vue
+annonceur. Il vérifie que le chrono est visible et diminue chaque seconde sur la
+TV générale et la TV du manège principal sans rechargement. Il termine ensuite
+le cavalier, confirme la fermeture automatique du live warm-up et poursuit le
+bloc de compétition normal.
+
 Tous les écrans sont validés en 1920 × 1080. Les TV générale, d'arène et de
 compétition doivent afficher le cavalier en piste, le premier score, le `No score`,
 le `Scratch` et l'état final du bloc. La TV livestream doit afficher son état

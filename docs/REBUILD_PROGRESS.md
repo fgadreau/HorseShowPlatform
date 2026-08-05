@@ -142,7 +142,7 @@ Cette fermeture n'est pas un quatrième chantier. Elle confirme simplement que l
 - migration `0084_showscore_block_function_alignment.sql` validée : helpers de droits, visibilité et timing ShowScore lisent les blocs et leurs nouveaux champs tout en conservant les signatures historiques;
 - test `targeted_context_showscore.sql` réussi avec un vrai rôle authentifié d'association;
 - test `horse_creator_access.sql` adapté aux répertoires et réussi;
-- anciens tests `phase1_rls.sql`, `results_payouts.sql` et `aqr_audit_import_cleanup.sql` convertis vers les tables canoniques `blocks/classes` et réussis;
+- anciens tests `phase1_rls.sql` et `results_payouts.sql` convertis vers les tables canoniques `blocks/classes` et réussis;
 - nouveau test intégré `bloc1_integrated_workflows.sql` réussi : classe, dossard, inscription, facture, box, setup ShowScore, score, résultat et payout parcourus dans une seule transaction;
 - le test intégré confirme que l'inscription et la réservation du même concours rejoignent la même facture brouillon et qu'un utilisateur d'une autre association ne voit ni l'inscription, ni les lignes de facture, ni le résultat, ni le payout, ni le dossard;
 - signature de faux rapprochement d'un cheval complétée avec le propriétaire proposé afin qu'un rejet ne masque pas une recherche portant une autre identité complète;

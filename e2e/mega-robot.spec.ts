@@ -68,10 +68,12 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   const expectedPayout = buildExpectedPayout(participantCount);
   const expectedAwards = buildExpectedAwards(expectedPayout.netPurse, participantCount);
   const blockName = `[E2E] Bloc annonceur — ${state.runId}`;
+  const warmupName = `[E2E] Warm-up chrono — ${state.runId}`;
   let crossAppFixture: CrossAppFixture | null = null;
   let championshipParticipantNames: string[] = [];
   let displayRuns: DisplayRun[] = [];
   let tvDisplayCodes: TvDisplayCodes | null = null;
+  let warmupId = "";
   const browserErrors: string[] = [];
   let showScoreContext: BrowserContext | null = null;
   let publicDisplays: PublicDisplays | null = null;
@@ -323,6 +325,14 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await expect(showScorePage.locator("body")).toContainText(blockName);
     await verifyShowScoreDayTabs(showScorePage, crossAppFixture, blockName);
     tvDisplayCodes = await configureShowScoreTvViews(showScorePage);
+    warmupId = await configureShowScorePaidWarmup({
+      page: showScorePage,
+      organizationId: state.organizationId,
+      showId: crossAppFixture.showId,
+      showDayId: crossAppFixture.showDayId,
+      showScoreUrl: config.showScoreUrl,
+      warmupName,
+    });
     const setupLink = showScorePage.locator(
       `a[href="/associations/${state.organizationId}/classes/${crossAppFixture.blockId}/setup"]`,
     );
@@ -374,6 +384,18 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       tvDisplayCodes,
     });
     await attachPublicDisplayScreenshots(testInfo, publicDisplays, "avant-le-premier-passage");
+
+    await testShowScorePaidWarmupTimer({
+      displays: publicDisplays,
+      organizationId: state.organizationId,
+      page: showScorePage,
+      showDayId: crossAppFixture.showDayId,
+      showId: crossAppFixture.showId,
+      showScoreUrl: config.showScoreUrl,
+      testInfo,
+      warmupId,
+      warmupName,
+    });
 
     for (const managementView of ["scribe", "schedule", "time"]) {
       await showScorePage.goto(
@@ -846,6 +868,147 @@ async function configureShowScoreTvViews(page: Page): Promise<TvDisplayCodes> {
   await dialog.getByRole("button", { name: "Annuler", exact: true }).last().click();
   await expect(dialog).toBeHidden();
   return codes;
+}
+
+async function configureShowScorePaidWarmup({
+  page,
+  organizationId,
+  showId,
+  showDayId,
+  showScoreUrl,
+  warmupName,
+}: {
+  page: Page;
+  organizationId: string;
+  showId: string;
+  showDayId: string;
+  showScoreUrl: string;
+  warmupName: string;
+}) {
+  await page.getByRole("button", { name: "+ Ajouter un paid warm up", exact: true }).click();
+  await expect(page).toHaveURL(/\/paid-warmups\/[^/]+\/setup$/);
+  const warmupId = new URL(page.url()).pathname.match(/\/paid-warmups\/([^/]+)\/setup$/)?.[1] ?? "";
+  expect(warmupId).not.toBe("");
+
+  const settings = page.getByRole("heading", { name: "Réglages", exact: true }).locator("..");
+  await settings.locator("label").filter({ hasText: /^Nom$/ }).locator("..").locator("input").fill(warmupName);
+  await settings.locator("label").filter({ hasText: /^Manège \/ arena$/ }).locator("..").locator("input").fill("Arène E2E");
+  await settings.locator("label").filter({ hasText: /^Temps par cavalier$/ }).locator("..").locator("input").fill("5");
+  const publicLive = page.getByRole("checkbox", { name: "Autoriser le live public pour ce paid warm up", exact: true });
+  if (!(await publicLive.isChecked())) await publicLive.check();
+  await page.locator("textarea").fill("1\tCavalière Chrono E2E");
+  await page.getByRole("button", { name: "Importer dans cet ordre", exact: true }).click();
+  await expect(page.locator("body")).toContainText("1 cavalier(s) importé(s) dans l’ordre fourni.");
+
+  const admin = createE2EAdminClient();
+  await expect.poll(async () => {
+    const { data, error } = await admin
+      .from("show_score_paid_warmups")
+      .select("name,arena,duration_minutes_per_rider,is_public_live,entries")
+      .eq("id", warmupId)
+      .single<{
+        arena: string;
+        duration_minutes_per_rider: number;
+        entries: Array<Record<string, unknown>>;
+        is_public_live: boolean;
+        name: string;
+      }>();
+    if (error) throw error;
+    return {
+      arena: data.arena,
+      duration: Number(data.duration_minutes_per_rider),
+      isPublic: data.is_public_live,
+      name: data.name,
+      riders: data.entries.map((entry) => String(entry.rider ?? "")),
+    };
+  }).toEqual({
+    arena: "Arène E2E",
+    duration: 5,
+    isPublic: true,
+    name: warmupName,
+    riders: ["Cavalière Chrono E2E"],
+  });
+
+  await page.goto(`${showScoreUrl}/associations/${organizationId}/shows/${showId}?day=${showDayId}`);
+  await expect(page.locator("body")).toContainText(warmupName);
+  return warmupId;
+}
+
+async function testShowScorePaidWarmupTimer({
+  displays,
+  organizationId,
+  page,
+  showDayId,
+  showId,
+  showScoreUrl,
+  testInfo,
+  warmupId,
+  warmupName,
+}: {
+  displays: PublicDisplays;
+  organizationId: string;
+  page: Page;
+  showDayId: string;
+  showId: string;
+  showScoreUrl: string;
+  testInfo: TestInfo;
+  warmupId: string;
+  warmupName: string;
+}) {
+  await page.goto(`${showScoreUrl}/associations/${organizationId}/shows/${showId}/announcer?day=${showDayId}`);
+  const warmupCard = page.locator(`[data-announcer-warmup-id="${warmupId}"]`);
+  await expect(warmupCard).toContainText(warmupName);
+  await warmupCard.getByRole("button", { name: "Démarrer en piste", exact: true }).click();
+
+  const admin = createE2EAdminClient();
+  await expect.poll(async () => {
+    const { data, error } = await admin
+      .from("show_score_paid_warmups")
+      .select("active_started_at,is_public_live")
+      .eq("id", warmupId)
+      .single<{ active_started_at: string | null; is_public_live: boolean }>();
+    if (error) throw error;
+    return { running: Boolean(data.active_started_at), visible: data.is_public_live };
+  }).toEqual({ running: true, visible: true });
+
+  const tvTimers = [
+    displays.generalTvPage.locator("[data-tv-warmup-timer]"),
+    displays.competitionTvPage.locator("[data-tv-warmup-timer]"),
+  ];
+  for (const timer of tvTimers) {
+    await expect(timer).toBeVisible();
+    await expect(timer).toHaveAttribute("data-tv-warmup-timer-kind", "rider");
+    await expect(timer).toContainText(/\d+:\d{2}/);
+  }
+  await expect(displays.generalTvPage.locator("body")).toContainText("Cavalière Chrono E2E");
+  await expect(displays.competitionTvPage.locator("body")).toContainText("Cavalière Chrono E2E");
+
+  const firstRemaining = Number(await tvTimers[0].getAttribute("data-tv-warmup-remaining-seconds"));
+  expect(firstRemaining).toBeGreaterThan(0);
+  await expect.poll(async () => Number(await tvTimers[0].getAttribute("data-tv-warmup-remaining-seconds"))).toBeLessThan(firstRemaining);
+  await assertPublicDisplaysRemainOpen(displays);
+  await attachPublicDisplayScreenshots(testInfo, displays, "warm-up-chrono-en-cours");
+
+  await warmupCard.getByRole("button", { name: "Arrêter et marquer passé", exact: true }).click();
+  await expect.poll(async () => {
+    const { data, error } = await admin
+      .from("show_score_paid_warmups")
+      .select("active_started_at,is_public_live,entries")
+      .eq("id", warmupId)
+      .single<{
+        active_started_at: string | null;
+        entries: Array<Record<string, unknown>>;
+        is_public_live: boolean;
+      }>();
+    if (error) throw error;
+    return {
+      activeStartedAt: data.active_started_at,
+      isPublic: data.is_public_live,
+      statuses: data.entries.map((entry) => String(entry.status ?? "")),
+    };
+  }).toEqual({ activeStartedAt: null, isPublic: false, statuses: ["done"] });
+
+  for (const timer of tvTimers) await expect(timer).toBeHidden();
 }
 
 async function readTvDisplayCode(locator: Locator) {

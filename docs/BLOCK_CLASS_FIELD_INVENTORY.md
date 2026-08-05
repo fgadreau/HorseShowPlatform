@@ -194,7 +194,6 @@ Les fonctions de facturation qui joignent actuellement classe-parent et division
 - `0061_showscore_public_visibility_policies.sql`
 - `0063_showscore_scored_runs_results.sql`
 - `0064_results_payouts.sql`
-- `0065_aqr_audit_import_batches.sql`
 - `0066_showscore_scoring_session_scribe_rls.sql`
 
 ### Facturation et mutations dépendantes
@@ -257,7 +256,6 @@ Fonctions à réécrire explicitement :
 - `src/features/dashboard/ClientDashboardView.tsx`
 - `src/features/dashboard/shared.tsx`
 - `src/features/overview/OverviewView.tsx`
-- `src/lib/aqrAuditImport.ts`
 - `src/lib/display.ts`
 - `src/lib/payouts.ts`
 - `src/utils/planFeatures.ts`
@@ -267,7 +265,6 @@ Fonctions à réécrire explicitement :
 
 - `supabase/seed.sql`
 - `supabase/seed_draw_test_program.sql`
-- `supabase/tests/aqr_audit_import_cleanup.sql`
 - `supabase/tests/results_payouts.sql`
 - `scripts/draw-test-program.ts`
 - `scripts/payout-test-program.ts`
