@@ -758,12 +758,16 @@ function expectMoney(actual: unknown, expected: number) {
 }
 
 function buildAnnouncerOutcomes(participantCount: number): AnnouncerOutcome[] {
+  let scoredIndex = 0;
+
   return Array.from({ length: participantCount }, (_, index) => {
-    if (participantCount >= 5 && index === participantCount - 1) return { score: null, status: "scratch" };
-    if (participantCount >= 3 && index === participantCount - (participantCount >= 5 ? 2 : 1)) {
+    if (participantCount >= 5 && index === participantCount - 2) return { score: null, status: "scratch" };
+    if (participantCount >= 3 && index === participantCount - (participantCount >= 5 ? 3 : 2)) {
       return { score: null, status: "no_score" };
     }
-    return { score: index < 2 ? 80 : 80 - index * 0.5, status: "scored" };
+    const score = scoredIndex < 2 ? 80 : 80 - scoredIndex * 0.5;
+    scoredIndex += 1;
+    return { score, status: "scored" };
   });
 }
 
