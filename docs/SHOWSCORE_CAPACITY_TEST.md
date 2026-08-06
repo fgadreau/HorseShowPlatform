@@ -126,12 +126,18 @@ résultats suivants sur ce déploiement :
 | 150 | 3 600 / 3 600 | 1 236 ms | 0 | 0 | Réussi |
 | 167, essai 1 | 4 007 / 4 008 | 1 353 ms | 13 lectures | 1 | Échec strict |
 | 167, essai 2 | 4 007 / 4 008 | 1 345 ms | 13 lectures | 1 | Échec strict |
+| 167, 2 runners | 4 008 / 4 008 | 1 311 ms | 0 | 0 | Réussi |
 
-La capacité entièrement validée par ce banc est donc de 150 vues simultanées.
-À 167 vues, une TV différente s'est reconnectée pendant chaque essai et le
-snapshot de récupération a fonctionné, mais le budget volontaire de zéro
-reconnexion n'est pas respecté. Les paliers supérieurs ne doivent pas être
-lancés avant d'avoir distingué une limite du runner d'une limite Realtime.
+La capacité entièrement validée par ce banc est donc de 167 vues simultanées
+lorsque la génération de charge est répartie sur deux runners. Les deux échecs
+sur un runner unique indiquent une limite du générateur concentré, pas un seuil
+Realtime démontré à 167 connexions.
+
+Un premier essai distribué volontairement retardé de cinq minutes a aussi
+déclenché le snapshot de secours périodique de 156 vues et observé six
+reconnexions pendant la session prolongée. Ce résultat n'est pas comparable aux
+paliers de deux minutes, mais il montre que le prochain essai doit être un test
+d'endurance distribué à 167 vues avant d'augmenter vers 317 vues.
 
 ## GitHub Actions
 
