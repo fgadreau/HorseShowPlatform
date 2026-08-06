@@ -1,3 +1,5 @@
+import { buildRealtimeConnectionMetrics } from "./realtime-connections.mjs";
+
 export function aggregateCapacityReports(reports, options = {}) {
   const expectedShards = options.expectedShards ?? 2;
   const expectedViewers = options.expectedViewers ?? 167;
@@ -22,8 +24,9 @@ export function aggregateCapacityReports(reports, options = {}) {
   const navigationP95Ms = percentile(viewers.map((viewer) => viewer.navigationMs), 95);
   const failedNavigations = viewers.filter((viewer) => !viewer.navigationSucceeded).length;
   const pageErrors = sum(viewers.map((viewer) => viewer.pageErrors.length));
-  const realtimeErrors = sum(
-    viewers.map((viewer) => viewer.realtimeErrors + viewer.realtimeStatusErrors),
+  const realtimeConnections = buildRealtimeConnectionMetrics(
+    viewers,
+    sourceProfile.duration.holdSeconds,
   );
   const propagation = buildPropagationMetrics(viewers, writer);
   const budgets = sourceProfile.budgets;
@@ -40,7 +43,25 @@ export function aggregateCapacityReports(reports, options = {}) {
       budgets.maxRestRequestsPerViewMinute,
     ),
     check("Taux d’erreurs REST", restErrorRate <= budgets.maxRestErrorRate, restErrorRate, budgets.maxRestErrorRate),
-    check("Erreurs Realtime", realtimeErrors === 0, realtimeErrors, 0),
+    check(
+      "Connexions Realtime actives à la fin",
+      realtimeConnections.activeConnections === realtimeConnections.expectedConnections,
+      realtimeConnections.activeConnections,
+      realtimeConnections.expectedConnections,
+    ),
+    check(
+      "Déconnexions Realtime non récupérées",
+      realtimeConnections.unrecoveredFailures === 0,
+      realtimeConnections.unrecoveredFailures,
+      0,
+    ),
+    check(
+      "Reconnexions récupérées par vue-heure",
+      realtimeConnections.recoveredReconnectsPerViewHour
+        <= (budgets.maxRecoveredRealtimeReconnectsPerViewHour ?? 0),
+      realtimeConnections.recoveredReconnectsPerViewHour,
+      budgets.maxRecoveredRealtimeReconnectsPerViewHour ?? 0,
+    ),
     check("Erreurs JavaScript non interceptées", pageErrors === 0, pageErrors, 0),
     check("Erreurs du producteur", writer.errors.length === 0, writer.errors.length, 0),
     check("Mutations live publiées", writer.mutations.length > 0, writer.mutations.length, "> 0"),
@@ -63,11 +84,12 @@ export function aggregateCapacityReports(reports, options = {}) {
     checks,
     endedAt: latestDate(reports.map((report) => report.endedAt)),
     metrics: {
-      activeRealtimeConnections: sum(viewers.map((viewer) => viewer.realtimeActive)),
+      activeRealtimeConnections: realtimeConnections.activeConnections,
       failedNavigations,
       navigationP95Ms: round(navigationP95Ms),
       pageErrors,
-      realtimeErrors,
+      realtimeConnections,
+      realtimeErrors: realtimeConnections.unrecoveredFailures,
       realtimePropagation: propagation,
       restErrorRate: round(restErrorRate, 5),
       restRequestsPerViewMinute: round(restRequestsPerViewMinute),

@@ -29,7 +29,10 @@ une preuve de saturation de ShowScore et devra mener à une exécution distribu�
 
 - toutes les vues doivent charger;
 - navigation p95 au plus 15 secondes;
-- aucune erreur de statut Realtime;
+- toutes les connexions Realtime doivent être actives à la fin;
+- aucune déconnexion Realtime non récupérée;
+- aucune reconnexion récupérée sur les profils courts et au plus 0,5 par
+  vue-heure pour `endurance167`;
 - aucune erreur JavaScript non interceptée;
 - taux d'erreurs REST au plus 0,5 %;
 - au plus 2 requêtes REST par vue et par minute une fois la rampe stabilisée.
@@ -70,6 +73,10 @@ CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF=<ref-production>
 CAPACITY_SUPABASE_SERVICE_ROLE_KEY=<secret serveur seulement>
 SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET=<optionnel>
 ```
+
+`CAPACITY_MAX_RECOVERED_REALTIME_RECONNECTS_PER_VIEW_HOUR` permet de remplacer
+le budget du profil. Sa valeur par défaut est `0,5` pour `endurance167` et `0`
+pour tous les profils courts.
 
 Plusieurs URL TV ou OBS peuvent être séparées par des virgules ou des retours à
 la ligne. Le robot les distribue en rotation entre les vues demandées.
@@ -143,9 +150,17 @@ stricts. Dix-sept vues se sont reconnectées automatiquement et 14 livraisons on
 secours complets ont aussi produit 6 409 lectures REST, soit 2,56 par vue-minute
 contre une limite de 2.
 
-Le palier de 317 vues ne doit donc pas encore être lancé. Il faut d'abord réduire
-le coût du snapshot de secours et définir un budget d'endurance explicite pour
-les reconnexions récupérées, distinct d'une perte de connexion non récupérée.
+L'artefact détaillé contient exactement 493 lectures de chacune des 13 routes du
+snapshot, donc 493 snapshots complets. La correction porte l'intervalle de
+sécurité d'une vue Realtime saine de cinq à dix minutes, toujours avec une gigue
+de 20 %. Une reconnexion conserve sa resynchronisation immédiate. Le banc sépare
+maintenant les reconnexions récupérées des déconnexions finales et applique au
+profil d'endurance une limite de 0,5 reconnexion récupérée par vue-heure. Les
+profils courts demeurent stricts à zéro.
+
+Le palier de 317 vues ne doit donc pas encore être lancé. Il faut d'abord valider
+ces deux corrections avec `smoke`, `baseline`, puis `endurance167` sur le
+déploiement ShowScore de préproduction.
 
 ## GitHub Actions
 
