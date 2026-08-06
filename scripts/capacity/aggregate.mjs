@@ -1,13 +1,13 @@
 export function aggregateCapacityReports(reports, options = {}) {
   const expectedShards = options.expectedShards ?? 2;
   const expectedViewers = options.expectedViewers ?? 167;
-  const profileName = options.profileName ?? "distributed167";
   const writerReports = reports.filter((report) => report.writer);
   const writer = writerReports[0]?.writer ?? null;
   const viewers = reports.flatMap((report) => report.viewers ?? []);
   const sourceProfile = writerReports[0]?.profile ?? reports[0]?.profile;
 
   if (!sourceProfile) throw new Error("Aucun profil de capacité à agréger.");
+  const profileName = options.profileName ?? sourceProfile.profile;
   if (writerReports.length !== 1) {
     throw new Error(`Un seul producteur est attendu; valeur reçue: ${writerReports.length}.`);
   }

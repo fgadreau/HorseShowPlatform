@@ -62,6 +62,13 @@ test("le profil distribué conserve 167 vues et accepte un départ coordonné", 
   assert.equal(capacitySummary(config).coordinatedStartAt, startAt);
 });
 
+test("le profil d’endurance maintient 167 vues pendant 15 minutes", () => {
+  const config = readCapacityConfig(environment({ CAPACITY_PROFILE: "endurance167" }));
+
+  assert.equal(capacitySummary(config).viewers.total, 167);
+  assert.equal(capacitySummary(config).duration.holdSeconds, 900);
+});
+
 test("une date de départ coordonné invalide est refusée", () => {
   assert.throws(
     () => readCapacityConfig(environment({ CAPACITY_COORDINATED_START_AT: "demain matin" })),

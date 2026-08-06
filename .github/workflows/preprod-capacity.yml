@@ -16,6 +16,7 @@ on:
           - diagnostic150
           - intermediate
           - distributed167
+          - endurance167
           - high
           - target
 
@@ -28,7 +29,7 @@ permissions:
 
 jobs:
   capacity:
-    if: inputs.profile != 'distributed167'
+    if: inputs.profile != 'distributed167' && inputs.profile != 'endurance167'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -72,7 +73,7 @@ jobs:
           retention-days: 30
 
   distributed-prepare:
-    if: inputs.profile == 'distributed167'
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
     runs-on: ubuntu-latest
     outputs:
       start_at: ${{ steps.clock.outputs.start_at }}
@@ -82,7 +83,7 @@ jobs:
         run: echo "start_at=$(date -u -d '+150 seconds' '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
   distributed-capacity:
-    if: inputs.profile == 'distributed167'
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
     needs: distributed-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -112,7 +113,7 @@ jobs:
       CAPACITY_OBS_URLS: ${{ vars.PREPROD_SHOWSCORE_OBS_URLS }}
       CAPACITY_OBS_VIEWERS: ${{ matrix.obs }}
       CAPACITY_PRODUCTION_SHOWSCORE_HOST: ${{ vars.PRODUCTION_SHOWSCORE_HOST }}
-      CAPACITY_PROFILE: distributed167
+      CAPACITY_PROFILE: ${{ inputs.profile }}
       CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
       CAPACITY_PUBLIC_URL: ${{ vars.PREPROD_SHOWSCORE_PUBLIC_URL }}
       CAPACITY_REPORT_DIR: .tmp/capacity/shard-${{ matrix.shard }}
@@ -147,7 +148,7 @@ jobs:
           retention-days: 30
 
   distributed-aggregate:
-    if: inputs.profile == 'distributed167'
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
     needs: distributed-capacity
     runs-on: ubuntu-latest
     steps:

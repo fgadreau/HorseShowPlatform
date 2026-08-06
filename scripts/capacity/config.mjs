@@ -74,6 +74,15 @@ export const CAPACITY_PROFILES = Object.freeze({
     settleSeconds: 25,
     tvViewers: 15,
   }),
+  endurance167: Object.freeze({
+    holdSeconds: 900,
+    mobileViewers: 150,
+    obsViewers: 2,
+    rampBatchSize: 15,
+    rampDelayMs: 1_000,
+    settleSeconds: 25,
+    tvViewers: 15,
+  }),
   high: Object.freeze({
     holdSeconds: 180,
     mobileViewers: 300,
