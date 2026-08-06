@@ -111,9 +111,26 @@ live complète : 6 mutations, 54 livraisons sur 54, propagation p95 de 599 ms et
 restauration réussie. Il a aussi révélé une amplification distincte dans le
 client public ShowScore : chaque mutation reçue recharge les 13 sources REST de
 la page. À une mutation toutes les 5 secondes, cela représente 156 requêtes par
-vue-minute. Le budget REST demeure donc en échec jusqu'à ce que le client
-applique la charge utile Realtime localement ou ne recharge que la ressource
-touchée.
+vue-minute.
+
+La correction ShowScore fusionnée en préproduction le 6 août applique désormais
+la charge utile Realtime localement. Les paliers avec producteur ont donné les
+résultats suivants sur ce déploiement :
+
+| Vues | Livraisons | Propagation p95 | REST stable | Reconnexions | Résultat |
+| ---: | ---: | ---: | ---: | ---: | --- |
+| 67 | 1 608 / 1 608 | 929 ms | 0 | 0 | Réussi |
+| 100 | 2 400 / 2 400 | 1 006 ms | 0 | 0 | Réussi |
+| 125 | 3 000 / 3 000 | 1 164 ms | 0 | 0 | Réussi |
+| 150 | 3 600 / 3 600 | 1 236 ms | 0 | 0 | Réussi |
+| 167, essai 1 | 4 007 / 4 008 | 1 353 ms | 13 lectures | 1 | Échec strict |
+| 167, essai 2 | 4 007 / 4 008 | 1 345 ms | 13 lectures | 1 | Échec strict |
+
+La capacité entièrement validée par ce banc est donc de 150 vues simultanées.
+À 167 vues, une TV différente s'est reconnectée pendant chaque essai et le
+snapshot de récupération a fonctionné, mais le budget volontaire de zéro
+reconnexion n'est pas respecté. Les paliers supérieurs ne doivent pas être
+lancés avant d'avoir distingué une limite du runner d'une limite Realtime.
 
 ## GitHub Actions
 
