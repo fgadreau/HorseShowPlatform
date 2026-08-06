@@ -1,14 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
-import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, findById, horseLabel } from "../../lib/display";
+import { EmptyState, ModalDialog, NoticeBanner, ViewIntro } from "../../components/ui";
+import { contactLabel, errorMessage, findById, formatCurrency, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, purchaseIncentiveProgramNomination, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, IncentiveProgram, IncentiveProgramNomination, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import type { Notice } from "../../types/ui";
 import { uiText, horseExternalReferenceChips, horseGenderLabel, todayDateValue } from "../dashboard/shared";
 import { healthComplianceStatusLabel, healthComplianceTone, HorseAssociationComplianceGroups, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
+import { incentiveProgramName, incentiveProgramTypeLabel, nominationRoleLabel, nominationStatusLabel, programUsesStallion } from "../programs/programLabels";
 
 function MyHorsesView({
   locale,
@@ -20,6 +23,10 @@ function MyHorsesView({
   horseExternalIdentifiers,
   horseHealthDocuments,
   horseContacts,
+  incentivePrograms = [],
+  incentiveProgramNominations = [],
+  payerContacts = [],
+  programHorses = horses,
   healthComplianceRevision,
   organization,
   profileId,
@@ -30,6 +37,7 @@ function MyHorsesView({
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
+  onRefresh,
 }: {
   locale: Locale;
   contacts: Contact[];
@@ -40,6 +48,10 @@ function MyHorsesView({
   horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horseContacts: HorseContact[];
+  incentivePrograms?: IncentiveProgram[];
+  incentiveProgramNominations?: IncentiveProgramNomination[];
+  payerContacts?: Contact[];
+  programHorses?: Horse[];
   healthComplianceRevision?: string;
   organization: Organization | null;
   profileId: string;
@@ -50,9 +62,29 @@ function MyHorsesView({
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  onRefresh?: () => Promise<void> | void;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+  const activePrograms = incentivePrograms.filter((program) => program.is_active && program.organization_id === organization?.id);
+  const [purchaseProgramId, setPurchaseProgramId] = useState(activePrograms[0]?.id ?? "");
+  const [purchaseHorseId, setPurchaseHorseId] = useState("");
+  const [purchasePayerId, setPurchasePayerId] = useState("");
+  const [purchaseRole, setPurchaseRole] = useState<IncentiveProgramNomination["nomination_role"]>("horse");
+  const [purchaseSeason, setPurchaseSeason] = useState(String(new Date().getFullYear()));
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [purchaseNotice, setPurchaseNotice] = useState<Notice | null>(null);
+  const purchaseProgram = activePrograms.find((program) => program.id === purchaseProgramId) ?? null;
+  const availablePurchaseRoles: IncentiveProgramNomination["nomination_role"][] = purchaseProgram && programUsesStallion(purchaseProgram)
+    ? ["stallion", "foal"]
+    : purchaseProgram?.program_type === "horse_foal_nomination"
+      ? ["horse", "foal"]
+      : ["horse"];
+  useEffect(() => {
+    if (!activePrograms.some((program) => program.id === purchaseProgramId)) {
+      setPurchaseProgramId(activePrograms[0]?.id ?? "");
+    }
+  }, [activePrograms, purchaseProgramId]);
   const healthCompliance = useHorseHealthComplianceOverview({
     horseIds: horses.map((horse) => horse.id),
     referenceDate: todayDateValue(),
@@ -67,6 +99,33 @@ function MyHorsesView({
     await onDeleteHorse(horse.id);
     if (editingHorse?.id === horse.id) {
       setEditingHorse(null);
+    }
+  }
+
+  async function handleNominationPurchase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!purchaseProgram || !purchaseHorseId || !purchasePayerId) return;
+    setPurchaseBusy(true);
+    setPurchaseNotice(null);
+    try {
+      const nomination = await purchaseIncentiveProgramNomination({
+        incentive_program_id: purchaseProgram.id,
+        horse_id: purchaseHorseId,
+        payer_contact_id: purchasePayerId,
+        nomination_role: availablePurchaseRoles.includes(purchaseRole) ? purchaseRole : availablePurchaseRoles[0],
+        season_year: Number(purchaseSeason) || new Date().getFullYear(),
+      });
+      setPurchaseNotice({
+        tone: "success",
+        message: nomination.status === "active"
+          ? uiText(locale, "Nomination active.", "Nomination active.")
+          : uiText(locale, "Nomination créée. La facture se trouve dans Mes factures; une validation peut rester requise pour la progéniture d’un étalon.", "Nomination created. The invoice is in My invoices; stallion offspring may still require validation."),
+      });
+      await onRefresh?.();
+    } catch (error) {
+      setPurchaseNotice({ tone: "error", message: errorMessage(error) });
+    } finally {
+      setPurchaseBusy(false);
     }
   }
 
@@ -94,6 +153,28 @@ function MyHorsesView({
           </button>
         </div>
       </section>
+
+      {activePrograms.length ? <section className="panel span-2">
+        <div className="panel-header"><div><h2>{uiText(locale, "Acheter une nomination", "Buy a nomination")}</h2><p>{uiText(locale, "Choisis un programme facultatif pour l’un de tes chevaux. Une nomination payante crée une facture brouillon.", "Choose an optional program for one of your horses. A paid nomination creates a draft invoice.")}</p></div></div>
+        {purchaseNotice ? <NoticeBanner notice={purchaseNotice} /> : null}
+        <form className="stack" onSubmit={handleNominationPurchase}>
+          <div className="form-grid">
+            <label>{uiText(locale, "Programme", "Program")}<select required value={purchaseProgramId} onChange={(event) => { const programId = event.target.value; const program = activePrograms.find((candidate) => candidate.id === programId); setPurchaseProgramId(programId); setPurchaseRole(program && programUsesStallion(program) ? "stallion" : "horse"); }}>{activePrograms.map((program) => <option key={program.id} value={program.id}>{`${incentiveProgramName(program, locale)} · ${formatCurrency(program.nomination_fee, organization?.currency ?? "CAD")}`}</option>)}</select>{purchaseProgram ? <span className="input-help">{incentiveProgramTypeLabel(purchaseProgram.program_type, locale)}</span> : null}</label>
+            <label>{uiText(locale, "Cheval", "Horse")}<select required value={purchaseHorseId} onChange={(event) => setPurchaseHorseId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{programHorses.map((horse) => <option key={horse.id} value={horse.id}>{horse.name}</option>)}</select></label>
+            <label>{uiText(locale, "Payeur", "Payer")}<select required value={purchasePayerId} onChange={(event) => setPurchasePayerId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{payerContacts.map((contact) => <option key={contact.id} value={contact.id}>{contactLabel(contact)}</option>)}</select></label>
+            <label>{uiText(locale, "Rôle", "Role")}<select value={availablePurchaseRoles.includes(purchaseRole) ? purchaseRole : availablePurchaseRoles[0]} onChange={(event) => setPurchaseRole(event.target.value as IncentiveProgramNomination["nomination_role"])}>{availablePurchaseRoles.map((role) => <option key={role} value={role}>{nominationRoleLabel(role, locale)}</option>)}</select></label>
+            <label>{uiText(locale, "Saison", "Season")}<input min="1900" required type="number" value={purchaseSeason} onChange={(event) => setPurchaseSeason(event.target.value)} /></label>
+          </div>
+          {purchaseProgram && programUsesStallion(purchaseProgram) && purchaseRole === "foal" ? <p className="muted-line">{uiText(locale, "La nomination restera en attente jusqu’à ce que l’association confirme l’étalon admissible.", "The nomination remains pending until the association confirms the qualifying stallion.")}</p> : null}
+          <button className="primary-button" disabled={purchaseBusy || !purchaseHorseId || !purchasePayerId} type="submit">{purchaseBusy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer la nomination", "Create nomination")}</button>
+        </form>
+        <div className="requirement-list">
+          {incentiveProgramNominations.filter((nomination) => programHorses.some((horse) => horse.id === nomination.horse_id)).map((nomination) => {
+            const program = incentivePrograms.find((candidate) => candidate.id === nomination.incentive_program_id);
+            return <div className="membership-type-row" key={nomination.id}><span className="membership-type-main"><strong>{horses.find((horse) => horse.id === nomination.horse_id)?.name}</strong>{`${program ? incentiveProgramName(program, locale) : uiText(locale, "Programme", "Program")} · ${nomination.season_year}`}</span><small>{nominationStatusLabel(nomination.status, locale)}</small></div>;
+          })}
+        </div>
+      </section> : null}
 
       {creatingHorse ? (
         <ModalDialog description={uiText(locale, "Ajoute le cheval à ton profil et complète les documents requis.", "Add the horse to your profile and complete required documents.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>

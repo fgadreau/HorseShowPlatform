@@ -59,6 +59,10 @@ import type {
   ExternalCredentialProduct,
   GoverningBodyAssignment,
   GoverningBodyAssignmentInput,
+  IncentiveProgram,
+  IncentiveProgramInput,
+  IncentiveProgramNomination,
+  IncentiveProgramNominationInput,
   Invoice,
   InvoiceLineItem,
   ManualSale,
@@ -135,6 +139,8 @@ export type AppContext = {
   disciplineCredentialIssuers: DisciplineCredentialIssuer[];
   externalCredentialProducts: ExternalCredentialProduct[];
   eligibilityRequirements: EligibilityRequirement[];
+  incentivePrograms: IncentiveProgram[];
+  incentiveProgramNominations: IncentiveProgramNomination[];
   contactInsuranceEvidence: ContactInsuranceEvidence[];
   slates: Slate[];
   showAnnouncements: ShowAnnouncement[];
@@ -376,6 +382,8 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     disciplineCredentialIssuersResult,
     externalCredentialProductsResult,
     eligibilityRequirementsResult,
+    incentiveProgramsResult,
+    incentiveProgramNominationsResult,
     slatesResult,
     contactRolesResult,
     externalCredentialIssuersResult,
@@ -419,6 +427,8 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     client.from("discipline_credential_issuers").select("*").eq("is_active", true).returns<DisciplineCredentialIssuer[]>(),
     client.from("external_credential_products").select("*").eq("is_active", true).order("name", { ascending: true }).returns<ExternalCredentialProduct[]>(),
     scopeQueryToOrganization(client.from("eligibility_requirements").select("*").order("created_at", { ascending: true }).returns<EligibilityRequirement[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("incentive_programs").select("*").order("name_fr", { ascending: true }).returns<IncentiveProgram[]>(), loadedOrganizationId),
+    scopeQueryToOrganization(client.from("incentive_program_nominations").select("*").order("created_at", { ascending: false }).returns<IncentiveProgramNomination[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("slates").select("*").order("sort_order", { ascending: true }).returns<Slate[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("contact_roles").select("*").order("created_at", { ascending: false }).returns<ContactRole[]>(), loadedOrganizationId),
     client.from("external_credential_issuers").select("*").order("name", { ascending: true }).returns<ExternalCredentialIssuer[]>(),
@@ -511,6 +521,16 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
       ? []
       : (() => { throw eligibilityRequirementsResult.error; })()
     : eligibilityRequirementsResult.data ?? [];
+  const incentivePrograms = incentiveProgramsResult.error
+    ? isMissingSchemaError(incentiveProgramsResult.error, "incentive_programs")
+      ? []
+      : (() => { throw incentiveProgramsResult.error; })()
+    : incentiveProgramsResult.data ?? [];
+  const incentiveProgramNominations = incentiveProgramNominationsResult.error
+    ? isMissingSchemaError(incentiveProgramNominationsResult.error, "incentive_program_nominations")
+      ? []
+      : (() => { throw incentiveProgramNominationsResult.error; })()
+    : incentiveProgramNominationsResult.data ?? [];
   const contactInsuranceEvidence = contactInsuranceEvidenceResult.error
     ? isMissingSchemaError(contactInsuranceEvidenceResult.error, "contact_insurance_evidence")
       ? []
@@ -857,6 +877,8 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     disciplineCredentialIssuers,
     externalCredentialProducts,
     eligibilityRequirements,
+    incentivePrograms,
+    incentiveProgramNominations,
     contactInsuranceEvidence,
     slates: slatesResult.data ?? [],
     showAnnouncements,
@@ -1319,6 +1341,119 @@ export async function deleteEligibilityRequirement(id: string) {
   const client = requireSupabase();
   const { error } = await client.from("eligibility_requirements").delete().eq("id", id);
   if (error) throw error;
+}
+
+export async function createIncentiveProgram(input: IncentiveProgramInput) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("incentive_programs").insert({
+    ...input,
+    code: input.code.trim(),
+    name_fr: input.name_fr.trim(),
+    name_en: input.name_en?.trim() || null,
+    description_fr: input.description_fr?.trim() || null,
+    description_en: input.description_en?.trim() || null,
+    nomination_fee: Math.max(0, Number(input.nomination_fee) || 0),
+    tax_applicable: input.tax_applicable ?? false,
+    is_active: input.is_active ?? true,
+    settings: input.settings ?? {},
+  }).select("*").single<IncentiveProgram>();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateIncentiveProgram(id: string, input: Partial<IncentiveProgramInput>) {
+  const client = requireSupabase();
+  const payload = {
+    ...input,
+    ...(input.code == null ? {} : { code: input.code.trim() }),
+    ...(input.name_fr == null ? {} : { name_fr: input.name_fr.trim() }),
+    ...(input.name_en === undefined ? {} : { name_en: input.name_en?.trim() || null }),
+    ...(input.description_fr === undefined ? {} : { description_fr: input.description_fr?.trim() || null }),
+    ...(input.description_en === undefined ? {} : { description_en: input.description_en?.trim() || null }),
+    ...(input.nomination_fee === undefined ? {} : { nomination_fee: Math.max(0, Number(input.nomination_fee) || 0) }),
+  };
+  const { data, error } = await client.from("incentive_programs").update(payload).eq("id", id).select("*").single<IncentiveProgram>();
+  if (error) throw error;
+  return data;
+}
+
+export async function createIncentiveProgramNomination(input: IncentiveProgramNominationInput) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("incentive_program_nominations").insert({
+    ...input,
+    status: input.status ?? "active",
+    source: input.source ?? "manual",
+    nominated_on: input.nominated_on ?? new Date().toISOString().slice(0, 10),
+    reference_number: input.reference_number?.trim() || null,
+    notes: input.notes?.trim() || null,
+    metadata: input.metadata ?? {},
+  }).select("*").single<IncentiveProgramNomination>();
+  if (error) throw error;
+  return data;
+}
+
+export async function updateIncentiveProgramNomination(id: string, input: Partial<IncentiveProgramNominationInput>) {
+  const client = requireSupabase();
+  const { data, error } = await client.from("incentive_program_nominations").update(input).eq("id", id).select("*").single<IncentiveProgramNomination>();
+  if (error) throw error;
+  return data;
+}
+
+export async function purchaseIncentiveProgramNomination(input: {
+  incentive_program_id: string;
+  horse_id: string;
+  payer_contact_id: string;
+  nomination_role: IncentiveProgramNomination["nomination_role"];
+  season_year: number;
+  qualifying_stallion_nomination_id?: string | null;
+  reference_number?: string | null;
+  notes?: string | null;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client.rpc("purchase_incentive_program_nomination", {
+    p_incentive_program_id: input.incentive_program_id,
+    p_horse_id: input.horse_id,
+    p_payer_contact_id: input.payer_contact_id,
+    p_nomination_role: input.nomination_role,
+    p_season_year: input.season_year,
+    p_qualifying_stallion_nomination_id: input.qualifying_stallion_nomination_id ?? null,
+    p_reference_number: input.reference_number?.trim() || null,
+    p_notes: input.notes?.trim() || null,
+  });
+  if (error) throw error;
+  return data as unknown as IncentiveProgramNomination;
+}
+
+export type IncentiveNominationCsvRow = {
+  program_code: string;
+  horse_name: string;
+  registration_number: string;
+  nomination_role: string;
+  season_year: string;
+  status: string;
+  nominated_on: string;
+  valid_from: string;
+  valid_until: string;
+  qualifying_stallion_reference: string;
+  reference_number: string;
+  notes: string;
+};
+
+export type IncentiveNominationImportResult = {
+  imported: number;
+  failed: number;
+  errors: Array<{ row: number; message: string }>;
+};
+
+export async function importIncentiveProgramNominations(organizationId: string, rows: IncentiveNominationCsvRow[]) {
+  const client = requireSupabase();
+  const orderedRows = [...rows].sort((left, right) => Number(right.nomination_role === "stallion") - Number(left.nomination_role === "stallion"));
+  const { data, error } = await client.rpc("import_incentive_program_nominations", {
+    p_organization_id: organizationId,
+    p_rows: orderedRows,
+  });
+  if (error) throw error;
+  return data as unknown as IncentiveNominationImportResult;
 }
 
 export async function createContactInsuranceEvidence(input: Omit<ContactInsuranceEvidence, "id" | "created_at" | "updated_at" | "reviewed_at" | "reviewed_by_user_id">) {

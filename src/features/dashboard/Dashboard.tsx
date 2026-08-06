@@ -945,6 +945,7 @@ export function Dashboard({
             disciplines={disciplines}
             disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
             eligibilityRequirements={context?.eligibilityRequirements ?? []}
+            incentivePrograms={context?.incentivePrograms ?? []}
             externalCredentialIssuers={externalCredentialIssuers}
             externalCredentialProducts={context?.externalCredentialProducts ?? []}
             classes={selectedShowClasses}
@@ -1160,6 +1161,10 @@ export function Dashboard({
             horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={personalHorseHealthDocuments}
             horseContacts={horseContacts}
+            incentivePrograms={context?.incentivePrograms ?? []}
+            incentiveProgramNominations={context?.incentiveProgramNominations ?? []}
+            payerContacts={selectedOrganizationPersonalContacts}
+            programHorses={selectedOrganizationPersonalHorses}
             healthComplianceRevision={healthComplianceRevision}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
@@ -1170,6 +1175,7 @@ export function Dashboard({
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+            onRefresh={onRefresh}
           />
         ) : null}
 

@@ -4,7 +4,7 @@ import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../componen
 import { classLabel, findById, formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createBlock, createBlockTemplate, createClassTemplate, createClass, createSlate, deleteBlock, deleteBlockTemplate, deleteClassTemplate, deleteClass, deleteSlate, saveShowScorePaidWarmup, updateBlock, updateBlockTemplate, updateClassTemplate, updateClass, updateShowScorePaidWarmup, updateSlate } from "../../services/supabaseServices";
-import type { Block, BlockConcurrencyGroupMember, BlockJudgeAssignment, BlockTemplate, ClassTemplate, Contact, ClassRecord, Discipline, DisciplineCredentialIssuer, EligibilityRequirement, Entry, EligibilityRules, ExternalCredentialIssuer, ExternalCredentialProduct, Horse, Organization, OrganizationDiscipline, OrganizationDisciplineGoverningBody, SanctioningBody, Show, ShowDay, ShowScorePaidWarmup, Slate } from "../../types/domain";
+import type { Block, BlockConcurrencyGroupMember, BlockJudgeAssignment, BlockTemplate, ClassTemplate, Contact, ClassRecord, Discipline, DisciplineCredentialIssuer, EligibilityRequirement, Entry, EligibilityRules, ExternalCredentialIssuer, ExternalCredentialProduct, Horse, IncentiveProgram, Organization, OrganizationDiscipline, OrganizationDisciplineGoverningBody, SanctioningBody, Show, ShowDay, ShowScorePaidWarmup, Slate } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { BlockForm } from "./BlockForm";
 import { BlockTemplateForm } from "./BlockTemplateForm";
@@ -33,6 +33,7 @@ function ClassesView({
   disciplines,
   disciplineCredentialIssuers,
   eligibilityRequirements,
+  incentivePrograms,
   externalCredentialIssuers,
   externalCredentialProducts,
   classes,
@@ -77,6 +78,7 @@ function ClassesView({
   disciplines: Discipline[];
   disciplineCredentialIssuers: DisciplineCredentialIssuer[];
   eligibilityRequirements: EligibilityRequirement[];
+  incentivePrograms: IncentiveProgram[];
   externalCredentialIssuers: ExternalCredentialIssuer[];
   externalCredentialProducts: ExternalCredentialProduct[];
   classes: ClassRecord[];
@@ -864,6 +866,7 @@ function ClassesView({
             externalCredentialIssuers={externalCredentialIssuers}
             externalCredentialProducts={externalCredentialProducts}
             inheritedRequirements={editorContext.inheritedRequirements}
+            incentivePrograms={incentivePrograms}
             organization={organization}
             ownRequirements={editorContext.ownRequirements}
             scopeId={editingRequirements.id}

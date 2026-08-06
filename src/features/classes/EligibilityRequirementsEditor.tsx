@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { NoticeBanner } from "../../components/ui";
 import { errorMessage } from "../../lib/display";
 import { createEligibilityRequirement, updateEligibilityRequirement } from "../../services/supabaseServices";
-import type { DisciplineCredentialIssuer, EligibilityRequirement, ExternalCredentialIssuer, ExternalCredentialProduct, Organization } from "../../types/domain";
+import type { DisciplineCredentialIssuer, EligibilityRequirement, ExternalCredentialIssuer, ExternalCredentialProduct, IncentiveProgram, Organization } from "../../types/domain";
 import type { Notice } from "../../types/ui";
 
 export function EligibilityRequirementsEditor({
@@ -11,6 +11,7 @@ export function EligibilityRequirementsEditor({
   externalCredentialIssuers,
   externalCredentialProducts,
   inheritedRequirements,
+  incentivePrograms,
   organization,
   disciplineIds,
   ownRequirements,
@@ -23,6 +24,7 @@ export function EligibilityRequirementsEditor({
   externalCredentialIssuers: ExternalCredentialIssuer[];
   externalCredentialProducts: ExternalCredentialProduct[];
   inheritedRequirements: EligibilityRequirement[];
+  incentivePrograms: IncentiveProgram[];
   organization: Organization;
   disciplineIds: string[];
   ownRequirements: EligibilityRequirement[];
@@ -63,6 +65,7 @@ export function EligibilityRequirementsEditor({
           external_credential_issuer_id: template.external_credential_issuer_id,
           credential_product_id: template.credential_product_id,
           credential_type: template.credential_type,
+          incentive_program_id: template.incentive_program_id,
           requirement_group_code: template.requirement_group_code,
           match_rule: template.match_rule,
           enforcement_mode: "blocking",
@@ -80,10 +83,23 @@ export function EligibilityRequirementsEditor({
   }
 
   const templates: RequirementTemplate[] = [
-    { requirement_type: "host_membership", subject_type: "rider", external_credential_issuer_id: null, credential_product_id: null, credential_type: "membership", requirement_group_code: null, match_rule: "all", label: "Carte de membre de l’association pour le cavalier" },
+    { requirement_type: "host_membership", subject_type: "rider", external_credential_issuer_id: null, credential_product_id: null, incentive_program_id: null, credential_type: "membership", requirement_group_code: null, match_rule: "all", label: "Carte de membre de l’association pour le cavalier" },
     ...issuers.filter((issuer) => issuer.issuer_type !== "insurance_provider").map((issuer): RequirementTemplate => issuer.issuer_type === "breed_registry"
-      ? { requirement_type: "horse_registration", subject_type: "horse", external_credential_issuer_id: issuer.id, credential_product_id: null, credential_type: "registration", requirement_group_code: null, match_rule: "all", label: `Enregistrement du cheval — ${issuer.name}` }
-      : { requirement_type: "external_contact_credential", subject_type: "rider", external_credential_issuer_id: issuer.id, credential_product_id: null, credential_type: "membership", requirement_group_code: null, match_rule: "all", label: `Adhésion du cavalier — ${issuer.name}` }),
+      ? { requirement_type: "horse_registration", subject_type: "horse", external_credential_issuer_id: issuer.id, credential_product_id: null, incentive_program_id: null, credential_type: "registration", requirement_group_code: null, match_rule: "all", label: `Enregistrement du cheval — ${issuer.name}` }
+      : { requirement_type: "external_contact_credential", subject_type: "rider", external_credential_issuer_id: issuer.id, credential_product_id: null, incentive_program_id: null, credential_type: "membership", requirement_group_code: null, match_rule: "all", label: `Adhésion du cavalier — ${issuer.name}` }),
+    ...((scopeType === "class" || scopeType === "class_template")
+      ? incentivePrograms.filter((program) => program.organization_id === organization.id && program.is_active).map((program): RequirementTemplate => ({
+          requirement_type: "program_nomination",
+          subject_type: "horse",
+          external_credential_issuer_id: null,
+          credential_product_id: null,
+          incentive_program_id: program.id,
+          credential_type: null,
+          requirement_group_code: null,
+          match_rule: "all",
+          label: `Nomination obligatoire — ${program.name_fr}`,
+        }))
+      : []),
   ];
 
   return <div className="stack">
@@ -101,11 +117,11 @@ export function EligibilityRequirementsEditor({
       <legend>Options acceptées pour l’assurance</legend>
       {insuranceProducts.map((product) => {
         const issuer = externalCredentialIssuers.find((candidate) => candidate.id === product.external_credential_issuer_id);
-        const template: RequirementTemplate = { requirement_type: "rider_insurance", subject_type: "rider", external_credential_issuer_id: product.external_credential_issuer_id, credential_product_id: product.id, credential_type: "membership", requirement_group_code: insuranceGroup, match_rule: "at_least_one", label: `${issuer?.name ?? "Organisme"} — ${product.name}` };
+        const template: RequirementTemplate = { requirement_type: "rider_insurance", subject_type: "rider", external_credential_issuer_id: product.external_credential_issuer_id, credential_product_id: product.id, incentive_program_id: null, credential_type: "membership", requirement_group_code: insuranceGroup, match_rule: "at_least_one", label: `${issuer?.name ?? "Organisme"} — ${product.name}` };
         return <label className="check-row" key={product.id}><input checked={activeKeys.has(requirementKey(template))} disabled={Boolean(busyKey)} type="checkbox" onChange={(event) => void toggle(template, event.target.checked)} /><span>{template.label}</span></label>;
       })}
       {(() => {
-        const template: RequirementTemplate = { requirement_type: "rider_insurance", subject_type: "rider", external_credential_issuer_id: null, credential_product_id: null, credential_type: "insurance", requirement_group_code: insuranceGroup, match_rule: "at_least_one", label: "Preuve d’assurance personnelle approuvée" };
+        const template: RequirementTemplate = { requirement_type: "rider_insurance", subject_type: "rider", external_credential_issuer_id: null, credential_product_id: null, incentive_program_id: null, credential_type: "insurance", requirement_group_code: insuranceGroup, match_rule: "at_least_one", label: "Preuve d’assurance personnelle approuvée" };
         return <label className="check-row"><input checked={activeKeys.has(requirementKey(template))} disabled={Boolean(busyKey)} type="checkbox" onChange={(event) => void toggle(template, event.target.checked)} /><span>{template.label}</span></label>;
       })()}
       <span className="input-help">Les options cochées dans ce groupe sont alternatives : une seule preuve valide suffit.</span>
@@ -113,10 +129,10 @@ export function EligibilityRequirementsEditor({
   </div>;
 }
 
-type RequirementTemplate = Pick<EligibilityRequirement, "requirement_type" | "subject_type" | "external_credential_issuer_id" | "credential_product_id" | "credential_type" | "requirement_group_code" | "match_rule" | "label">;
+type RequirementTemplate = Pick<EligibilityRequirement, "requirement_type" | "subject_type" | "external_credential_issuer_id" | "credential_product_id" | "incentive_program_id" | "credential_type" | "requirement_group_code" | "match_rule" | "label">;
 
 function requirementKey(requirement: RequirementTemplate) {
-  return [requirement.requirement_type, requirement.subject_type, requirement.external_credential_issuer_id ?? "", requirement.credential_product_id ?? "", requirement.requirement_group_code ?? ""].join(":");
+  return [requirement.requirement_type, requirement.subject_type, requirement.external_credential_issuer_id ?? "", requirement.credential_product_id ?? "", requirement.incentive_program_id ?? "", requirement.requirement_group_code ?? ""].join(":");
 }
 
 function scopeLabel(scope: EligibilityRequirement["scope_type"]) {

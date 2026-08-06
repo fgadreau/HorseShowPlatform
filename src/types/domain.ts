@@ -798,7 +798,95 @@ export type OrganizationDisciplineGoverningBody = {
 };
 
 export type EligibilityRequirementScope = "organization_discipline" | "block" | "class" | "block_template" | "class_template";
-export type EligibilityRequirementType = "host_membership" | "external_contact_credential" | "horse_registration" | "rider_insurance";
+export type EligibilityRequirementType = "host_membership" | "external_contact_credential" | "horse_registration" | "rider_insurance" | "program_nomination";
+
+export type IncentiveProgramType =
+  | "horse_foal_nomination"
+  | "stallion_nomination"
+  | "stallion_subscription_foal_nomination"
+  | "stallion_incentive"
+  | "performance_incentive";
+
+export type IncentiveProgram = {
+  id: string;
+  organization_id: string;
+  code: string;
+  name_fr: string;
+  name_en: string | null;
+  description_fr: string | null;
+  description_en: string | null;
+  program_type: IncentiveProgramType;
+  valid_from: string | null;
+  valid_until: string | null;
+  nomination_deadline: string | null;
+  nomination_fee: number;
+  tax_applicable: boolean;
+  is_active: boolean;
+  settings: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IncentiveProgramInput = Pick<IncentiveProgram,
+  | "organization_id"
+  | "code"
+  | "name_fr"
+  | "program_type"
+> & Partial<Pick<IncentiveProgram,
+  | "name_en"
+  | "description_fr"
+  | "description_en"
+  | "valid_from"
+  | "valid_until"
+  | "nomination_deadline"
+  | "nomination_fee"
+  | "tax_applicable"
+  | "is_active"
+  | "settings"
+  | "created_by_user_id"
+>>;
+
+export type IncentiveProgramNomination = {
+  id: string;
+  organization_id: string;
+  incentive_program_id: string;
+  horse_id: string;
+  nomination_role: "horse" | "foal" | "stallion";
+  season_year: number;
+  status: "pending" | "active" | "expired" | "rejected" | "withdrawn";
+  source: "manual" | "import" | "stallion_progeny" | "performance";
+  nominated_on: string;
+  valid_from: string | null;
+  valid_until: string | null;
+  qualifying_stallion_nomination_id: string | null;
+  manual_sale_id: string | null;
+  reference_number: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_by_user_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type IncentiveProgramNominationInput = Pick<IncentiveProgramNomination,
+  | "organization_id"
+  | "incentive_program_id"
+  | "horse_id"
+  | "nomination_role"
+  | "season_year"
+> & Partial<Pick<IncentiveProgramNomination,
+  | "status"
+  | "source"
+  | "nominated_on"
+  | "valid_from"
+  | "valid_until"
+  | "qualifying_stallion_nomination_id"
+  | "reference_number"
+  | "notes"
+  | "metadata"
+  | "created_by_user_id"
+>>;
 
 export type EligibilityRequirement = {
   id: string;
@@ -813,6 +901,7 @@ export type EligibilityRequirement = {
   subject_type: "rider" | "owner" | "horse";
   external_credential_issuer_id: string | null;
   credential_product_id: string | null;
+  incentive_program_id: string | null;
   credential_type: ExternalCredentialProduct["credential_type"] | null;
   requirement_group_code: string | null;
   match_rule: "all" | "at_least_one";
@@ -840,6 +929,7 @@ export type EligibilityRequirementInput = Pick<EligibilityRequirement,
   | "class_template_id"
   | "external_credential_issuer_id"
   | "credential_product_id"
+  | "incentive_program_id"
   | "credential_type"
   | "requirement_group_code"
   | "match_rule"
