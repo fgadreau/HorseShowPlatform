@@ -128,17 +128,24 @@ résultats suivants sur ce déploiement :
 | 167, essai 1 | 4 007 / 4 008 | 1 353 ms | 13 lectures | 1 | Échec strict |
 | 167, essai 2 | 4 007 / 4 008 | 1 345 ms | 13 lectures | 1 | Échec strict |
 | 167, 2 runners | 4 008 / 4 008 | 1 311 ms | 0 | 0 | Réussi |
+| 167, 2 runners, 15 min | 29 378 / 29 392 | 1 305 ms | 2,56 / vue-min | 17 | Échec strict |
 
 La capacité entièrement validée par ce banc est donc de 167 vues simultanées
 lorsque la génération de charge est répartie sur deux runners. Les deux échecs
 sur un runner unique indiquent une limite du générateur concentré, pas un seuil
 Realtime démontré à 167 connexions.
 
-Un premier essai distribué volontairement retardé de cinq minutes a aussi
-déclenché le snapshot de secours périodique de 156 vues et observé six
-reconnexions pendant la session prolongée. Ce résultat n'est pas comparable aux
-paliers de deux minutes, mais il montre que le prochain essai doit être un test
-d'endurance distribué à 167 vues avant d'augmenter vers 317 vues.
+Le test d'endurance distribué de 15 minutes confirme que le service reste
+opérationnel : les 167 connexions sont actives à la fin, la fixture est restaurée
+et la couverture atteint 99,952 %. Il ne respecte toutefois pas les budgets
+stricts. Dix-sept vues se sont reconnectées automatiquement et 14 livraisons ont
+été manquées momentanément avant le snapshot de récupération. Les snapshots de
+secours complets ont aussi produit 6 409 lectures REST, soit 2,56 par vue-minute
+contre une limite de 2.
+
+Le palier de 317 vues ne doit donc pas encore être lancé. Il faut d'abord réduire
+le coût du snapshot de secours et définir un budget d'endurance explicite pour
+les reconnexions récupérées, distinct d'une perte de connexion non récupérée.
 
 ## GitHub Actions
 
