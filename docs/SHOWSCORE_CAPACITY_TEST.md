@@ -103,6 +103,15 @@ Realtime comme un échec explicite. Ces migrations sont respectivement
 `20260805000700_showscore_announcer_live_realtime.sql` et
 `20260805000800_shows_realtime.sql`.
 
+Le premier smoke avec producteur du 5 août 2026 a ensuite confirmé la chaîne
+live complète : 6 mutations, 54 livraisons sur 54, propagation p95 de 599 ms et
+restauration réussie. Il a aussi révélé une amplification distincte dans le
+client public ShowScore : chaque mutation reçue recharge les 13 sources REST de
+la page. À une mutation toutes les 5 secondes, cela représente 156 requêtes par
+vue-minute. Le budget REST demeure donc en échec jusqu'à ce que le client
+applique la charge utile Realtime localement ou ne recharge que la ressource
+touchée.
+
 ## GitHub Actions
 
 Le workflow `ShowScore preprod capacity` est déclenché manuellement avec l'un
