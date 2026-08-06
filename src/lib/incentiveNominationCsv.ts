@@ -9,6 +9,8 @@ const columns: Array<keyof IncentiveNominationCsvRow> = [
   "program_code",
   "horse_name",
   "registration_number",
+  "nrha_number",
+  "date_of_birth",
   "nomination_role",
   "season_year",
   "status",
@@ -28,6 +30,13 @@ const aliases: Record<string, keyof IncentiveNominationCsvRow> = {
   registration_number: "registration_number",
   numero_enregistrement: "registration_number",
   no_enregistrement: "registration_number",
+  nrha_number: "nrha_number",
+  numero_nrha: "nrha_number",
+  nrha_profile: "nrha_number",
+  profil_nrha: "nrha_number",
+  date_of_birth: "date_of_birth",
+  date_naissance: "date_of_birth",
+  horse_date_of_birth: "date_of_birth",
   nomination_role: "nomination_role",
   role_nomination: "nomination_role",
   season_year: "season_year",
@@ -49,15 +58,18 @@ const aliases: Record<string, keyof IncentiveNominationCsvRow> = {
 
 export const incentiveNominationCsvHeaders = columns.join(",");
 
-export function parseIncentiveNominationCsv(content: string): IncentiveNominationCsvPreview {
+export function parseIncentiveNominationCsv(content: string, options: { requireNrhaProfile?: boolean } = {}): IncentiveNominationCsvPreview {
   const records = parseCsvRecords(content.replace(/^\uFEFF/, ""));
   if (!records.length) return { rows: [], errors: [{ row: 1, message: "Le fichier CSV est vide." }] };
 
   const mappedHeaders = records[0].map((header) => aliases[normalizeHeader(header)] ?? null);
   const errors: IncentiveNominationCsvPreview["errors"] = [];
   if (!mappedHeaders.includes("program_code")) errors.push({ row: 1, message: "Colonne program_code / code_programme manquante." });
-  if (!mappedHeaders.includes("horse_name") && !mappedHeaders.includes("registration_number")) {
-    errors.push({ row: 1, message: "Ajoute horse_name / nom_cheval ou registration_number / numero_enregistrement." });
+  if (!mappedHeaders.includes("horse_name") && !mappedHeaders.includes("registration_number") && !mappedHeaders.includes("nrha_number")) {
+    errors.push({ row: 1, message: "Ajoute horse_name / nom_cheval, registration_number / numero_enregistrement ou nrha_number / numero_nrha." });
+  }
+  if (options.requireNrhaProfile && (!mappedHeaders.includes("nrha_number") || !mappedHeaders.includes("date_of_birth"))) {
+    errors.push({ row: 1, message: "L’import avec profil NRHA exige les colonnes nrha_number / numero_nrha et date_of_birth / date_naissance." });
   }
   if (errors.length) return { rows: [], errors };
 
@@ -70,7 +82,10 @@ export function parseIncentiveNominationCsv(content: string): IncentiveNominatio
 
     const csvRowNumber = index + 2;
     if (!row.program_code) errors.push({ row: csvRowNumber, message: "Le code du programme est requis." });
-    if (!row.horse_name && !row.registration_number) errors.push({ row: csvRowNumber, message: "Le nom ou le numéro d’enregistrement du cheval est requis." });
+    if (!row.horse_name && !row.registration_number && !row.nrha_number) errors.push({ row: csvRowNumber, message: "Le nom, le numéro d’enregistrement ou le numéro NRHA du cheval est requis." });
+    if (options.requireNrhaProfile && !row.nrha_number) errors.push({ row: csvRowNumber, message: "Le numéro de profil NRHA est requis." });
+    if (options.requireNrhaProfile && !row.date_of_birth) errors.push({ row: csvRowNumber, message: "La date de naissance du cheval est requise." });
+    if (row.date_of_birth && !isValidDate(row.date_of_birth)) errors.push({ row: csvRowNumber, message: "La date de naissance doit être une date valide au format AAAA-MM-JJ." });
     if (row.season_year && !/^\d{4}$/.test(row.season_year)) errors.push({ row: csvRowNumber, message: "La saison doit être une année sur quatre chiffres." });
     if (row.nomination_role && !["horse", "foal", "stallion"].includes(row.nomination_role.toLowerCase())) {
       errors.push({ row: csvRowNumber, message: "nomination_role doit être horse, foal ou stallion." });
@@ -85,6 +100,12 @@ export function parseIncentiveNominationCsv(content: string): IncentiveNominatio
   });
 
   return { rows, errors };
+}
+
+function isValidDate(value: string) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const date = new Date(`${value}T00:00:00Z`);
+  return !Number.isNaN(date.getTime()) && date.toISOString().slice(0, 10) === value;
 }
 
 function normalizeHeader(value: string) {

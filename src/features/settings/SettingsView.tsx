@@ -11,7 +11,6 @@ import type { CogginsValidityRule, ExternalCredentialIssuer, HealthIdentityValid
 import { uiText, organizationBackNumberMode } from "../dashboard/shared";
 import { backNumberPolicyLabel } from "../classes/classUtils";
 import { DisciplineRequirementsSettings } from "./DisciplineRequirementsSettings";
-import { IncentiveProgramsSettings } from "./IncentiveProgramsSettings";
 
 type OrganizationBillingFormState = {
   name: string;
@@ -561,8 +560,6 @@ function SettingsView({
       />
 
       {context && organization ? <DisciplineRequirementsSettings context={context} organization={organization} onRefresh={onRefresh} /> : null}
-
-      {context && organization ? <IncentiveProgramsSettings context={context} locale={locale} organization={organization} onRefresh={onRefresh} /> : null}
 
       <SettingsSection
         {...sectionToggleLabels}

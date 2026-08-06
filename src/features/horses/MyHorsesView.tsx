@@ -11,7 +11,7 @@ import { uiText, horseExternalReferenceChips, horseGenderLabel, todayDateValue }
 import { healthComplianceStatusLabel, healthComplianceTone, HorseAssociationComplianceGroups, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
-import { incentiveProgramName, incentiveProgramTypeLabel, nominationRoleLabel, nominationStatusLabel, programUsesStallion } from "../programs/programLabels";
+import { incentiveProgramAgePriceTiers, incentiveProgramFeeForHorse, incentiveProgramName, incentiveProgramTypeLabel, nominationRoleLabel, nominationStatusLabel, programUsesStallion } from "../programs/programLabels";
 
 function MyHorsesView({
   locale,
@@ -75,6 +75,10 @@ function MyHorsesView({
   const [purchaseBusy, setPurchaseBusy] = useState(false);
   const [purchaseNotice, setPurchaseNotice] = useState<Notice | null>(null);
   const purchaseProgram = activePrograms.find((program) => program.id === purchaseProgramId) ?? null;
+  const purchaseHorse = programHorses.find((horse) => horse.id === purchaseHorseId) ?? null;
+  const purchaseSeasonYear = Number(purchaseSeason) || new Date().getFullYear();
+  const purchasePricing = purchaseProgram ? incentiveProgramFeeForHorse(purchaseProgram, purchaseHorse, purchaseSeasonYear) : null;
+  const purchaseRequiresBirthDate = Boolean(purchaseProgram && incentiveProgramAgePriceTiers(purchaseProgram).length);
   const availablePurchaseRoles: IncentiveProgramNomination["nomination_role"][] = purchaseProgram && programUsesStallion(purchaseProgram)
     ? ["stallion", "foal"]
     : purchaseProgram?.program_type === "horse_foal_nomination"
@@ -105,6 +109,10 @@ function MyHorsesView({
   async function handleNominationPurchase(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!purchaseProgram || !purchaseHorseId || !purchasePayerId) return;
+    if (purchaseRequiresBirthDate && !purchaseHorse?.date_of_birth) {
+      setPurchaseNotice({ tone: "error", message: uiText(locale, "Ajoute la date de naissance du cheval avant d’acheter cette nomination. Elle détermine son âge au 1er janvier.", "Add the horse's date of birth before buying this nomination. It determines age on January 1.") });
+      return;
+    }
     setPurchaseBusy(true);
     setPurchaseNotice(null);
     try {
@@ -159,14 +167,15 @@ function MyHorsesView({
         {purchaseNotice ? <NoticeBanner notice={purchaseNotice} /> : null}
         <form className="stack" onSubmit={handleNominationPurchase}>
           <div className="form-grid">
-            <label>{uiText(locale, "Programme", "Program")}<select required value={purchaseProgramId} onChange={(event) => { const programId = event.target.value; const program = activePrograms.find((candidate) => candidate.id === programId); setPurchaseProgramId(programId); setPurchaseRole(program && programUsesStallion(program) ? "stallion" : "horse"); }}>{activePrograms.map((program) => <option key={program.id} value={program.id}>{`${incentiveProgramName(program, locale)} · ${formatCurrency(program.nomination_fee, organization?.currency ?? "CAD")}`}</option>)}</select>{purchaseProgram ? <span className="input-help">{incentiveProgramTypeLabel(purchaseProgram.program_type, locale)}</span> : null}</label>
-            <label>{uiText(locale, "Cheval", "Horse")}<select required value={purchaseHorseId} onChange={(event) => setPurchaseHorseId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{programHorses.map((horse) => <option key={horse.id} value={horse.id}>{horse.name}</option>)}</select></label>
+            <label>{uiText(locale, "Programme", "Program")}<select required value={purchaseProgramId} onChange={(event) => { const programId = event.target.value; const program = activePrograms.find((candidate) => candidate.id === programId); setPurchaseProgramId(programId); setPurchaseRole(program && programUsesStallion(program) ? "stallion" : "horse"); }}>{activePrograms.map((program) => <option key={program.id} value={program.id}>{incentiveProgramName(program, locale)}</option>)}</select>{purchaseProgram ? <span className="input-help">{incentiveProgramTypeLabel(purchaseProgram.program_type, locale)}</span> : null}</label>
+            <label>{uiText(locale, "Cheval", "Horse")}<select required value={purchaseHorseId} onChange={(event) => setPurchaseHorseId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{programHorses.map((horse) => <option key={horse.id} value={horse.id}>{horse.name}</option>)}</select>{purchaseHorse ? <span className="input-help">{purchaseHorse.date_of_birth ? uiText(locale, `Né le ${purchaseHorse.date_of_birth}`, `Born ${purchaseHorse.date_of_birth}`) : uiText(locale, "Date de naissance manquante", "Missing date of birth")}</span> : null}</label>
             <label>{uiText(locale, "Payeur", "Payer")}<select required value={purchasePayerId} onChange={(event) => setPurchasePayerId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{payerContacts.map((contact) => <option key={contact.id} value={contact.id}>{contactLabel(contact)}</option>)}</select></label>
             <label>{uiText(locale, "Rôle", "Role")}<select value={availablePurchaseRoles.includes(purchaseRole) ? purchaseRole : availablePurchaseRoles[0]} onChange={(event) => setPurchaseRole(event.target.value as IncentiveProgramNomination["nomination_role"])}>{availablePurchaseRoles.map((role) => <option key={role} value={role}>{nominationRoleLabel(role, locale)}</option>)}</select></label>
             <label>{uiText(locale, "Saison", "Season")}<input min="1900" required type="number" value={purchaseSeason} onChange={(event) => setPurchaseSeason(event.target.value)} /></label>
           </div>
+          {purchaseProgram && purchasePricing ? <p className="muted-line"><strong>{uiText(locale, "Prix applicable", "Applicable fee")} : {formatCurrency(purchasePricing.fee, organization?.currency ?? "CAD")}</strong>{purchasePricing.age !== null ? ` · ${uiText(locale, `Âge au 1er janvier ${purchaseSeasonYear} : ${purchasePricing.age} an(s)`, `Age on January 1, ${purchaseSeasonYear}: ${purchasePricing.age}`)}` : purchaseRequiresBirthDate ? ` · ${uiText(locale, "date de naissance requise", "date of birth required")}` : ""}</p> : null}
           {purchaseProgram && programUsesStallion(purchaseProgram) && purchaseRole === "foal" ? <p className="muted-line">{uiText(locale, "La nomination restera en attente jusqu’à ce que l’association confirme l’étalon admissible.", "The nomination remains pending until the association confirms the qualifying stallion.")}</p> : null}
-          <button className="primary-button" disabled={purchaseBusy || !purchaseHorseId || !purchasePayerId} type="submit">{purchaseBusy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer la nomination", "Create nomination")}</button>
+          <button className="primary-button" disabled={purchaseBusy || !purchaseHorseId || !purchasePayerId || (purchaseRequiresBirthDate && !purchaseHorse?.date_of_birth)} type="submit">{purchaseBusy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer la nomination", "Create nomination")}</button>
         </form>
         <div className="requirement-list">
           {incentiveProgramNominations.filter((nomination) => programHorses.some((horse) => horse.id === nomination.horse_id)).map((nomination) => {

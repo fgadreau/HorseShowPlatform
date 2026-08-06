@@ -807,6 +807,16 @@ export type IncentiveProgramType =
   | "stallion_incentive"
   | "performance_incentive";
 
+export type IncentiveProgramAgePriceTier = {
+  min_age: number;
+  max_age: number | null;
+  fee: number;
+};
+
+export type IncentiveProgramSettings = Record<string, unknown> & {
+  age_price_tiers?: IncentiveProgramAgePriceTier[];
+};
+
 export type IncentiveProgram = {
   id: string;
   organization_id: string;
@@ -822,7 +832,7 @@ export type IncentiveProgram = {
   nomination_fee: number;
   tax_applicable: boolean;
   is_active: boolean;
-  settings: Record<string, unknown>;
+  settings: IncentiveProgramSettings;
   created_by_user_id: string | null;
   created_at: string;
   updated_at: string;
