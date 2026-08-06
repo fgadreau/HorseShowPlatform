@@ -1,5 +1,5 @@
 import type { Locale } from "../../lib/i18n";
-import type { IncentiveProgram, IncentiveProgramNomination } from "../../types/domain";
+import type { Horse, IncentiveProgram, IncentiveProgramAgePriceTier, IncentiveProgramNomination } from "../../types/domain";
 
 export function incentiveProgramName(program: IncentiveProgram, locale: Locale) {
   return locale === "en" ? program.name_en?.trim() || program.name_fr : program.name_fr;
@@ -38,4 +38,40 @@ export function nominationStatusLabel(status: IncentiveProgramNomination["status
 
 export function programUsesStallion(program: IncentiveProgram) {
   return ["stallion_nomination", "stallion_subscription_foal_nomination", "stallion_incentive"].includes(program.program_type);
+}
+
+export function incentiveProgramAgePriceTiers(program: IncentiveProgram): IncentiveProgramAgePriceTier[] {
+  const rawTiers = program.settings?.age_price_tiers;
+  if (!Array.isArray(rawTiers)) return [];
+
+  return rawTiers
+    .map((tier) => {
+      if (!tier || typeof tier !== "object") return null;
+      const candidate = tier as Record<string, unknown>;
+      const minAge = Number(candidate.min_age);
+      const maxAge = candidate.max_age == null || candidate.max_age === "" ? null : Number(candidate.max_age);
+      const fee = Number(candidate.fee);
+      if (!Number.isInteger(minAge) || minAge < 0 || (maxAge !== null && (!Number.isInteger(maxAge) || maxAge < minAge)) || !Number.isFinite(fee) || fee < 0) return null;
+      return { min_age: minAge, max_age: maxAge, fee };
+    })
+    .filter((tier): tier is IncentiveProgramAgePriceTier => Boolean(tier))
+    .sort((left, right) => left.min_age - right.min_age);
+}
+
+export function horseAgeForSeason(horse: Pick<Horse, "birth_year" | "date_of_birth">, seasonYear: number) {
+  const birthYear = horse.date_of_birth ? Number(horse.date_of_birth.slice(0, 4)) : null;
+  if (!birthYear || !Number.isInteger(seasonYear) || seasonYear < birthYear) return null;
+  return seasonYear - birthYear;
+}
+
+export function incentiveProgramFeeForHorse(program: IncentiveProgram, horse: Pick<Horse, "birth_year" | "date_of_birth"> | null, seasonYear: number) {
+  const tiers = incentiveProgramAgePriceTiers(program);
+  const age = horse ? horseAgeForSeason(horse, seasonYear) : null;
+  const tier = age === null ? null : tiers.find((candidate) => age >= candidate.min_age && (candidate.max_age === null || age <= candidate.max_age)) ?? null;
+  return {
+    age,
+    fee: tier?.fee ?? Number(program.nomination_fee),
+    tier,
+    usesFallback: !tier,
+  };
 }

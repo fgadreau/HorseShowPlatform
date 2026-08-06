@@ -1428,6 +1428,8 @@ export type IncentiveNominationCsvRow = {
   program_code: string;
   horse_name: string;
   registration_number: string;
+  nrha_number: string;
+  date_of_birth: string;
   nomination_role: string;
   season_year: string;
   status: string;

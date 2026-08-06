@@ -4,7 +4,7 @@ begin;
 
 insert into public.incentive_programs (
   id, organization_id, code, name_fr, name_en, program_type,
-  valid_from, valid_until, nomination_deadline, nomination_fee, created_by_user_id
+  valid_from, valid_until, nomination_deadline, nomination_fee, settings, created_by_user_id
 ) values (
   'a1000000-0000-0000-0000-000000000001',
   '30000000-0000-0000-0000-000000000001',
@@ -16,6 +16,7 @@ insert into public.incentive_programs (
   '2026-12-31',
   '2200-12-31',
   75,
+  '{"age_price_tiers":[{"min_age":0,"max_age":2,"fee":50},{"min_age":3,"max_age":5,"fee":90},{"min_age":6,"max_age":null,"fee":125}]}'::jsonb,
   '20000000-0000-0000-0000-000000000002'
 );
 
@@ -146,6 +147,60 @@ update public.eligibility_requirements
 set incentive_program_id = 'a1000000-0000-0000-0000-000000000001'
 where id = 'a1100000-0000-0000-0000-000000000001';
 
+update public.horses
+set date_of_birth = '2026-06-15',
+    birth_year = 2026
+where id = '80000000-0000-0000-0000-000000000001';
+
+insert into public.horse_external_identifiers (
+  horse_id,
+  external_credential_issuer_id,
+  identifier_type,
+  identifier_value,
+  status,
+  verified_at
+)
+select
+  '80000000-0000-0000-0000-000000000001',
+  issuer.id,
+  'competition_license',
+  'NRHA-AGE-TEST-001',
+  'active',
+  now()
+from public.external_credential_issuers issuer
+where issuer.code = 'NRHA';
+
+do $$
+declare
+  pricing record;
+begin
+  select * into pricing
+  from public.resolve_incentive_program_nomination_fee(
+    'a1000000-0000-0000-0000-000000000001',
+    '80000000-0000-0000-0000-000000000001',
+    2028
+  );
+  if pricing.fee <> 50 or pricing.horse_age <> 2 or not pricing.used_age_tier then
+    raise exception 'Expected January 1 age pricing to resolve age 2 at $50: %', row_to_json(pricing);
+  end if;
+  raise notice 'ok - nomination price uses the horse age on January 1 of the season';
+end;
+$$;
+
+do $$
+begin
+  perform public.resolve_incentive_program_nomination_fee(
+    'a1000000-0000-0000-0000-000000000001',
+    'a1300000-0000-0000-0000-000000000001',
+    2028
+  );
+  raise exception 'Expected age-based pricing to require a horse date of birth';
+exception
+  when check_violation then
+    raise notice 'ok - age-priced nominations require the horse date of birth';
+end;
+$$;
+
 do $$
 declare
   assessment jsonb;
@@ -210,6 +265,19 @@ select public.import_incentive_program_nominations(
   ))
 );
 
+select public.import_incentive_program_nominations(
+  '30000000-0000-0000-0000-000000000001',
+  jsonb_build_array(jsonb_build_object(
+    'program_code', 'TEST-NOM',
+    'nrha_number', 'NRHA-AGE-TEST-001',
+    'date_of_birth', '2026-06-15',
+    'nomination_role', 'horse',
+    'season_year', '2029',
+    'status', 'active',
+    'reference_number', 'TEST-NRHA-2029-001'
+  ))
+);
+
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000004', true);
 
 do $$
@@ -244,7 +312,7 @@ begin
     join public.invoices invoice on invoice.id = sale.invoice_id
     where nomination.reference_number = 'TEST-2028-001'
       and invoice.status = 'draft'
-      and invoice.total_amount = 75
+      and invoice.total_amount = 50
   ) then
     raise exception 'Expected a draft invoice for the nomination fee';
   end if;
@@ -287,6 +355,23 @@ begin
     raise exception 'Expected the CSV import RPC to create the nomination';
   end if;
   raise notice 'ok - CSV rows import by registration number';
+end;
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from public.incentive_program_nominations
+    where incentive_program_id = 'a1000000-0000-0000-0000-000000000001'
+      and horse_id = '80000000-0000-0000-0000-000000000001'
+      and season_year = 2029
+      and source = 'import'
+      and metadata ->> 'nrha_number' = 'NRHA-AGE-TEST-001'
+      and metadata ->> 'date_of_birth' = '2026-06-15'
+  ) then
+    raise exception 'Expected the NRHA profile import to match the horse and retain birth data';
+  end if;
+  raise notice 'ok - CSV rows import through an active NRHA horse profile';
 end;
 $$;
 

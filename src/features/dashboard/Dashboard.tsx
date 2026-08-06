@@ -162,6 +162,7 @@ import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
+import { IncentiveProgramsSettings } from "../settings/IncentiveProgramsSettings";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
 import { ClientDashboardView } from "./ClientDashboardView";
 import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
@@ -1282,6 +1283,26 @@ export function Dashboard({
             shows={activeShowList}
             unpaidBalance={selectedShowPersonalUnpaidBalance}
           />
+        ) : null}
+
+        {effectiveView === "programs" && context && selectedOrganization ? (
+          <div className="content-grid">
+            <ViewIntro
+              eyebrow={locale === "fr" ? "Association" : "Association"}
+              title={locale === "fr" ? "Programmes" : "Programs"}
+              description={locale === "fr" ? "Gère les programmes incitatifs, les tarifs selon l’âge, les nominations et les imports NRHA." : "Manage incentive programs, age-based pricing, nominations, and NRHA imports."}
+              stats={[
+                { label: locale === "fr" ? "Programmes actifs" : "Active programs", value: String(context.incentivePrograms.filter((program) => program.organization_id === selectedOrganization.id && program.is_active).length) },
+                { label: locale === "fr" ? "Nominations" : "Nominations", value: String(context.incentiveProgramNominations.filter((nomination) => nomination.organization_id === selectedOrganization.id).length) },
+              ]}
+            />
+            <IncentiveProgramsSettings
+              context={context}
+              locale={locale}
+              organization={selectedOrganization}
+              onRefresh={onRefresh}
+            />
+          </div>
         ) : null}
 
         {effectiveView === "settings" ? (

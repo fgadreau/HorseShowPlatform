@@ -14,6 +14,7 @@ export type ViewKey =
   | "scoring"
   | "results"
   | "billing"
+  | "programs"
   | "settings"
   | "my-overview"
   | "my-profile"
