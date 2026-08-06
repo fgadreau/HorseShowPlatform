@@ -18,7 +18,10 @@
     "test:e2e:local:mega": "E2E_MODE=mega node scripts/run-e2e-local.mjs",
     "test:e2e:smoke": "E2E_MODE=smoke playwright test",
     "test:e2e:mega": "E2E_MODE=mega playwright test",
-    "test:e2e:install": "playwright install chromium"
+    "test:e2e:install": "playwright install chromium",
+    "test:capacity": "node scripts/run-showscore-capacity.mjs",
+    "test:capacity:aggregate": "node scripts/aggregate-showscore-capacity.mjs",
+    "test:capacity:config": "node --test scripts/capacity/*.test.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
