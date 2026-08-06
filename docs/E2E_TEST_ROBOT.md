@@ -164,3 +164,11 @@ Le déclenchement nocturne est défini sur la branche par défaut `main`, mais s
 cible demeure toujours l'URL et le projet Supabase de `preprod`. Les garde-fous
 comparent également la référence Supabase avec celle de PROD avant toute
 écriture.
+
+## Capacité publique
+
+Le méga robot valide le parcours métier, mais ne représente pas à lui seul des
+centaines de visiteurs. Le test complémentaire décrit dans
+[`SHOWSCORE_CAPACITY_TEST.md`](./SHOWSCORE_CAPACITY_TEST.md) ouvre simultanément
+les TV, les cellulaires et OBS, puis mesure les budgets REST et les erreurs
+Realtime sans modifier les données du show.
