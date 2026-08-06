@@ -51,6 +51,24 @@ test("les paliers intermédiaires évitent un saut direct de 67 à 517 vues", ()
   assert.equal(high.viewers.total, 317);
 });
 
+test("le profil distribué conserve 167 vues et accepte un départ coordonné", () => {
+  const startAt = "2026-08-06T15:30:00.000Z";
+  const config = readCapacityConfig(environment({
+    CAPACITY_COORDINATED_START_AT: startAt,
+    CAPACITY_PROFILE: "distributed167",
+  }));
+
+  assert.equal(capacitySummary(config).viewers.total, 167);
+  assert.equal(capacitySummary(config).coordinatedStartAt, startAt);
+});
+
+test("une date de départ coordonné invalide est refusée", () => {
+  assert.throws(
+    () => readCapacityConfig(environment({ CAPACITY_COORDINATED_START_AT: "demain matin" })),
+    /date ISO valide/,
+  );
+});
+
 test("la production est toujours refusée", () => {
   const config = readCapacityConfig(environment({
     CAPACITY_PUBLIC_URL: "https://showscore-prod.example/public/show",

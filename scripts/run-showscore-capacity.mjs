@@ -74,11 +74,16 @@ try {
     const blockId = findSubscribedBlockId(viewers);
     writer = await createCapacityWriter(config, blockId);
     console.log(`Producteur prêt pour le bloc ${blockId}.`);
+  }
+  if (config.coordinatedStartAt) {
+    await waitForCoordinatedStart(config.coordinatedStartAt);
+  }
+  if (writer) {
     await writer.activate();
-    if (config.writerSettleMs > 0) {
-      console.log(`Stabilisation live pendant ${config.writerSettleMs} ms.`);
-      await wait(config.writerSettleMs);
-    }
+  }
+  if (config.writerSettleMs > 0 && (writer || config.coordinatedStartAt)) {
+    console.log(`Stabilisation live pendant ${config.writerSettleMs} ms.`);
+    await wait(config.writerSettleMs);
   }
   steadyStateStartedAt = new Date();
   for (const viewer of viewers) viewer.metrics.steadyState = true;
@@ -110,7 +115,7 @@ try {
 function buildViewerDefinitions(role, count, urls, context) {
   return Array.from({ length: count }, (_, index) => ({
     context,
-    id: `${role}-${String(index + 1).padStart(3, "0")}`,
+    id: `${config.viewerIdPrefix}${role}-${String(index + 1).padStart(3, "0")}`,
     role,
     url: urls[index % urls.length],
   }));
@@ -441,6 +446,20 @@ function sum(values) {
 
 function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
+}
+
+async function waitForCoordinatedStart(startAt) {
+  const remainingMs = startAt.getTime() - Date.now();
+  if (remainingMs < -5_000) {
+    throw new Error(
+      `Départ coordonné manqué de ${Math.ceil(Math.abs(remainingMs) / 1_000)} s; test distribué annulé.`,
+    );
+  }
+  if (remainingMs <= 0) return;
+  console.log(
+    `En attente du départ coordonné à ${startAt.toISOString()} (${Math.ceil(remainingMs / 1_000)} s).`,
+  );
+  await wait(remainingMs);
 }
 
 async function waitWithProgress(seconds, viewerCount) {

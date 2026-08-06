@@ -65,6 +65,15 @@ export const CAPACITY_PROFILES = Object.freeze({
     settleSeconds: 25,
     tvViewers: 15,
   }),
+  distributed167: Object.freeze({
+    holdSeconds: 120,
+    mobileViewers: 150,
+    obsViewers: 2,
+    rampBatchSize: 15,
+    rampDelayMs: 1_000,
+    settleSeconds: 25,
+    tvViewers: 15,
+  }),
   high: Object.freeze({
     holdSeconds: 180,
     mobileViewers: 300,
@@ -97,6 +106,10 @@ export function readCapacityConfig(environment = process.env) {
   const config = {
     allowTraffic: environment.CAPACITY_ALLOW_TRAFFIC === "true",
     allowWrites: environment.CAPACITY_ALLOW_WRITES === "true",
+    coordinatedStartAt: dateValue(
+      environment.CAPACITY_COORDINATED_START_AT,
+      "CAPACITY_COORDINATED_START_AT",
+    ),
     deployEnvironment: textValue(environment.CAPACITY_DEPLOY_ENV).toLowerCase(),
     dryRun: environment.CAPACITY_DRY_RUN === "true",
     holdSeconds: integerValue(environment.CAPACITY_HOLD_SECONDS, profile.holdSeconds, 5, 3_600),
@@ -139,6 +152,7 @@ export function readCapacityConfig(environment = process.env) {
     tvUrls: urlList(environment.CAPACITY_TV_URLS, "CAPACITY_TV_URLS"),
     tvViewers: integerValue(environment.CAPACITY_TV_VIEWERS, profile.tvViewers, 0, 50),
     vercelProtectionBypass: textValue(environment.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET),
+    viewerIdPrefix: textValue(environment.CAPACITY_VIEWER_ID_PREFIX),
     writerEnabled: environment.CAPACITY_WRITER_ENABLED === "true",
     writerIntervalMs: integerValue(environment.CAPACITY_WRITER_INTERVAL_MS, 5_000, 1_000, 60_000),
     writerSettleMs: integerValue(environment.CAPACITY_WRITER_SETTLE_MS, 3_000, 0, 60_000),
@@ -222,6 +236,7 @@ export function capacitySummary(config) {
       intervalMs: config.writerIntervalMs,
       settleMs: config.writerSettleMs,
     },
+    coordinatedStartAt: config.coordinatedStartAt?.toISOString() ?? null,
   };
 }
 
@@ -311,6 +326,16 @@ function decimalValue(value, fallback, minimum, maximum) {
   const parsed = Number(normalized);
   if (!Number.isFinite(parsed) || parsed < minimum || parsed > maximum) {
     throw new Error(`Valeur numérique invalide (${minimum} à ${maximum}): ${normalized}.`);
+  }
+  return parsed;
+}
+
+function dateValue(value, name) {
+  const normalized = textValue(value);
+  if (!normalized) return null;
+  const parsed = new Date(normalized);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${name} doit contenir une date ISO valide.`);
   }
   return parsed;
 }

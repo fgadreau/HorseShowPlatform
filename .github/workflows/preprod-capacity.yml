@@ -15,6 +15,7 @@ on:
           - diagnostic125
           - diagnostic150
           - intermediate
+          - distributed167
           - high
           - target
 
@@ -27,6 +28,7 @@ permissions:
 
 jobs:
   capacity:
+    if: inputs.profile != 'distributed167'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -66,5 +68,105 @@ jobs:
         with:
           name: showscore-capacity-${{ inputs.profile }}-${{ github.run_id }}
           path: .tmp/capacity
+          if-no-files-found: warn
+          retention-days: 30
+
+  distributed-prepare:
+    if: inputs.profile == 'distributed167'
+    runs-on: ubuntu-latest
+    outputs:
+      start_at: ${{ steps.clock.outputs.start_at }}
+    steps:
+      - id: clock
+        name: Choose a common mutation start time
+        run: echo "start_at=$(date -u -d '+5 minutes' '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
+
+  distributed-capacity:
+    if: inputs.profile == 'distributed167'
+    needs: distributed-prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: preprod
+      url: ${{ vars.PREPROD_SHOWSCORE_URL }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: 0
+            mobile: 75
+            obs: 1
+            tv: 8
+            writer: "true"
+          - shard: 1
+            mobile: 75
+            obs: 1
+            tv: 7
+            writer: "false"
+    env:
+      CAPACITY_ALLOW_TRAFFIC: "true"
+      CAPACITY_ALLOW_WRITES: "true"
+      CAPACITY_COORDINATED_START_AT: ${{ needs.distributed-prepare.outputs.start_at }}
+      CAPACITY_DEPLOY_ENV: staging
+      CAPACITY_MOBILE_VIEWERS: ${{ matrix.mobile }}
+      CAPACITY_OBS_URLS: ${{ vars.PREPROD_SHOWSCORE_OBS_URLS }}
+      CAPACITY_OBS_VIEWERS: ${{ matrix.obs }}
+      CAPACITY_PRODUCTION_SHOWSCORE_HOST: ${{ vars.PRODUCTION_SHOWSCORE_HOST }}
+      CAPACITY_PROFILE: distributed167
+      CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      CAPACITY_PUBLIC_URL: ${{ vars.PREPROD_SHOWSCORE_PUBLIC_URL }}
+      CAPACITY_REPORT_DIR: .tmp/capacity/shard-${{ matrix.shard }}
+      CAPACITY_SUPABASE_PROJECT_REF: ${{ vars.PREPROD_SUPABASE_PROJECT_REF }}
+      CAPACITY_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PREPROD_SUPABASE_SERVICE_ROLE_KEY }}
+      CAPACITY_SUPABASE_URL: ${{ vars.PREPROD_SUPABASE_URL }}
+      CAPACITY_TV_URLS: ${{ vars.PREPROD_SHOWSCORE_TV_URLS }}
+      CAPACITY_TV_VIEWERS: ${{ matrix.tv }}
+      CAPACITY_VIEWER_ID_PREFIX: shard-${{ matrix.shard }}-
+      CAPACITY_WRITER_ENABLED: ${{ matrix.writer }}
+      CAPACITY_WRITER_INTERVAL_MS: "5000"
+      CAPACITY_WRITER_SETTLE_MS: "3000"
+      SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run distributed capacity shard
+        continue-on-error: true
+        run: npm run test:capacity
+      - name: Upload shard report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: showscore-capacity-distributed-${{ github.run_id }}-shard-${{ matrix.shard }}
+          path: .tmp/capacity/shard-${{ matrix.shard }}
+          if-no-files-found: warn
+          retention-days: 30
+
+  distributed-aggregate:
+    if: inputs.profile == 'distributed167'
+    needs: distributed-capacity
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Download shard reports
+        uses: actions/download-artifact@v4
+        with:
+          pattern: showscore-capacity-distributed-${{ github.run_id }}-shard-*
+          path: .tmp/capacity-shards
+      - name: Aggregate the 167-view result
+        run: node scripts/aggregate-showscore-capacity.mjs
+      - name: Upload aggregate report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: showscore-capacity-distributed-${{ github.run_id }}-aggregate
+          path: .tmp/capacity-aggregate
           if-no-files-found: warn
           retention-days: 30

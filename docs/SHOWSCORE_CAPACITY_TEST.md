@@ -16,6 +16,7 @@ mesure sa propagation vers chaque vue, puis restaure la fixture.
 | `diagnostic125` | 15 | 108 | 2 | 2 min | Cerner le seuil avant 150 vues |
 | `diagnostic150` | 15 | 133 | 2 | 2 min | Cerner le seuil avant 167 vues |
 | `intermediate` | 15 | 150 | 2 | 2 min | Premier palier après baseline |
+| `distributed167` | 15 | 150 | 2 | 2 min | Rejouer 167 vues sur deux runners |
 | `high` | 15 | 300 | 2 | 3 min | Palier avant la cible maximale |
 | `target` | 15 | 500 | 2 | 5 min | Première cible de capacité publique |
 
@@ -135,10 +136,16 @@ lancés avant d'avoir distingué une limite du runner d'une limite Realtime.
 ## GitHub Actions
 
 Le workflow `ShowScore preprod capacity` est déclenché manuellement avec l'un
-des huit profils. Les URL et références sont gardées dans les variables de
+des neuf profils. Les URL et références sont gardées dans les variables de
 l'environnement GitHub `preprod`. La clé Supabase `service-role`, déjà utilisée
 par le robot E2E, demeure uniquement dans le processus Node du runner. Le
 rapport est conservé comme artefact pendant 30 jours.
+
+`distributed167` répartit les vues en deux shards de 84 et 83 vues. Les deux
+runners attendent une même heure UTC; un seul active le producteur, puis un job
+final agrège les 167 journaux de vues et recalcule tous les budgets. Les
+identifiants de vues doivent être uniques, les deux rapports présents et la
+fixture restaurée pour obtenir un résultat réussi.
 
 Commencer par `smoke` et `baseline`. Après un premier échec à `intermediate`,
 utiliser `diagnostic100`, `diagnostic125` et `diagnostic150` dans cet ordre pour
