@@ -40,8 +40,13 @@ test("le profil cible représente 500 visiteurs mobiles", () => {
 });
 
 test("les paliers intermédiaires évitent un saut direct de 67 à 517 vues", () => {
+  const diagnosticTotals = ["diagnostic100", "diagnostic125", "diagnostic150"]
+    .map((profile) => capacitySummary(readCapacityConfig(environment({
+      CAPACITY_PROFILE: profile,
+    }))).viewers.total);
   const intermediate = capacitySummary(readCapacityConfig(environment({ CAPACITY_PROFILE: "intermediate" })));
   const high = capacitySummary(readCapacityConfig(environment({ CAPACITY_PROFILE: "high" })));
+  assert.deepEqual(diagnosticTotals, [100, 125, 150]);
   assert.equal(intermediate.viewers.total, 167);
   assert.equal(high.viewers.total, 317);
 });

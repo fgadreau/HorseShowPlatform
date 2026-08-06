@@ -11,6 +11,9 @@ on:
         options:
           - smoke
           - baseline
+          - diagnostic100
+          - diagnostic125
+          - diagnostic150
           - intermediate
           - high
           - target

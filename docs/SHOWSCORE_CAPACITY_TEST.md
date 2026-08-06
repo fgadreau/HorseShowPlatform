@@ -12,6 +12,9 @@ mesure sa propagation vers chaque vue, puis restaure la fixture.
 | --- | ---: | ---: | ---: | ---: | --- |
 | `smoke` | 3 | 5 | 1 | 30 s | Valider la configuration |
 | `baseline` | 15 | 50 | 2 | 2 min | Représenter le prochain show |
+| `diagnostic100` | 15 | 83 | 2 | 2 min | Cerner le seuil après baseline |
+| `diagnostic125` | 15 | 108 | 2 | 2 min | Cerner le seuil avant 150 vues |
+| `diagnostic150` | 15 | 133 | 2 | 2 min | Cerner le seuil avant 167 vues |
 | `intermediate` | 15 | 150 | 2 | 2 min | Premier palier après baseline |
 | `high` | 15 | 300 | 2 | 3 min | Palier avant la cible maximale |
 | `target` | 15 | 500 | 2 | 5 min | Première cible de capacité publique |
@@ -115,12 +118,13 @@ touchée.
 ## GitHub Actions
 
 Le workflow `ShowScore preprod capacity` est déclenché manuellement avec l'un
-des cinq profils. Les URL et références sont gardées dans les variables de
+des huit profils. Les URL et références sont gardées dans les variables de
 l'environnement GitHub `preprod`. La clé Supabase `service-role`, déjà utilisée
 par le robot E2E, demeure uniquement dans le processus Node du runner. Le
 rapport est conservé comme artefact pendant 30 jours.
 
-Commencer par `smoke`, puis `baseline`, `intermediate` et `high`. Le profil
-`target` ne doit être lancé qu'après lecture des rapports précédents et pendant
-une fenêtre où la préproduction peut être chargée sans déranger les tests
-manuels.
+Commencer par `smoke` et `baseline`. Après un premier échec à `intermediate`,
+utiliser `diagnostic100`, `diagnostic125` et `diagnostic150` dans cet ordre pour
+cerner le seuil avant de reprendre `intermediate` puis `high`. Le profil `target`
+ne doit être lancé qu'après lecture des rapports précédents et pendant une
+fenêtre où la préproduction peut être chargée sans déranger les tests manuels.
