@@ -67,6 +67,15 @@ test("le profil d’endurance maintient 167 vues pendant 15 minutes", () => {
 
   assert.equal(capacitySummary(config).viewers.total, 167);
   assert.equal(capacitySummary(config).duration.holdSeconds, 900);
+  assert.equal(
+    capacitySummary(config).budgets.maxRecoveredRealtimeReconnectsPerViewHour,
+    0.5,
+  );
+  assert.equal(
+    capacitySummary(readCapacityConfig(environment({ CAPACITY_PROFILE: "distributed167" })))
+      .budgets.maxRecoveredRealtimeReconnectsPerViewHour,
+    0,
+  );
 });
 
 test("une date de départ coordonné invalide est refusée", () => {

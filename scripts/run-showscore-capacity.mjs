@@ -12,6 +12,7 @@ import {
   findSubscribedBlockId,
   summarizeRealtimeFrame,
 } from "./capacity/realtime.mjs";
+import { buildRealtimeConnectionMetrics } from "./capacity/realtime-connections.mjs";
 import { createCapacityWriter } from "./capacity/writer.mjs";
 
 const config = readCapacityConfig();
@@ -161,6 +162,7 @@ async function openViewer(definition) {
     if (!isSupabaseRealtime(socket.url())) return;
     metrics.realtimeOpened += 1;
     metrics.realtimeActive += 1;
+    if (metrics.steadyState) metrics.steadyRealtimeOpened += 1;
     socket.on("framereceived", (event) => {
       const mutation = extractCapacityMutation(event.payload);
       if (mutation && metrics.steadyState) metrics.realtimeMutations.push(mutation);
@@ -174,9 +176,11 @@ async function openViewer(definition) {
     socket.on("close", () => {
       metrics.realtimeActive = Math.max(0, metrics.realtimeActive - 1);
       metrics.realtimeClosed += 1;
+      if (metrics.steadyState) metrics.steadyRealtimeClosed += 1;
     });
     socket.on("socketerror", () => {
       metrics.realtimeErrors += 1;
+      if (metrics.steadyState) metrics.steadyRealtimeErrors += 1;
     });
   });
 
@@ -187,6 +191,7 @@ async function openViewer(definition) {
     metrics.consoleErrors.push(messageText);
     if (/abonnement temps réel|realtime subscription/i.test(messageText)) {
       metrics.realtimeStatusErrors += 1;
+      if (metrics.steadyState) metrics.steadyRealtimeStatusErrors += 1;
     }
   });
 
@@ -232,6 +237,10 @@ function createViewerMetrics({ id, role, url }) {
     steadyRestFailures: 0,
     steadyRestRequests: 0,
     steadyRestRoutes: new Map(),
+    steadyRealtimeClosed: 0,
+    steadyRealtimeErrors: 0,
+    steadyRealtimeOpened: 0,
+    steadyRealtimeStatusErrors: 0,
     steadyState: false,
     url,
   };
@@ -249,8 +258,9 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
   const navigationP95Ms = percentile(navigationDurations, 95);
   const failedNavigations = serializedViewers.filter((viewer) => !viewer.navigationSucceeded).length;
   const pageErrors = sum(serializedViewers.map((viewer) => viewer.pageErrors.length));
-  const realtimeErrors = sum(
-    serializedViewers.map((viewer) => viewer.realtimeErrors + viewer.realtimeStatusErrors),
+  const realtimeConnections = buildRealtimeConnectionMetrics(
+    serializedViewers,
+    activeConfig.holdSeconds,
   );
   const propagation = buildPropagationMetrics(serializedViewers, writer);
   const checks = [
@@ -263,7 +273,25 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
       activeConfig.maxRestRequestsPerViewMinute,
     ),
     check("Taux d’erreurs REST", restErrorRate <= activeConfig.maxRestErrorRate, restErrorRate, activeConfig.maxRestErrorRate),
-    check("Erreurs Realtime", realtimeErrors === 0, realtimeErrors, 0),
+    check(
+      "Connexions Realtime actives à la fin",
+      realtimeConnections.activeConnections === realtimeConnections.expectedConnections,
+      realtimeConnections.activeConnections,
+      realtimeConnections.expectedConnections,
+    ),
+    check(
+      "Déconnexions Realtime non récupérées",
+      realtimeConnections.unrecoveredFailures === 0,
+      realtimeConnections.unrecoveredFailures,
+      0,
+    ),
+    check(
+      "Reconnexions récupérées par vue-heure",
+      realtimeConnections.recoveredReconnectsPerViewHour
+        <= activeConfig.maxRecoveredRealtimeReconnectsPerViewHour,
+      realtimeConnections.recoveredReconnectsPerViewHour,
+      activeConfig.maxRecoveredRealtimeReconnectsPerViewHour,
+    ),
     check("Erreurs JavaScript non interceptées", pageErrors === 0, pageErrors, 0),
   ];
   if (writer) {
@@ -290,11 +318,12 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
     checks,
     endedAt: endedAt.toISOString(),
     metrics: {
-      activeRealtimeConnections: sum(serializedViewers.map((viewer) => viewer.realtimeActive)),
+      activeRealtimeConnections: realtimeConnections.activeConnections,
       failedNavigations,
       navigationP95Ms: round(navigationP95Ms),
       pageErrors,
-      realtimeErrors,
+      realtimeConnections,
+      realtimeErrors: realtimeConnections.unrecoveredFailures,
       realtimePropagation: propagation,
       restErrorRate: round(restErrorRate, 5),
       restRequestsPerViewMinute: round(restRequestsPerViewMinute),

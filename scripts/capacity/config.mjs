@@ -76,6 +76,7 @@ export const CAPACITY_PROFILES = Object.freeze({
   }),
   endurance167: Object.freeze({
     holdSeconds: 900,
+    maxRecoveredRealtimeReconnectsPerViewHour: 0.5,
     mobileViewers: 150,
     obsViewers: 2,
     rampBatchSize: 15,
@@ -128,6 +129,12 @@ export function readCapacityConfig(environment = process.env) {
       2_000,
       100,
       120_000,
+    ),
+    maxRecoveredRealtimeReconnectsPerViewHour: decimalValue(
+      environment.CAPACITY_MAX_RECOVERED_REALTIME_RECONNECTS_PER_VIEW_HOUR,
+      profile.maxRecoveredRealtimeReconnectsPerViewHour ?? 0,
+      0,
+      100,
     ),
     maxRestErrorRate: decimalValue(environment.CAPACITY_MAX_REST_ERROR_RATE, 0.005, 0, 1),
     maxRestRequestsPerViewMinute: decimalValue(
@@ -219,6 +226,8 @@ export function capacitySummary(config) {
   return {
     budgets: {
       maxNavigationP95Ms: config.maxNavigationP95Ms,
+      maxRecoveredRealtimeReconnectsPerViewHour:
+        config.maxRecoveredRealtimeReconnectsPerViewHour,
       maxRealtimePropagationP95Ms: config.maxRealtimePropagationP95Ms,
       maxRestErrorRate: config.maxRestErrorRate,
       maxRestRequestsPerViewMinute: config.maxRestRequestsPerViewMinute,
