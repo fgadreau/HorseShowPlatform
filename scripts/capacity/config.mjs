@@ -29,6 +29,24 @@ export const CAPACITY_PROFILES = Object.freeze({
     settleSeconds: 20,
     tvViewers: 15,
   }),
+  intermediate: Object.freeze({
+    holdSeconds: 120,
+    mobileViewers: 150,
+    obsViewers: 2,
+    rampBatchSize: 15,
+    rampDelayMs: 1_000,
+    settleSeconds: 25,
+    tvViewers: 15,
+  }),
+  high: Object.freeze({
+    holdSeconds: 180,
+    mobileViewers: 300,
+    obsViewers: 2,
+    rampBatchSize: 20,
+    rampDelayMs: 1_000,
+    settleSeconds: 30,
+    tvViewers: 15,
+  }),
   target: Object.freeze({
     holdSeconds: 300,
     mobileViewers: 500,
@@ -51,10 +69,17 @@ export function readCapacityConfig(environment = process.env) {
 
   const config = {
     allowTraffic: environment.CAPACITY_ALLOW_TRAFFIC === "true",
+    allowWrites: environment.CAPACITY_ALLOW_WRITES === "true",
     deployEnvironment: textValue(environment.CAPACITY_DEPLOY_ENV).toLowerCase(),
     dryRun: environment.CAPACITY_DRY_RUN === "true",
     holdSeconds: integerValue(environment.CAPACITY_HOLD_SECONDS, profile.holdSeconds, 5, 3_600),
     maxNavigationP95Ms: integerValue(environment.CAPACITY_MAX_NAVIGATION_P95_MS, 15_000, 1_000, 120_000),
+    maxRealtimePropagationP95Ms: integerValue(
+      environment.CAPACITY_MAX_REALTIME_PROPAGATION_P95_MS,
+      2_000,
+      100,
+      120_000,
+    ),
     maxRestErrorRate: decimalValue(environment.CAPACITY_MAX_REST_ERROR_RATE, 0.005, 0, 1),
     maxRestRequestsPerViewMinute: decimalValue(
       environment.CAPACITY_MAX_REST_REQUESTS_PER_VIEW_MINUTE,
@@ -64,6 +89,12 @@ export function readCapacityConfig(environment = process.env) {
     ),
     mobileUrl: urlValue(environment.CAPACITY_PUBLIC_URL, "CAPACITY_PUBLIC_URL"),
     mobileViewers: integerValue(environment.CAPACITY_MOBILE_VIEWERS, profile.mobileViewers, 0, 500),
+    minRealtimeMutationCoverage: decimalValue(
+      environment.CAPACITY_MIN_REALTIME_MUTATION_COVERAGE,
+      0.99,
+      0,
+      1,
+    ),
     obsUrls: urlList(environment.CAPACITY_OBS_URLS, "CAPACITY_OBS_URLS"),
     obsViewers: integerValue(environment.CAPACITY_OBS_VIEWERS, profile.obsViewers, 0, 20),
     productionHost: normalizeHost(environment.CAPACITY_PRODUCTION_SHOWSCORE_HOST),
@@ -72,9 +103,17 @@ export function readCapacityConfig(environment = process.env) {
     rampDelayMs: integerValue(environment.CAPACITY_RAMP_DELAY_MS, profile.rampDelayMs, 0, 60_000),
     reportDirectory: textValue(environment.CAPACITY_REPORT_DIR) || ".tmp/capacity",
     settleSeconds: integerValue(environment.CAPACITY_SETTLE_SECONDS, profile.settleSeconds, 0, 600),
+    supabaseProjectRef: textValue(environment.CAPACITY_SUPABASE_PROJECT_REF).toLowerCase(),
+    supabaseServiceRoleKey: textValue(environment.CAPACITY_SUPABASE_SERVICE_ROLE_KEY),
+    supabaseUrl: urlValue(environment.CAPACITY_SUPABASE_URL, "CAPACITY_SUPABASE_URL"),
+    productionSupabaseProjectRef: textValue(
+      environment.CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF,
+    ).toLowerCase(),
     tvUrls: urlList(environment.CAPACITY_TV_URLS, "CAPACITY_TV_URLS"),
     tvViewers: integerValue(environment.CAPACITY_TV_VIEWERS, profile.tvViewers, 0, 50),
     vercelProtectionBypass: textValue(environment.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET),
+    writerEnabled: environment.CAPACITY_WRITER_ENABLED === "true",
+    writerIntervalMs: integerValue(environment.CAPACITY_WRITER_INTERVAL_MS, 5_000, 1_000, 60_000),
   };
 
   assertCapacityConfiguration(config);
@@ -121,14 +160,18 @@ export function assertSafeCapacityTarget(config) {
       throw new Error(`La cible distante doit utiliser HTTPS: ${url}`);
     }
   }
+
+  assertSafeWriterTarget(config);
 }
 
 export function capacitySummary(config) {
   return {
     budgets: {
       maxNavigationP95Ms: config.maxNavigationP95Ms,
+      maxRealtimePropagationP95Ms: config.maxRealtimePropagationP95Ms,
       maxRestErrorRate: config.maxRestErrorRate,
       maxRestRequestsPerViewMinute: config.maxRestRequestsPerViewMinute,
+      minRealtimeMutationCoverage: config.minRealtimeMutationCoverage,
     },
     duration: {
       holdSeconds: config.holdSeconds,
@@ -145,6 +188,10 @@ export function capacitySummary(config) {
       obs: config.obsViewers,
       total: config.mobileViewers + config.obsViewers + config.tvViewers,
       tv: config.tvViewers,
+    },
+    writer: {
+      enabled: config.writerEnabled,
+      intervalMs: config.writerIntervalMs,
     },
   };
 }
@@ -163,6 +210,32 @@ function assertCapacityConfiguration(config) {
   if (config.obsViewers > 0 && config.obsUrls.length === 0) {
     throw new Error("CAPACITY_OBS_URLS est requis lorsque des vues OBS sont demandées.");
   }
+  if (config.writerEnabled) {
+    const missing = [
+      ["CAPACITY_SUPABASE_URL", config.supabaseUrl],
+      ["CAPACITY_SUPABASE_SERVICE_ROLE_KEY", config.supabaseServiceRoleKey],
+      ["CAPACITY_SUPABASE_PROJECT_REF", config.supabaseProjectRef],
+      ["CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF", config.productionSupabaseProjectRef],
+    ].filter(([, value]) => !value).map(([name]) => name);
+    if (missing.length) {
+      throw new Error(`Configuration du producteur incomplète: ${missing.join(", ")}.`);
+    }
+  }
+}
+
+function assertSafeWriterTarget(config) {
+  if (!config.writerEnabled) return;
+  if (!config.allowWrites) {
+    throw new Error("CAPACITY_ALLOW_WRITES=true est requis pour activer le producteur.");
+  }
+
+  const urlProjectRef = supabaseProjectRefFromUrl(config.supabaseUrl);
+  if (!urlProjectRef || urlProjectRef !== config.supabaseProjectRef) {
+    throw new Error("L’URL Supabase du producteur ne correspond pas à la référence de projet courante.");
+  }
+  if (config.supabaseProjectRef === config.productionSupabaseProjectRef) {
+    throw new Error("Sécurité capacité: le producteur cible le projet Supabase de PRODUCTION.");
+  }
 }
 
 function targetUrls(config) {
@@ -180,6 +253,16 @@ function normalizeHost(value) {
     return new URL(normalized.includes("://") ? normalized : `https://${normalized}`).hostname.toLowerCase();
   } catch {
     throw new Error("CAPACITY_PRODUCTION_SHOWSCORE_HOST n’est pas un hôte valide.");
+  }
+}
+
+function supabaseProjectRefFromUrl(value) {
+  try {
+    const hostname = new URL(value).hostname.toLowerCase();
+    if (LOCAL_HOSTS.has(hostname)) return "local";
+    return hostname.match(/^([a-z0-9-]+)\.supabase\.co$/)?.[1] ?? "";
+  } catch {
+    return "";
   }
 }
 

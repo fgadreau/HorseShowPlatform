@@ -7,6 +7,12 @@ import {
   capacitySummary,
   readCapacityConfig,
 } from "./capacity/config.mjs";
+import {
+  extractCapacityMutation,
+  findSubscribedBlockId,
+  summarizeRealtimeFrame,
+} from "./capacity/realtime.mjs";
+import { createCapacityWriter } from "./capacity/writer.mjs";
 
 const config = readCapacityConfig();
 assertSafeCapacityTarget(config);
@@ -48,6 +54,7 @@ const viewerDefinitions = [
 ];
 const runStartedAt = new Date();
 let steadyStateStartedAt = null;
+let writer = null;
 
 try {
   const viewers = [];
@@ -63,22 +70,34 @@ try {
 
   console.log(`Stabilisation pendant ${config.settleSeconds} s.`);
   await wait(config.settleSeconds * 1_000);
+  if (config.writerEnabled) {
+    const blockId = findSubscribedBlockId(viewers);
+    writer = await createCapacityWriter(config, blockId);
+    console.log(`Producteur prêt pour le bloc ${blockId}.`);
+  }
   steadyStateStartedAt = new Date();
   for (const viewer of viewers) viewer.metrics.steadyState = true;
 
   console.log(`Mesure de l’état stable pendant ${config.holdSeconds} s.`);
-  await waitWithProgress(config.holdSeconds, viewers.length);
+  await Promise.all([
+    waitWithProgress(config.holdSeconds, viewers.length),
+    writer?.runFor(config.holdSeconds * 1_000),
+  ]);
+  for (const viewer of viewers) viewer.metrics.steadyState = false;
+  await writer?.restore();
 
   const report = buildReport({
     config,
     runStartedAt,
     steadyStateStartedAt,
     viewers,
+    writer: writer?.summary() || null,
   });
   await writeReport(config.reportDirectory, report);
   printOutcome(report);
   if (!report.passed) process.exitCode = 1;
 } finally {
+  await writer?.restore();
   await Promise.allSettled([tvContext.close(), mobileContext.close(), obsContext.close()]);
   await browser.close();
 }
@@ -133,6 +152,8 @@ async function openViewer(definition) {
     metrics.realtimeOpened += 1;
     metrics.realtimeActive += 1;
     socket.on("framereceived", (event) => {
+      const mutation = extractCapacityMutation(event.payload);
+      if (mutation && metrics.steadyState) metrics.realtimeMutations.push(mutation);
       const summary = summarizeRealtimeFrame(event.payload, "received");
       if (summary) metrics.realtimeEvents.push(summary);
     });
@@ -190,6 +211,7 @@ function createViewerMetrics({ id, role, url }) {
     realtimeClosed: 0,
     realtimeErrors: 0,
     realtimeEvents: [],
+    realtimeMutations: [],
     realtimeOpened: 0,
     realtimeStatusErrors: 0,
     restDurationsMs: [],
@@ -205,7 +227,7 @@ function createViewerMetrics({ id, role, url }) {
   };
 }
 
-function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStateStartedAt: steadyAt, viewers }) {
+function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStateStartedAt: steadyAt, viewers, writer }) {
   const endedAt = new Date();
   const holdMinutes = activeConfig.holdSeconds / 60;
   const serializedViewers = viewers.map(({ metrics }) => serializeMetrics(metrics));
@@ -220,6 +242,7 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
   const realtimeErrors = sum(
     serializedViewers.map((viewer) => viewer.realtimeErrors + viewer.realtimeStatusErrors),
   );
+  const propagation = buildPropagationMetrics(serializedViewers, writer);
   const checks = [
     check("Toutes les vues ont chargé", failedNavigations === 0, failedNavigations, 0),
     check("Navigation p95", navigationP95Ms <= activeConfig.maxNavigationP95Ms, navigationP95Ms, activeConfig.maxNavigationP95Ms),
@@ -233,6 +256,25 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
     check("Erreurs Realtime", realtimeErrors === 0, realtimeErrors, 0),
     check("Erreurs JavaScript non interceptées", pageErrors === 0, pageErrors, 0),
   ];
+  if (writer) {
+    checks.push(
+      check("Erreurs du producteur", writer.errors.length === 0, writer.errors.length, 0),
+      check("Mutations live publiées", writer.mutations.length > 0, writer.mutations.length, "> 0"),
+      check("Fixture live restaurée", writer.restored, writer.restored ? 1 : 0, 1),
+      check(
+        "Couverture des mutations Realtime",
+        propagation.coverage >= activeConfig.minRealtimeMutationCoverage,
+        propagation.coverage,
+        activeConfig.minRealtimeMutationCoverage,
+      ),
+      check(
+        "Propagation Realtime p95",
+        propagation.p95Ms <= activeConfig.maxRealtimePropagationP95Ms,
+        propagation.p95Ms,
+        activeConfig.maxRealtimePropagationP95Ms,
+      ),
+    );
+  }
 
   return {
     checks,
@@ -243,6 +285,7 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
       navigationP95Ms: round(navigationP95Ms),
       pageErrors,
       realtimeErrors,
+      realtimePropagation: propagation,
       restErrorRate: round(restErrorRate, 5),
       restRequestsPerViewMinute: round(restRequestsPerViewMinute),
       steadyRestFailures,
@@ -254,6 +297,7 @@ function buildReport({ config: activeConfig, runStartedAt: startedAt, steadyStat
     startedAt: startedAt.toISOString(),
     steadyStateStartedAt: steadyAt?.toISOString() ?? null,
     viewers: serializedViewers,
+    writer,
   };
 }
 
@@ -276,6 +320,31 @@ function aggregateRoutes(viewers, property) {
     }
   }
   return Array.from(routes, ([route, count]) => ({ count, route })).sort((left, right) => right.count - left.count);
+}
+
+function buildPropagationMetrics(viewers, writer) {
+  if (!writer) {
+    return { coverage: 0, expectedDeliveries: 0, p95Ms: 0, receivedDeliveries: 0 };
+  }
+  const mutationIds = new Set(writer.mutations.map((mutation) => mutation.id));
+  const latencies = [];
+  let receivedDeliveries = 0;
+  for (const viewer of viewers) {
+    const receivedById = new Map();
+    for (const mutation of viewer.realtimeMutations) {
+      if (!mutationIds.has(mutation.id) || receivedById.has(mutation.id)) continue;
+      receivedById.set(mutation.id, mutation);
+      latencies.push(mutation.latencyMs);
+      receivedDeliveries += 1;
+    }
+  }
+  const expectedDeliveries = writer.mutations.length * viewers.length;
+  return {
+    coverage: round(receivedDeliveries / Math.max(1, expectedDeliveries), 5),
+    expectedDeliveries,
+    p95Ms: round(percentile(latencies, 95)),
+    receivedDeliveries,
+  };
 }
 
 function check(name, passed, actual, limit) {
@@ -302,6 +371,7 @@ function markdownReport(report) {
     `- Profil: ${report.profile.profile}`,
     `- Vues: ${report.profile.viewers.total} (${report.profile.viewers.tv} TV, ${report.profile.viewers.mobile} mobiles, ${report.profile.viewers.obs} OBS)`,
     `- État stable: ${report.profile.duration.holdSeconds} secondes`,
+    `- Producteur live: ${report.writer ? `${report.writer.mutations.length} mutations (${report.writer.source})` : "désactivé"}`,
     "",
     "## Seuils",
     "",
@@ -345,49 +415,6 @@ function normalizeRestRoute(url) {
   const parsed = new URL(url);
   const columns = parsed.searchParams.get("select") ? "?select=…" : "";
   return `${parsed.pathname}${columns}`;
-}
-
-function summarizeRealtimeFrame(rawPayload, direction) {
-  try {
-    const parsed = JSON.parse(String(rawPayload));
-    const topic = Array.isArray(parsed) ? parsed[2] : parsed?.topic;
-    const event = Array.isArray(parsed) ? parsed[3] : parsed?.event;
-    const payload = Array.isArray(parsed) ? parsed[4] : parsed?.payload;
-    if (!event) return null;
-
-    if (direction === "sent" && event === "phx_join") {
-      return {
-        direction,
-        event,
-        subscriptions: (payload?.config?.postgres_changes || []).map((subscription) => ({
-          event: subscription.event,
-          filter: subscription.filter || "",
-          schema: subscription.schema,
-          table: subscription.table,
-        })),
-        topic,
-      };
-    }
-
-    const status = payload?.status || payload?.data?.status || "";
-    const message = payload?.message || payload?.response?.message || payload?.data?.message || "";
-    const isDiagnostic =
-      ["phx_error", "phx_close", "system"].includes(event)
-      || (event === "phx_reply" && status && status !== "ok");
-    if (!isDiagnostic) return null;
-
-    return {
-      channel: payload?.channel || payload?.data?.channel || "",
-      direction,
-      event,
-      extension: payload?.extension || payload?.data?.extension || "",
-      message,
-      status,
-      topic,
-    };
-  } catch {
-    return null;
-  }
 }
 
 function percentile(values, targetPercentile) {

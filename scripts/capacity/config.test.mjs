@@ -39,6 +39,13 @@ test("le profil cible représente 500 visiteurs mobiles", () => {
   assert.equal(config.maxRestRequestsPerViewMinute, 2);
 });
 
+test("les paliers intermédiaires évitent un saut direct de 67 à 517 vues", () => {
+  const intermediate = capacitySummary(readCapacityConfig(environment({ CAPACITY_PROFILE: "intermediate" })));
+  const high = capacitySummary(readCapacityConfig(environment({ CAPACITY_PROFILE: "high" })));
+  assert.equal(intermediate.viewers.total, 167);
+  assert.equal(high.viewers.total, 317);
+});
+
 test("la production est toujours refusée", () => {
   const config = readCapacityConfig(environment({
     CAPACITY_PUBLIC_URL: "https://showscore-prod.example/public/show",
@@ -77,4 +84,29 @@ test("le mode dry-run valide la forme sans envoyer de trafic", () => {
     CAPACITY_DRY_RUN: "true",
   }));
   assert.doesNotThrow(() => assertSafeCapacityTarget(config));
+});
+
+test("le producteur exige une autorisation et refuse Supabase production", () => {
+  const writerEnvironment = {
+    CAPACITY_ALLOW_WRITES: "true",
+    CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF: "prodref",
+    CAPACITY_SUPABASE_PROJECT_REF: "preprodref",
+    CAPACITY_SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role",
+    CAPACITY_SUPABASE_URL: "https://preprodref.supabase.co",
+    CAPACITY_WRITER_ENABLED: "true",
+  };
+  const safeConfig = readCapacityConfig(environment(writerEnvironment));
+  assert.doesNotThrow(() => assertSafeCapacityTarget(safeConfig));
+
+  const missingPermission = readCapacityConfig(environment({
+    ...writerEnvironment,
+    CAPACITY_ALLOW_WRITES: "false",
+  }));
+  assert.throws(() => assertSafeCapacityTarget(missingPermission), /CAPACITY_ALLOW_WRITES=true/);
+
+  const production = readCapacityConfig(environment({
+    ...writerEnvironment,
+    CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF: "preprodref",
+  }));
+  assert.throws(() => assertSafeCapacityTarget(production), /Supabase de PRODUCTION/);
 });
