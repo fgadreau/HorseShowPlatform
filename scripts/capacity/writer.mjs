@@ -25,6 +25,13 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
     client.from(table).select(columns).eq(key, blockId),
     `Impossible de lire la session live ${source}`,
   );
+  const originalPublication = await selectSingle(
+    client
+      .from("show_score_publication_states")
+      .select("status,updated_at")
+      .eq("block_id", blockId),
+    "Impossible de lire l’état de publication du bloc ciblé",
+  );
 
   if (!Array.isArray(original.runs) || original.runs.length === 0) {
     throw new Error(`La session live ${source} ne contient aucun passage à animer.`);
@@ -34,8 +41,11 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
   }
 
   let lastUpdatedAt = original.updated_at;
+  let lastPublicationUpdatedAt = originalPublication.updated_at;
   let revision = Number(original.revision || 0);
   let lastMarkerId = "";
+  let publicationChanged = false;
+  let publicationRestored = true;
   let restored = false;
   const errors = [];
   const mutations = [];
@@ -82,23 +92,56 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
     }
   }
 
-  async function restore() {
-    if (restored) return;
-    if (!lastMarkerId) {
-      restored = true;
+  async function activate() {
+    if (["live", "live_no_score", "live_scoring", "live_finished"].includes(originalPublication.status)) {
       return;
     }
+    const { data, error } = await client
+      .from("show_score_publication_states")
+      .update({ status: "live_scoring" })
+      .eq("block_id", blockId)
+      .eq("updated_at", lastPublicationUpdatedAt)
+      .select("updated_at");
+    if (error) throw error;
+    if (!Array.isArray(data) || data.length !== 1) {
+      throw new Error("L’état de publication a changé; activation live concurrente refusée.");
+    }
+    lastPublicationUpdatedAt = data[0].updated_at;
+    publicationChanged = true;
+    publicationRestored = false;
+    console.log(`Producteur: fixture passée de ${originalPublication.status} à live_scoring.`);
+  }
+
+  async function restore() {
+    if (restored) return;
     try {
-      const current = await selectSingle(
-        client.from(table).select(columns).eq(key, blockId),
-        "Impossible de vérifier la fixture avant restauration",
-      );
-      if (findCapacityMarker(current.runs)?.id !== lastMarkerId) {
-        throw new Error("La session live a été modifiée par un autre acteur; restauration automatique refusée.");
+      if (lastMarkerId) {
+        const current = await selectSingle(
+          client.from(table).select(columns).eq(key, blockId),
+          "Impossible de vérifier la fixture avant restauration",
+        );
+        if (findCapacityMarker(current.runs)?.id !== lastMarkerId) {
+          throw new Error("La session live a été modifiée par un autre acteur; restauration automatique refusée.");
+        }
+        lastUpdatedAt = current.updated_at;
+        if (source === "announcer") revision = Number(current.revision || revision);
+        await updateRuns(original.runs);
       }
-      lastUpdatedAt = current.updated_at;
-      if (source === "announcer") revision = Number(current.revision || revision);
-      await updateRuns(original.runs);
+
+      if (publicationChanged && !publicationRestored) {
+        const { data, error } = await client
+          .from("show_score_publication_states")
+          .update({ status: originalPublication.status })
+          .eq("block_id", blockId)
+          .eq("updated_at", lastPublicationUpdatedAt)
+          .select("updated_at");
+        if (error) throw error;
+        if (!Array.isArray(data) || data.length !== 1) {
+          throw new Error("L’état de publication a changé; restauration concurrente refusée.");
+        }
+        lastPublicationUpdatedAt = data[0].updated_at;
+        publicationRestored = true;
+      }
       restored = true;
       console.log("Producteur: fixture live restaurée.");
     } catch (error) {
@@ -113,13 +156,14 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
       errors: [...errors],
       intervalMs: config.writerIntervalMs,
       mutations: [...mutations],
+      originalPublicationStatus: originalPublication.status,
       restored,
       source,
       table,
     };
   }
 
-  return { restore, runFor, summary };
+  return { activate, restore, runFor, summary };
 }
 
 export function mutateRuns(originalRuns, marker, sequence) {

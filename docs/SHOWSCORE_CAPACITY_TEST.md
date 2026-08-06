@@ -58,6 +58,7 @@ CAPACITY_TV_URLS=https://<preprod>/public/.../tv,https://<preprod>/public/.../tv
 CAPACITY_OBS_URLS=https://<preprod>/public/.../overlay?arena=...
 CAPACITY_WRITER_ENABLED=true
 CAPACITY_WRITER_INTERVAL_MS=5000
+CAPACITY_WRITER_SETTLE_MS=3000
 CAPACITY_SUPABASE_URL=https://<ref-preprod>.supabase.co
 CAPACITY_SUPABASE_PROJECT_REF=<ref-preprod>
 CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF=<ref-production>
@@ -86,11 +87,12 @@ routes REST les plus sollicitées, le nombre de mutations, leur couverture et le
 p95 de propagation.
 
 Le producteur découvre le bloc à partir des abonnements réellement ouverts par
-les vues. Il respecte la source live configurée (`scribe` ou `announcer`) et
-n'écrit que le tableau `runs` de cette session. Chaque écriture utilise la date
-de mise à jour précédente comme verrou optimiste. Si un autre acteur touche la
-fixture, le robot arrête ses écritures et refuse de remplacer cette modification.
-La restauration remet le contenu original; la source annonceur conserve une
+les vues. Il respecte la source live configurée (`scribe` ou `announcer`), place
+temporairement la publication en `live_scoring`, puis n'écrit que le tableau
+`runs` de cette session. Chaque écriture utilise la date de mise à jour précédente
+comme verrou optimiste. Si un autre acteur touche la fixture, le robot arrête ses
+écritures et refuse de remplacer cette modification. La restauration remet le
+contenu et le statut de publication originaux; la source annonceur conserve une
 révision monotone.
 
 Le premier smoke du 5 août 2026 a révélé une boucle de reconnexion. Neuf vues

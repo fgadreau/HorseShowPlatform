@@ -114,6 +114,7 @@ export function readCapacityConfig(environment = process.env) {
     vercelProtectionBypass: textValue(environment.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET),
     writerEnabled: environment.CAPACITY_WRITER_ENABLED === "true",
     writerIntervalMs: integerValue(environment.CAPACITY_WRITER_INTERVAL_MS, 5_000, 1_000, 60_000),
+    writerSettleMs: integerValue(environment.CAPACITY_WRITER_SETTLE_MS, 3_000, 0, 60_000),
   };
 
   assertCapacityConfiguration(config);
@@ -192,6 +193,7 @@ export function capacitySummary(config) {
     writer: {
       enabled: config.writerEnabled,
       intervalMs: config.writerIntervalMs,
+      settleMs: config.writerSettleMs,
     },
   };
 }

@@ -74,6 +74,11 @@ try {
     const blockId = findSubscribedBlockId(viewers);
     writer = await createCapacityWriter(config, blockId);
     console.log(`Producteur prêt pour le bloc ${blockId}.`);
+    await writer.activate();
+    if (config.writerSettleMs > 0) {
+      console.log(`Stabilisation live pendant ${config.writerSettleMs} ms.`);
+      await wait(config.writerSettleMs);
+    }
   }
   steadyStateStartedAt = new Date();
   for (const viewer of viewers) viewer.metrics.steadyState = true;
