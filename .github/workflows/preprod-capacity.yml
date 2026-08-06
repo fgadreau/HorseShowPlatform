@@ -1,0 +1,57 @@
+name: ShowScore preprod capacity
+
+on:
+  workflow_dispatch:
+    inputs:
+      profile:
+        description: Profil de charge public
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - baseline
+          - target
+
+concurrency:
+  group: preprod-capacity
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  capacity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment:
+      name: preprod
+      url: ${{ vars.PREPROD_SHOWSCORE_URL }}
+    env:
+      CAPACITY_ALLOW_TRAFFIC: "true"
+      CAPACITY_DEPLOY_ENV: staging
+      CAPACITY_OBS_URLS: ${{ vars.PREPROD_SHOWSCORE_OBS_URLS }}
+      CAPACITY_PRODUCTION_SHOWSCORE_HOST: ${{ vars.PRODUCTION_SHOWSCORE_HOST }}
+      CAPACITY_PROFILE: ${{ inputs.profile }}
+      CAPACITY_PUBLIC_URL: ${{ vars.PREPROD_SHOWSCORE_PUBLIC_URL }}
+      CAPACITY_TV_URLS: ${{ vars.PREPROD_SHOWSCORE_TV_URLS }}
+      SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run ShowScore capacity test
+        run: npm run test:capacity
+      - name: Upload capacity report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: showscore-capacity-${{ inputs.profile }}-${{ github.run_id }}
+          path: .tmp/capacity
+          if-no-files-found: warn
+          retention-days: 30
