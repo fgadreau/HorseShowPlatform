@@ -18,12 +18,14 @@ mesure sa propagation vers chaque vue, puis restaure la fixture.
 | `intermediate` | 15 | 150 | 2 | 2 min | Premier palier après baseline |
 | `distributed167` | 15 | 150 | 2 | 2 min | Rejouer 167 vues sur deux runners |
 | `endurance167` | 15 | 150 | 2 | 15 min | Mesurer la stabilité et les snapshots de secours |
+| `distributed500` | 15 | 500 | 2 | 5 min | Valider 517 sorties sur six runners |
 | `high` | 15 | 300 | 2 | 3 min | Palier avant la cible maximale |
 | `target` | 15 | 500 | 2 | 5 min | Première cible de capacité publique |
 
-Le profil `target` est volontairement manuel. Cinq cents pages de navigateur
+Les profils `target` et `distributed500` sont volontairement manuels. Cinq cents pages de navigateur
 peuvent aussi saturer le runner GitHub; un échec de mémoire du runner n'est pas
-une preuve de saturation de ShowScore et devra mener à une exécution distribuée.
+une preuve de saturation de ShowScore. `distributed500` évite cette ambiguïté en
+répartissant les 517 sorties réelles sur six runners.
 
 ## Budgets initiaux
 
@@ -165,16 +167,17 @@ déploiement ShowScore de préproduction.
 ## GitHub Actions
 
 Le workflow `ShowScore preprod capacity` est déclenché manuellement avec l'un
-des dix profils. Les URL et références sont gardées dans les variables de
+des onze profils. Les URL et références sont gardées dans les variables de
 l'environnement GitHub `preprod`. La clé Supabase `service-role`, déjà utilisée
 par le robot E2E, demeure uniquement dans le processus Node du runner. Le
 rapport est conservé comme artefact pendant 30 jours.
 
 `distributed167` et `endurance167` répartissent les vues en deux shards de 84
-et 83 vues. Les deux runners attendent une même heure UTC; un seul active le
-producteur, puis un job final agrège les 167 journaux de vues et recalcule tous
-les budgets. Les identifiants de vues doivent être uniques, les deux rapports
-présents et la fixture restaurée pour obtenir un résultat réussi.
+et 83 vues. `distributed500` utilise six shards contenant entre 85 et 88 sorties.
+Tous les runners attendent une même heure UTC; un seul active le producteur,
+puis un job final exige tous les rapports et agrège exactement 167 ou 517 journaux
+de vues avant de recalculer les budgets. Les identifiants de vues doivent être
+uniques et la fixture restaurée pour obtenir un résultat réussi.
 
 Commencer par `smoke` et `baseline`. Après un premier échec à `intermediate`,
 utiliser `diagnostic100`, `diagnostic125` et `diagnostic150` dans cet ordre pour

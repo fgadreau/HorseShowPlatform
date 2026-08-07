@@ -84,6 +84,15 @@ export const CAPACITY_PROFILES = Object.freeze({
     settleSeconds: 25,
     tvViewers: 15,
   }),
+  distributed500: Object.freeze({
+    holdSeconds: 300,
+    mobileViewers: 500,
+    obsViewers: 2,
+    rampBatchSize: 25,
+    rampDelayMs: 1_000,
+    settleSeconds: 30,
+    tvViewers: 15,
+  }),
   high: Object.freeze({
     holdSeconds: 180,
     mobileViewers: 300,

@@ -10,7 +10,11 @@ const reportPaths = (await findJsonFiles(inputDirectory))
 const reports = await Promise.all(
   reportPaths.map(async (filePath) => JSON.parse(await fs.readFile(filePath, "utf8"))),
 );
-const report = aggregateCapacityReports(reports);
+const report = aggregateCapacityReports(reports, {
+  expectedShards: positiveInteger(process.env.CAPACITY_EXPECTED_SHARDS, 2),
+  expectedViewers: positiveInteger(process.env.CAPACITY_EXPECTED_VIEWERS, 167),
+  profileName: process.env.CAPACITY_AGGREGATE_PROFILE || undefined,
+});
 
 await fs.mkdir(outputDirectory, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -26,6 +30,15 @@ for (const item of report.checks) {
 }
 console.log(`Rapports agrégés: ${jsonPath} et ${markdownPath}`);
 if (!report.passed) process.exitCode = 1;
+
+function positiveInteger(rawValue, fallback) {
+  if (rawValue == null || rawValue === "") return fallback;
+  const value = Number(rawValue);
+  if (!Number.isSafeInteger(value) || value <= 0) {
+    throw new Error(`Valeur entière positive attendue; valeur reçue: ${rawValue}.`);
+  }
+  return value;
+}
 
 async function findJsonFiles(directory) {
   const entries = await fs.readdir(directory, { withFileTypes: true });
