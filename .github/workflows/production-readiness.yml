@@ -74,4 +74,6 @@ jobs:
       - name: Confirm the production project without printing credentials
         run: node scripts/assert-database-target.mjs production
       - name: Show the production migration plan without applying it
-        run: npx supabase db push --dry-run --db-url "$DATABASE_URL"
+        # PROD may already contain newer hotfix migrations. Include every
+        # missing local migration in the plan while --dry-run prevents writes.
+        run: npx supabase db push --dry-run --include-all --db-url "$DATABASE_URL"
