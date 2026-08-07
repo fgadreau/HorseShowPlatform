@@ -4,6 +4,9 @@ const LIVE_TABLE_KEYS = new Map([
 ]);
 
 export function parseRealtimeFrame(rawPayload) {
+  const binaryBroadcast = parseBinaryBroadcastFrame(rawPayload);
+  if (binaryBroadcast) return binaryBroadcast;
+
   try {
     const parsed = JSON.parse(String(rawPayload));
     return {
@@ -11,6 +14,57 @@ export function parseRealtimeFrame(rawPayload) {
       payload: Array.isArray(parsed) ? parsed[4] : parsed?.payload,
       topic: Array.isArray(parsed) ? parsed[2] : parsed?.topic,
     };
+  } catch {
+    return null;
+  }
+}
+
+function parseBinaryBroadcastFrame(rawPayload) {
+  let bytes;
+  if (rawPayload instanceof ArrayBuffer) {
+    bytes = new Uint8Array(rawPayload);
+  } else if (ArrayBuffer.isView(rawPayload)) {
+    bytes = new Uint8Array(
+      rawPayload.buffer,
+      rawPayload.byteOffset,
+      rawPayload.byteLength,
+    );
+  } else {
+    return null;
+  }
+
+  // Supabase Realtime's server-to-client user Broadcast frame (kind 4):
+  // kind, topic length, event length, metadata length, encoding, then data.
+  if (bytes.length < 5 || bytes[0] !== 4) return null;
+  const topicLength = bytes[1];
+  const eventLength = bytes[2];
+  const metadataLength = bytes[3];
+  const payloadEncoding = bytes[4];
+  const headerLength = 5 + topicLength + eventLength + metadataLength;
+  if (bytes.length < headerLength) return null;
+
+  try {
+    const decoder = new TextDecoder();
+    let offset = 5;
+    const topic = decoder.decode(bytes.subarray(offset, offset + topicLength));
+    offset += topicLength;
+    const broadcastEvent = decoder.decode(bytes.subarray(offset, offset + eventLength));
+    offset += eventLength;
+    const metadataText = decoder.decode(bytes.subarray(offset, offset + metadataLength));
+    offset += metadataLength;
+
+    // Capacity markers are JSON. Binary application payloads cannot contain
+    // the structured marker and are intentionally ignored.
+    if (payloadEncoding !== 1) return null;
+    const broadcastPayload = JSON.parse(decoder.decode(bytes.subarray(offset)));
+    const payload = {
+      event: broadcastEvent,
+      payload: broadcastPayload,
+      type: "broadcast",
+    };
+    if (metadataText) payload.meta = JSON.parse(metadataText);
+
+    return { event: "broadcast", payload, topic };
   } catch {
     return null;
   }
