@@ -67,6 +67,7 @@ CAPACITY_PUBLIC_URL=https://<preprod>/public/associations/<association>/shows/<s
 CAPACITY_TV_URLS=https://<preprod>/public/.../tv,https://<preprod>/public/.../tv?arena=...
 CAPACITY_OBS_URLS=https://<preprod>/public/.../overlay?arena=...
 CAPACITY_WRITER_ENABLED=true
+CAPACITY_WRITER_BLOCK_ID=<uuid-du-bloc-fixture>
 CAPACITY_WRITER_INTERVAL_MS=5000
 CAPACITY_WRITER_SETTLE_MS=3000
 CAPACITY_SUPABASE_URL=https://<ref-preprod>.supabase.co
@@ -100,8 +101,11 @@ les seuils, le p95 de navigation, le taux d'erreur, les connexions Realtime, les
 routes REST les plus sollicitées, le nombre de mutations, leur couverture et le
 p95 de propagation.
 
-Le producteur découvre le bloc à partir des abonnements réellement ouverts par
-les vues. Il respecte la source live configurée (`scribe` ou `announcer`), place
+Avec Broadcast, le producteur cible explicitement `CAPACITY_WRITER_BLOCK_ID`,
+car le canal privé est au niveau du concours et ne contient plus de filtre de
+bloc. L'ancienne découverte par filtre `postgres_changes` demeure compatible
+avec le mode de secours. Le producteur respecte la source live configurée
+(`scribe` ou `announcer`), place
 temporairement la publication en `live_scoring`, puis n'écrit que le tableau
 `runs` de cette session. Chaque écriture utilise la date de mise à jour précédente
 comme verrou optimiste. Si un autre acteur touche la fixture, le robot arrête ses

@@ -72,7 +72,7 @@ try {
   console.log(`Stabilisation pendant ${config.settleSeconds} s.`);
   await wait(config.settleSeconds * 1_000);
   if (config.writerEnabled) {
-    const blockId = findSubscribedBlockId(viewers);
+    const blockId = findSubscribedBlockId(viewers, config.writerBlockId);
     writer = await createCapacityWriter(config, blockId);
     console.log(`Producteur prêt pour le bloc ${blockId}.`);
   }

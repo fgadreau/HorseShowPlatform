@@ -148,6 +148,7 @@ test("le producteur exige une autorisation et refuse Supabase production", () =>
     CAPACITY_SUPABASE_PROJECT_REF: "preprodref",
     CAPACITY_SUPABASE_SERVICE_ROLE_KEY: "test-only-service-role",
     CAPACITY_SUPABASE_URL: "https://preprodref.supabase.co",
+    CAPACITY_WRITER_BLOCK_ID: "e3000000-0000-0000-0000-000000000001",
     CAPACITY_WRITER_ENABLED: "true",
   };
   const safeConfig = readCapacityConfig(environment(writerEnvironment));
@@ -164,4 +165,12 @@ test("le producteur exige une autorisation et refuse Supabase production", () =>
     CAPACITY_PRODUCTION_SUPABASE_PROJECT_REF: "preprodref",
   }));
   assert.throws(() => assertSafeCapacityTarget(production), /Supabase de PRODUCTION/);
+
+  assert.throws(
+    () => readCapacityConfig(environment({
+      ...writerEnvironment,
+      CAPACITY_WRITER_BLOCK_ID: "pas-un-uuid",
+    })),
+    /UUID valide/,
+  );
 });
