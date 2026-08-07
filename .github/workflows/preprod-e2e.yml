@@ -1,0 +1,76 @@
+name: Preprod E2E robot
+
+on:
+  push:
+    branches:
+      - preprod
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Taille du scénario
+        required: true
+        default: smoke
+        type: choice
+        options:
+          - smoke
+          - mega
+  workflow_call:
+    inputs:
+      mode:
+        required: false
+        default: smoke
+        type: string
+    secrets:
+      PREPROD_SUPABASE_PUBLISHABLE_KEY:
+        required: true
+      PREPROD_SUPABASE_SERVICE_ROLE_KEY:
+        required: true
+      VERCEL_AUTOMATION_BYPASS_SECRET:
+        required: true
+
+concurrency:
+  group: preprod-e2e
+  cancel-in-progress: false
+
+jobs:
+  robot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment:
+      name: preprod
+      url: ${{ vars.PREPROD_HSP_URL }}
+    env:
+      E2E_ALLOW_WRITES: "true"
+      E2E_BASE_URL: ${{ vars.PREPROD_HSP_URL }}
+      E2E_SHOWSCORE_URL: ${{ vars.PREPROD_SHOWSCORE_URL }}
+      E2E_DEPLOY_ENV: staging
+      E2E_MODE: ${{ inputs.mode || (github.event_name == 'schedule' && 'mega') || 'smoke' }}
+      E2E_PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      E2E_SUPABASE_PROJECT_REF: ${{ vars.PREPROD_SUPABASE_PROJECT_REF }}
+      E2E_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PREPROD_SUPABASE_PUBLISHABLE_KEY }}
+      E2E_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PREPROD_SUPABASE_SERVICE_ROLE_KEY }}
+      E2E_SUPABASE_URL: ${{ vars.PREPROD_SUPABASE_URL }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Run preprod robot
+        run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-preprod-${{ github.run_id }}
+          path: |
+            playwright-report
+            test-results/e2e
+          if-no-files-found: ignore
+          retention-days: 14

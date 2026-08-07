@@ -1,25 +1,26 @@
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, divisionLabel, findById, formatCurrency, formatDate, horseLabel, showLabel } from "../../lib/display";
+import { contactLabel, classLabel, findById, formatCurrency, formatDate, horseLabel, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, ContactExternalMembership, ContactRole, Division, Entry, ExternalOrganization, Horse, HorseExternalMembership, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalMembershipRequirement, Show, ShowDay } from "../../types/domain";
+import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
-import { entryDivisionBlockDetail, entryDivisionLabel } from "./entryDisplay";
+import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
+import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function MyEntriesView({
   locale,
-  classes,
+  blocks,
   contacts,
-  contactExternalMemberships,
+  contactExternalIdentifiers,
   contactRoles,
-  divisions,
+  classes,
   entries,
-  externalOrganizations,
-  horseExternalMemberships,
+  externalCredentialIssuers,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horses,
   membershipRequirements,
@@ -39,17 +40,17 @@ function MyEntriesView({
   onVerifyNrhaHorse,
 }: {
   locale: Locale;
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contactRoles: ContactRole[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
-  externalOrganizations: ExternalOrganization[];
-  horseExternalMemberships: HorseExternalMembership[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   nrhaRiderRankings: NrhaRiderRanking[];
   organization: Organization | null;
   profileId: string;
@@ -67,6 +68,7 @@ function MyEntriesView({
 }) {
   const [creatingEntry, setCreatingEntry] = useState(false);
   const [editingEntry, setEditingEntry] = useState<Entry | null>(null);
+  const eligibilityAssessments = useEntryEligibilityAssessments(entries, shows);
 
   async function handleDeleteEntry(entry: Entry) {
     const horseName = horseLabel(findById(horses, entry.horse_id));
@@ -98,7 +100,7 @@ function MyEntriesView({
             <h2>{uiText(locale, "Nouvelle inscription", "New entry")}</h2>
             <p>{uiText(locale, "Inscris un cheval et complète les infos manquantes sans quitter la page.", "Enter a horse and complete missing information without leaving the page.")}</p>
           </div>
-          <button className="primary-button" disabled={!organization || !shows.length || !divisions.length} type="button" onClick={() => setCreatingEntry(true)}>
+          <button className="primary-button" disabled={!organization || !shows.length || !classes.length} type="button" onClick={() => setCreatingEntry(true)}>
             <Plus size={18} />
             {uiText(locale, "Inscription", "Entry")}
           </button>
@@ -109,14 +111,14 @@ function MyEntriesView({
         <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>
           <EntryForm
             locale={locale}
-            classes={classes}
+            blocks={blocks}
             contacts={contacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
             contactRoles={contactRoles}
-            divisions={divisions}
+            classes={classes}
             entries={entries}
-            externalOrganizations={externalOrganizations}
-            horseExternalMemberships={horseExternalMemberships}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
             membershipRequirements={membershipRequirements}
@@ -141,15 +143,15 @@ function MyEntriesView({
         <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Modifier l'inscription", "Edit entry")} onClose={() => setEditingEntry(null)}>
           <EntryEditForm
             locale={locale}
-            classes={classes}
+            blocks={blocks}
             contacts={contacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
             contactRoles={contactRoles}
-            divisions={divisions}
+            classes={classes}
             entries={entries}
             entry={editingEntry}
-            externalOrganizations={externalOrganizations}
-            horseExternalMemberships={horseExternalMemberships}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
             membershipRequirements={membershipRequirements}
@@ -186,8 +188,8 @@ function MyEntriesView({
             <div className="table-row" key={entry.id}>
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <div>
-                <span>{entryDivisionLabel(findById(divisions, entry.division_id), locale)}</span>
-                <span className="muted-line">{entryDivisionBlockDetail(findById(divisions, entry.division_id), classes, locale)}</span>
+                <span>{entryClassLabel(findById(classes, entry.class_id), locale)}</span>
+                <span className="muted-line">{entryClassBlockDetail(findById(classes, entry.class_id), blocks, locale)}</span>
                 {entry.is_late ? (
                   <span className="muted-line">
                     {uiText(locale, "Retard", "Late")} +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}
@@ -196,6 +198,7 @@ function MyEntriesView({
               </div>
               <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
               <div className="row-actions">
+                <EntryEligibilityStatus assessment={eligibilityAssessments[entry.id]} locale={locale} />
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
                   {uiText(locale, "Modifier", "Edit")}
                 </button>

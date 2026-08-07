@@ -2,12 +2,14 @@ import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Plus, Search, ShieldCheck } from "lucide-react";
 import { errorMessage } from "../../lib/display";
+import { defaultAcceptedExternalImportKeys } from "../../lib/externalImportProposal";
 import type { Locale } from "../../lib/i18n";
 import { createContact, verifyNrhaMember } from "../../services/supabaseServices";
-import type { NrhaMemberLookupVerification } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ExternalOrganization, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
+import type { ContactIdentityCandidate, NrhaMemberLookupVerification } from "../../services/supabaseServices";
+import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, ExternalCredentialProduct, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
 import { uiText, buildExternalMembershipFields, InlineHealthMessage } from "../dashboard/shared";
-import { integerFromMembershipNumber, nrhaMemberDataImportRows, nrhaMemberMismatchMessage, nrhaMemberStatus, nrhaMemberVerificationPayload, nrhaOfficialMemberValues, type NrhaMemberDataImportRow, type NrhaMemberVerificationState } from "./nrhaMemberValidation";
+import { compareNrhaMemberIdentity, integerFromMembershipNumber, nrhaMemberDataImportRows, nrhaMemberImportDecisionPayload, nrhaMemberMismatchMessage, nrhaMemberStatus, nrhaMemberVerificationPayload, nrhaOfficialMemberValues, type NrhaMemberDataImportRow, type NrhaMemberLocalValues, type NrhaMemberVerificationState } from "./nrhaMemberValidation";
+import { ContactIdentityCandidateReview } from "./IdentityCandidateReview";
 
 type ContactCreationMode = "manual" | "import";
 
@@ -21,12 +23,17 @@ function ContactForm({
   createdByUserId,
   defaultType = "owner",
   description,
-  externalOrganizations = [],
+  externalCredentialProducts = [],
+  externalCredentialIssuers = [],
+  allowCredentialReview = false,
   linkedUserId,
   membershipRequirements = [],
   organization,
   title,
   onCreateContact,
+  onDismissIdentityCandidate,
+  onSearchIdentityCandidates,
+  onUseExistingContact,
   onVerifyNrhaMember,
   onCreated,
 }: {
@@ -34,12 +41,17 @@ function ContactForm({
   createdByUserId?: string;
   defaultType?: Contact["type"];
   description?: string;
-  externalOrganizations?: ExternalOrganization[];
+  externalCredentialProducts?: ExternalCredentialProduct[];
+  externalCredentialIssuers?: ExternalCredentialIssuer[];
+  allowCredentialReview?: boolean;
   linkedUserId?: string;
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   title?: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
+  onDismissIdentityCandidate?: (candidate: ContactIdentityCandidate) => Promise<void>;
+  onSearchIdentityCandidates?: (input: Parameters<typeof createContact>[0]) => Promise<ContactIdentityCandidate[]>;
+  onUseExistingContact?: (candidate: ContactIdentityCandidate) => Promise<void>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
   onCreated?: () => void;
 }) {
@@ -58,21 +70,27 @@ function ContactForm({
   const [country, setCountry] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
   const [membershipNumbers, setMembershipNumbers] = useState<Record<string, string>>({});
+  const [membershipProductIds, setMembershipProductIds] = useState<Record<string, string>>({});
+  const [membershipStatuses, setMembershipStatuses] = useState<Record<string, ContactExternalIdentifier["status"]>>({});
+  const [membershipExpiries, setMembershipExpiries] = useState<Record<string, string>>({});
   const [nrhaMemberBusy, setNrhaMemberBusy] = useState(false);
   const [nrhaMemberMessage, setNrhaMemberMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaMemberLookup, setNrhaMemberLookup] = useState<NrhaMemberLookupVerification | null>(null);
   const [nrhaMemberVerification, setNrhaMemberVerification] = useState<NrhaMemberVerificationState | null>(null);
+  const [nrhaMemberImportEvidence, setNrhaMemberImportEvidence] = useState<Record<string, unknown> | null>(null);
   const [nrhaImportMemberNumber, setNrhaImportMemberNumber] = useState("");
   const [nrhaImportBusy, setNrhaImportBusy] = useState(false);
   const [nrhaImportMessage, setNrhaImportMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaImportResult, setNrhaImportResult] = useState<NrhaMemberImportResult | null>(null);
+  const [identityCandidates, setIdentityCandidates] = useState<ContactIdentityCandidate[]>([]);
+  const [pendingContactInput, setPendingContactInput] = useState<Parameters<typeof createContact>[0] | null>(null);
   const [busy, setBusy] = useState(false);
   const externalMembershipFields = useMemo(
-    () => buildExternalMembershipFields(defaultType, externalOrganizations, membershipRequirements),
-    [defaultType, externalOrganizations, membershipRequirements],
+    () => buildExternalMembershipFields(defaultType, externalCredentialIssuers, membershipRequirements),
+    [defaultType, externalCredentialIssuers, membershipRequirements],
   );
-  const nrhaExternalOrganization = externalMembershipFields.find((field) => field.organization.code.toUpperCase() === "NRHA")?.organization ?? null;
-  const nrhaOrganizationId = nrhaExternalOrganization?.id ?? null;
+  const nrhaExternalCredentialIssuer = externalMembershipFields.find((field) => field.organization.code.toUpperCase() === "NRHA")?.organization ?? null;
+  const nrhaOrganizationId = nrhaExternalCredentialIssuer?.id ?? null;
   const currentNrhaMemberNumber = nrhaOrganizationId ? membershipNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
   const activeNrhaLookupValues = nrhaMemberLookup ? nrhaOfficialMemberValues(nrhaMemberLookup, { memberNumber: currentNrhaMemberNumber }) : null;
   const verifiedNrhaMember =
@@ -118,10 +136,7 @@ function ContactForm({
       return;
     }
 
-    setBusy(true);
-
-    try {
-      await onCreateContact({
+    await reviewOrCreateContact({
         organization_id: organization.id,
         type: defaultType,
         first_name: firstName,
@@ -140,17 +155,66 @@ function ContactForm({
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
         external_memberships: externalMembershipFields.map((field) => ({
-          external_organization_id: field.organization.id,
-          membership_number: membershipNumbers[field.organization.id] ?? "",
-          status: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? nrhaMemberStatus(verifiedNrhaMember.officialValues) : "unknown",
-          expires_on: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember.officialValues.expiresOn || null : null,
+          external_credential_issuer_id: field.organization.id,
+          credential_product_id: membershipProductIds[field.organization.id] || null,
+          identifier_value: membershipNumbers[field.organization.id] ?? "",
+          status: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? nrhaMemberStatus(verifiedNrhaMember.officialValues) : membershipStatuses[field.organization.id] ?? "pending",
+          expires_on: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember.officialValues.expiresOn || null : membershipExpiries[field.organization.id] || null,
           verified_at: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? new Date().toISOString() : null,
-          verification_payload: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? verifiedNrhaMember.payload : undefined,
-          verification_source: verifiedNrhaMember && field.organization.id === verifiedNrhaMember.organizationId ? "nrha_api" : null,
+          verification_payload: field.organization.id === nrhaOrganizationId ? verifiedNrhaMember?.payload ?? nrhaMemberImportEvidence ?? undefined : undefined,
+          verification_source: field.organization.id === nrhaOrganizationId && (verifiedNrhaMember || nrhaMemberImportEvidence) ? "nrha_api" : null,
         })),
       });
+  }
+
+  async function reviewOrCreateContact(input: Parameters<typeof createContact>[0]) {
+    setBusy(true);
+
+    try {
+      if (onSearchIdentityCandidates) {
+        const candidates = await onSearchIdentityCandidates(input);
+
+        if (candidates.length) {
+          setPendingContactInput(input);
+          setIdentityCandidates(candidates);
+          return;
+        }
+      }
+
+      await finishContactCreation(input);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function finishContactCreation(input: Parameters<typeof createContact>[0]) {
+    await onCreateContact(input);
+    resetForm();
+    onCreated?.();
+  }
+
+  async function handleUseExistingContact(candidate: ContactIdentityCandidate) {
+    if (!onUseExistingContact) return;
+    setBusy(true);
+
+    try {
+      await onUseExistingContact(candidate);
       resetForm();
       onCreated?.();
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleCreateDistinctContact() {
+    if (!pendingContactInput) return;
+    setBusy(true);
+
+    try {
+      if (onDismissIdentityCandidate) {
+        await Promise.all(identityCandidates.map((candidate) => onDismissIdentityCandidate(candidate)));
+      }
+      await finishContactCreation(pendingContactInput);
     } finally {
       setBusy(false);
     }
@@ -175,12 +239,15 @@ function ContactForm({
     setNrhaImportMemberNumber("");
     setNrhaImportMessage(null);
     setNrhaImportResult(null);
+    setIdentityCandidates([]);
+    setPendingContactInput(null);
   }
 
   function clearNrhaMemberValidation() {
     setNrhaMemberMessage(null);
     setNrhaMemberLookup(null);
     setNrhaMemberVerification(null);
+    setNrhaMemberImportEvidence(null);
   }
 
   async function handleVerifyNrhaMember() {
@@ -189,6 +256,7 @@ function ContactForm({
     setNrhaMemberMessage(null);
     setNrhaMemberLookup(null);
     setNrhaMemberVerification(null);
+    setNrhaMemberImportEvidence(null);
 
     if (!nrhaOrganizationId) {
       setNrhaMemberMessage({
@@ -225,6 +293,22 @@ function ContactForm({
         memberNumber,
       });
       const officialValues = nrhaOfficialMemberValues(verification, { memberNumber });
+      const localValues: NrhaMemberLocalValues = {
+        address,
+        addressLine2,
+        city,
+        country,
+        email,
+        expiresOn: "",
+        firstName,
+        lastName,
+        middleName,
+        memberNumber: String(memberNumber),
+        phone,
+        state,
+        zipCode,
+      };
+      const identityComparison = compareNrhaMemberIdentity(localValues, officialValues);
 
       if (verification.status === "not_found" || !verification.member) {
         setNrhaMemberMessage({
@@ -236,12 +320,12 @@ function ContactForm({
 
       setNrhaMemberLookup(verification);
 
-      if (verification.status === "verified" && verification.matched) {
+      if (verification.status === "verified" && verification.matched && identityComparison.verdict === "match") {
         setNrhaMemberVerification({
           memberNumber: String(memberNumber),
           officialValues,
           organizationId: nrhaOrganizationId,
-          payload: nrhaMemberVerificationPayload(verification),
+          payload: nrhaMemberVerificationPayload(verification, identityComparison),
         });
         setNrhaMemberMessage({
           tone: "success",
@@ -252,7 +336,7 @@ function ContactForm({
 
       setNrhaMemberMessage({
         tone: "info",
-        message: `${nrhaMemberMismatchMessage(verification, locale)} ${uiText(locale, "Tu peux importer les données officielles ci-dessous.", "You can import the official data below.")}`,
+        message: `${nrhaMemberMismatchMessage(verification, locale, identityComparison)} ${uiText(locale, "Tu peux importer les données officielles ci-dessous.", "You can import the official data below.")}`,
       });
     } catch (error) {
       setNrhaMemberMessage({
@@ -329,7 +413,27 @@ function ContactForm({
     try {
       const values = nrhaOfficialMemberValues(nrhaImportResult.verification, { memberNumber: nrhaImportResult.memberNumber });
       const nameParts = splitFullName(values.fullName || [values.firstName, values.lastName].filter(Boolean).join(" "));
-      await onCreateContact({
+      const importedLocalValues: NrhaMemberLocalValues = {
+        address: values.address,
+        addressLine2: values.addressLine2,
+        city: values.city,
+        country: values.country,
+        email: values.email,
+        expiresOn: values.expiresOn,
+        firstName: values.firstName || nameParts.firstName || values.fullName || "NRHA",
+        lastName: values.lastName || nameParts.lastName || values.fullName || "Member",
+        middleName: values.middleName || nameParts.middleName,
+        memberNumber: values.memberNumber,
+        phone: values.phone,
+        state: values.state,
+        zipCode: values.zipCode,
+      };
+      const importRows = nrhaMemberDataImportRows(values, {
+        address: "", addressLine2: "", city: "", country: "", email: "", expiresOn: "", firstName: "", lastName: "", middleName: "", memberNumber: "", phone: "", state: "", zipCode: "",
+      }, locale);
+      const importComparison = compareNrhaMemberIdentity(importedLocalValues, values);
+      const importPayload = nrhaMemberImportDecisionPayload(nrhaImportResult.verification, importRows, importRows.map((row) => row.key), importComparison);
+      await reviewOrCreateContact({
         organization_id: organization.id,
         type: defaultType,
         first_name: values.firstName || nameParts.firstName || values.fullName || "NRHA",
@@ -348,17 +452,15 @@ function ContactForm({
         linked_user_id: linkedUserId,
         created_by_user_id: createdByUserId,
         external_memberships: externalMembershipFields.map((field) => ({
-          external_organization_id: field.organization.id,
-          membership_number: field.organization.id === nrhaOrganizationId ? values.memberNumber : membershipNumbers[field.organization.id] ?? "",
+          external_credential_issuer_id: field.organization.id,
+          identifier_value: field.organization.id === nrhaOrganizationId ? values.memberNumber : membershipNumbers[field.organization.id] ?? "",
           status: field.organization.id === nrhaOrganizationId ? nrhaMemberStatus(values) : "unknown",
           expires_on: field.organization.id === nrhaOrganizationId ? values.expiresOn || null : null,
           verified_at: field.organization.id === nrhaOrganizationId ? new Date().toISOString() : null,
-          verification_payload: field.organization.id === nrhaOrganizationId ? nrhaMemberVerificationPayload(nrhaImportResult.verification) : undefined,
+          verification_payload: field.organization.id === nrhaOrganizationId ? importPayload : undefined,
           verification_source: field.organization.id === nrhaOrganizationId ? "nrha_api" : null,
         })),
       });
-      resetForm();
-      onCreated?.();
     } catch (error) {
       setNrhaImportMessage({
         tone: "error",
@@ -375,6 +477,24 @@ function ContactForm({
     }
 
     const selectedKeys = new Set(keys);
+    const intendedValues: NrhaMemberLocalValues = {
+      address: selectedKeys.has("address") ? activeNrhaLookupValues.address : address,
+      addressLine2: selectedKeys.has("addressLine2") ? activeNrhaLookupValues.addressLine2 : addressLine2,
+      city: selectedKeys.has("city") ? activeNrhaLookupValues.city : city,
+      country: selectedKeys.has("country") ? activeNrhaLookupValues.country : country,
+      email: selectedKeys.has("email") ? activeNrhaLookupValues.email : email,
+      expiresOn: selectedKeys.has("expiresOn") ? activeNrhaLookupValues.expiresOn : verifiedNrhaMember?.officialValues.expiresOn ?? "",
+      firstName: selectedKeys.has("firstName") ? activeNrhaLookupValues.firstName : firstName,
+      lastName: selectedKeys.has("lastName") ? activeNrhaLookupValues.lastName : lastName,
+      middleName: selectedKeys.has("middleName") ? activeNrhaLookupValues.middleName : middleName,
+      memberNumber: selectedKeys.has("memberNumber") ? activeNrhaLookupValues.memberNumber : currentNrhaMemberNumber,
+      phone: selectedKeys.has("phone") ? activeNrhaLookupValues.phone : phone,
+      state: selectedKeys.has("state") ? activeNrhaLookupValues.state : state,
+      zipCode: selectedKeys.has("zipCode") ? activeNrhaLookupValues.zipCode : zipCode,
+    };
+    const comparison = compareNrhaMemberIdentity(intendedValues, activeNrhaLookupValues);
+    const importPayload = nrhaMemberImportDecisionPayload(nrhaMemberLookup, nrhaMemberRows, selectedKeys, comparison);
+    setNrhaMemberImportEvidence(importPayload);
     applyMemberValues(activeNrhaLookupValues, selectedKeys);
 
     if (nrhaMemberRows.every((row) => selectedKeys.has(row.key))) {
@@ -382,7 +502,7 @@ function ContactForm({
         memberNumber: activeNrhaLookupValues.memberNumber || currentNrhaMemberNumber,
         officialValues: activeNrhaLookupValues,
         organizationId: nrhaOrganizationId,
-        payload: nrhaMemberVerificationPayload(nrhaMemberLookup),
+        payload: importPayload,
       });
       setNrhaMemberMessage({
         tone: "success",
@@ -428,7 +548,7 @@ function ContactForm({
           <p>{description ?? (organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first."))}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="contact-create-form" onSubmit={handleSubmit}>
         <div className="segmented-control compact-segmented">
           <button className={creationMode === "manual" ? "active" : ""} type="button" onClick={() => setCreationMode("manual")}>
             {uiText(locale, "Création manuelle", "Manual creation")}
@@ -586,9 +706,10 @@ function ContactForm({
                   <strong>{uiText(locale, "Numéros de membre externes", "External membership numbers")}</strong>
                   <span>{uiText(locale, "Les champs obligatoires dépendent de l'association active.", "Required fields depend on the active association.")}</span>
                 </div>
-                {externalMembershipFields.map((field) => (
-                  <label key={field.organization.id}>
-                    {field.organization.code} #
+                {externalMembershipFields.map((field) => {
+                  const issuerProducts = externalCredentialProducts.filter((product) => product.external_credential_issuer_id === field.organization.id && product.is_active);
+                  return <div className="stack compact-stack nested-fieldset" key={field.organization.id}>
+                  <label>{field.organization.code} #
                     <input
                       disabled={!organization}
                       required={field.required}
@@ -613,7 +734,10 @@ function ContactForm({
                       </div>
                     ) : null}
                   </label>
-                ))}
+                  {issuerProducts.length ? <label>{uiText(locale, "Type de carte ou produit", "Membership or product type")}<select value={membershipProductIds[field.organization.id] ?? ""} onChange={(event) => setMembershipProductIds((current) => ({ ...current, [field.organization.id]: event.target.value }))}><option value="">Non précisé</option>{issuerProducts.map((product) => <option key={product.id} value={product.id}>{product.name}{product.includes_liability_insurance ? ` — ${uiText(locale, "assurance incluse", "insurance included")}` : ""}</option>)}</select></label> : null}
+                  {allowCredentialReview ? <div className="form-grid"><label>{uiText(locale, "Statut", "Status")}<select value={membershipStatuses[field.organization.id] ?? "pending"} onChange={(event) => setMembershipStatuses((current) => ({ ...current, [field.organization.id]: event.target.value as ContactExternalIdentifier["status"] }))}><option value="pending">À vérifier</option><option value="active">Active</option><option value="expired">Expirée</option><option value="inactive">Inactive</option><option value="revoked">Révoquée</option></select></label><label>{uiText(locale, "Expiration", "Expiry")}<input type="date" value={membershipExpiries[field.organization.id] ?? ""} onChange={(event) => setMembershipExpiries((current) => ({ ...current, [field.organization.id]: event.target.value }))} /></label></div> : null}
+                  </div>;
+                })}
                 <InlineHealthMessage value={nrhaMemberMessage} />
                 {nrhaMemberRows.length ? (
                   <NrhaMemberDataPanel rows={nrhaMemberRows} locale={locale} onApply={handleApplyNrhaMemberData} />
@@ -653,10 +777,24 @@ function ContactForm({
           </div>
         )}
 
-        <button className="primary-button" disabled={busy || !canCreateContact} type="submit">
-          <Plus size={18} />
-          {creationMode === "import" ? uiText(locale, "Créer le contact importé", "Create imported contact") : uiText(locale, "Créer le contact", "Create contact")}
-        </button>
+        {identityCandidates.length && pendingContactInput ? (
+          <ContactIdentityCandidateReview
+            busy={busy}
+            candidates={identityCandidates}
+            locale={locale}
+            onCreateDistinct={handleCreateDistinctContact}
+            onEdit={() => {
+              setIdentityCandidates([]);
+              setPendingContactInput(null);
+            }}
+            onUseExisting={handleUseExistingContact}
+          />
+        ) : (
+          <button className="primary-button" disabled={busy || !canCreateContact} type="submit">
+            <Plus size={18} />
+            {creationMode === "import" ? uiText(locale, "Créer le contact importé", "Create imported contact") : uiText(locale, "Créer le contact", "Create contact")}
+          </button>
+        )}
       </form>
     </section>
   );
@@ -671,11 +809,11 @@ function NrhaMemberDataPanel({
   rows: NrhaMemberDataImportRow[];
   onApply: (keys: NrhaMemberDataImportRow["key"][]) => void;
 }) {
-  const [selectedKeys, setSelectedKeys] = useState<Set<NrhaMemberDataImportRow["key"]>>(() => new Set(rows.map((row) => row.key)));
+  const [selectedKeys, setSelectedKeys] = useState<Set<NrhaMemberDataImportRow["key"]>>(() => new Set(defaultAcceptedExternalImportKeys(rows)));
   const rowSelectionSignature = rows.map((row) => `${row.key}:${row.current}:${row.official}`).join("|");
 
   useEffect(() => {
-    setSelectedKeys(new Set(rows.map((row) => row.key)));
+    setSelectedKeys(new Set(defaultAcceptedExternalImportKeys(rows)));
   }, [rowSelectionSignature]);
 
   function toggleKey(key: NrhaMemberDataImportRow["key"]) {
@@ -696,7 +834,7 @@ function NrhaMemberDataPanel({
     <div className="nrha-data-import-panel">
       <div className="inline-form-header">
         <strong>{uiText(locale, "Données NRHA disponibles", "Available NRHA data")}</strong>
-        <span>{uiText(locale, "Importe les valeurs officielles qui manquent ou qui ont changé dans HSP.", "Import official values missing or changed in HSP.")}</span>
+        <span>{uiText(locale, "Les champs vides sont présélectionnés. Toute valeur HSP existante à remplacer doit être cochée explicitement.", "Missing fields are preselected. Any existing HSP value to replace must be checked explicitly.")}</span>
       </div>
       <div className="nrha-data-import-list">
         {rows.map((row) => (

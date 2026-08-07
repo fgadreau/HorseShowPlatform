@@ -3,7 +3,7 @@ import type { Organization, PlanTier } from '../types/domain';
 export const PLAN_FEATURES = {
   community: [
     'shows',               // Créer/gérer des shows
-    'classes',             // Classes et divisions
+    'blocks',             // Classes et classes
     'people',              // Gestion des contacts
     'back_numbers',        // Numéros de dos
     'public_pages',        // Horaire et résultats publics
@@ -15,7 +15,7 @@ export const PLAN_FEATURES = {
     'entries_online',      // Portail d'inscription en ligne pour les riders
     'draw',                // Ordres de passage automatiques
     'stripe_preauth',      // Préautorisations Stripe
-    'advanced_fees',       // Frais avancés par division/classe
+    'advanced_fees',       // Frais avancés par classRecord/classe
     'financial_reports',   // Rapports financiers
     'health_documents',    // Vérifications santé chevaux
     'custom_branding',     // Logo, couleurs
@@ -28,7 +28,7 @@ export const PLAN_FEATURES = {
     'nsba_integration',        // Vérification membres NSBA
     'membership_verification', // Vérification auto memberships fédérations
     'horse_license_check',     // Vérification licences chevaux
-    'eligibility_check',       // Vérification éligibilité divisions
+    'eligibility_check',       // Vérification éligibilité classes
     'official_reports',        // Rapports format fédération
     'api_access',              // Accès API REST
     'live_streaming',          // Overlay OBS / streaming

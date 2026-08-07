@@ -5,7 +5,7 @@ import { ModalDialog, ViewIntro } from "../../components/ui";
 import { formatDate, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createShow, slugify, updateShow } from "../../services/supabaseServices";
-import type { ClassRecord, Division, Entry, Invoice, Organization, Show, ShowDay, ShowScoreClassSetup, StallOption } from "../../types/domain";
+import type { Block, ClassRecord, Entry, Invoice, Organization, Show, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { uiText, buildShowReadinessItems, type ShowReadinessItem } from "../dashboard/shared";
 import { showTimeInputValue } from "../classes/classUtils";
@@ -16,8 +16,8 @@ type ShowAssistantStep = "essentials" | "payments" | "readiness";
 
 function ShowAssistant({
   locale = "fr",
+  blocks,
   classes,
-  divisions,
   entries,
   initialShow,
   invoices,
@@ -31,14 +31,14 @@ function ShowAssistant({
   onViewChange,
 }: {
   locale?: Locale;
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
   entries: Entry[];
   initialShow: Show | null;
   invoices: Invoice[];
   organization: Organization | null;
   showDays: ShowDay[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   stallOptions: StallOption[];
   onClose: () => void;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
@@ -86,8 +86,8 @@ function ShowAssistant({
   const readinessItems = activeShow
     ? buildShowReadinessItems(activeShow, {
         locale,
+        blocks,
         classes,
-        divisions,
         entries,
         invoices,
         showDays,
@@ -196,7 +196,7 @@ function ShowAssistant({
 
   return (
     <div className="modal-backdrop">
-      <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" role="dialog">
+      <section aria-labelledby="show-assistant-title" aria-modal="true" className="assistant-modal" data-testid="show-assistant" role="dialog">
         <div className="assistant-modal-header">
           <div>
             <p className="eyebrow">{uiText(locale, "Assistant", "Assistant")}</p>

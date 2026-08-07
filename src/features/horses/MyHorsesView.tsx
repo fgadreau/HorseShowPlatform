@@ -1,59 +1,99 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
-import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
-import { contactLabel, findById, horseLabel } from "../../lib/display";
+import { EmptyState, ModalDialog, NoticeBanner, ViewIntro } from "../../components/ui";
+import { contactLabel, errorMessage, findById, formatCurrency, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
-import { uiText, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel } from "../dashboard/shared";
+import { createContact, createHorse, createUploadedHorseHealthDocument, deleteHorse, purchaseIncentiveProgramNomination, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, IncentiveProgram, IncentiveProgramNomination, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import type { Notice } from "../../types/ui";
+import { uiText, horseExternalReferenceChips, horseGenderLabel, todayDateValue } from "../dashboard/shared";
+import { healthComplianceStatusLabel, healthComplianceTone, HorseAssociationComplianceGroups, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
+import { incentiveProgramAgePriceTiers, incentiveProgramFeeForHorse, incentiveProgramName, incentiveProgramTypeLabel, nominationRoleLabel, nominationStatusLabel, programUsesStallion } from "../programs/programLabels";
 
 function MyHorsesView({
   locale,
   contacts,
   contactRoles,
-  canManageHealthDocuments,
-  externalOrganizations,
+  externalCredentialIssuers,
   membershipRequirements = [],
   horses,
-  horseExternalMemberships,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horseContacts,
+  incentivePrograms = [],
+  incentiveProgramNominations = [],
+  payerContacts = [],
+  programHorses = horses,
+  healthComplianceRevision,
   organization,
   profileId,
   onCreateContact,
   onCreateHorse,
   onCreateHorseHealthDocument,
   onDeleteHorse,
-  onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
+  onRefresh,
 }: {
   locale: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
-  canManageHealthDocuments: boolean;
-  externalOrganizations: ExternalOrganization[];
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   horses: Horse[];
-  horseExternalMemberships: HorseExternalMembership[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horseContacts: HorseContact[];
+  incentivePrograms?: IncentiveProgram[];
+  incentiveProgramNominations?: IncentiveProgramNomination[];
+  payerContacts?: Contact[];
+  programHorses?: Horse[];
+  healthComplianceRevision?: string;
   organization: Organization | null;
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  onRefresh?: () => Promise<void> | void;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
+  const activePrograms = incentivePrograms.filter((program) => program.is_active && program.organization_id === organization?.id);
+  const [purchaseProgramId, setPurchaseProgramId] = useState(activePrograms[0]?.id ?? "");
+  const [purchaseHorseId, setPurchaseHorseId] = useState("");
+  const [purchasePayerId, setPurchasePayerId] = useState("");
+  const [purchaseRole, setPurchaseRole] = useState<IncentiveProgramNomination["nomination_role"]>("horse");
+  const [purchaseSeason, setPurchaseSeason] = useState(String(new Date().getFullYear()));
+  const [purchaseBusy, setPurchaseBusy] = useState(false);
+  const [purchaseNotice, setPurchaseNotice] = useState<Notice | null>(null);
+  const purchaseProgram = activePrograms.find((program) => program.id === purchaseProgramId) ?? null;
+  const purchaseHorse = programHorses.find((horse) => horse.id === purchaseHorseId) ?? null;
+  const purchaseSeasonYear = Number(purchaseSeason) || new Date().getFullYear();
+  const purchasePricing = purchaseProgram ? incentiveProgramFeeForHorse(purchaseProgram, purchaseHorse, purchaseSeasonYear) : null;
+  const purchaseRequiresBirthDate = Boolean(purchaseProgram && incentiveProgramAgePriceTiers(purchaseProgram).length);
+  const availablePurchaseRoles: IncentiveProgramNomination["nomination_role"][] = purchaseProgram && programUsesStallion(purchaseProgram)
+    ? ["stallion", "foal"]
+    : purchaseProgram?.program_type === "horse_foal_nomination"
+      ? ["horse", "foal"]
+      : ["horse"];
+  useEffect(() => {
+    if (!activePrograms.some((program) => program.id === purchaseProgramId)) {
+      setPurchaseProgramId(activePrograms[0]?.id ?? "");
+    }
+  }, [activePrograms, purchaseProgramId]);
+  const healthCompliance = useHorseHealthComplianceOverview({
+    horseIds: horses.map((horse) => horse.id),
+    referenceDate: todayDateValue(),
+    refreshToken: healthComplianceRevision,
+  });
 
   async function handleDeleteHorse(horse: Horse) {
     if (!window.confirm(uiText(locale, `Supprimer ${horse.name} et les inscriptions/réservations liées?`, `Delete ${horse.name} and linked entries/reservations?`))) {
@@ -63,6 +103,37 @@ function MyHorsesView({
     await onDeleteHorse(horse.id);
     if (editingHorse?.id === horse.id) {
       setEditingHorse(null);
+    }
+  }
+
+  async function handleNominationPurchase(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!purchaseProgram || !purchaseHorseId || !purchasePayerId) return;
+    if (purchaseRequiresBirthDate && !purchaseHorse?.date_of_birth) {
+      setPurchaseNotice({ tone: "error", message: uiText(locale, "Ajoute la date de naissance du cheval avant d’acheter cette nomination. Elle détermine son âge au 1er janvier.", "Add the horse's date of birth before buying this nomination. It determines age on January 1.") });
+      return;
+    }
+    setPurchaseBusy(true);
+    setPurchaseNotice(null);
+    try {
+      const nomination = await purchaseIncentiveProgramNomination({
+        incentive_program_id: purchaseProgram.id,
+        horse_id: purchaseHorseId,
+        payer_contact_id: purchasePayerId,
+        nomination_role: availablePurchaseRoles.includes(purchaseRole) ? purchaseRole : availablePurchaseRoles[0],
+        season_year: Number(purchaseSeason) || new Date().getFullYear(),
+      });
+      setPurchaseNotice({
+        tone: "success",
+        message: nomination.status === "active"
+          ? uiText(locale, "Nomination active.", "Nomination active.")
+          : uiText(locale, "Nomination créée. La facture se trouve dans Mes factures; une validation peut rester requise pour la progéniture d’un étalon.", "Nomination created. The invoice is in My invoices; stallion offspring may still require validation."),
+      });
+      await onRefresh?.();
+    } catch (error) {
+      setPurchaseNotice({ tone: "error", message: errorMessage(error) });
+    } finally {
+      setPurchaseBusy(false);
     }
   }
 
@@ -91,6 +162,29 @@ function MyHorsesView({
         </div>
       </section>
 
+      {activePrograms.length ? <section className="panel span-2">
+        <div className="panel-header"><div><h2>{uiText(locale, "Acheter une nomination", "Buy a nomination")}</h2><p>{uiText(locale, "Choisis un programme facultatif pour l’un de tes chevaux. Une nomination payante crée une facture brouillon.", "Choose an optional program for one of your horses. A paid nomination creates a draft invoice.")}</p></div></div>
+        {purchaseNotice ? <NoticeBanner notice={purchaseNotice} /> : null}
+        <form className="stack" onSubmit={handleNominationPurchase}>
+          <div className="form-grid">
+            <label>{uiText(locale, "Programme", "Program")}<select required value={purchaseProgramId} onChange={(event) => { const programId = event.target.value; const program = activePrograms.find((candidate) => candidate.id === programId); setPurchaseProgramId(programId); setPurchaseRole(program && programUsesStallion(program) ? "stallion" : "horse"); }}>{activePrograms.map((program) => <option key={program.id} value={program.id}>{incentiveProgramName(program, locale)}</option>)}</select>{purchaseProgram ? <span className="input-help">{incentiveProgramTypeLabel(purchaseProgram.program_type, locale)}</span> : null}</label>
+            <label>{uiText(locale, "Cheval", "Horse")}<select required value={purchaseHorseId} onChange={(event) => setPurchaseHorseId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{programHorses.map((horse) => <option key={horse.id} value={horse.id}>{horse.name}</option>)}</select>{purchaseHorse ? <span className="input-help">{purchaseHorse.date_of_birth ? uiText(locale, `Né le ${purchaseHorse.date_of_birth}`, `Born ${purchaseHorse.date_of_birth}`) : uiText(locale, "Date de naissance manquante", "Missing date of birth")}</span> : null}</label>
+            <label>{uiText(locale, "Payeur", "Payer")}<select required value={purchasePayerId} onChange={(event) => setPurchasePayerId(event.target.value)}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{payerContacts.map((contact) => <option key={contact.id} value={contact.id}>{contactLabel(contact)}</option>)}</select></label>
+            <label>{uiText(locale, "Rôle", "Role")}<select value={availablePurchaseRoles.includes(purchaseRole) ? purchaseRole : availablePurchaseRoles[0]} onChange={(event) => setPurchaseRole(event.target.value as IncentiveProgramNomination["nomination_role"])}>{availablePurchaseRoles.map((role) => <option key={role} value={role}>{nominationRoleLabel(role, locale)}</option>)}</select></label>
+            <label>{uiText(locale, "Saison", "Season")}<input min="1900" required type="number" value={purchaseSeason} onChange={(event) => setPurchaseSeason(event.target.value)} /></label>
+          </div>
+          {purchaseProgram && purchasePricing ? <p className="muted-line"><strong>{uiText(locale, "Prix applicable", "Applicable fee")} : {formatCurrency(purchasePricing.fee, organization?.currency ?? "CAD")}</strong>{purchasePricing.age !== null ? ` · ${uiText(locale, `Âge au 1er janvier ${purchaseSeasonYear} : ${purchasePricing.age} an(s)`, `Age on January 1, ${purchaseSeasonYear}: ${purchasePricing.age}`)}` : purchaseRequiresBirthDate ? ` · ${uiText(locale, "date de naissance requise", "date of birth required")}` : ""}</p> : null}
+          {purchaseProgram && programUsesStallion(purchaseProgram) && purchaseRole === "foal" ? <p className="muted-line">{uiText(locale, "La nomination restera en attente jusqu’à ce que l’association confirme l’étalon admissible.", "The nomination remains pending until the association confirms the qualifying stallion.")}</p> : null}
+          <button className="primary-button" disabled={purchaseBusy || !purchaseHorseId || !purchasePayerId || (purchaseRequiresBirthDate && !purchaseHorse?.date_of_birth)} type="submit">{purchaseBusy ? uiText(locale, "Création...", "Creating...") : uiText(locale, "Créer la nomination", "Create nomination")}</button>
+        </form>
+        <div className="requirement-list">
+          {incentiveProgramNominations.filter((nomination) => programHorses.some((horse) => horse.id === nomination.horse_id)).map((nomination) => {
+            const program = incentivePrograms.find((candidate) => candidate.id === nomination.incentive_program_id);
+            return <div className="membership-type-row" key={nomination.id}><span className="membership-type-main"><strong>{horses.find((horse) => horse.id === nomination.horse_id)?.name}</strong>{`${program ? incentiveProgramName(program, locale) : uiText(locale, "Programme", "Program")} · ${nomination.season_year}`}</span><small>{nominationStatusLabel(nomination.status, locale)}</small></div>;
+          })}
+        </div>
+      </section> : null}
+
       {creatingHorse ? (
         <ModalDialog description={uiText(locale, "Ajoute le cheval à ton profil et complète les documents requis.", "Add the horse to your profile and complete required documents.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>
           <HorseForm
@@ -98,7 +192,7 @@ function MyHorsesView({
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={profileId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={onCreateContact}
@@ -117,11 +211,10 @@ function MyHorsesView({
             locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
-            canManageHealthDocuments={canManageHealthDocuments}
             createdByUserId={profileId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={membershipRequirements}
-            horseExternalMemberships={horseExternalMemberships}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={horseHealthDocuments}
             horseContacts={horseContacts}
             organization={organization}
@@ -129,7 +222,6 @@ function MyHorsesView({
             onCancel={() => setEditingHorse(null)}
             onCreateContact={onCreateContact}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={async (id, input) => {
               await onUpdateHorse(id, input);
               setEditingHorse(null);
@@ -155,11 +247,19 @@ function MyHorsesView({
             <span>Action</span>
           </div>
           {horses.map((horse) => {
-            const healthDisplay = horseHealthDisplay(horse, horseHealthDocuments, organization);
-            const referenceChips = horseExternalReferenceChips(horse, horseExternalMemberships, externalOrganizations);
+            const associationResults = healthCompliance.results.filter((result) => result.horse_id === horse.id);
+            const summaryStatus = associationResults.some((result) => result.compliance_status === "non_compliant")
+              ? "non_compliant"
+              : associationResults.some((result) => result.compliance_status === "pending_review")
+                ? "pending_review"
+                : associationResults.length
+                  ? "compliant"
+                  : null;
+            const summaryTone = summaryStatus ? healthComplianceTone(summaryStatus) : "neutral";
+            const referenceChips = horseExternalReferenceChips(horse, horseExternalIdentifiers, externalCredentialIssuers);
 
             return (
-              <div className={`horse-list-row ${healthDisplay.summary.tone}`} key={horse.id}>
+              <div className={`horse-list-row ${summaryTone}`} key={horse.id}>
                 <div className="horse-list-identity">
                   <strong>{horse.name}</strong>
                   <span>
@@ -172,15 +272,19 @@ function MyHorsesView({
                   ) : null}
                 </div>
                 <div className="horse-list-status">
-                  <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
-                  <div className="horse-chip-row">
-                    {healthDisplay.chips.map((chip) => (
-                      <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}`}>
-                        <span>{chip.label}</span>
-                        <strong>{chip.value}</strong>
-                      </span>
-                    ))}
-                  </div>
+                  <span className={`horse-summary-pill ${summaryTone}`}>
+                    {healthCompliance.loading
+                      ? uiText(locale, "Calcul en cours", "Calculating")
+                      : healthCompliance.error
+                        ? uiText(locale, "Statut indisponible", "Status unavailable")
+                        : summaryStatus
+                          ? healthComplianceStatusLabel(summaryStatus, locale)
+                          : uiText(locale, "Aucune association liée", "No linked association")}
+                  </span>
+                  {healthCompliance.error ? <span className="muted-line">{healthCompliance.error}</span> : null}
+                  {!healthCompliance.loading && !healthCompliance.error ? (
+                    <HorseAssociationComplianceGroups locale={locale} results={associationResults} />
+                  ) : null}
                 </div>
                 <div className="horse-chip-row reference-chip-row">
                   {referenceChips.map((chip) => (

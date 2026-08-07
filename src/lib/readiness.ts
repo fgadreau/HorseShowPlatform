@@ -1,13 +1,11 @@
 import { contactLabel, formatDate, horseLabel } from "./display";
-import { getHorseCogginsValidity, getHorseVaccineValidity, type HorseCogginsValidity, type HorseVaccineValidity } from "./health";
 import type {
   Contact,
-  ContactExternalMembership,
-  ExternalOrganization,
+  ContactExternalIdentifier,
+  ExternalCredentialIssuer,
   Horse,
-  HorseHealthDocument,
-  Organization,
-  OrganizationExternalMembershipRequirement,
+  HorseHealthCompliance,
+  OrganizationExternalCredentialRequirement,
   Show,
 } from "../types/domain";
 
@@ -32,9 +30,9 @@ export type ReadinessResult = {
 const proceedStatuses = new Set<ReadinessItemStatus>(["ready", "not_required"]);
 
 export function buildHorseShowReadiness(input: {
-  documents: HorseHealthDocument[];
+  healthCompliance?: HorseHealthCompliance | null;
+  healthComplianceLoading?: boolean;
   horse: Horse | null | undefined;
-  organization: Organization | null | undefined;
   show: Show | null | undefined;
   skipHealth?: boolean;
 }): ReadinessResult {
@@ -56,51 +54,50 @@ export function buildHorseShowReadiness(input: {
     return summarizeReadiness(items, "Verification sante ignoree pour ce statut.");
   }
 
-  const cogginsValidity = getHorseCogginsValidity({
-    documents: input.documents,
-    horseId: input.horse.id,
-    organization: input.organization,
-    referenceDate: input.show?.start_date ?? null,
-  });
-  const vaccineValidity = getHorseVaccineValidity({
-    documents: input.documents,
-    horseId: input.horse.id,
-    organization: input.organization,
-    referenceDate: input.show?.start_date ?? null,
-  });
-
-  items.push({
-    blocking: !cogginsValidity.valid,
-    detail: horseCogginsReadinessMessage(cogginsValidity, input.show),
-    key: "horse.coggins",
-    status: horseCogginsReadinessStatus(cogginsValidity),
-    title: `Coggins - ${horseLabel(input.horse)}`,
-  });
-  items.push({
-    blocking: !vaccineValidity.valid,
-    detail: horseVaccineReadinessMessage(vaccineValidity, input.show),
-    key: "horse.vaccine",
-    status: horseVaccineReadinessStatus(vaccineValidity),
-    title: `Vaccin influenza/rhino - ${horseLabel(input.horse)}`,
-  });
+  if (input.healthComplianceLoading || !input.healthCompliance) {
+      items.push({
+        blocking: true,
+        detail: "Calcul de la conformite sante pour la date du concours en cours.",
+        key: "horse.health_compliance",
+        status: "pending",
+        title: `Documents sante - ${horseLabel(input.horse)}`,
+      });
+  } else {
+      const compliance = input.healthCompliance;
+      items.push({
+        blocking: !compliance.can_proceed,
+        detail: horseHealthComplianceReadinessMessage(compliance, input.show),
+        key: "horse.health_compliance",
+        status:
+          compliance.compliance_status === "not_required"
+            ? "not_required"
+            : compliance.compliance_status === "compliant"
+              ? "ready"
+              : compliance.can_proceed
+                ? "pending"
+                : compliance.compliance_status === "pending_review"
+                  ? "pending"
+                  : "blocked",
+        title: `Documents sante - ${horseLabel(input.horse)}`,
+      });
+  }
 
   return summarizeReadiness(items, "Cheval pret pour le show.");
 }
 
 export function buildContactShowReadiness(input: {
   contact: Contact | null | undefined;
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
   contactType: Contact["type"];
-  externalOrganizations: ExternalOrganization[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   referenceDate?: string | null;
   roleLabel: string;
 }): ReadinessResult {
-  const requiredOrganizationIds = input.membershipRequirements
-    .filter((requirement) => requirement.is_required && requirement.contact_type === input.contactType)
-    .map((requirement) => requirement.external_organization_id);
+  const requiredCredentials = input.membershipRequirements
+    .filter((requirement) => requirement.is_required && requirement.contact_type === input.contactType);
 
-  if (!requiredOrganizationIds.length) {
+  if (!requiredCredentials.length) {
     return summarizeReadiness([], `${input.roleLabel} sans exigence de membership show-level.`);
   }
 
@@ -120,34 +117,89 @@ export function buildContactShowReadiness(input: {
   }
 
   const contact = input.contact;
-  const memberships = input.contactExternalMemberships.filter((membership) => membership.contact_id === contact.id);
+  const memberships = input.contactExternalIdentifiers.filter((membership) => membership.contact_id === contact.id);
   const referenceDate = dateReferenceValue(input.referenceDate);
-  const items = requiredOrganizationIds.map((externalOrganizationId) => {
-    const externalOrganization = input.externalOrganizations.find((organization) => organization.id === externalOrganizationId);
-    const membership = memberships.find((candidate) => candidate.external_organization_id === externalOrganizationId);
-    const membershipNumber = membership?.membership_number.trim();
-    const organizationLabel = externalOrganization?.code ?? externalOrganization?.name ?? "Organisation externe";
+  const groupedCredentials = groupReadinessRequirements(requiredCredentials);
+  const items = groupedCredentials.flatMap((group) => {
+    if (group.matchRule === "at_least_one") {
+      const validOption = group.requirements
+        .map((requirement) => ({
+          requirement,
+          identifier: memberships.find(
+            (candidate) =>
+              candidate.external_credential_issuer_id === requirement.external_credential_issuer_id &&
+              candidate.identifier_type === requirement.identifier_type,
+          ),
+        }))
+        .find(({ identifier, requirement }) =>
+          contactExternalIdentifierMeetsValidityRule(identifier, requirement.validity_rule, referenceDate),
+        );
+      const issuerLabels = group.requirements.map((requirement) => {
+        const issuer = input.externalCredentialIssuers.find(
+          (candidate) => candidate.id === requirement.external_credential_issuer_id,
+        );
+        return issuer?.code ?? issuer?.name ?? "Organisation externe";
+      });
+      const blocking = group.requirements.some((requirement) => requirement.enforcement_mode === "blocking");
+
+      if (validOption?.identifier) {
+        const issuer = input.externalCredentialIssuers.find(
+          (candidate) => candidate.id === validOption.requirement.external_credential_issuer_id,
+        );
+        const issuerLabel = issuer?.code ?? issuer?.name ?? "Organisation externe";
+        const expirationDetail = validOption.identifier.expires_on
+          ? ` valide jusqu'au ${formatDate(validOption.identifier.expires_on)}`
+          : "";
+        return [{
+          blocking: false,
+          detail: `${issuerLabel} #${validOption.identifier.identifier_value}${expirationDetail} en dossier pour ${contactLabel(contact)}.`,
+          key: `contact.${contact.id}.group.${group.key}`,
+          status: "ready" as const,
+          title: `${input.roleLabel} - ${issuerLabels.join(" ou ")}`,
+        }];
+      }
+
+      return [{
+        blocking,
+        detail: `Une adhesion active (${issuerLabels.join(" ou ")}) est requise pour ${contactLabel(contact)}.`,
+        key: `contact.${contact.id}.group.${group.key}`,
+        status: blocking ? "blocked" as const : "pending" as const,
+        title: `${input.roleLabel} - ${issuerLabels.join(" ou ")}`,
+      }];
+    }
+
+    return group.requirements.map((requirement) => {
+    const externalCredentialIssuerId = requirement.external_credential_issuer_id;
+    const externalCredentialIssuer = input.externalCredentialIssuers.find((organization) => organization.id === externalCredentialIssuerId);
+    const membership = memberships.find(
+      (candidate) =>
+        candidate.external_credential_issuer_id === externalCredentialIssuerId &&
+        candidate.identifier_type === requirement.identifier_type,
+    );
+    const membershipNumber = membership?.identifier_value.trim();
+    const organizationLabel = externalCredentialIssuer?.code ?? externalCredentialIssuer?.name ?? "Organisation externe";
+    const blocking = requirement.enforcement_mode === "blocking";
 
     if (!membershipNumber) {
       return {
-        blocking: true,
+        blocking,
         detail: `${organizationLabel} # manquant pour ${contactLabel(contact)}.`,
-        key: `contact.${contact.id}.${externalOrganizationId}`,
-        status: "blocked" as const,
+        key: `contact.${contact.id}.${externalCredentialIssuerId}.${requirement.identifier_type}`,
+        status: blocking ? "blocked" as const : "pending" as const,
         title: `${input.roleLabel} - ${organizationLabel}`,
       };
     }
 
-    if (membershipIsExpired(membership, referenceDate)) {
+    if (!contactExternalIdentifierMeetsValidityRule(membership, requirement.validity_rule, referenceDate)) {
       const expiryDetail = membership?.expires_on
         ? ` depuis le ${formatDate(membership.expires_on)}`
         : "";
 
       return {
-        blocking: true,
-        detail: `${organizationLabel} #${membershipNumber} est expire${expiryDetail} pour ${contactLabel(contact)}.`,
-        key: `contact.${contact.id}.${externalOrganizationId}`,
-        status: "blocked" as const,
+        blocking,
+        detail: `${organizationLabel} #${membershipNumber} n'est pas actif a la date du show${expiryDetail} pour ${contactLabel(contact)}.`,
+        key: `contact.${contact.id}.${externalCredentialIssuerId}.${requirement.identifier_type}`,
+        status: blocking ? "blocked" as const : "pending" as const,
         title: `${input.roleLabel} - ${organizationLabel}`,
       };
     }
@@ -157,22 +209,40 @@ export function buildContactShowReadiness(input: {
     return {
       blocking: false,
       detail: `${organizationLabel} #${membershipNumber}${expirationDetail} en dossier pour ${contactLabel(contact)}.`,
-      key: `contact.${contact.id}.${externalOrganizationId}`,
+      key: `contact.${contact.id}.${externalCredentialIssuerId}.${requirement.identifier_type}`,
       status: "ready" as const,
       title: `${input.roleLabel} - ${organizationLabel}`,
     };
+    });
   });
 
   return summarizeReadiness(items, `${input.roleLabel} pret pour le show.`);
 }
 
+function groupReadinessRequirements(requirements: OrganizationExternalCredentialRequirement[]) {
+  const groups = new Map<string, OrganizationExternalCredentialRequirement[]>();
+
+  for (const requirement of requirements) {
+    const key = requirement.requirement_group_code
+      ? `${requirement.contact_type}:${requirement.requirement_group_code}`
+      : `direct:${requirement.id}`;
+    groups.set(key, [...(groups.get(key) ?? []), requirement]);
+  }
+
+  return Array.from(groups.entries()).map(([key, groupedRequirements]) => ({
+    key,
+    matchRule: groupedRequirements[0]?.match_rule ?? "all",
+    requirements: groupedRequirements,
+  }));
+}
+
 export function buildEntryShowReadiness(input: {
-  contactExternalMemberships: ContactExternalMembership[];
-  documents: HorseHealthDocument[];
-  externalOrganizations: ExternalOrganization[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  healthCompliance?: HorseHealthCompliance | null;
+  healthComplianceLoading?: boolean;
   horse: Horse | null | undefined;
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
-  organization: Organization | null | undefined;
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   ownerContact: Contact | null | undefined;
   payerContact: Contact | null | undefined;
   riderContact: Contact | null | undefined;
@@ -181,9 +251,9 @@ export function buildEntryShowReadiness(input: {
   skipHorseHealth?: boolean;
 }): ReadinessResult {
   const horseReadiness = buildHorseShowReadiness({
-    documents: input.documents,
+    healthCompliance: input.healthCompliance,
+    healthComplianceLoading: input.healthComplianceLoading,
     horse: input.horse,
-    organization: input.organization,
     show: input.show,
     skipHealth: input.skipHorseHealth,
   });
@@ -196,9 +266,9 @@ export function buildEntryShowReadiness(input: {
       contactResults.push(
         buildContactShowReadiness({
           contact: input.riderContact,
-          contactExternalMemberships: input.contactExternalMemberships,
+          contactExternalIdentifiers: input.contactExternalIdentifiers,
           contactType: "rider",
-          externalOrganizations: input.externalOrganizations,
+          externalCredentialIssuers: input.externalCredentialIssuers,
           membershipRequirements: input.membershipRequirements,
           referenceDate: input.show?.start_date ?? null,
           roleLabel: "Cavalier",
@@ -210,9 +280,9 @@ export function buildEntryShowReadiness(input: {
       contactResults.push(
         buildContactShowReadiness({
           contact: input.ownerContact,
-          contactExternalMemberships: input.contactExternalMemberships,
+          contactExternalIdentifiers: input.contactExternalIdentifiers,
           contactType: "owner",
-          externalOrganizations: input.externalOrganizations,
+          externalCredentialIssuers: input.externalCredentialIssuers,
           membershipRequirements: input.membershipRequirements,
           referenceDate: input.show?.start_date ?? null,
           roleLabel: "Proprietaire",
@@ -224,9 +294,9 @@ export function buildEntryShowReadiness(input: {
       contactResults.push(
         buildContactShowReadiness({
           contact: input.payerContact,
-          contactExternalMemberships: input.contactExternalMemberships,
+          contactExternalIdentifiers: input.contactExternalIdentifiers,
           contactType: "payer",
-          externalOrganizations: input.externalOrganizations,
+          externalCredentialIssuers: input.externalCredentialIssuers,
           membershipRequirements: input.membershipRequirements,
           referenceDate: input.show?.start_date ?? null,
           roleLabel: "Payeur",
@@ -238,16 +308,63 @@ export function buildEntryShowReadiness(input: {
   return summarizeReadiness([horseReadiness, ...contactResults].flatMap((result) => result.items), "Pret pour creer l'inscription.");
 }
 
-function membershipIsExpired(membership: ContactExternalMembership | null | undefined, referenceDate: string) {
-  if (!membership) {
+function horseHealthComplianceReadinessMessage(
+  compliance: HorseHealthCompliance,
+  show: Show | null | undefined,
+) {
+  const reference = show ? `Date du concours: ${formatDate(show.start_date)}.` : `Date de reference: ${formatDate(compliance.reference_date)}.`;
+
+  if (compliance.compliance_status === "not_required") {
+    return `Cette association ne demande aucun document sante. ${reference}`;
+  }
+
+  if (compliance.compliance_status === "compliant") {
+    return `Documents sante a jour. ${reference}`;
+  }
+
+  const reasons = compliance.reasons.map((reason) => {
+    const requirement = reason.requirement === "coggins" ? "Coggins" : reason.requirement === "influenza" ? "Influenza" : "Rhino";
+    const status = {
+      expired: reason.expires_on ? `expire le ${formatDate(reason.expires_on)}` : "expire",
+      identity_mismatch: "identite differente",
+      identity_pending: "identite a confirmer",
+      missing: "document manquant",
+      missing_date: "date absente",
+      future_date: "date posterieure au concours",
+      rejected: "document refuse",
+      review_pending: "revision de l'association requise",
+      review_rejected: "refuse par l'association",
+      valid: "valide",
+      not_required: "non exige",
+    }[reason.status];
+    return `${requirement}: ${status}`;
+  });
+  const prefix = compliance.can_proceed ? "Avertissement" : "Inscription ou reservation bloquee";
+  return `${prefix}: ${reasons.join("; ")}. ${reference}`;
+}
+
+function contactExternalIdentifierMeetsValidityRule(
+  identifier: ContactExternalIdentifier | null | undefined,
+  validityRule: OrganizationExternalCredentialRequirement["validity_rule"],
+  referenceDate: string,
+) {
+  if (!identifier?.identifier_value.trim()) {
     return false;
   }
 
-  if (membership.status === "expired") {
+  if (validityRule === "present") {
     return true;
   }
 
-  return Boolean(membership.expires_on && dateReferenceValue(membership.expires_on) < referenceDate);
+  if (identifier.status !== "active") {
+    return false;
+  }
+
+  if (identifier.valid_from && dateReferenceValue(identifier.valid_from) > referenceDate) {
+    return false;
+  }
+
+  return !identifier.expires_on || dateReferenceValue(identifier.expires_on) >= referenceDate;
 }
 
 function dateReferenceValue(value: string | null | undefined) {
@@ -279,82 +396,6 @@ function summarizeReadiness(items: ReadinessItem[], readyMessage: string): Readi
     message: blockingItems[0]?.detail ?? readyMessage,
     status,
   };
-}
-
-function horseCogginsReadinessStatus(validity: HorseCogginsValidity): ReadinessItemStatus {
-  if (validity.status === "not_required") {
-    return "not_required";
-  }
-
-  if (validity.valid) {
-    return "ready";
-  }
-
-  return validity.status === "pending_review" ? "pending" : "blocked";
-}
-
-function horseVaccineReadinessStatus(validity: HorseVaccineValidity): ReadinessItemStatus {
-  if (validity.status === "not_required") {
-    return "not_required";
-  }
-
-  if (validity.valid) {
-    return "ready";
-  }
-
-  return validity.status === "pending_review" ? "pending" : "blocked";
-}
-
-function horseCogginsReadinessMessage(validity: HorseCogginsValidity, show: Show | null | undefined) {
-  const reference = show ? ` pour l'arrivee du show (${formatDate(show.start_date)})` : "";
-
-  if (!validity.required) {
-    return "Coggins non exige par cette association.";
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return `Coggins valide jusqu'au ${formatDate(validity.expiresOn)}${reference}.`;
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `Coggins expire le ${formatDate(validity.expiresOn)} et ne couvre pas${reference || " la date de reference"}.`;
-  }
-
-  if (validity.status === "pending_review") {
-    return "Coggins en revision manuelle; il doit etre approuve avant de reserver ou inscrire.";
-  }
-
-  if (validity.status === "rejected") {
-    return "Coggins refuse; deposer un nouveau document ou corriger la fiche.";
-  }
-
-  return "Coggins manquant; ajouter un GVL valide ou deposer le PDF pour revision.";
-}
-
-function horseVaccineReadinessMessage(validity: HorseVaccineValidity, show: Show | null | undefined) {
-  const reference = show ? ` pour l'arrivee du show (${formatDate(show.start_date)})` : "";
-
-  if (!validity.required) {
-    return "Certificat vaccin non exige par cette association.";
-  }
-
-  if (validity.status === "valid" && validity.expiresOn) {
-    return `Certificat vaccin valide jusqu'au ${formatDate(validity.expiresOn)}${reference}.`;
-  }
-
-  if (validity.status === "expired" && validity.expiresOn) {
-    return `Certificat vaccin expire le ${formatDate(validity.expiresOn)} et ne couvre pas${reference || " la date de reference"}.`;
-  }
-
-  if (validity.status === "pending_review") {
-    return "Certificat vaccin en revision manuelle; il doit etre approuve avant de reserver ou inscrire.";
-  }
-
-  if (validity.status === "rejected") {
-    return "Certificat vaccin refuse; deposer un nouveau document ou corriger la fiche.";
-  }
-
-  return "Certificat vaccin influenza/rhino manquant.";
 }
 
 export function readinessItemClassName(item: ReadinessItem) {

@@ -1,33 +1,87 @@
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
-import { CheckCircle2, FileText, Plus, ShieldCheck } from "lucide-react";
+import { CheckCircle2, FileText, History, LockKeyhole, PencilLine, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
+import { ExternalImportDataPanel } from "../../components/ExternalImportDataPanel";
 import { contactLabel, errorMessage, findById, formatDate, horseLabel, numericValue } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
-import { getHorseCogginsValidity } from "../../lib/health";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createUploadedHorseHealthDocument, getHorseHealthDocumentFileUrl, reviewHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement } from "../../types/domain";
-import { uiText, buildHorseExternalMembershipFields, horseHealthStatusLabel, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, healthDocumentDateLabel, healthDocumentDateValue, isVaccineHealthDocument, healthVerificationSourceLabel, healthReviewNote, latestHorseHealthDocument, latestHorseVaccineDocument, todayDateValue, birthYearFromDateValue, InlineHealthMessage, horseHealthResultMessage, cogginsValidityBadgeClass, cogginsValidityTagLabel, cogginsValidityTone, horseGenderLabel } from "../dashboard/shared";
-import { integerFromReference, nrhaHorseDataImportRows, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
+import { canCorrectHorseIdentity, createContact, createUploadedHorseHealthDocument, getHorseHealthDocumentFileUrl, listHorseIdentityCorrections, listHorseIdentityLocks, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse, type NrhaHorseLookupVerification } from "../../services/supabaseServices";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, HorseIdentityCorrection, HorseIdentityLock, HorseIdentityLockField, Organization, OrganizationExternalCredentialRequirement } from "../../types/domain";
+import { uiText, buildHorseExternalIdentifierFields, horseHealthStatusLabel, horseReferenceTypeForOrganization, horseExternalReferenceLabel, resolveGvlCogginsUrl, healthDocumentTypeLabel, healthDocumentDateLabel, healthDocumentDateValue, isVaccineHealthDocument, healthVerificationSourceLabel, healthReviewNote, latestHorseHealthDocument, latestHorseVaccineDocument, todayDateValue, birthYearFromDateValue, InlineHealthMessage, horseHealthResultMessage, horseGenderLabel } from "../dashboard/shared";
+import { healthComplianceReasonSummary, healthComplianceStatusLabel, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
+import { compareNrhaHorseIdentity, integerFromReference, nrhaHorseDataImportRows, nrhaHorseImportDecisionPayload, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload, type NrhaHorseDataImportRow, type NrhaHorseVerificationState } from "./nrhaHorseValidation";
+import { HorseDocumentIdentityPanel } from "./HorseDocumentIdentityPanel";
+
+function horseIdentityLockLabel(field: HorseIdentityLockField, locale: Locale) {
+  const labels: Record<HorseIdentityLockField, { fr: string; en: string }> = {
+    name: { fr: "nom", en: "name" },
+    date_of_birth: { fr: "date de naissance", en: "date of birth" },
+    birth_year: { fr: "année de naissance", en: "birth year" },
+    gender: { fr: "sexe", en: "sex" },
+    breed: { fr: "race", en: "breed" },
+    registration_number: { fr: "numéro principal", en: "primary number" },
+    registration_status: { fr: "statut d’enregistrement grade", en: "grade registration status" },
+    external_identifier: { fr: "numéro externe", en: "external number" },
+  };
+  return labels[field][locale];
+}
+
+function horseIdentityLockErrorMessage(error: unknown, locale: Locale) {
+  const message = errorMessage(error);
+  if (message.includes("HSP_HORSE_IDENTITY_CORRECTION_FORBIDDEN")) {
+    return uiText(locale, "Seuls un propriétaire, co-propriétaire, agent ou administrateur plateforme peuvent corriger cette identité.", "Only an owner, co-owner, agent, or platform administrator can correct this identity.");
+  }
+  if (message.includes("HSP_HORSE_IDENTITY_CORRECTION_REASON_REQUIRED")) {
+    return uiText(locale, "Une raison d’au moins 10 caractères est obligatoire.", "A reason of at least 10 characters is required.");
+  }
+  if (message.includes("HSP_NO_IDENTITY_CHANGES")) {
+    return uiText(locale, "Aucun changement d’identité n’a été détecté.", "No identity change was detected.");
+  }
+  const field = message.match(/HSP_HORSE_IDENTITY_LOCKED:([a-z_]+)/)?.[1] as HorseIdentityLockField | "birth" | "document" | undefined;
+  if (!field) return message;
+  if (field === "document") {
+    return uiText(locale, "Ce document soutient une validation active et ne peut pas être supprimé.", "This document supports an active validation and cannot be deleted.");
+  }
+  const label = field === "birth" ? uiText(locale, "naissance", "birth information") : horseIdentityLockLabel(field, locale);
+  return uiText(
+    locale,
+    `Le champ « ${label} » est protégé par un document vérifié. Utilisez le mode de correction auditée pour le modifier.`,
+    `The “${label}” field is protected by a verified document. Use the audited correction mode to change it.`,
+  );
+}
+
+function horseIdentityCorrectionFieldLabel(field: string, locale: Locale) {
+  if (field.startsWith("external_identifier:")) return horseIdentityLockLabel("external_identifier", locale);
+  if (field === "birth_year") return horseIdentityLockLabel("birth_year", locale);
+  if (field in {
+    name: true,
+    date_of_birth: true,
+    gender: true,
+    breed: true,
+    registration_number: true,
+    registration_status: true,
+  }) {
+    return horseIdentityLockLabel(field as HorseIdentityLockField, locale);
+  }
+  return field;
+}
 
 function HorseEditForm({
   locale = "fr",
   contacts,
   contactRoles,
-  canManageHealthDocuments,
   createdByUserId,
-  externalOrganizations = [],
+  externalCredentialIssuers = [],
   membershipRequirements = [],
   horse,
-  horseExternalMemberships = [],
+  horseExternalIdentifiers = [],
   horseHealthDocuments = [],
   horseContacts,
   organization,
   onCancel,
   onCreateContact,
   onCreateHorseHealthDocument,
-  onReviewHorseHealthDocument,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
@@ -35,19 +89,17 @@ function HorseEditForm({
   locale?: Locale;
   contacts: Contact[];
   contactRoles: ContactRole[];
-  canManageHealthDocuments: boolean;
   createdByUserId?: string;
-  externalOrganizations?: ExternalOrganization[];
-  membershipRequirements?: OrganizationExternalMembershipRequirement[];
+  externalCredentialIssuers?: ExternalCredentialIssuer[];
+  membershipRequirements?: OrganizationExternalCredentialRequirement[];
   horse: Horse;
-  horseExternalMemberships?: HorseExternalMembership[];
+  horseExternalIdentifiers?: HorseExternalIdentifier[];
   horseHealthDocuments?: HorseHealthDocument[];
   horseContacts: HorseContact[];
   organization: Organization | null;
   onCancel: () => void;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
@@ -59,6 +111,7 @@ function HorseEditForm({
   const [breed, setBreed] = useState(horse.breed ?? "");
   const [gender, setGender] = useState<"" | NonNullable<Horse["gender"]>>(horse.gender ?? "");
   const [dateOfBirth, setDateOfBirth] = useState(horse.date_of_birth ?? "");
+  const [registrationStatus, setRegistrationStatus] = useState<Horse["registration_status"]>(horse.registration_status ?? (horse.registration_number ? "registered" : "unknown"));
   const [registrationNumber, setRegistrationNumber] = useState(horse.registration_number ?? "");
   const [sireName, setSireName] = useState(horse.sire_name ?? "");
   const [damName, setDamName] = useState(horse.dam_name ?? "");
@@ -66,28 +119,44 @@ function HorseEditForm({
   const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
   const [vaccineCertificateFile, setVaccineCertificateFile] = useState<File | null>(null);
   const [vaccineAdministeredOn, setVaccineAdministeredOn] = useState("");
+  const breedRegistryIssuers = useMemo(() => externalCredentialIssuers.filter((issuer) => issuer.issuer_type === "breed_registry" && issuer.is_active), [externalCredentialIssuers]);
+  const registrationDocuments = useMemo(() => horseHealthDocuments.filter((document) => document.horse_id === horse.id && document.document_category === "registration"), [horse.id, horseHealthDocuments]);
+  const [registrationDocumentIssuerId, setRegistrationDocumentIssuerId] = useState(() => externalCredentialIssuers.find((issuer) => issuer.issuer_type === "breed_registry" && issuer.is_active)?.id ?? "");
+  const [registrationDocumentNumber, setRegistrationDocumentNumber] = useState("");
+  const [registrationDocumentFile, setRegistrationDocumentFile] = useState<File | null>(null);
+  const [registrationDocumentBusy, setRegistrationDocumentBusy] = useState(false);
+  const [registrationDocumentMessage, setRegistrationDocumentMessage] = useState<InlineHealthMessage | null>(null);
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>(() =>
-    Object.fromEntries(horseExternalMemberships.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_organization_id, membership.reference_number])),
+    Object.fromEntries(horseExternalIdentifiers.filter((membership) => membership.horse_id === horse.id).map((membership) => [membership.external_credential_issuer_id, membership.identifier_value])),
   );
   const [nrhaHorseBusy, setNrhaHorseBusy] = useState(false);
   const [nrhaHorseMessage, setNrhaHorseMessage] = useState<InlineHealthMessage | null>(null);
   const [nrhaHorseVerification, setNrhaHorseVerification] = useState<NrhaHorseVerificationState | null>(null);
+  const [nrhaHorseLookup, setNrhaHorseLookup] = useState<NrhaHorseLookupVerification | null>(null);
+  const [nrhaHorseImportEvidence, setNrhaHorseImportEvidence] = useState<Record<string, unknown> | null>(null);
   const [busy, setBusy] = useState(false);
   const [healthBusy, setHealthBusy] = useState(false);
   const [fileBusyDocumentId, setFileBusyDocumentId] = useState("");
   const [fileErrorDocumentId, setFileErrorDocumentId] = useState("");
   const [fileErrorMessageByDocumentId, setFileErrorMessageByDocumentId] = useState<Record<string, string>>({});
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
+  const [identityLocks, setIdentityLocks] = useState<HorseIdentityLock[]>([]);
+  const [identityCorrections, setIdentityCorrections] = useState<HorseIdentityCorrection[]>([]);
+  const [canCorrectIdentity, setCanCorrectIdentity] = useState(false);
+  const [identityCorrectionMode, setIdentityCorrectionMode] = useState(false);
+  const [identityCorrectionReason, setIdentityCorrectionReason] = useState("");
+  const [identityLockBusy, setIdentityLockBusy] = useState(true);
+  const [identityLockMessage, setIdentityLockMessage] = useState<InlineHealthMessage | null>(null);
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const selectedOwnerContact = findById(contacts, ownerContactId) ?? null;
   const becameAgentByOwnerChange = currentUserContact && horse.primary_owner_contact_id === currentUserContact.id && ownerContactId !== currentUserContact.id;
   const defaultAgentId = becameAgentByOwnerChange ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
   const externalReferenceFields = useMemo(
-    () => buildHorseExternalMembershipFields(externalOrganizations, horseExternalMemberships.filter((membership) => membership.horse_id === horse.id)),
-    [externalOrganizations, horse.id, horseExternalMemberships],
+    () => buildHorseExternalIdentifierFields(externalCredentialIssuers, horseExternalIdentifiers.filter((membership) => membership.horse_id === horse.id)),
+    [externalCredentialIssuers, horse.id, horseExternalIdentifiers],
   );
-  const nrhaOrganizationId = externalReferenceFields.find((externalOrganization) => externalOrganization.code.toUpperCase() === "NRHA")?.id ?? null;
+  const nrhaOrganizationId = externalReferenceFields.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA")?.id ?? null;
   const currentNrhaReferenceNumber = nrhaOrganizationId ? externalReferenceNumbers[nrhaOrganizationId]?.trim() ?? "" : "";
   const verifiedNrhaHorse =
     nrhaHorseVerification &&
@@ -98,9 +167,12 @@ function HorseEditForm({
     nrhaHorseVerification.ownerContactId === ownerContactId
       ? nrhaHorseVerification
       : null;
-  const nrhaHorseDataRows = verifiedNrhaHorse
+  const activeNrhaHorseOfficialValues = nrhaHorseLookup
+    ? nrhaOfficialHorseValues(nrhaHorseLookup, { licenseNumber: integerFromReference(currentNrhaReferenceNumber), name })
+    : verifiedNrhaHorse?.officialValues ?? null;
+  const nrhaHorseDataRows = activeNrhaHorseOfficialValues
     ? nrhaHorseDataImportRows(
-        verifiedNrhaHorse.officialValues,
+        activeNrhaHorseOfficialValues,
         {
           damName,
           dateOfBirth,
@@ -114,25 +186,85 @@ function HorseEditForm({
       )
     : [];
   const latestCoggins = useMemo(() => latestHorseHealthDocument(horse.id, horseHealthDocuments, "coggins_eia"), [horse.id, horseHealthDocuments]);
-  const cogginsValidity = useMemo(
-    () =>
-      getHorseCogginsValidity({
-        documents: horseHealthDocuments,
-        horseId: horse.id,
-        organization,
-      }),
-    [horse.id, horseHealthDocuments, organization],
-  );
+  const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
+  const horseHealthComplianceOverview = useHorseHealthComplianceOverview({
+    horseIds: organization ? [horse.id] : [],
+    organizationId: organization?.id,
+    referenceDate: todayDateValue(),
+    refreshToken: healthComplianceRevision,
+  });
+  const horseHealthCompliance = horseHealthComplianceOverview.results.find(
+    (result) => result.horse_id === horse.id && result.organization_id === organization?.id,
+  ) ?? null;
   const latestVaccine = useMemo(() => latestHorseVaccineDocument(horse.id, horseHealthDocuments), [horse.id, horseHealthDocuments]);
-  const [vaccineReviewDate, setVaccineReviewDate] = useState(latestVaccine?.test_or_administered_on ?? "");
+  const identityLockFields = useMemo(() => new Set(identityLocks.map((lock) => lock.lock_field)), [identityLocks]);
+  const birthIdentityLocked = identityLockFields.has("date_of_birth") || identityLockFields.has("birth_year");
+  const lockedNrhaImportKeys = useMemo(() => {
+    const keys: NrhaHorseDataImportRow["key"][] = [];
+    if (identityLockFields.has("name")) keys.push("name");
+    if (birthIdentityLocked) keys.push("dateOfBirth");
+    if (identityLockFields.has("gender")) keys.push("gender");
+    if (
+      identityLockFields.has("registration_number")
+      || identityLocks.some((lock) => lock.lock_field === "external_identifier" && lock.external_credential_issuer_id === nrhaOrganizationId)
+    ) {
+      keys.push("nrhaReferenceNumber");
+    }
+    return keys;
+  }, [birthIdentityLocked, identityLockFields, identityLocks, nrhaOrganizationId]);
+
+  async function reloadIdentityLocks() {
+    setIdentityLockBusy(true);
+    try {
+      const [locks, corrections, canCorrect] = await Promise.all([
+        listHorseIdentityLocks(horse.id),
+        listHorseIdentityCorrections(horse.id),
+        canCorrectHorseIdentity(horse.id),
+      ]);
+      setIdentityLocks(locks);
+      setIdentityCorrections(corrections);
+      setCanCorrectIdentity(canCorrect);
+      setIdentityLockMessage(null);
+    } catch (error) {
+      setIdentityLockMessage({ tone: "error", message: horseIdentityLockErrorMessage(error, locale) });
+    } finally {
+      setIdentityLockBusy(false);
+    }
+  }
+
+  function cancelIdentityCorrection() {
+    setName(horse.name);
+    setBreed(horse.breed ?? "");
+    setGender(horse.gender ?? "");
+    setDateOfBirth(horse.date_of_birth ?? "");
+    setRegistrationStatus(horse.registration_status ?? (horse.registration_number ? "registered" : "unknown"));
+    setRegistrationNumber(horse.registration_number ?? "");
+    setExternalReferenceNumbers(
+      Object.fromEntries(
+        horseExternalIdentifiers
+          .filter((identifier) => identifier.horse_id === horse.id)
+          .map((identifier) => [identifier.external_credential_issuer_id, identifier.identifier_value]),
+      ),
+    );
+    setIdentityCorrectionMode(false);
+    setIdentityCorrectionReason("");
+    setIdentityLockMessage(null);
+  }
 
   useEffect(() => {
-    setVaccineReviewDate(latestVaccine?.test_or_administered_on ?? "");
-  }, [latestVaccine?.id, latestVaccine?.test_or_administered_on]);
+    if (!registrationDocumentIssuerId && breedRegistryIssuers[0]) {
+      setRegistrationDocumentIssuerId(breedRegistryIssuers[0].id);
+    }
+  }, [breedRegistryIssuers, registrationDocumentIssuerId]);
+
+  useEffect(() => {
+    void reloadIdentityLocks();
+  }, [horse.id]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
+    setIdentityLockMessage(null);
 
     try {
       await onUpdateHorse(horse.id, {
@@ -142,40 +274,44 @@ function HorseEditForm({
         breed: breed || null,
         gender: gender || null,
         date_of_birth: dateOfBirth || null,
-        registration_number: registrationNumber || null,
+        registration_status: registrationStatus,
+        registration_number: registrationStatus === "grade" ? null : registrationNumber || null,
         sire_name: sireName || null,
         dam_name: damName || null,
         external_memberships: externalReferenceFields.map((organization) => externalMembershipInputForOrganization(organization)),
+        identity_correction_reason: identityCorrectionMode ? identityCorrectionReason.trim() : undefined,
       });
+    } catch (error) {
+      setIdentityLockMessage({ tone: "error", message: horseIdentityLockErrorMessage(error, locale) });
     } finally {
       setBusy(false);
     }
   }
 
-  function externalMembershipInputForOrganization(externalOrganization: ExternalOrganization) {
-    const referenceType = horseReferenceTypeForOrganization(externalOrganization);
-    const referenceNumber = externalReferenceNumbers[externalOrganization.id] ?? "";
+  function externalMembershipInputForOrganization(externalCredentialIssuer: ExternalCredentialIssuer) {
+    const referenceType = horseReferenceTypeForOrganization(externalCredentialIssuer);
+    const referenceNumber = registrationStatus === "grade" && externalCredentialIssuer.issuer_type === "breed_registry" ? "" : externalReferenceNumbers[externalCredentialIssuer.id] ?? "";
     const existingMembership =
-      horseExternalMemberships.find(
+      horseExternalIdentifiers.find(
         (membership) =>
           membership.horse_id === horse.id &&
-          membership.external_organization_id === externalOrganization.id &&
-          membership.reference_type === referenceType,
+          membership.external_credential_issuer_id === externalCredentialIssuer.id &&
+          membership.identifier_type === referenceType,
       ) ?? null;
-    const isNrha = externalOrganization.code.toUpperCase() === "NRHA";
+    const isNrha = externalCredentialIssuer.code.toUpperCase() === "NRHA";
     const existingIdentityStillMatches =
       !isNrha ||
       (name.trim() === horse.name &&
         dateOfBirth === (horse.date_of_birth ?? "") &&
         ownerContactId === horse.primary_owner_contact_id);
-    const existingReferenceStillMatches = existingMembership?.reference_number.trim() === referenceNumber.trim();
+    const existingReferenceStillMatches = existingMembership?.identifier_value.trim() === referenceNumber.trim();
     const canPreserveExistingValidation = Boolean(existingMembership && existingReferenceStillMatches && existingIdentityStillMatches);
 
-    if (verifiedNrhaHorse && externalOrganization.id === verifiedNrhaHorse.organizationId) {
+    if (verifiedNrhaHorse && externalCredentialIssuer.id === verifiedNrhaHorse.organizationId) {
       return {
-        external_organization_id: externalOrganization.id,
-        reference_type: referenceType,
-        reference_number: referenceNumber,
+        external_credential_issuer_id: externalCredentialIssuer.id,
+        identifier_type: referenceType,
+        identifier_value: referenceNumber,
         status: "active" as const,
         verified_at: new Date().toISOString(),
         verification_payload: verifiedNrhaHorse.payload,
@@ -183,10 +319,22 @@ function HorseEditForm({
       };
     }
 
+    if (isNrha && nrhaHorseImportEvidence) {
+      return {
+        external_credential_issuer_id: externalCredentialIssuer.id,
+        identifier_type: referenceType,
+        identifier_value: referenceNumber,
+        status: "unknown" as const,
+        verified_at: null,
+        verification_payload: nrhaHorseImportEvidence,
+        verification_source: "nrha_api",
+      };
+    }
+
     return {
-      external_organization_id: externalOrganization.id,
-      reference_type: referenceType,
-      reference_number: referenceNumber,
+      external_credential_issuer_id: externalCredentialIssuer.id,
+      identifier_type: referenceType,
+      identifier_value: referenceNumber,
       status: canPreserveExistingValidation ? existingMembership?.status ?? "unknown" : "unknown",
       expires_on: canPreserveExistingValidation ? existingMembership?.expires_on ?? null : null,
       verified_at: canPreserveExistingValidation ? existingMembership?.verified_at ?? null : null,
@@ -198,15 +346,19 @@ function HorseEditForm({
   function clearNrhaHorseValidation() {
     setNrhaHorseMessage(null);
     setNrhaHorseVerification(null);
+    setNrhaHorseLookup(null);
+    setNrhaHorseImportEvidence(null);
   }
 
-  async function handleVerifyNrhaHorse(externalOrganization: ExternalOrganization) {
-    const referenceNumber = externalReferenceNumbers[externalOrganization.id]?.trim() ?? "";
+  async function handleVerifyNrhaHorse(externalCredentialIssuer: ExternalCredentialIssuer) {
+    const referenceNumber = externalReferenceNumbers[externalCredentialIssuer.id]?.trim() ?? "";
     const licenseNumber = integerFromReference(referenceNumber);
     const ownerName = selectedOwnerContact ? contactLabel(selectedOwnerContact) : "";
 
     setNrhaHorseMessage(null);
     setNrhaHorseVerification(null);
+    setNrhaHorseLookup(null);
+    setNrhaHorseImportEvidence(null);
 
     if (!licenseNumber) {
       setNrhaHorseMessage({
@@ -234,16 +386,30 @@ function HorseEditForm({
         ownerName,
       });
       const officialValues = nrhaOfficialHorseValues(verification, { licenseNumber, name });
+      const identityComparison = compareNrhaHorseIdentity(
+        {
+          damName,
+          dateOfBirth,
+          gender,
+          name,
+          nrhaReferenceNumber: referenceNumber,
+          ownerName,
+          registrationNumber,
+          sireName,
+        },
+        officialValues,
+      );
+      setNrhaHorseLookup(verification);
 
-      if (verification.status === "verified" && verification.matched) {
+      if (verification.status === "verified" && verification.matched && identityComparison.verdict === "match") {
         setNrhaHorseVerification({
           dateOfBirth,
           name: name.trim(),
-          organizationId: externalOrganization.id,
+          organizationId: externalCredentialIssuer.id,
           ownerContactId,
           ownerName,
           officialValues,
-          payload: verificationPayload(verification),
+          payload: verificationPayload(verification, identityComparison),
           referenceNumber,
         });
         setNrhaHorseMessage({
@@ -255,7 +421,7 @@ function HorseEditForm({
 
       setNrhaHorseMessage({
         tone: "error",
-        message: nrhaHorseMismatchMessage(verification, locale),
+        message: nrhaHorseMismatchMessage(verification, locale, identityComparison),
       });
     } catch (error) {
       setNrhaHorseMessage({
@@ -267,26 +433,34 @@ function HorseEditForm({
     }
   }
 
-  function handleApplyNrhaHorseData() {
-    if (!verifiedNrhaHorse) {
+  function handleApplyNrhaHorseData(keys: NrhaHorseDataImportRow["key"][]) {
+    if (!nrhaHorseLookup || !activeNrhaHorseOfficialValues || !nrhaOrganizationId) {
       return;
     }
 
-    const values = verifiedNrhaHorse.officialValues;
+    const values = activeNrhaHorseOfficialValues;
+    const selectedKeys = new Set(keys.filter((key) => !lockedNrhaImportKeys.includes(key)));
+    const ownerName = selectedOwnerContact ? contactLabel(selectedOwnerContact) : "";
+    const beforeComparison = compareNrhaHorseIdentity({
+      damName, dateOfBirth, gender, name, nrhaReferenceNumber: currentNrhaReferenceNumber, ownerName, registrationNumber, sireName,
+    }, values);
+    const importPayload = nrhaHorseImportDecisionPayload(nrhaHorseLookup, nrhaHorseDataRows, selectedKeys, beforeComparison);
+    setNrhaHorseImportEvidence(importPayload);
+    const shouldApply = (key: NrhaHorseDataImportRow["key"]) => selectedKeys.has(key);
 
-    if (values.name) {
+    if (values.name && shouldApply("name")) {
       setName(values.name);
     }
 
-    if (values.dateOfBirth) {
+    if (values.dateOfBirth && shouldApply("dateOfBirth")) {
       setDateOfBirth(values.dateOfBirth);
     }
 
-    if (values.gender) {
+    if (values.gender && shouldApply("gender")) {
       setGender(values.gender);
     }
 
-    if (values.registrationNumber) {
+    if (values.registrationNumber && shouldApply("nrhaReferenceNumber")) {
       setRegistrationNumber(values.registrationNumber);
 
       if (nrhaOrganizationId) {
@@ -297,27 +471,40 @@ function HorseEditForm({
       }
     }
 
-    if (values.sireName) {
+    if (values.sireName && shouldApply("sireName")) {
       setSireName(values.sireName);
     }
 
-    if (values.damName) {
+    if (values.damName && shouldApply("damName")) {
       setDamName(values.damName);
     }
 
-    setNrhaHorseVerification((current) =>
-      current
-        ? {
-            ...current,
-            dateOfBirth: values.dateOfBirth || current.dateOfBirth,
-            name: values.name || current.name,
-            referenceNumber: values.registrationNumber || current.referenceNumber,
-          }
-        : current,
-    );
+    const intendedLocalValues = {
+      damName: values.damName && shouldApply("damName") ? values.damName : damName,
+      dateOfBirth: values.dateOfBirth && shouldApply("dateOfBirth") ? values.dateOfBirth : dateOfBirth,
+      gender: values.gender && shouldApply("gender") ? values.gender : gender,
+      name: values.name && shouldApply("name") ? values.name : name,
+      nrhaReferenceNumber: values.registrationNumber && shouldApply("nrhaReferenceNumber") ? values.registrationNumber : currentNrhaReferenceNumber,
+      ownerName,
+      registrationNumber: values.registrationNumber && shouldApply("nrhaReferenceNumber") ? values.registrationNumber : registrationNumber,
+      sireName: values.sireName && shouldApply("sireName") ? values.sireName : sireName,
+    };
+    const afterComparison = compareNrhaHorseIdentity(intendedLocalValues, values);
+    setNrhaHorseVerification(afterComparison.verdict === "match" ? {
+      dateOfBirth: intendedLocalValues.dateOfBirth,
+      name: intendedLocalValues.name.trim(),
+      organizationId: nrhaOrganizationId,
+      ownerContactId,
+      ownerName,
+      officialValues: values,
+      payload: nrhaHorseImportDecisionPayload(nrhaHorseLookup, nrhaHorseDataRows, selectedKeys, afterComparison),
+      referenceNumber: intendedLocalValues.nrhaReferenceNumber,
+    } : null);
     setNrhaHorseMessage({
-      tone: "success",
-      message: uiText(locale, "Données NRHA importées dans la fiche cheval.", "NRHA data imported into the horse profile."),
+      tone: afterComparison.verdict === "match" ? "success" : "info",
+      message: afterComparison.verdict === "match"
+        ? uiText(locale, "Champs NRHA sélectionnés importés; la fiche concorde maintenant.", "Selected NRHA fields imported; the record now matches.")
+        : uiText(locale, "Champs NRHA sélectionnés importés. Les autres différences restent inchangées.", "Selected NRHA fields imported. Other differences remain unchanged."),
     });
   }
 
@@ -403,58 +590,6 @@ function HorseEditForm({
     }
   }
 
-  async function handleReviewCoggins(status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
-    if (!latestCoggins) {
-      return;
-    }
-
-    await handleReviewHealthDocument(latestCoggins, status, "Coggins");
-  }
-
-  async function handleReviewVaccine(status: Extract<HorseHealthDocument["status"], "approved" | "rejected">) {
-    if (!latestVaccine) {
-      return;
-    }
-
-    if (status === "approved" && !vaccineReviewDate) {
-      setHealthMessage({
-        tone: "error",
-        message: uiText(locale, "Entre la date du vaccin vue sur le certificat avant d'approuver.", "Enter the vaccine date shown on the certificate before approving."),
-      });
-      return;
-    }
-
-    await handleReviewHealthDocument(latestVaccine, status, "certificat vaccin", status === "approved" ? vaccineReviewDate || null : undefined);
-  }
-
-  async function handleReviewHealthDocument(
-    document: HorseHealthDocument,
-    status: Extract<HorseHealthDocument["status"], "approved" | "rejected">,
-    label: string,
-    testOrAdministeredOn?: string | null,
-  ) {
-    setHealthBusy(true);
-    setHealthMessage(null);
-
-    try {
-      await onReviewHorseHealthDocument(document.id, {
-        status,
-        reviewed_by_user_id: createdByUserId,
-        review_notes:
-          status === "approved"
-            ? `${label} approuvé manuellement par un gestionnaire de l'association.`
-            : `${label} refusé manuellement par un gestionnaire de l'association.`,
-        test_or_administered_on: testOrAdministeredOn,
-      });
-      setHealthMessage({
-        tone: status === "approved" ? "success" : "info",
-        message: status === "approved" ? `${label} approuvé.` : `${label} refusé.`,
-      });
-    } finally {
-      setHealthBusy(false);
-    }
-  }
-
   async function handleUploadVaccineCertificate() {
     if (!organization || !vaccineCertificateFile) {
       return;
@@ -477,6 +612,36 @@ function HorseEditForm({
       setVaccineAdministeredOn("");
     } finally {
       setHealthBusy(false);
+    }
+  }
+
+  async function handleUploadRegistrationDocument() {
+    const issuer = breedRegistryIssuers.find((candidate) => candidate.id === registrationDocumentIssuerId);
+    const registryNumber = registrationDocumentNumber.trim();
+    if (!organization || !issuer || !registryNumber || !registrationDocumentFile || registrationStatus === "grade") return;
+
+    setRegistrationDocumentBusy(true);
+    setRegistrationDocumentMessage(null);
+    try {
+      await onCreateHorseHealthDocument({
+        organization_id: organization.id,
+        horse_id: horse.id,
+        document_category: "registration",
+        document_type: "breed_registration",
+        external_credential_issuer_id: issuer.id,
+        registration_number: registryNumber,
+        breed_name: breed || null,
+        issuer_name: issuer.name,
+        file: registrationDocumentFile,
+        created_by_user_id: createdByUserId,
+      });
+      setRegistrationDocumentFile(null);
+      setRegistrationDocumentNumber("");
+      setRegistrationDocumentMessage({ tone: "success", message: uiText(locale, "Document d’enregistrement ajouté au cheval.", "Registration document added to the horse.") });
+    } catch (error) {
+      setRegistrationDocumentMessage({ tone: "error", message: errorMessage(error) });
+    } finally {
+      setRegistrationDocumentBusy(false);
     }
   }
 
@@ -515,9 +680,90 @@ function HorseEditForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
+        {identityLockBusy ? (
+          <span className="muted-line">{uiText(locale, "Vérification des protections d’identité...", "Checking identity protections...")}</span>
+        ) : identityLocks.length ? (
+          <div className="health-document-summary identity-lock-summary">
+            <div className="health-document-title">
+              <span className="badge approved"><LockKeyhole size={14} /> {uiText(locale, "Identité protégée", "Protected identity")}</span>
+              <strong>{uiText(locale, "Champs liés à un document vérifié", "Fields linked to a verified document")}</strong>
+            </div>
+            <span className="muted-line">
+              {Array.from(identityLockFields).map((field) => horseIdentityLockLabel(field, locale)).join(" · ")}
+            </span>
+            <span className="muted-line">
+              {uiText(
+                locale,
+                "Les autres renseignements restent modifiables. Les champs protégés exigent une correction motivée et auditée.",
+                "Other information remains editable. Protected fields require a reasoned, audited correction.",
+              )}
+            </span>
+            {canCorrectIdentity ? (
+              <div className="row-actions">
+                <button className="ghost-button" type="button" onClick={() => setIdentityCorrectionMode(true)}>
+                  <PencilLine size={16} />
+                  {uiText(locale, "Corriger l’identité", "Correct identity")}
+                </button>
+              </div>
+            ) : (
+              <span className="muted-line">
+                {uiText(
+                  locale,
+                  "La correction est réservée au propriétaire, co-propriétaire, agent ou administrateur plateforme.",
+                  "Correction is restricted to the owner, co-owner, agent, or platform administrator.",
+                )}
+              </span>
+            )}
+          </div>
+        ) : null}
+        <InlineHealthMessage value={identityLockMessage} />
+        {identityCorrectionMode ? (
+          <div className="health-document-summary identity-correction-editor">
+            <div className="health-document-title">
+              <span className="badge pending_review"><PencilLine size={14} /> {uiText(locale, "Correction auditée", "Audited correction")}</span>
+              <strong>{uiText(locale, "Modifier les champs protégés", "Edit protected fields")}</strong>
+            </div>
+            <span className="muted-line">
+              {uiText(
+                locale,
+                "Les validations qui utilisent une valeur modifiée seront invalidées et devront être refaites. L’avant, l’après et la raison seront conservés.",
+                "Validations using a changed value will be invalidated and must be completed again. Before, after, and reason are retained.",
+              )}
+            </span>
+            <label>
+              {uiText(locale, "Raison obligatoire", "Required reason")}
+              <textarea
+                minLength={10}
+                placeholder={uiText(locale, "Ex. correction d’une erreur de saisie confirmée par le propriétaire", "Example: correcting a data-entry error confirmed by the owner")}
+                required
+                value={identityCorrectionReason}
+                onChange={(event) => setIdentityCorrectionReason(event.target.value)}
+              />
+              <span className="muted-line">{identityCorrectionReason.trim().length}/10 {uiText(locale, "caractères minimum", "minimum characters")}</span>
+            </label>
+            <button className="text-button" type="button" onClick={cancelIdentityCorrection}>
+              {uiText(locale, "Annuler la correction", "Cancel correction")}
+            </button>
+          </div>
+        ) : null}
+        {identityCorrections.length ? (
+          <details className="health-document-summary identity-correction-history">
+            <summary><History size={16} /> {uiText(locale, "Historique des corrections d’identité", "Identity correction history")} ({identityCorrections.length})</summary>
+            <div className="stack">
+              {identityCorrections.map((correction) => (
+                <div key={correction.id}>
+                  <strong>{formatDate(correction.applied_at ?? correction.created_at)}</strong>
+                  <span className="muted-line">{correction.reason}</span>
+                  <span className="muted-line">{correction.changed_fields.map((field) => horseIdentityCorrectionFieldLabel(field, locale)).join(" · ")}</span>
+                </div>
+              ))}
+            </div>
+          </details>
+        ) : null}
         <label>
           {uiText(locale, "Nom du cheval", "Horse name")}
           <input
+            disabled={identityLockFields.has("name") && !identityCorrectionMode}
             required
             value={name}
             onChange={(event) => {
@@ -530,7 +776,7 @@ function HorseEditForm({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
-          externalOrganizations={externalOrganizations}
+          externalCredentialIssuers={externalCredentialIssuers}
           label={uiText(locale, "Propriétaire", "Owner")}
           locale={locale}
           membershipRequirements={membershipRequirements}
@@ -548,7 +794,7 @@ function HorseEditForm({
           contacts={contacts}
           contactRoles={contactRoles}
           createdByUserId={createdByUserId}
-          externalOrganizations={externalOrganizations}
+          externalCredentialIssuers={externalCredentialIssuers}
           label="Agent"
           locale={locale}
           membershipRequirements={membershipRequirements}
@@ -561,11 +807,11 @@ function HorseEditForm({
         <div className="form-grid">
           <label>
             {uiText(locale, "Race", "Breed")}
-            <input value={breed} onChange={(event) => setBreed(event.target.value)} />
+            <input disabled={identityLockFields.has("breed") && !identityCorrectionMode} value={breed} onChange={(event) => setBreed(event.target.value)} />
           </label>
           <label>
             {uiText(locale, "Sexe", "Sex")}
-            <select value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
+            <select disabled={identityLockFields.has("gender") && !identityCorrectionMode} value={gender} onChange={(event) => setGender(event.target.value as "" | NonNullable<Horse["gender"]>)}>
               <option value="">{uiText(locale, "Non défini", "Unset")}</option>
               <option value="M">{uiText(locale, "Mâle (Stallion / Colt)", "Male (Stallion / Colt)")}</option>
               <option value="F">{uiText(locale, "Femelle (Mare / Filly)", "Female (Mare / Filly)")}</option>
@@ -576,6 +822,7 @@ function HorseEditForm({
         <label>
           {uiText(locale, "Date de naissance", "Date of birth")}
           <input
+            disabled={birthIdentityLocked && !identityCorrectionMode}
             type="date"
             value={dateOfBirth}
             onChange={(event) => {
@@ -584,10 +831,34 @@ function HorseEditForm({
             }}
           />
         </label>
-        <label>
-          {uiText(locale, "Enregistrement", "Registration")}
-          <input value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            {uiText(locale, "Statut d’enregistrement", "Registration status")}
+            <select
+              value={registrationStatus}
+              onChange={(event) => {
+                const nextStatus = event.target.value as Horse["registration_status"];
+                setRegistrationStatus(nextStatus);
+                if (nextStatus === "grade") {
+                  setRegistrationNumber("");
+                  setExternalReferenceNumbers((current) => Object.fromEntries(Object.entries(current).filter(([issuerId]) => externalReferenceFields.find((issuer) => issuer.id === issuerId)?.issuer_type !== "breed_registry")));
+                }
+              }}
+            >
+              <option value="unknown">{uiText(locale, "À préciser", "To be confirmed")}</option>
+              <option value="registered">{uiText(locale, "Enregistré — un ou plusieurs registres", "Registered — one or more registries")}</option>
+              <option disabled={identityLockFields.has("registration_status") && !identityCorrectionMode} value="grade">{uiText(locale, "Grade — sans enregistrement", "Grade — unregistered")}</option>
+            </select>
+          </label>
+          {registrationStatus !== "grade" ? (
+            <label>
+              {uiText(locale, "Numéro principal (facultatif)", "Primary number (optional)")}
+              <input disabled={identityLockFields.has("registration_number") && !identityCorrectionMode} value={registrationNumber} onChange={(event) => setRegistrationNumber(event.target.value)} />
+            </label>
+          ) : (
+            <span className="muted-line">{uiText(locale, "Cheval déclaré grade : aucun enregistrement requis.", "Declared grade horse: no registration required.")}</span>
+          )}
+        </div>
         <div className="form-grid">
           <label>
             {uiText(locale, "Père", "Sire")}
@@ -600,6 +871,65 @@ function HorseEditForm({
         </div>
         <div className="external-membership-fields health-document-fields">
           <div className="inline-form-header">
+            <strong>{uiText(locale, "Documents d’enregistrement de race", "Breed registration documents")}</strong>
+            <span>{uiText(locale, "Un cheval peut avoir des enregistrements auprès de plusieurs registres. Le fichier demeure lié au cheval, pas à l’association.", "A horse may be registered with multiple registries. The file belongs to the horse, not the association.")}</span>
+          </div>
+          {registrationStatus === "grade" ? (
+            <span className="muted-line">{uiText(locale, "Ce cheval est déclaré grade; aucun document d’enregistrement n’est attendu.", "This horse is declared grade; no registration document is expected.")}</span>
+          ) : (
+            <>
+              {registrationDocuments.map((document) => {
+                const issuer = externalCredentialIssuers.find((candidate) => candidate.id === document.external_credential_issuer_id);
+                return (
+                  <div className="health-document-summary" key={document.id}>
+                    <div className="health-document-title">
+                      <span className={`badge ${document.status}`}>{horseHealthStatusLabel(document.status, locale)}</span>
+                      <strong>{issuer?.name ?? document.issuer_name ?? uiText(locale, "Registre de race", "Breed registry")}</strong>
+                    </div>
+                    <span className="muted-line">{document.registration_number ?? uiText(locale, "Numéro non lu", "Number not read")}{document.original_file_name ? ` — ${document.original_file_name}` : ""}</span>
+                    {document.document_url ? (
+                      <button className="text-button" disabled={fileBusyDocumentId === document.id} type="button" onClick={() => void handleOpenStoredDocument(document)}>
+                        {fileBusyDocumentId === document.id ? uiText(locale, "Ouverture...", "Opening...") : uiText(locale, "Ouvrir le document", "Open document")}
+                      </button>
+                    ) : null}
+                  </div>
+                );
+              })}
+              {!registrationDocuments.length ? <span className="muted-line">{uiText(locale, "Aucun document d’enregistrement importé.", "No registration document uploaded.")}</span> : null}
+              <div className="health-document-actions">
+                <label>
+                  {uiText(locale, "Registre", "Registry")}
+                  <select value={registrationDocumentIssuerId} onChange={(event) => setRegistrationDocumentIssuerId(event.target.value)}>
+                    <option value="">{uiText(locale, "Choisir", "Choose")}</option>
+                    {breedRegistryIssuers.map((issuer) => <option key={issuer.id} value={issuer.id}>{issuer.code} — {issuer.name}</option>)}
+                  </select>
+                </label>
+                <label>
+                  {uiText(locale, "Numéro lu sur le document", "Number shown on document")}
+                  <input value={registrationDocumentNumber} onChange={(event) => setRegistrationDocumentNumber(event.target.value)} />
+                </label>
+                <label>
+                  {uiText(locale, "Document", "Document")}
+                  <input accept="application/pdf,image/*" type="file" onChange={(event) => setRegistrationDocumentFile(event.target.files?.[0] ?? null)} />
+                  {registrationDocumentFile ? <span className="muted-line">{registrationDocumentFile.name}</span> : null}
+                </label>
+                <button
+                  className="primary-button"
+                  disabled={registrationDocumentBusy || !registrationDocumentFile || !registrationDocumentIssuerId || !registrationDocumentNumber.trim()}
+                  type="button"
+                  onClick={() => void handleUploadRegistrationDocument()}
+                >
+                  <FileText size={18} />
+                  {registrationDocumentBusy ? uiText(locale, "Importation...", "Uploading...") : uiText(locale, "Importer l’enregistrement", "Upload registration")}
+                </button>
+              </div>
+              <span className="muted-line">{uiText(locale, "Ce numéro est conservé comme valeur lue; il ne remplace pas automatiquement la fiche HSP.", "This number is stored as a read value; it does not automatically replace the HSP record.")}</span>
+              <InlineHealthMessage value={registrationDocumentMessage} />
+            </>
+          )}
+        </div>
+        <div className="external-membership-fields health-document-fields">
+          <div className="inline-form-header">
             <strong>Coggins / EIA GVL</strong>
             <span>{uiText(locale, "Validation automatique du résultat GVL.", "Automatic GVL result validation.")}</span>
           </div>
@@ -607,7 +937,14 @@ function HorseEditForm({
             <div className="health-document-summary">
               <div className="health-document-title">
                 <span className={`badge ${latestCoggins.status}`}>{horseHealthStatusLabel(latestCoggins.status, locale)}</span>
-                <span className={`badge ${cogginsValidityBadgeClass(cogginsValidity)}`}>{cogginsValidityTagLabel(cogginsValidity, locale)}</span>
+                {horseHealthCompliance ? (
+                  <span
+                    className={`badge ${horseHealthCompliance.compliance_status === "compliant" || horseHealthCompliance.compliance_status === "not_required" ? "verified" : horseHealthCompliance.compliance_status === "pending_review" ? "pending_review" : "rejected"}`}
+                    title={healthComplianceReasonSummary(horseHealthCompliance, locale)}
+                  >
+                    {healthComplianceStatusLabel(horseHealthCompliance.compliance_status, locale)}
+                  </span>
+                ) : null}
                 <strong>{latestCoggins.certificate_number ?? uiText(locale, "Certificat GVL", "GVL certificate")}</strong>
               </div>
               <span className="muted-line">
@@ -637,16 +974,6 @@ function HorseEditForm({
                   <button className="text-button" disabled={healthBusy} type="button" onClick={() => void handleReverifyLatestGvlCoggins()}>
                     {uiText(locale, "Revérifier GVL", "Reverify GVL")}
                   </button>
-                ) : null}
-                {canManageHealthDocuments && latestCoggins.status === "pending_review" ? (
-                  <>
-                  <button className="text-button" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("approved")}>
-                    {uiText(locale, "Approuver", "Approve")}
-                  </button>
-                  <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewCoggins("rejected")}>
-                    {uiText(locale, "Refuser", "Reject")}
-                  </button>
-                  </>
                 ) : null}
               </div>
               {fileErrorDocumentId === latestCoggins.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[latestCoggins.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
@@ -684,28 +1011,12 @@ function HorseEditForm({
                 {latestVaccine.test_or_administered_on ? `${uiText(locale, "Vaccin", "Vaccine")}: ${formatDate(latestVaccine.test_or_administered_on)}` : uiText(locale, "Date du vaccin inconnue", "Unknown vaccine date")}
                 {latestVaccine.document_url ? uiText(locale, " - fichier déposé", " - file uploaded") : ""}
               </span>
-              {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
-                <label className="compact-label">
-                  {uiText(locale, "Date vaccin validée", "Validated vaccine date")}
-                  <input type="date" value={vaccineReviewDate} onChange={(event) => setVaccineReviewDate(event.target.value)} />
-                </label>
-              ) : null}
               <div className="row-actions health-review-actions">
                 {latestVaccine.document_url ? (
                   <button className="text-button" disabled={fileBusyDocumentId === latestVaccine.id} type="button" onClick={() => void handleOpenStoredDocument(latestVaccine)}>
                     {fileBusyDocumentId === latestVaccine.id ? "Ouverture..." : "PDF"}
                   </button>
                 ) : null}
-              {canManageHealthDocuments && latestVaccine.status === "pending_review" ? (
-                  <>
-                  <button className="text-button" disabled={healthBusy || !vaccineReviewDate} type="button" onClick={() => handleReviewVaccine("approved")}>
-                    {uiText(locale, "Approuver", "Approve")}
-                  </button>
-                  <button className="text-button danger-text" disabled={healthBusy} type="button" onClick={() => handleReviewVaccine("rejected")}>
-                    {uiText(locale, "Refuser", "Reject")}
-                  </button>
-                  </>
-              ) : null}
               </div>
               {fileErrorDocumentId === latestVaccine.id ? <span className="muted-line">{uiText(locale, "Impossible d'ouvrir le fichier", "Unable to open file")}: {fileErrorMessageByDocumentId[latestVaccine.id] || uiText(locale, "accès refusé.", "access denied.")}</span> : null}
             </div>
@@ -728,35 +1039,53 @@ function HorseEditForm({
             </button>
           </div>
         </div>
+        <HorseDocumentIdentityPanel
+          contacts={contacts}
+          externalCredentialIssuers={externalCredentialIssuers}
+          horse={horse}
+          horseDocuments={horseHealthDocuments.filter((document) => document.horse_id === horse.id)}
+          horseExternalIdentifiers={horseExternalIdentifiers.filter((identifier) => identifier.horse_id === horse.id)}
+          locale={locale}
+          onValidationCreated={reloadIdentityLocks}
+        />
         {externalReferenceFields.length ? (
           <div className="external-membership-fields">
             <div className="inline-form-header">
               <strong>{uiText(locale, "Références externes du cheval", "External horse references")}</strong>
               <span>{uiText(locale, "Ex.: licence de compétition NRHA. Ces références pourront être validées par intégration externe plus tard.", "Example: NRHA competition license. These references can be validated through an external integration later.")}</span>
             </div>
-            {externalReferenceFields.map((externalOrganization) => (
-              <label key={externalOrganization.id}>
-                {horseExternalReferenceLabel(externalOrganization)}
+            {externalReferenceFields.map((externalCredentialIssuer) => (
+              <label key={externalCredentialIssuer.id}>
+                {horseExternalReferenceLabel(externalCredentialIssuer)}
                 <input
-                  value={externalReferenceNumbers[externalOrganization.id] ?? ""}
+                  disabled={
+                    (registrationStatus === "grade" && externalCredentialIssuer.issuer_type === "breed_registry")
+                    || (
+                      !identityCorrectionMode
+                      && identityLocks.some(
+                        (lock) => lock.lock_field === "external_identifier" && lock.external_credential_issuer_id === externalCredentialIssuer.id,
+                      )
+                    )
+                  }
+                  value={externalReferenceNumbers[externalCredentialIssuer.id] ?? ""}
                   onChange={(event) => {
                     setExternalReferenceNumbers((current) => ({
                       ...current,
-                      [externalOrganization.id]: event.target.value,
+                      [externalCredentialIssuer.id]: event.target.value,
                     }));
 
-                    if (externalOrganization.code.toUpperCase() === "NRHA") {
+                    if (externalCredentialIssuer.code.toUpperCase() === "NRHA") {
                       clearNrhaHorseValidation();
                     }
                   }}
                 />
-                {externalOrganization.code.toUpperCase() === "NRHA" ? (
+                {externalCredentialIssuer.code.toUpperCase() === "NRHA" ? (
                   <div className="row-actions">
                     <button
                       className="ghost-button"
-                      disabled={busy || nrhaHorseBusy || !organization || !externalReferenceNumbers[externalOrganization.id]?.trim()}
+                      disabled={busy || nrhaHorseBusy || !organization || !externalReferenceNumbers[externalCredentialIssuer.id]?.trim()}
                       type="button"
-                      onClick={() => handleVerifyNrhaHorse(externalOrganization)}
+                      onClick={() => handleVerifyNrhaHorse(externalCredentialIssuer)}
                     >
                       <ShieldCheck size={18} />
                       {nrhaHorseBusy ? uiText(locale, "Validation...", "Validating...") : uiText(locale, "Valider NRHA", "Validate NRHA")}
@@ -766,30 +1095,16 @@ function HorseEditForm({
               </label>
             ))}
             <InlineHealthMessage value={nrhaHorseMessage} />
-            {nrhaHorseDataRows.length ? (
-              <div className="nrha-data-import-panel">
-                <div className="inline-form-header">
-                  <strong>{uiText(locale, "Données NRHA disponibles", "Available NRHA data")}</strong>
-                  <span>{uiText(locale, "Importe les valeurs officielles qui manquent ou qui ont changé dans HSP.", "Import official values missing or changed in HSP.")}</span>
-                </div>
-                <div className="nrha-data-import-list">
-                  {nrhaHorseDataRows.map((row) => (
-                    <div className="nrha-data-import-row" key={row.key}>
-                      <span>{row.label}</span>
-                      <strong>HSP: {row.current}</strong>
-                      <strong>NRHA: {row.official}</strong>
-                    </div>
-                  ))}
-                </div>
-                <button className="ghost-button" type="button" onClick={handleApplyNrhaHorseData}>
-                  <Plus size={18} />
-                  {uiText(locale, "Importer les données NRHA", "Import NRHA data")}
-                </button>
-              </div>
-            ) : null}
+            {nrhaHorseDataRows.length ? <ExternalImportDataPanel disabledKeys={lockedNrhaImportKeys} locale={locale} rows={nrhaHorseDataRows} sourceLabel="NRHA" onApply={handleApplyNrhaHorseData} /> : null}
           </div>
         ) : null}
-        <FormActions busy={busy || !ownerContactId} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
+        <FormActions
+          busy={busy || identityLockBusy || !ownerContactId}
+          cancelLabel={identityCorrectionMode ? uiText(locale, "Annuler la correction", "Cancel correction") : uiText(locale, "Annuler", "Cancel")}
+          disabled={identityCorrectionMode && identityCorrectionReason.trim().length < 10}
+          saveLabel={identityCorrectionMode ? uiText(locale, "Appliquer la correction", "Apply correction") : uiText(locale, "Sauvegarder", "Save changes")}
+          onCancel={identityCorrectionMode ? cancelIdentityCorrection : onCancel}
+        />
       </form>
     </section>
   );

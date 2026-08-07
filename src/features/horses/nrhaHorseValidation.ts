@@ -1,4 +1,19 @@
 import type { Locale } from "../../lib/i18n";
+import {
+  buildExternalImportFields,
+  buildExternalImportProposal,
+  decideExternalImport,
+  withExternalImportDecision,
+  type ExternalImportChangeType,
+} from "../../lib/externalImportProposal";
+import {
+  compareExternalHorseIdentity,
+  identityDateEqual,
+  identityGenderEqual,
+  identityIdentifierEqual,
+  identityTextEqual,
+  type IdentityComparison,
+} from "../../lib/identityComparison";
 import type { NrhaHorseLookupCheck, NrhaHorseLookupVerification } from "../../services/supabaseServices";
 import type { Horse } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
@@ -19,6 +34,7 @@ type NrhaOfficialHorseValues = {
   dateOfBirth: string;
   gender: "" | NonNullable<Horse["gender"]>;
   name: string;
+  ownerName: string;
   rawSex: string;
   registrationNumber: string;
   sireName: string;
@@ -29,6 +45,9 @@ type NrhaHorseDataImportRow = {
   label: string;
   current: string;
   official: string;
+  currentValue: string;
+  proposedValue: string;
+  changeType: ExternalImportChangeType;
 };
 
 type NrhaHorseLocalValues = {
@@ -37,6 +56,7 @@ type NrhaHorseLocalValues = {
   gender: "" | NonNullable<Horse["gender"]>;
   name: string;
   nrhaReferenceNumber: string;
+  ownerName?: string;
   registrationNumber: string;
   sireName: string;
 };
@@ -52,10 +72,32 @@ function integerFromReference(value: string) {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
-function verificationPayload(verification: NrhaHorseLookupVerification): Record<string, unknown> {
+function verificationPayload(verification: NrhaHorseLookupVerification, identityComparison?: IdentityComparison): Record<string, unknown> {
   return {
     nrhaHorseLookup: verification as unknown,
+    ...(identityComparison ? { identityComparison } : {}),
   };
+}
+
+function nrhaHorseImportDecisionPayload(
+  verification: NrhaHorseLookupVerification,
+  rows: NrhaHorseDataImportRow[],
+  acceptedKeys: Iterable<NrhaHorseDataImportRow["key"]>,
+  identityComparison?: IdentityComparison,
+) {
+  const values = nrhaOfficialHorseValues(verification);
+  const proposal = buildExternalImportProposal({
+    subjectType: "horse",
+    sourceCode: "NRHA_MEMBER_LOOKUP",
+    sourceRecordKey: values.registrationNumber,
+    comparison: identityComparison,
+    fields: rows.map(({ key, currentValue, proposedValue, changeType }) => ({ key, currentValue, proposedValue, changeType })),
+  });
+
+  return withExternalImportDecision(
+    verificationPayload(verification, identityComparison),
+    decideExternalImport(proposal, acceptedKeys),
+  );
 }
 
 function nrhaOfficialHorseValues(
@@ -73,6 +115,7 @@ function nrhaOfficialHorseValues(
     dateOfBirth: normalizeNrhaDate(horse?.foalDate ?? verification.officialFoalDate ?? ""),
     gender: mapNrhaSex(horse?.sex),
     name: horse?.horseName?.trim() || verification.officialHorseName || fallback.name?.trim() || "",
+    ownerName: horse?.ownerName?.trim() || verification.officialOwnerName || "",
     rawSex: horse?.sex?.trim() ?? "",
     registrationNumber: registrationNumber ? String(registrationNumber) : "",
     sireName: horse?.sireName?.trim() ?? "",
@@ -88,6 +131,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     current: current.name,
     official: values.name,
     formatter: (value) => formatPlainNrhaValue(value, locale),
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "dateOfBirth",
@@ -95,6 +139,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     current: current.dateOfBirth,
     official: values.dateOfBirth,
     formatter: (value) => value || uiText(locale, "Non renseigné", "Not set"),
+    compare: identityDateEqual,
   });
   maybePushRow(rows, {
     key: "gender",
@@ -103,6 +148,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     official: values.gender,
     formatter: (value) => nrhaGenderLabel(value as "" | NonNullable<Horse["gender"]>, locale),
     officialDisplay: values.rawSex ? `${values.rawSex} -> ${nrhaGenderLabel(values.gender, locale)}` : undefined,
+    compare: identityGenderEqual,
   });
   maybePushRow(rows, {
     key: "nrhaReferenceNumber",
@@ -110,7 +156,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     current: current.nrhaReferenceNumber || current.registrationNumber,
     official: values.registrationNumber,
     formatter: (value) => formatPlainNrhaValue(value, locale),
-    compare: sameReferenceNumber,
+    compare: identityIdentifierEqual,
   });
   maybePushRow(rows, {
     key: "sireName",
@@ -118,6 +164,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     current: current.sireName,
     official: values.sireName,
     formatter: (value) => formatPlainNrhaValue(value, locale),
+    compare: identityTextEqual,
   });
   maybePushRow(rows, {
     key: "damName",
@@ -125,6 +172,7 @@ function nrhaHorseDataImportRows(values: NrhaOfficialHorseValues, current: NrhaH
     current: current.damName,
     official: values.damName,
     formatter: (value) => formatPlainNrhaValue(value, locale),
+    compare: identityTextEqual,
   });
 
   return rows;
@@ -142,24 +190,22 @@ function maybePushRow(
     compare?: (current: string, official: string) => boolean;
   },
 ) {
-  const officialValue = input.official.trim();
+  const field = buildExternalImportFields([{
+    key: input.key,
+    currentValue: input.current,
+    proposedValue: input.official,
+    equals: input.compare,
+  }])[0];
 
-  if (!officialValue) {
-    return;
-  }
-
-  const currentValue = input.current.trim();
-  const matches = input.compare ? input.compare(currentValue, officialValue) : currentValue === officialValue;
-
-  if (matches) {
+  if (!field) {
     return;
   }
 
   rows.push({
-    key: input.key,
+    ...field,
     label: input.label,
-    current: input.formatter(currentValue),
-    official: input.officialDisplay ?? input.formatter(officialValue),
+    current: input.formatter(field.currentValue),
+    official: input.officialDisplay ?? input.formatter(field.proposedValue),
   });
 }
 
@@ -238,19 +284,15 @@ function nrhaGenderLabel(gender: "" | NonNullable<Horse["gender"]>, locale: Loca
   return uiText(locale, "Non défini", "Unset");
 }
 
-function sameReferenceNumber(current: string, official: string) {
-  const currentDigits = current.replace(/\D/g, "");
-  const officialDigits = official.replace(/\D/g, "");
-
-  return Boolean(currentDigits && officialDigits && currentDigits === officialDigits) || current.trim() === official.trim();
-}
-
-function nrhaHorseMismatchMessage(verification: NrhaHorseLookupVerification, locale: Locale) {
+function nrhaHorseMismatchMessage(verification: NrhaHorseLookupVerification, locale: Locale, identityComparison?: IdentityComparison) {
   if (verification.status === "not_found") {
     return uiText(locale, "NRHA: aucune fiche cheval trouvée pour ce numéro.", "NRHA: no horse record found for this number.");
   }
 
-  const mismatches = [
+  const comparisonMismatches = identityComparison?.evidence
+    .filter((item) => item.outcome === "different")
+    .map((item) => `${horseIdentityFieldLabel(item.field, locale)}: ${item.candidate || uiText(locale, "NRHA inconnu", "unknown in NRHA")}`) ?? [];
+  const mismatches = comparisonMismatches.length ? comparisonMismatches : [
     nrhaCheckMismatchLabel(uiText(locale, "nom", "name"), verification.checks?.name, locale),
     nrhaCheckMismatchLabel(uiText(locale, "date de naissance", "birth date"), verification.checks?.dateOfBirth, locale),
     nrhaCheckMismatchLabel(uiText(locale, "propriétaire", "owner"), verification.checks?.ownerName, locale),
@@ -263,6 +305,37 @@ function nrhaHorseMismatchMessage(verification: NrhaHorseLookupVerification, loc
   return `${uiText(locale, "NRHA: informations non concordantes", "NRHA: details do not match")}: ${mismatches.join(" · ")}`;
 }
 
+function compareNrhaHorseIdentity(current: NrhaHorseLocalValues, official: NrhaOfficialHorseValues) {
+  return compareExternalHorseIdentity(
+    {
+      name: current.name,
+      date_of_birth: current.dateOfBirth,
+      gender: current.gender,
+      external_identifier: current.nrhaReferenceNumber || current.registrationNumber,
+      owner_name: current.ownerName,
+    },
+    {
+      name: official.name,
+      date_of_birth: official.dateOfBirth,
+      gender: official.gender,
+      external_identifier: official.registrationNumber,
+      owner_name: official.ownerName,
+    },
+  );
+}
+
+function horseIdentityFieldLabel(field: string, locale: Locale) {
+  const labels: Record<string, [string, string]> = {
+    identifier: ["numéro", "number"],
+    name: ["nom", "name"],
+    date_of_birth: ["date de naissance", "birth date"],
+    gender: ["sexe", "sex"],
+    owner: ["propriétaire", "owner"],
+  };
+  const label = labels[field] ?? [field, field];
+  return uiText(locale, label[0], label[1]);
+}
+
 function nrhaCheckMismatchLabel(label: string, check: NrhaHorseLookupCheck | undefined, locale: Locale) {
   if (!check || check.matched) {
     return null;
@@ -271,5 +344,5 @@ function nrhaCheckMismatchLabel(label: string, check: NrhaHorseLookupCheck | und
   return `${label}: ${check.official || uiText(locale, "NRHA inconnu", "unknown in NRHA")}`;
 }
 
-export { formatImportedSex, integerFromReference, mapNrhaSex, normalizeNrhaDate, nrhaHorseDataImportRows, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload };
+export { compareNrhaHorseIdentity, formatImportedSex, integerFromReference, mapNrhaSex, normalizeNrhaDate, nrhaHorseDataImportRows, nrhaHorseImportDecisionPayload, nrhaHorseMismatchMessage, nrhaOfficialHorseValues, verificationPayload };
 export type { NrhaHorseDataImportRow, NrhaHorseVerificationState, NrhaOfficialHorseValues };

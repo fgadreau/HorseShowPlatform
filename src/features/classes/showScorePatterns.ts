@@ -1,4 +1,4 @@
-import type { ClassRecord } from "../../types/domain";
+import type { Block } from "../../types/domain";
 
 type ShowScorePatternGroup = {
   label: string;
@@ -162,7 +162,7 @@ export function showScorePatternSelectValue(value: string | null | undefined) {
 
 export function patternForConcurrentClass(
   patternValue: string | null | undefined,
-  concurrentClass: Pick<ClassRecord, "pattern"> | null | undefined,
+  concurrentClass: Pick<Block, "pattern"> | null | undefined,
 ) {
   if (concurrentClass) {
     return showScorePatternSelectValue(concurrentClass.pattern);

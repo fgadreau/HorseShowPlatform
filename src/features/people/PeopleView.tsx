@@ -3,88 +3,208 @@ import { Plus, Search } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, formatCurrency, formatDate, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, reviewHorseHealthDocument, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse, verifyNrhaMember } from "../../services/supabaseServices";
-import type { Contact, ContactExternalMembership, ContactOrganizationMembership, ContactRole, ExternalOrganization, Horse, HorseContact, HorseExternalMembership, HorseHealthDocument, Organization, OrganizationExternalMembershipRequirement, OrganizationMembershipType } from "../../types/domain";
-import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseHealthDisplay, horseExternalReferenceChips, horseGenderLabel, cogginsValidityTagLabel, cogginsValidityBadgeClass, cogginsValidityMessage } from "../dashboard/shared";
+import { createContact, createContactOrganizationMembership, createHorse, createUploadedHorseHealthDocument, deleteContact, deleteHorse, dismissContactIdentityCandidate, dismissHorseIdentityCandidate, linkContactToDirectory, linkHorseToDirectory, searchContactIdentityCandidates, searchHorseIdentityCandidates, unlinkContactFromDirectory, unlinkHorseFromDirectory, updateContact, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse, verifyNrhaMember } from "../../services/supabaseServices";
+import type { ContactIdentityCandidate, HorseIdentityCandidate } from "../../services/supabaseServices";
+import type { Contact, ContactExternalIdentifier, ContactInsuranceEvidence, ContactOrganizationMembership, ContactRole, DirectoryContact, DirectoryHorse, Discipline, ExternalCredentialIssuer, ExternalCredentialProduct, Horse, HorseContact, HorseExternalIdentifier, HorseHealthDocument, Organization, OrganizationDiscipline, OrganizationExternalCredentialRequirement, OrganizationMembershipType } from "../../types/domain";
+import { uiText, normalizeDirectorySearch, contactMatchesDirectorySearch, horseMatchesDirectorySearch, horseExternalReferenceChips, horseGenderLabel, todayDateValue } from "../dashboard/shared";
+import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { ContactForm } from "./ContactForm";
 import { ContactEditForm } from "./ContactEditForm";
 import { HorseForm } from "../horses/HorseForm";
 import { HorseEditForm } from "../horses/HorseEditForm";
+import { DirectoryCreationPicker, DirectoryDisciplinePicker } from "./DirectoryDisciplinePicker";
+import { InsuranceEvidenceForm } from "./InsuranceEvidenceForm";
 
 function PeopleView({
   locale,
   contacts,
-  contactExternalMemberships,
+  contactExternalIdentifiers,
+  contactInsuranceEvidence,
   contactOrganizationMemberships,
   contactRoles,
-  canManageHealthDocuments,
   createdByUserId,
-  externalOrganizations,
-  horseExternalMemberships,
+  directoryContacts,
+  directoryHorses,
+  disciplines,
+  externalCredentialIssuers,
+  externalCredentialProducts,
+  horseExternalIdentifiers,
   horseHealthDocuments,
   horses,
   horseContacts,
+  healthComplianceRevision,
   membershipRequirements,
   organizationMembershipTypes,
   organization,
+  organizationDisciplines,
   onCreateContact,
   onCreateContactOrganizationMembership,
   onCreateHorse,
   onCreateHorseHealthDocument,
+  onLinkContactToDirectory,
+  onLinkHorseToDirectory,
   onDeleteContact,
   onDeleteHorse,
-  onReviewHorseHealthDocument,
+  onUnlinkContactFromDirectory,
+  onUnlinkHorseFromDirectory,
   onUpdateContact,
   onUpdateHorse,
   onVerifyGvlCogginsDocument,
   onVerifyNrhaHorse,
   onVerifyNrhaMember,
+  onRefresh,
 }: {
   locale: Locale;
   contacts: Contact[];
-  contactExternalMemberships: ContactExternalMembership[];
+  contactExternalIdentifiers: ContactExternalIdentifier[];
+  contactInsuranceEvidence: ContactInsuranceEvidence[];
   contactOrganizationMemberships: ContactOrganizationMembership[];
   contactRoles: ContactRole[];
-  canManageHealthDocuments: boolean;
   createdByUserId: string;
-  externalOrganizations: ExternalOrganization[];
-  horseExternalMemberships: HorseExternalMembership[];
+  directoryContacts: DirectoryContact[];
+  directoryHorses: DirectoryHorse[];
+  disciplines: Discipline[];
+  externalCredentialIssuers: ExternalCredentialIssuer[];
+  externalCredentialProducts: ExternalCredentialProduct[];
+  horseExternalIdentifiers: HorseExternalIdentifier[];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
   horseContacts: HorseContact[];
-  membershipRequirements: OrganizationExternalMembershipRequirement[];
+  healthComplianceRevision?: string;
+  membershipRequirements: OrganizationExternalCredentialRequirement[];
   organizationMembershipTypes: OrganizationMembershipType[];
   organization: Organization | null;
+  organizationDisciplines: OrganizationDiscipline[];
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
+  onLinkContactToDirectory: (input: Parameters<typeof linkContactToDirectory>[0]) => Promise<void>;
+  onLinkHorseToDirectory: (input: Parameters<typeof linkHorseToDirectory>[0]) => Promise<void>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+  onUnlinkContactFromDirectory: (...args: Parameters<typeof unlinkContactFromDirectory>) => Promise<void>;
+  onUnlinkHorseFromDirectory: (...args: Parameters<typeof unlinkHorseFromDirectory>) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
+  onRefresh: () => Promise<void> | void;
 }) {
   const [creatingContact, setCreatingContact] = useState(false);
   const [creatingHorse, setCreatingHorse] = useState(false);
+  const [contactCreationDirectoryIds, setContactCreationDirectoryIds] = useState<Set<string>>(new Set());
+  const [horseCreationDirectoryIds, setHorseCreationDirectoryIds] = useState<Set<string>>(new Set());
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
+  const [insuranceContact, setInsuranceContact] = useState<Contact | null>(null);
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [contactSearch, setContactSearch] = useState("");
   const [horseSearch, setHorseSearch] = useState("");
   const [membershipTypeByContact, setMembershipTypeByContact] = useState<Record<string, string>>({});
   const [sellingMembershipContactId, setSellingMembershipContactId] = useState("");
+  const healthCompliance = useHorseHealthComplianceOverview({
+    horseIds: horses.map((horse) => horse.id),
+    organizationId: organization?.id,
+    referenceDate: todayDateValue(),
+    refreshToken: healthComplianceRevision,
+  });
   const normalizedContactSearch = normalizeDirectorySearch(contactSearch);
   const normalizedHorseSearch = normalizeDirectorySearch(horseSearch);
   const filteredContacts = normalizedContactSearch
     ? contacts.filter((contact) => contactMatchesDirectorySearch(contact, contactRoles, normalizedContactSearch))
     : [];
   const filteredHorses = normalizedHorseSearch
-    ? horses.filter((horse) => horseMatchesDirectorySearch(horse, contacts, horseExternalMemberships, externalOrganizations, normalizedHorseSearch))
+    ? horses.filter((horse) => horseMatchesDirectorySearch(horse, contacts, horseExternalIdentifiers, externalCredentialIssuers, normalizedHorseSearch))
     : [];
   const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active);
+
+  function initialDirectoryIds() {
+    const defaultDirectory = organizationDisciplines.find((discipline) => discipline.is_default) ?? organizationDisciplines[0];
+    return new Set(defaultDirectory ? [defaultDirectory.id] : []);
+  }
+
+  function startCreatingContact() {
+    setContactCreationDirectoryIds(initialDirectoryIds());
+    setCreatingContact(true);
+  }
+
+  function startCreatingHorse() {
+    setHorseCreationDirectoryIds(initialDirectoryIds());
+    setCreatingHorse(true);
+  }
+
+  async function syncContactDirectories(contact: Contact, selectedIds: Set<string>) {
+    for (const organizationDiscipline of organizationDisciplines) {
+      if (selectedIds.has(organizationDiscipline.id)) {
+        await onLinkContactToDirectory({
+          organization_discipline_id: organizationDiscipline.id,
+          contact_id: contact.id,
+          created_by_user_id: createdByUserId,
+        });
+      } else {
+        await onUnlinkContactFromDirectory(organizationDiscipline.id, contact.id);
+      }
+    }
+  }
+
+  async function syncHorseDirectories(horse: Horse, selectedIds: Set<string>) {
+    for (const organizationDiscipline of organizationDisciplines) {
+      if (selectedIds.has(organizationDiscipline.id)) {
+        await onLinkHorseToDirectory({
+          organization_discipline_id: organizationDiscipline.id,
+          horse_id: horse.id,
+          created_by_user_id: createdByUserId,
+        });
+      } else {
+        await onUnlinkHorseFromDirectory(organizationDiscipline.id, horse.id);
+      }
+    }
+  }
+
+  async function createContactInSelectedDirectories(input: Parameters<typeof createContact>[0], selectedIds: Set<string>) {
+    const contact = await onCreateContact(input);
+    await syncContactDirectories(contact, selectedIds);
+    return contact;
+  }
+
+  async function createHorseInSelectedDirectories(input: Parameters<typeof createHorse>[0]) {
+    const horse = await onCreateHorse(input);
+    await syncHorseDirectories(horse, horseCreationDirectoryIds);
+    return horse;
+  }
+
+  async function linkExistingContactToSelectedDirectories(candidate: ContactIdentityCandidate) {
+    for (const organizationDisciplineId of contactCreationDirectoryIds) {
+      await onLinkContactToDirectory({
+        organization_discipline_id: organizationDisciplineId,
+        contact_id: candidate.contact_id,
+        created_by_user_id: createdByUserId,
+      });
+    }
+    setCreatingContact(false);
+  }
+
+  async function linkExistingHorseToSelectedDirectories(candidate: HorseIdentityCandidate) {
+    for (const organizationDisciplineId of horseCreationDirectoryIds) {
+      await onLinkHorseToDirectory({
+        organization_discipline_id: organizationDisciplineId,
+        horse_id: candidate.horse_id,
+        created_by_user_id: createdByUserId,
+      });
+    }
+    setCreatingHorse(false);
+  }
+
+  async function linkExistingContactToHorseDirectories(candidate: ContactIdentityCandidate) {
+    for (const organizationDisciplineId of horseCreationDirectoryIds) {
+      await onLinkContactToDirectory({
+        organization_discipline_id: organizationDisciplineId,
+        contact_id: candidate.contact_id,
+        created_by_user_id: createdByUserId,
+      });
+    }
+  }
 
   function membershipsForContact(contactId: string) {
     return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
@@ -165,11 +285,11 @@ function PeopleView({
             <p>{uiText(locale, "Ouvre le bon formulaire sans quitter la recherche de contacts et chevaux.", "Open the right form without leaving contact and horse search.")}</p>
           </div>
           <div className="row-actions">
-            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingContact(true)}>
+            <button className="primary-button" data-testid="create-contact-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingContact}>
               <Plus size={18} />
               {uiText(locale, "Contact", "Contact")}
             </button>
-            <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
+            <button className="primary-button" data-testid="create-horse-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={startCreatingHorse}>
               <Plus size={18} />
               {uiText(locale, "Cheval", "Horse")}
             </button>
@@ -179,12 +299,30 @@ function PeopleView({
 
       {creatingContact ? (
         <ModalDialog description={organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first.")} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Nouveau contact", "New contact")} onClose={() => setCreatingContact(false)}>
+          <DirectoryCreationPicker
+            locale={locale}
+            disciplines={disciplines}
+            organizationDisciplines={organizationDisciplines}
+            selectedIds={contactCreationDirectoryIds}
+            onChange={setContactCreationDirectoryIds}
+          />
           <ContactForm
             locale={locale}
-            externalOrganizations={externalOrganizations}
+            allowCredentialReview
+            createdByUserId={createdByUserId}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             organization={organization}
-            onCreateContact={onCreateContact}
+            onCreateContact={(input) => createContactInSelectedDirectories(input, contactCreationDirectoryIds)}
+            onDismissIdentityCandidate={(candidate) => dismissContactIdentityCandidate({
+              organization_id: organization?.id ?? "",
+              contact_id: candidate.contact_id,
+              search_signature: candidate.search_signature,
+              reason: "confirmed_distinct_by_staff",
+            })}
+            onSearchIdentityCandidates={searchContactIdentityCandidates}
+            onUseExistingContact={linkExistingContactToSelectedDirectories}
             onVerifyNrhaMember={onVerifyNrhaMember}
             onCreated={() => setCreatingContact(false)}
           />
@@ -193,16 +331,39 @@ function PeopleView({
 
       {creatingHorse ? (
         <ModalDialog description={contacts.length ? uiText(locale, "Connecte le cheval à un propriétaire.", "Connect the horse to an owner.") : uiText(locale, "Crée un contact propriétaire directement dans ce formulaire au besoin.", "Create an owner contact directly in this form if needed.")} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>
+          <DirectoryCreationPicker
+            locale={locale}
+            disciplines={disciplines}
+            organizationDisciplines={organizationDisciplines}
+            selectedIds={horseCreationDirectoryIds}
+            onChange={setHorseCreationDirectoryIds}
+          />
           <HorseForm
             locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
             createdByUserId={createdByUserId}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             organization={organization}
-            onCreateContact={onCreateContact}
-            onCreateHorse={onCreateHorse}
+            onCreateContact={(input) => createContactInSelectedDirectories(input, horseCreationDirectoryIds)}
+            onCreateHorse={createHorseInSelectedDirectories}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onDismissContactIdentityCandidate={(candidate) => dismissContactIdentityCandidate({
+              organization_id: organization?.id ?? "",
+              contact_id: candidate.contact_id,
+              search_signature: candidate.search_signature,
+              reason: "confirmed_distinct_by_staff",
+            })}
+            onDismissIdentityCandidate={(candidate) => dismissHorseIdentityCandidate({
+              organization_id: organization?.id ?? "",
+              horse_id: candidate.horse_id,
+              search_signature: candidate.search_signature,
+              reason: "confirmed_distinct_by_staff",
+            })}
+            onSearchContactIdentityCandidates={searchContactIdentityCandidates}
+            onSearchIdentityCandidates={searchHorseIdentityCandidates}
+            onUseExistingContact={linkExistingContactToHorseDirectories}
+            onUseExistingHorse={linkExistingHorseToSelectedDirectories}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
             onCreated={() => setCreatingHorse(false)}
@@ -214,9 +375,11 @@ function PeopleView({
         <ModalDialog description={contactLabel(editingContact)} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Modifier le contact", "Edit contact")} onClose={() => setEditingContact(null)}>
           <ContactEditForm
             locale={locale}
+            allowCredentialReview
             contact={editingContact}
-            contactExternalMemberships={contactExternalMemberships}
-            externalOrganizations={externalOrganizations}
+            contactExternalIdentifiers={contactExternalIdentifiers}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={externalCredentialProducts}
             membershipRequirements={membershipRequirements}
             onCancel={() => setEditingContact(null)}
             onVerifyNrhaMember={onVerifyNrhaMember}
@@ -234,10 +397,9 @@ function PeopleView({
             locale={locale}
             contacts={contacts}
             contactRoles={contactRoles}
-            canManageHealthDocuments={canManageHealthDocuments}
             createdByUserId={createdByUserId}
-            externalOrganizations={externalOrganizations}
-            horseExternalMemberships={horseExternalMemberships}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={horseHealthDocuments}
             horseContacts={horseContacts}
             organization={organization}
@@ -245,13 +407,31 @@ function PeopleView({
             onCancel={() => setEditingHorse(null)}
             onCreateContact={onCreateContact}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={async (id, input) => {
               await onUpdateHorse(id, input);
               setEditingHorse(null);
             }}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+          />
+        </ModalDialog>
+      ) : null}
+
+      {insuranceContact ? (
+        <ModalDialog
+          className="class-program-modal"
+          description={contactLabel(insuranceContact)}
+          eyebrow={uiText(locale, "Admissibilité", "Eligibility")}
+          title={uiText(locale, "Preuves d’assurance", "Insurance evidence")}
+          onClose={() => setInsuranceContact(null)}
+        >
+          <InsuranceEvidenceForm
+            contact={insuranceContact}
+            createdByUserId={createdByUserId}
+            evidence={contactInsuranceEvidence.filter((item) => item.contact_id === insuranceContact.id)}
+            issuers={externalCredentialIssuers}
+            products={externalCredentialProducts}
+            onRefresh={onRefresh}
           />
         </ModalDialog>
       ) : null}
@@ -285,12 +465,31 @@ function PeopleView({
             const alreadyHasSelectedMembership = membershipTypeId ? contactHasMembershipType(contact.id, membershipTypeId) : false;
             const sellingMembership = sellingMembershipContactId === contact.id;
             const canSellMembership = Boolean(organization && selectedMembershipType && !alreadyHasSelectedMembership && !sellingMembership);
+            const contactDirectoryIds = new Set(
+              directoryContacts
+                .filter((directoryContact) => directoryContact.contact_id === contact.id)
+                .map((directoryContact) => directoryContact.organization_discipline_id),
+            );
 
             return (
               <div className="horse-list-row" key={contact.id}>
                 <div className="horse-list-identity">
                   <strong>{contactLabel(contact)}</strong>
                   <span>{contact.barn_name || uiText(locale, "Contact", "Contact")}</span>
+                  <DirectoryDisciplinePicker
+                    locale={locale}
+                    disciplines={disciplines}
+                    organizationDisciplines={organizationDisciplines}
+                    linkedOrganizationDisciplineIds={contactDirectoryIds}
+                    onLink={(organizationDisciplineId) =>
+                      onLinkContactToDirectory({
+                        organization_discipline_id: organizationDisciplineId,
+                        contact_id: contact.id,
+                        created_by_user_id: createdByUserId,
+                      })
+                    }
+                    onUnlink={(organizationDisciplineId) => onUnlinkContactFromDirectory(organizationDisciplineId, contact.id)}
+                  />
                 </div>
                 <div className="horse-chip-row">
                   <span className="horse-status-chip neutral">
@@ -339,6 +538,9 @@ function PeopleView({
                   <button className="text-button" type="button" onClick={() => setEditingContact(contact)}>
                     {uiText(locale, "Modifier", "Edit")}
                   </button>
+                  <button className="text-button" type="button" onClick={() => setInsuranceContact(contact)}>
+                    {uiText(locale, "Assurance", "Insurance")}
+                  </button>
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteContact(contact)}>
                     {uiText(locale, "Supprimer", "Delete")}
                   </button>
@@ -375,27 +577,49 @@ function PeopleView({
             </div>
           ) : null}
           {filteredHorses.map((horse) => {
-            const healthDisplay = horseHealthDisplay(horse, horseHealthDocuments, organization);
-            const referenceChips = horseExternalReferenceChips(horse, horseExternalMemberships, externalOrganizations);
+            const complianceResult = healthCompliance.results.find((result) => result.horse_id === horse.id);
+            const healthTone = complianceResult ? healthComplianceTone(complianceResult.compliance_status) : "neutral";
+            const referenceChips = horseExternalReferenceChips(horse, horseExternalIdentifiers, externalCredentialIssuers);
+            const horseDirectoryIds = new Set(
+              directoryHorses
+                .filter((directoryHorse) => directoryHorse.horse_id === horse.id)
+                .map((directoryHorse) => directoryHorse.organization_discipline_id),
+            );
 
             return (
-              <div className={`horse-list-row ${healthDisplay.summary.tone}`} key={horse.id}>
+              <div className={`horse-list-row ${healthTone}`} key={horse.id}>
                 <div className="horse-list-identity">
                   <strong>{horse.name}</strong>
                   <span>
                     {contactLabel(findById(contacts, horse.primary_owner_contact_id))} · {horseGenderLabel(horse.gender)}
                   </span>
+                  <DirectoryDisciplinePicker
+                    locale={locale}
+                    disciplines={disciplines}
+                    organizationDisciplines={organizationDisciplines}
+                    linkedOrganizationDisciplineIds={horseDirectoryIds}
+                    onLink={(organizationDisciplineId) =>
+                      onLinkHorseToDirectory({
+                        organization_discipline_id: organizationDisciplineId,
+                        horse_id: horse.id,
+                        created_by_user_id: createdByUserId,
+                      })
+                    }
+                    onUnlink={(organizationDisciplineId) => onUnlinkHorseFromDirectory(organizationDisciplineId, horse.id)}
+                  />
                 </div>
                 <div className="horse-list-status">
-                  <span className={`horse-summary-pill ${healthDisplay.summary.tone}`}>{healthDisplay.summary.label}</span>
-                  <div className="horse-chip-row">
-                    {healthDisplay.chips.map((chip) => (
-                      <span className={`horse-status-chip ${chip.tone}`} key={`${horse.id}-${chip.label}`}>
-                        <span>{chip.label}</span>
-                        <strong>{chip.value}</strong>
-                      </span>
-                    ))}
-                  </div>
+                  <span className={`horse-summary-pill ${healthTone}`}>
+                    {healthCompliance.loading
+                      ? uiText(locale, "Calcul en cours", "Calculating")
+                      : healthCompliance.error
+                        ? uiText(locale, "Statut indisponible", "Status unavailable")
+                        : complianceResult
+                          ? healthComplianceStatusLabel(complianceResult.compliance_status, locale)
+                          : uiText(locale, "Non répertorié", "Not listed")}
+                  </span>
+                  {complianceResult ? <span className="muted-line">{healthComplianceReasonSummary(complianceResult, locale)}</span> : null}
+                  {healthCompliance.error ? <span className="muted-line">{healthCompliance.error}</span> : null}
                 </div>
                 <div className="horse-chip-row reference-chip-row">
                   {referenceChips.map((chip) => (

@@ -1,9 +1,8 @@
-import { SearchSelect } from "../../components/ui";
 import type { Locale } from "../../lib/i18n";
 import type { BackNumberPolicy, SanctioningBody } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { backNumberPolicyLabel } from "./classUtils";
-import { toggleSanctioningBodyCode, sanctionLabel } from "./classUtils";
+import { toggleGoverningBodyId } from "./classUtils";
 
 function SanctioningFields({
   locale = "fr",
@@ -12,9 +11,13 @@ function SanctioningFields({
   hideBackNumberPolicy = false,
   label,
   sanctioningBodies,
-  sanctioningBodyCodes,
+  governingBodyIds,
+  eligibilityCacheTtlHours,
+  sourceUnavailablePolicy,
   onBackNumberPolicyChange,
-  onSanctioningBodyCodesChange,
+  onGoverningBodyIdsChange,
+  onEligibilityCacheTtlHoursChange,
+  onSourceUnavailablePolicyChange,
 }: {
   locale?: Locale;
   backNumberPolicy: BackNumberPolicy;
@@ -22,11 +25,16 @@ function SanctioningFields({
   hideBackNumberPolicy?: boolean;
   label?: string;
   sanctioningBodies: SanctioningBody[];
-  sanctioningBodyCodes: string[];
+  governingBodyIds: string[];
+  eligibilityCacheTtlHours?: number;
+  sourceUnavailablePolicy?: "block" | "allow_with_warning";
   onBackNumberPolicyChange: (policy: BackNumberPolicy) => void;
-  onSanctioningBodyCodesChange: (codes: string[]) => void;
+  onGoverningBodyIdsChange: (ids: string[]) => void;
+  onEligibilityCacheTtlHoursChange?: (hours: number) => void;
+  onSourceUnavailablePolicyChange?: (policy: "block" | "allow_with_warning") => void;
 }) {
   const fieldLabel = label ?? uiText(locale, "Sanctions", "Sanctioning");
+  const hasNrha = sanctioningBodies.some((body) => body.code.toUpperCase() === "NRHA" && governingBodyIds.includes(body.id));
 
   return (
     <div className="stack compact-stack">
@@ -34,12 +42,12 @@ function SanctioningFields({
         <span className="contact-picker-label">{fieldLabel}</span>
         <div className="checkbox-grid">
           {sanctioningBodies.map((body) => (
-            <label className="check-row" key={body.code}>
+            <label className="check-row" key={body.id}>
               <input
-                checked={sanctioningBodyCodes.includes(body.code)}
+                checked={governingBodyIds.includes(body.id)}
                 disabled={disabled}
                 type="checkbox"
-                onChange={() => onSanctioningBodyCodesChange(toggleSanctioningBodyCode(sanctioningBodyCodes, body.code))}
+                onChange={() => onGoverningBodyIdsChange(toggleGoverningBodyId(governingBodyIds, body.id))}
               />
               <span>{body.name}</span>
             </label>
@@ -47,6 +55,29 @@ function SanctioningFields({
           {!sanctioningBodies.length ? <span className="muted-line">{uiText(locale, "Aucun organisme de sanction configuré.", "No sanctioning bodies configured.")}</span> : null}
         </div>
       </div>
+      {hasNrha && onEligibilityCacheTtlHoursChange && onSourceUnavailablePolicyChange ? (
+        <details>
+          <summary>{uiText(locale, "Options de vérification externe", "External verification options")}</summary>
+          <div className="form-grid compact-stack">
+            <label>
+              {uiText(locale, "Durée du cache d'admissibilité", "Eligibility cache duration")}
+              <select disabled={disabled} value={eligibilityCacheTtlHours ?? 6} onChange={(event) => onEligibilityCacheTtlHoursChange(Number(event.target.value))}>
+                <option value={1}>1 h</option>
+                <option value={6}>6 h</option>
+                <option value={12}>12 h</option>
+                <option value={24}>24 h</option>
+              </select>
+            </label>
+            <label>
+              {uiText(locale, "Si la source est indisponible", "If the source is unavailable")}
+              <select disabled={disabled} value={sourceUnavailablePolicy ?? "block"} onChange={(event) => onSourceUnavailablePolicyChange(event.target.value as "block" | "allow_with_warning")}>
+                <option value="block">{uiText(locale, "Bloquer l'inscription", "Block entry")}</option>
+                <option value="allow_with_warning">{uiText(locale, "Permettre avec avertissement", "Allow with warning")}</option>
+              </select>
+            </label>
+          </div>
+        </details>
+      ) : null}
       {hideBackNumberPolicy ? null : (
         <label>
           {uiText(locale, "Politique de dossard", "Back number policy")}

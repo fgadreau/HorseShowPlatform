@@ -8,7 +8,21 @@
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "test:draw": "tsc -p tsconfig.draw-test.json && cp scripts/draw-test-package.json .tmp/draw-tests/package.json && node .tmp/draw-tests/scripts/draw-test-program.js",
-    "test:payout": "tsc -p tsconfig.payout-test.json && cp scripts/draw-test-package.json .tmp/payout-tests/package.json && node .tmp/payout-tests/scripts/payout-test-program.js"
+    "test:payout": "tsc -p tsconfig.payout-test.json && cp scripts/draw-test-package.json .tmp/payout-tests/package.json && node .tmp/payout-tests/scripts/payout-test-program.js",
+    "test:identity": "tsc -p tsconfig.identity-test.json && cp scripts/draw-test-package.json .tmp/identity-tests/package.json && node .tmp/identity-tests/scripts/identity-comparison-test.js",
+    "test:governing": "tsc -p tsconfig.governing-test.json && cp scripts/draw-test-package.json .tmp/governing-tests/package.json && node .tmp/governing-tests/scripts/governing-bodies-test.js",
+    "test:eligibility": "tsc -p tsconfig.eligibility-test.json && cp scripts/draw-test-package.json .tmp/eligibility-tests/package.json && node .tmp/eligibility-tests/scripts/eligibility-engine-test.js",
+    "test:promotion": "node scripts/verify-production-migrations.mjs origin/main HEAD",
+    "test:e2e": "playwright test",
+    "test:e2e:local": "node scripts/run-e2e-local.mjs",
+    "test:e2e:local:mega": "E2E_MODE=mega node scripts/run-e2e-local.mjs",
+    "test:e2e:smoke": "E2E_MODE=smoke playwright test",
+    "test:e2e:mega": "E2E_MODE=mega playwright test",
+    "test:e2e:install": "playwright install chromium",
+    "test:capacity": "node scripts/run-showscore-capacity.mjs",
+    "test:capacity:aggregate": "node scripts/aggregate-showscore-capacity.mjs",
+    "test:capacity:config": "node --test scripts/capacity/*.test.mjs",
+    "test:broadcast": "node scripts/verify-showscore-public-broadcast.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
@@ -19,11 +33,14 @@
     "react-dom": "^19.2.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@vitejs/plugin-react": "^6.0.2",
     "supabase": "^2.102.0",
     "typescript": "^6.0.3",
-    "vite": "^8.0.14"
+    "vite": "^8.0.14",
+    "ws": "^8.21.2"
   }
 }

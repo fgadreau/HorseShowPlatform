@@ -2,11 +2,12 @@ import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, Clock, DollarSign, ExternalLink, MapPin, Shield, Stethoscope, Users } from "lucide-react";
 import { formatCurrency, formatDate } from "../../lib/display";
 import { fetchPublicShow, type PublicShowContext } from "../../services/supabaseServices";
-import type { ClassRecord, Division, PayoutCalculation, PayoutResultSnapshotRow, ShowDay } from "../../types/domain";
+import type { Block, ClassRecord, PayoutCalculation, PayoutResultSnapshotRow, ShowDay } from "../../types/domain";
 import { showScorePatternLabel } from "../classes/showScorePatterns";
+import { classScheduleStartLabel, sortScheduleBlocks } from "../classes/classUtils";
 
-function totalAddedMoney(divisions: Division[]) {
-  return divisions.reduce((sum, d) => sum + (d.added_money ?? 0), 0);
+function totalAddedMoney(classes: ClassRecord[]) {
+  return classes.reduce((sum, d) => sum + (d.added_money ?? 0), 0);
 }
 
 function stallPriceRange(stallOptions: PublicShowContext["stallOptions"], currency: string) {
@@ -22,13 +23,8 @@ function showDateRange(startDate: string, endDate: string) {
   return `${formatDate(startDate)} – ${formatDate(endDate)}`;
 }
 
-function ScheduleDay({ day, classes, divisions }: { day: ShowDay; classes: ClassRecord[]; divisions: Division[] }) {
-  const dayClasses = classes
-    .filter((c) => c.show_day_id === day.id)
-    .sort((a, b) => {
-      if (a.scheduled_time && b.scheduled_time) return a.scheduled_time.localeCompare(b.scheduled_time);
-      return a.sort_order - b.sort_order;
-    });
+function ScheduleDay({ day, blocks, classes }: { day: ShowDay; blocks: Block[]; classes: ClassRecord[] }) {
+  const dayClasses = sortScheduleBlocks(blocks.filter((block) => block.show_day_id === day.id));
 
   return (
     <div className="public-schedule-day">
@@ -40,37 +36,37 @@ function ScheduleDay({ day, classes, divisions }: { day: ShowDay; classes: Class
       </div>
       <div className="public-block-list">
         {dayClasses.map((block) => {
-          if (block.is_event_block) {
+          if (block.block_type !== "competition") {
             return (
               <div className="public-event-block" key={block.id}>
                 <Clock size={14} />
                 <span>
                   <strong>{block.name}</strong>
-                  {[block.block_label, block.scheduled_time ? block.scheduled_time.slice(0, 5) : null].filter(Boolean).join(" · ")}
+                  {[block.display_label, classScheduleStartLabel(block, "fr", blocks)].filter(Boolean).join(" · ")}
                 </span>
               </div>
             );
           }
 
-          const blockDivisions = divisions.filter((d) => d.class_id === block.id);
-          const blockAddedMoney = totalAddedMoney(blockDivisions);
+          const blockClasses = classes.filter((d) => d.block_id === block.id);
+          const blockAddedMoney = totalAddedMoney(blockClasses);
 
           return (
             <div className="public-class-block" key={block.id}>
               <div className="public-class-block-header">
                 <strong>{block.name}</strong>
                 <div className="public-class-block-meta">
-                  {block.scheduled_time ? <span><Clock size={12} />{block.scheduled_time.slice(0, 5)}</span> : null}
+                  <span><Clock size={12} />{classScheduleStartLabel(block, "fr", blocks)}</span>
                   {block.pattern ? <span>Pattern {showScorePatternLabel(block.pattern)}</span> : null}
                   {blockAddedMoney > 0 ? <span className="public-money-badge"><DollarSign size={12} />{formatCurrency(blockAddedMoney, "CAD")} added</span> : null}
                 </div>
               </div>
-              {blockDivisions.length > 0 ? (
-                <div className="public-division-list">
-                  {blockDivisions.map((div) => (
-                    <div className="public-division-row" key={div.id}>
+              {blockClasses.length > 0 ? (
+                <div className="public-classRecord-list">
+                  {blockClasses.map((div) => (
+                    <div className="public-classRecord-row" key={div.id}>
                       <span>{div.name}</span>
-                      <div className="public-division-meta">
+                      <div className="public-classRecord-meta">
                         {div.added_money > 0 ? <span>{formatCurrency(div.added_money, "CAD")}</span> : null}
                         {div.entry_fee != null ? <span>Inscription {formatCurrency(div.entry_fee, "CAD")}</span> : null}
                       </div>
@@ -89,14 +85,14 @@ function ScheduleDay({ day, classes, divisions }: { day: ShowDay; classes: Class
 
 function PublishedResults({
   calculations,
-  classes,
+  blocks,
   currency,
-  divisions,
+  classes,
 }: {
   calculations: PayoutCalculation[];
-  classes: ClassRecord[];
+  blocks: Block[];
   currency: string;
-  divisions: Division[];
+  classes: ClassRecord[];
 }) {
   const published = calculations.filter((calculation) => calculation.status === "published");
 
@@ -109,16 +105,16 @@ function PublishedResults({
       <h2>Résultats</h2>
       <div className="public-results-list">
         {published.map((calculation) => {
-          const division = divisions.find((candidate) => candidate.id === calculation.division_id);
-          const classRecord = division ? classes.find((candidate) => candidate.id === division.class_id) : null;
+          const classRecord = classes.find((candidate) => candidate.id === calculation.class_id);
+          const block = classRecord ? blocks.find((candidate) => candidate.id === classRecord.block_id) : null;
           const rows = calculation.result_snapshot ?? [];
 
           return (
             <div className="public-results-card" key={calculation.id}>
               <div className="public-results-card-header">
                 <div>
-                  <strong>{division ? division.name : "Classe"}</strong>
-                  {classRecord ? <span>{classRecord.name}</span> : null}
+                  <strong>{classRecord ? classRecord.name : "Classe"}</strong>
+                  {block ? <span>{block.name}</span> : null}
                 </div>
                 <span>{formatCurrency(calculation.net_purse, calculation.currency || currency)}</span>
               </div>
@@ -202,15 +198,24 @@ function PublicShowPage({ slug }: { slug: string }) {
     );
   }
 
-  const { show, organization, showDays, classes, divisions, payoutCalculations, stallOptions, announcements, membershipRequirements, externalOrganizations } = ctx;
+  const { show, organization, healthPolicy, showDays, blocks, classes, payoutCalculations, stallOptions, announcements, membershipRequirements, externalCredentialIssuers } = ctx;
   const currency = show.default_currency ?? organization.currency ?? "CAD";
-  const addedMoneyTotal = totalAddedMoney(divisions);
+  const addedMoneyTotal = totalAddedMoney(classes);
   const stallRange = stallPriceRange(stallOptions, currency);
-  const hasHealthRequirement = organization.health_verification_required;
+  const hasHealthRequirement = Boolean(
+    healthPolicy
+      && (
+        healthPolicy.coggins_required
+        || healthPolicy.influenza_required
+        || healthPolicy.rhino_required
+        || healthPolicy.identity_validation_requirement !== "none"
+        || healthPolicy.association_review_required
+      ),
+  );
   const requiredMemberships = membershipRequirements.filter((r) => r.is_required);
 
-  const entriesCloseDate = classes
-    .filter((c) => !c.is_event_block && c.entries_close_at)
+  const entriesCloseDate = blocks
+    .filter((c) => c.block_type === "competition" && c.entries_close_at)
     .map((c) => c.entries_close_at!)
     .sort()[0] ?? null;
 
@@ -281,12 +286,12 @@ function PublicShowPage({ slug }: { slug: string }) {
           <section className="public-section public-schedule-section">
             <h2>Programme</h2>
             {showDays.map((day) => (
-              <ScheduleDay key={day.id} day={day} classes={classes} divisions={divisions} />
+              <ScheduleDay key={day.id} day={day} blocks={blocks} classes={classes} />
             ))}
             {!showDays.length ? <p className="public-muted">Le programme sera publié prochainement.</p> : null}
           </section>
 
-          <PublishedResults calculations={payoutCalculations} classes={classes} currency={currency} divisions={divisions} />
+          <PublishedResults calculations={payoutCalculations} blocks={blocks} currency={currency} classes={classes} />
 
           <aside className="public-sidebar">
             <section className="public-section">
@@ -294,22 +299,58 @@ function PublicShowPage({ slug }: { slug: string }) {
               <ul className="public-requirements-list">
                 {hasHealthRequirement ? (
                   <>
-                    <li className="public-req">
-                      <Stethoscope size={16} />
-                      <span>Coggins requis — valide dans les <strong>{organization.coggins_validity_months} mois</strong></span>
-                    </li>
-                    <li className="public-req">
-                      <Stethoscope size={16} />
-                      <span>Documents de santé vérifiés à l'arrivée</span>
-                    </li>
+                    {healthPolicy?.coggins_required ? (
+                      <li className="public-req">
+                        <Stethoscope size={16} />
+                        <span>
+                          {healthPolicy.coggins_validity_rule === "calendar_year"
+                            ? <>Coggins requis — test effectué durant <strong>l’année du concours</strong></>
+                            : <>Coggins requis — valide pendant <strong>{healthPolicy.coggins_validity_months} mois</strong></>}
+                        </span>
+                      </li>
+                    ) : null}
+                    {healthPolicy?.influenza_required ? (
+                      <li className="public-req">
+                        <Stethoscope size={16} />
+                        <span>Vaccination influenza requise — valide pendant <strong>{healthPolicy.vaccine_validity_months} mois</strong></span>
+                      </li>
+                    ) : null}
+                    {healthPolicy?.rhino_required ? (
+                      <li className="public-req">
+                        <Stethoscope size={16} />
+                        <span>Vaccination rhino requise — valide pendant <strong>{healthPolicy.vaccine_validity_months} mois</strong></span>
+                      </li>
+                    ) : null}
+                    {healthPolicy?.combo_vaccine_accepted && healthPolicy.influenza_required && healthPolicy.rhino_required ? (
+                      <li className="public-req">
+                        <Stethoscope size={16} />
+                        <span>Un certificat combiné influenza/rhino est accepté.</span>
+                      </li>
+                    ) : null}
+                    {healthPolicy && healthPolicy.identity_validation_requirement !== "none" ? (
+                      <li className="public-req">
+                        <Shield size={16} />
+                        <span>
+                          {healthPolicy.identity_validation_requirement === "verified"
+                            ? "L’identité du cheval doit être vérifiée sur les documents."
+                            : "L’identité du cheval doit être identifiée sur les documents."}
+                        </span>
+                      </li>
+                    ) : null}
+                    {healthPolicy?.association_review_required ? (
+                      <li className="public-req">
+                        <Shield size={16} />
+                        <span>Les documents doivent être approuvés par l’association.</span>
+                      </li>
+                    ) : null}
                   </>
                 ) : null}
                 {requiredMemberships.map((req) => {
-                  const extOrg = externalOrganizations.find((o) => o.id === req.external_organization_id);
+                  const extOrg = externalCredentialIssuers.find((o) => o.id === req.external_credential_issuer_id);
                   return (
                     <li className="public-req" key={req.id}>
                       <Shield size={16} />
-                      <span>Membership <strong>{extOrg?.name ?? req.external_organization_id}</strong> requis</span>
+                      <span>Membership <strong>{extOrg?.name ?? req.external_credential_issuer_id}</strong> requis</span>
                     </li>
                   );
                 })}
@@ -408,7 +449,7 @@ function buildOgDescription(ctx: PublicShowContext) {
   const parts: string[] = [];
   parts.push(showDateRange(ctx.show.start_date, ctx.show.end_date));
   if (ctx.show.venue) parts.push(ctx.show.venue);
-  const added = totalAddedMoney(ctx.divisions);
+  const added = totalAddedMoney(ctx.classes);
   if (added > 0) parts.push(`${formatCurrency(added, currency)} added money`);
   return parts.join(" · ");
 }

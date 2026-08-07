@@ -99,6 +99,42 @@ values
 on conflict (organization_id, user_id) do update
 set role = excluded.role;
 
+insert into public.disciplines (id, code, name, description)
+values
+  ('32000000-0000-0000-0000-000000000001', 'REINING', 'Reining', 'Reining classes and scoring blocks.'),
+  ('32000000-0000-0000-0000-000000000002', 'GYMKHANA', 'Gymkhana', 'Timed gymkhana disciplines and directories.'),
+  ('32000000-0000-0000-0000-000000000003', 'PERFORMANCE', 'Performance', 'Western performance disciplines and directories.')
+on conflict (code) do update
+set name = excluded.name,
+    description = excluded.description,
+    is_active = true,
+    updated_at = now();
+
+insert into public.organization_disciplines (
+  id,
+  organization_id,
+  discipline_id,
+  is_default,
+  is_active,
+  created_by_user_id
+)
+values
+  ('33000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000001', true, true, '20000000-0000-0000-0000-000000000002'),
+  ('33000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000001', true, true, '20000000-0000-0000-0000-000000000006'),
+  ('33000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000002', false, true, '20000000-0000-0000-0000-000000000002'),
+  ('33000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', '32000000-0000-0000-0000-000000000003', false, true, '20000000-0000-0000-0000-000000000002'),
+  ('33000000-0000-0000-0000-000000000005', '30000000-0000-0000-0000-000000000002', '32000000-0000-0000-0000-000000000003', false, true, '20000000-0000-0000-0000-000000000006')
+on conflict (organization_id, discipline_id) do update
+set is_default = excluded.is_default,
+    is_active = excluded.is_active,
+    updated_at = now();
+
+insert into public.organization_deadline_policies (organization_id)
+values
+  ('30000000-0000-0000-0000-000000000001'),
+  ('30000000-0000-0000-0000-000000000002')
+on conflict (organization_id) do nothing;
+
 insert into public.shows (
   id,
   organization_id,
@@ -198,61 +234,112 @@ set
   notes = excluded.notes,
   updated_at = now();
 
-insert into public.classes (
+insert into public.blocks (
   id,
   organization_id,
   show_id,
   show_day_id,
   name,
-  code,
   arena,
   pattern,
   sort_order,
-  entry_fee,
-  judge_name,
-  status,
-  is_public
+  judge_display_name,
+  schedule_status,
+  schedule_is_public
 )
 values
-  ('50000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'Open Reining', 'OR-1', 'Main', '8', 1, 150.00, 'Phase1 Judge', 'open', true),
-  ('50000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'Novice Reining', 'NR-1', 'Main', '5', 2, 125.00, 'Phase1 Judge', 'open', true),
-  ('50000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '41000000-0000-0000-0000-000000000002', 'Org B Open Reining', 'BOR-1', 'West', '6', 1, 145.00, null, 'open', true)
+  ('50000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'Open Reining', 'Main', '8', 1, 'Phase1 Judge', 'open', true),
+  ('50000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '41000000-0000-0000-0000-000000000001', 'Novice Reining', 'Main', '5', 2, 'Phase1 Judge', 'open', true),
+  ('50000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '41000000-0000-0000-0000-000000000002', 'Org B Open Reining', 'West', '6', 1, null, 'open', true)
+on conflict (id) do update
+set
+  name = excluded.name,
+  arena = excluded.arena,
+  pattern = excluded.pattern,
+  sort_order = excluded.sort_order,
+  judge_display_name = excluded.judge_display_name,
+  schedule_status = excluded.schedule_status,
+  schedule_is_public = excluded.schedule_is_public,
+  updated_at = now();
+
+insert into public.classes (
+  id,
+  organization_id,
+  show_id,
+  block_id,
+  organization_discipline_id,
+  name,
+  code,
+  level,
+  entry_fee,
+  sort_order
+)
+values
+  ('60000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000001', 'Open', 'OR-1', 1, 150.00, 1),
+  ('60000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000001', 'Novice Horse', 'NR-1', 2, 125.00, 1),
+  ('60000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000003', '33000000-0000-0000-0000-000000000002', 'Open', 'BOR-1', 1, 145.00, 1)
 on conflict (id) do update
 set
   name = excluded.name,
   code = excluded.code,
-  arena = excluded.arena,
-  pattern = excluded.pattern,
-  sort_order = excluded.sort_order,
-  entry_fee = excluded.entry_fee,
-  judge_name = excluded.judge_name,
-  status = excluded.status,
-  is_public = excluded.is_public,
-  updated_at = now();
-
-insert into public.divisions (
-  id,
-  organization_id,
-  show_id,
-  class_id,
-  name,
-  level,
-  entry_fee
-)
-values
-  ('60000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000001', 'Open', 1, 150.00),
-  ('60000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '50000000-0000-0000-0000-000000000002', 'Novice Horse', 2, 125.00),
-  ('60000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '50000000-0000-0000-0000-000000000003', 'Open', 1, 145.00)
-on conflict (id) do update
-set
-  name = excluded.name,
   level = excluded.level,
   entry_fee = excluded.entry_fee,
+  organization_discipline_id = excluded.organization_discipline_id,
+  sort_order = excluded.sort_order,
   updated_at = now();
+
+insert into public.organization_governing_bodies (
+  organization_id,
+  governing_body_id,
+  is_active,
+  settings
+)
+select
+  mapping.organization_id::uuid,
+  body.id,
+  true,
+  '{}'::jsonb
+from (
+  values
+    ('30000000-0000-0000-0000-000000000001', 'NRHA'),
+    ('30000000-0000-0000-0000-000000000001', 'AQR'),
+    ('30000000-0000-0000-0000-000000000002', 'AQR')
+) mapping(organization_id, body_code)
+join public.governing_bodies body on body.code = mapping.body_code
+on conflict (organization_id, governing_body_id) do update
+set is_active = true,
+    settings = excluded.settings,
+    updated_at = now();
+
+insert into public.class_governing_bodies (
+  class_id,
+  governing_body_id,
+  reporting_class_code,
+  eligibility_profile_code,
+  sanction_metadata
+)
+select
+  mapping.class_id::uuid,
+  body.id,
+  mapping.reporting_class_code,
+  mapping.eligibility_profile_code,
+  mapping.sanction_metadata::jsonb
+from (
+  values
+    ('60000000-0000-0000-0000-000000000001', 'NRHA', '1100', 'category_1_ancillary_year_end', '{"seed_scenario":"multi_body","eligibility_cache_ttl_hours":6,"source_unavailable_policy":"block"}'),
+    ('60000000-0000-0000-0000-000000000001', 'AQR', 'OR-1', null, '{"seed_scenario":"multi_body"}'),
+    ('60000000-0000-0000-0000-000000000002', 'AQR', 'NR-1', null, '{}'),
+    ('60000000-0000-0000-0000-000000000003', 'AQR', 'BOR-1', null, '{}')
+) mapping(class_id, body_code, reporting_class_code, eligibility_profile_code, sanction_metadata)
+join public.governing_bodies body on body.code = mapping.body_code
+on conflict (class_id, governing_body_id) do update
+set reporting_class_code = excluded.reporting_class_code,
+    eligibility_profile_code = excluded.eligibility_profile_code,
+    sanction_metadata = excluded.sanction_metadata,
+    updated_at = now();
 
 insert into public.contacts (
   id,
-  organization_id,
   type,
   first_name,
   last_name,
@@ -262,10 +349,10 @@ insert into public.contacts (
   created_by_user_id
 )
 values
-  ('70000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'owner', 'Phase1', 'Owner A', 'phase1.owner-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004'),
-  ('70000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000001', 'rider', 'Phase1', 'Rider A', 'phase1.rider-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000002'),
-  ('70000000-0000-0000-0000-000000000003', '30000000-0000-0000-0000-000000000002', 'owner', 'Phase1', 'Owner B', 'phase1.owner-b@example.test', null, 'West Barn', '20000000-0000-0000-0000-000000000006'),
-  ('70000000-0000-0000-0000-000000000004', '30000000-0000-0000-0000-000000000001', 'rider', 'Phase1', 'Rider B', 'phase1.rider-b@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004')
+  ('70000000-0000-0000-0000-000000000001', 'owner', 'Phase1', 'Owner A', 'phase1.owner-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004'),
+  ('70000000-0000-0000-0000-000000000002', 'rider', 'Phase1', 'Rider A', 'phase1.rider-a@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000002'),
+  ('70000000-0000-0000-0000-000000000003', 'owner', 'Phase1', 'Owner B', 'phase1.owner-b@example.test', null, 'West Barn', '20000000-0000-0000-0000-000000000006'),
+  ('70000000-0000-0000-0000-000000000004', 'rider', 'Phase1', 'Rider B', 'phase1.rider-b@example.test', '20000000-0000-0000-0000-000000000004', 'North Barn', '20000000-0000-0000-0000-000000000004')
 on conflict (id) do update
 set
   type = excluded.type,
@@ -278,7 +365,6 @@ set
 
 insert into public.horses (
   id,
-  organization_id,
   name,
   breed,
   color,
@@ -288,8 +374,8 @@ insert into public.horses (
   created_by_user_id
 )
 values
-  ('80000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'Phase One Whiz', 'Quarter Horse', 'Bay', 'G', 'P1-A-001', '70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000004'),
-  ('80000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'Phase One Slide', 'Quarter Horse', 'Sorrel', 'M', 'P1-B-001', '70000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006')
+  ('80000000-0000-0000-0000-000000000001', 'Phase One Whiz', 'Quarter Horse', 'Bay', 'G', 'P1-A-001', '70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000004'),
+  ('80000000-0000-0000-0000-000000000002', 'Phase One Slide', 'Quarter Horse', 'Sorrel', 'M', 'P1-B-001', '70000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006')
 on conflict (id) do update
 set
   name = excluded.name,
@@ -302,7 +388,6 @@ set
 
 insert into public.horse_contacts (
   id,
-  organization_id,
   horse_id,
   contact_id,
   role,
@@ -312,8 +397,8 @@ insert into public.horse_contacts (
   can_pay_invoices
 )
 values
-  ('81000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'owner', true, true, true, true),
-  ('81000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000003', 'owner', true, true, true, true)
+  ('81000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'owner', true, true, true, true),
+  ('81000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000003', 'owner', true, true, true, true)
 on conflict (horse_id, contact_id, role) do update
 set
   can_create_entries = excluded.can_create_entries,
@@ -321,9 +406,36 @@ set
   can_book_stalls = excluded.can_book_stalls,
   can_pay_invoices = excluded.can_pay_invoices;
 
-insert into public.horse_health_documents (
+-- Scenario multidisciplinaire: les mêmes fiches globales vivent dans plusieurs répertoires.
+insert into public.directory_contacts (
   id,
-  organization_id,
+  organization_discipline_id,
+  contact_id,
+  source,
+  created_by_user_id
+)
+values
+  ('83000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000001', 'manual', '20000000-0000-0000-0000-000000000002'),
+  ('83000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', '70000000-0000-0000-0000-000000000001', 'manual', '20000000-0000-0000-0000-000000000002'),
+  ('83000000-0000-0000-0000-000000000003', '33000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000001', 'manual', '20000000-0000-0000-0000-000000000002')
+on conflict (organization_discipline_id, contact_id) do nothing;
+
+insert into public.directory_horses (
+  id,
+  organization_discipline_id,
+  horse_id,
+  source,
+  created_by_user_id
+)
+values
+  ('84000000-0000-0000-0000-000000000001', '33000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', 'manual', '20000000-0000-0000-0000-000000000002'),
+  ('84000000-0000-0000-0000-000000000002', '33000000-0000-0000-0000-000000000003', '80000000-0000-0000-0000-000000000001', 'manual', '20000000-0000-0000-0000-000000000002'),
+  ('84000000-0000-0000-0000-000000000003', '33000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', 'manual', '20000000-0000-0000-0000-000000000006')
+on conflict (organization_discipline_id, horse_id) do nothing;
+
+insert into public.horse_documents (
+  id,
+  uploaded_by_organization_id,
   horse_id,
   document_type,
   status,
@@ -355,12 +467,23 @@ set
   reviewed_at = excluded.reviewed_at,
   updated_at = now();
 
+-- Les documents fictifs du seed precedent les lectures d'identite S2. Le
+-- scenario de base accepte donc leur identite manuelle; les tests S2/S6
+-- creent ensuite leurs propres versions sans alterer ce point de depart.
+update public.organization_health_policies
+set identity_validation_requirement = 'none'
+where organization_id in (
+    '30000000-0000-0000-0000-000000000001',
+    '30000000-0000-0000-0000-000000000002'
+  )
+  and effective_from = '1900-01-01';
+
 insert into public.entries (
   id,
   organization_id,
   show_id,
   horse_id,
-  division_id,
+  class_id,
   created_by_user_id,
   owner_contact_id,
   rider_contact_id,
@@ -431,8 +554,8 @@ set
   total_price = excluded.total_price,
   tax_amount = excluded.tax_amount;
 
-insert into public.show_score_class_setups (
-  class_id,
+insert into public.show_score_block_setups (
+  block_id,
   organization_id,
   show_id,
   show_day_id,
@@ -451,7 +574,7 @@ values (
   '[{"id":"judge-1","name":"Phase1 Judge","order":1}]'::jsonb,
   true
 )
-on conflict (class_id) do update
+on conflict (block_id) do update
 set
   pattern = excluded.pattern,
   runs = excluded.runs,

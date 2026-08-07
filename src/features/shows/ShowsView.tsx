@@ -5,7 +5,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { formatDate, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createShow, createShowAnnouncement, deleteShowAnnouncement, updateShow } from "../../services/supabaseServices";
-import type { ClassRecord, Division, Entry, Invoice, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreClassSetup, StallOption } from "../../types/domain";
+import type { Block, ClassRecord, Entry, Invoice, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { uiText } from "../dashboard/shared";
 import { showPaymentSummary } from "../classes/classUtils";
@@ -14,8 +14,8 @@ import { ShowEditForm } from "./ShowEditForm";
 
 function ShowsView({
   locale,
+  blocks,
   classes,
-  divisions,
   entries,
   invoices,
   organization,
@@ -31,14 +31,14 @@ function ShowsView({
   onViewChange,
 }: {
   locale: Locale;
+  blocks: Block[];
   classes: ClassRecord[];
-  divisions: Division[];
   entries: Entry[];
   invoices: Invoice[];
   organization: Organization | null;
   showAnnouncements: ShowAnnouncement[];
   showDays: ShowDay[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   shows: Show[];
   stallOptions: StallOption[];
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
@@ -97,7 +97,7 @@ function ShowsView({
             <p>{organization ? uiText(locale, "Démarre un brouillon, puis complète la préparation quand tu veux.", "Start a draft, then finish readiness when you are ready.") : uiText(locale, "Crée une association d'abord.", "Create an organization first.")}</p>
           </div>
         </div>
-        <button className="primary-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
+        <button className="primary-button" data-testid="create-show-button" disabled={!organization} type="button" onClick={() => openAssistant()}>
           <Plus size={18} />
           {uiText(locale, "Créer un concours", "Create show")}
         </button>
@@ -132,7 +132,7 @@ function ShowsView({
           {shows.map((show) => {
             const announcementCount = showAnnouncements.filter((a) => a.show_id === show.id).length;
             return (
-              <div className="table-row" key={show.id}>
+              <div className="table-row" data-show-slug={show.slug} key={show.id}>
                 <div>
                   <strong>{show.name}</strong>
                   {show.is_public ? (
@@ -197,8 +197,9 @@ function ShowsView({
             <form className="form-grid announcement-form" onSubmit={handleCreateAnnouncement}>
               <h3>{uiText(locale, "Nouvelle annonce", "New announcement")}</h3>
               <div className="form-field">
-                <label>{uiText(locale, "Titre", "Title")}</label>
+                <label htmlFor="show-announcement-title">{uiText(locale, "Titre", "Title")}</label>
                 <input
+                  id="show-announcement-title"
                   type="text"
                   value={announcementTitle}
                   placeholder={uiText(locale, "ex. Changement d'heure — Dimanche", "e.g. Time change — Sunday")}
@@ -207,8 +208,9 @@ function ShowsView({
                 />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Message", "Message")}</label>
+                <label htmlFor="show-announcement-message">{uiText(locale, "Message", "Message")}</label>
                 <textarea
+                  id="show-announcement-message"
                   value={announcementBody}
                   placeholder={uiText(locale, "Détails de l'annonce...", "Announcement details...")}
                   required
@@ -229,8 +231,8 @@ function ShowsView({
       {assistantOpen ? (
         <ShowAssistant
           locale={locale}
+          blocks={blocks}
           classes={classes}
-          divisions={divisions}
           entries={entries}
           initialShow={assistantShow}
           invoices={invoices}

@@ -2,18 +2,18 @@ import { useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { FormActions, SearchSelect } from "../../components/ui";
-import { contactLabel, divisionLabel, findById, horseLabel, numericValue } from "../../lib/display";
+import { contactLabel, classLabel, findById, horseLabel, numericValue } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { ClassRecord, Contact, Division, Entry, Horse, Organization, ScheduleStartMode, Show, ShowDay, ShowScorePaidWarmup, ShowScorePaidWarmupInput, ShowScorePaidWarmupUpdateInput } from "../../types/domain";
+import type { Block, Contact, ClassRecord, Entry, Horse, Organization, ScheduleStartMode, Show, ShowDay, ShowScorePaidWarmup, ShowScorePaidWarmupInput, ShowScorePaidWarmupUpdateInput } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showDayLabel } from "./classUtils";
 
 type PaidWarmupFormProps = {
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
   defaultShowDayId?: string;
   defaultShowId?: string;
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
   horses: Horse[];
   locale: Locale;
@@ -29,11 +29,11 @@ type PaidWarmupFormProps = {
 };
 
 function PaidWarmupForm({
-  classes,
+  blocks,
   contacts,
   defaultShowDayId,
   defaultShowId,
-  divisions,
+  classes,
   entries,
   horses,
   locale,
@@ -55,6 +55,8 @@ function PaidWarmupForm({
   const [arena, setArena] = useState(warmup?.arena ?? "");
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(warmup?.schedule_start_mode ?? "unscheduled");
   const [scheduleStartTime, setScheduleStartTime] = useState(warmup?.schedule_start_time ?? "");
+  const canonicalWarmupBlock = blocks.find((block) => block.id === warmup?.block_id || block.id === warmup?.id);
+  const [followsBlockId, setFollowsBlockId] = useState(canonicalWarmupBlock?.follows_block_id ?? "");
   const [durationMinutesPerRider, setDurationMinutesPerRider] = useState(String(warmup?.duration_minutes_per_rider ?? 5));
   const [dragInterval, setDragInterval] = useState(warmup?.drag_interval == null ? "" : String(warmup.drag_interval));
   const [dragDurationMinutes, setDragDurationMinutes] = useState(String(warmup?.drag_duration_minutes ?? 8));
@@ -84,11 +86,22 @@ function PaidWarmupForm({
   const selectedEntries = selectedEntryIds
     .map((entryId) => findById(entries, entryId))
     .filter((entry): entry is Entry => Boolean(entry));
+  const precedingBlockChoices = blocks
+    .filter(
+      (block) =>
+        block.id !== warmup?.block_id &&
+        block.id !== warmup?.id &&
+        block.show_id === showId &&
+        block.show_day_id === showDayId &&
+        (block.arena ?? "").trim().toLocaleLowerCase() === arena.trim().toLocaleLowerCase(),
+    )
+    .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
     const nextDay = showDays.find((day) => day.show_id === nextShowId);
     setShowDayId(nextDay?.id ?? "");
+    setFollowsBlockId("");
     setSelectedEntryIds((current) => current.filter((entryId) => findById(entries, entryId)?.show_id === nextShowId));
   }
 
@@ -143,11 +156,12 @@ function PaidWarmupForm({
         drag_duration_minutes: numericValue(dragDurationMinutes) ?? 8,
         schedule_start_mode: scheduleStartMode,
         schedule_start_time: scheduleStartMode === "fixed" ? scheduleStartTime : null,
+        follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
         is_public_live: isPublicLive,
         active_entry_id: warmup?.active_entry_id ?? null,
         active_started_at: warmup?.active_started_at ?? null,
         entries: paidWarmupEntries,
-        sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, classes, showScorePaidWarmups),
+        sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, blocks, showScorePaidWarmups),
         legacy_payload: {
           source: "hsp_paid_warmup",
         },
@@ -179,7 +193,7 @@ function PaidWarmupForm({
         </label>
         <label>
           {uiText(locale, "Journée", "Day")}
-          <SearchSelect items={dayItems} placeholder={uiText(locale, "Choisir une journée", "Choose a day")} value={showDayId} onChange={setShowDayId} />
+          <SearchSelect items={dayItems} placeholder={uiText(locale, "Choisir une journée", "Choose a day")} value={showDayId} onChange={(nextDayId) => { setShowDayId(nextDayId); setFollowsBlockId(""); }} />
         </label>
       </div>
 
@@ -190,14 +204,14 @@ function PaidWarmupForm({
         </label>
         <label>
           Arène
-          <input value={arena} onChange={(event) => setArena(event.target.value)} />
+          <input value={arena} onChange={(event) => { setArena(event.target.value); setFollowsBlockId(""); }} />
         </label>
       </div>
 
       <div className="form-grid three">
         <label>
           {uiText(locale, "Départ", "Start")}
-          <select value={scheduleStartMode} onChange={(event) => setScheduleStartMode(event.target.value as ScheduleStartMode)}>
+          <select value={scheduleStartMode} onChange={(event) => { const nextMode = event.target.value as ScheduleStartMode; setScheduleStartMode(nextMode); if (nextMode !== "after_previous") setFollowsBlockId(""); }}>
             <option value="unscheduled">{uiText(locale, "À préciser", "To confirm")}</option>
             <option value="fixed">{uiText(locale, "Heure fixe", "Fixed time")}</option>
             <option value="after_previous">{uiText(locale, "Après le bloc précédent", "After previous block")}</option>
@@ -207,6 +221,15 @@ function PaidWarmupForm({
           Heure
           <input disabled={scheduleStartMode !== "fixed"} type="time" value={scheduleStartTime} onChange={(event) => setScheduleStartTime(event.target.value)} />
         </label>
+        {scheduleStartMode === "after_previous" ? (
+          <label>
+            {uiText(locale, "À la suite de", "After block")}
+            <select required value={followsBlockId} onChange={(event) => setFollowsBlockId(event.target.value)}>
+              <option value="">{uiText(locale, "Choisir le bloc précédent", "Choose the preceding block")}</option>
+              {precedingBlockChoices.map((block) => <option key={block.id} value={block.id}>{block.name}</option>)}
+            </select>
+          </label>
+        ) : null}
         <label className="checkbox-line compact-checkbox">
           <input checked={isPublicLive} type="checkbox" onChange={(event) => setIsPublicLive(event.target.checked)} />
           Public live
@@ -243,7 +266,7 @@ function PaidWarmupForm({
                   <input checked={selected} type="checkbox" onChange={() => toggleEntry(entry.id)} />
                   <span>
                     <strong>{entryDisplayName(entry, contacts, horses)}</strong>
-                    <span className="muted-line">{entryDetail(entry, contacts, horses, divisions, classes)}</span>
+                    <span className="muted-line">{entryDetail(entry, contacts, horses, classes, blocks)}</span>
                   </span>
                 </label>
               );
@@ -263,7 +286,7 @@ function PaidWarmupForm({
                 <strong>#{index + 1}</strong>
                 <span>
                   {entryDisplayName(entry, contacts, horses)}
-                  <span className="muted-line">{entryDetail(entry, contacts, horses, divisions, classes)}</span>
+                  <span className="muted-line">{entryDetail(entry, contacts, horses, classes, blocks)}</span>
                 </span>
                 <div className="row-actions">
                   <button className="icon-button" disabled={index === 0} title={uiText(locale, "Monter", "Move up")} type="button" onClick={() => moveEntry(entry.id, -1)}>
@@ -301,11 +324,11 @@ function entryDisplayName(entry: Entry, contacts: Contact[], horses: Horse[]) {
   return [backNumber, rider, horse].filter(Boolean).join(" - ");
 }
 
-function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], divisions: Division[], classes: ClassRecord[]) {
-  const division = findById(divisions, entry.division_id);
+function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], classes: ClassRecord[], blocks: Block[]) {
+  const classRecord = findById(classes, entry.class_id);
   const owner = contactLabel(findById(contacts, entry.owner_contact_id));
   return [
-    divisionLabel(division, classes),
+    classLabel(classRecord, blocks),
     owner ? `Owner: ${owner}` : null,
     entry.status,
   ]
@@ -313,8 +336,8 @@ function entryDetail(entry: Entry, contacts: Contact[], horses: Horse[], divisio
     .join(" - ");
 }
 
-function nextWarmupSortOrder(showDayId: string, classes: ClassRecord[], warmups: ShowScorePaidWarmup[]) {
-  const classOrders = classes.filter((classRecord) => classRecord.show_day_id === showDayId).map((classRecord) => classRecord.sort_order);
+function nextWarmupSortOrder(showDayId: string, blocks: Block[], warmups: ShowScorePaidWarmup[]) {
+  const classOrders = blocks.filter((block) => block.show_day_id === showDayId).map((block) => block.sort_order);
   const warmupOrders = warmups.filter((warmup) => warmup.show_day_id === showDayId).map((warmup) => warmup.sort_order);
   return Math.max(0, ...classOrders, ...warmupOrders) + 10;
 }

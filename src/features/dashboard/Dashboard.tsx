@@ -28,9 +28,8 @@ import {
 import { ContactPicker, EmptyState, FormActions, LanguageToggle, Metric, ModalDialog, NoticeBanner, SearchSelect, UpgradePrompt, ViewIntro } from "../../components/ui";
 import { hasPlanFeature } from "../../utils/planFeatures";
 import { canadianProvinceOptions, countryOptions, currencyOptions, taxPresetById, taxPresetForLocation, taxPresetIdForValues, taxPresetsForLocation, type TaxPreset } from "../../lib/billingSettings";
-import { contactLabel, divisionLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
+import { contactLabel, classLabel, errorMessage, findById, formatCurrency, formatDate, horseLabel, numericValue, showLabel } from "../../lib/display";
 import { normalizeGvlUrl } from "../../lib/gvlUrl";
-import { getHorseCogginsValidity, getHorseVaccineValidity, organizationCogginsValidityMonths, organizationRequiresHealthVerification, type HealthGateStatus, type HorseCogginsValidity, type HorseVaccineValidity } from "../../lib/health";
 import type { Locale, Translation } from "../../lib/i18n";
 import { buildEntryShowReadiness, readinessItemClassName, readinessTone, type ReadinessResult } from "../../lib/readiness";
 import { associationNavigation, associationViewKeys, personalNavigation } from "../navigation";
@@ -41,49 +40,54 @@ import {
   assignNextBackNumber,
   claimHorseBackNumber,
   cancelManualSale,
-  createClass,
+  createBlock,
+  createBlockTemplate,
   createClassTemplate,
-  createClassTemplateDivision,
   createBackNumberRange,
   createContact,
   createContactOrganizationMembership,
   createManualSale,
-  createDivision,
+  createClass,
   createEntry,
   createHorse,
   createUploadedHorseHealthDocument,
   createOrganization,
+  createOrganizationHealthDocumentReview,
   createOrganizationMembershipType,
   createOrganizationProduct,
   createShow,
+  createSlate,
   createShowAnnouncement,
   deleteShowAnnouncement,
+  deleteSlate,
   createStallBooking,
   createStallOption,
-  deleteClass,
+  deleteBlock,
+  deleteBlockTemplate,
   deleteClassTemplate,
-  deleteClassTemplateDivision,
   deleteBackNumber,
   deleteEntry,
   deleteContact,
-  deleteDivision,
+  deleteClass,
   deleteHorse,
   deleteStallBooking,
   deleteShowScorePaidWarmup,
   getHorseHealthDocumentFileUrl,
+  linkContactToDirectory,
+  linkHorseToDirectory,
   releaseBackNumber,
   replaceNrhaRiderRankings,
-  reviewHorseHealthDocument,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
-  setOrganizationExternalMembershipRequirement,
+  setOrganizationExternalCredentialRequirement,
+  setOrganizationHealthPolicy,
   slugify,
-  updateClass,
+  updateBlock,
+  updateBlockTemplate,
   updateClassTemplate,
-  updateClassTemplateDivision,
   updateBackNumberStatus,
   updateContact,
-  updateDivision,
+  updateClass,
   updateEntry,
   updateHorse,
   updateOrganizationHealthSettings,
@@ -92,10 +96,13 @@ import {
   updatePayoutAwardPayee,
   updatePayoutCalculationStatus,
   updateShow,
+  updateSlate,
   updateShowScorePaidWarmup,
   updateStallBooking,
   updateStallOption,
   updateUserProfile,
+  unlinkContactFromDirectory,
+  unlinkHorseFromDirectory,
   verifyGvlCogginsDocument,
   verifyNrhaEligibility,
   verifyNrhaHorse,
@@ -104,29 +111,29 @@ import {
 } from "../../services/supabaseServices";
 import type {
   BackNumberPolicy,
-  ClassRecord,
+  Block,
+  BlockTemplate,
   ClassTemplate,
-  ClassTemplateDivision,
   Contact,
-  ContactExternalMembership,
+  ContactExternalIdentifier,
   ContactOrganizationMembership,
   ContactRole,
   ContactRoleName,
-  Division,
+  ClassRecord,
   EligibilityRules,
   Entry,
-  EntryImportBatch,
-  ExternalOrganization,
+  ExternalCredentialIssuer,
   Horse,
   HorseContact,
-  HorseExternalMembership,
+  HorseExternalIdentifier,
   HorseHealthDocument,
   Invoice,
   InvoiceLineItem,
   ManualSale,
   Organization,
   OrganizationBackNumber,
-  OrganizationExternalMembershipRequirement,
+  OrganizationExternalCredentialRequirement,
+  OrganizationHealthPolicy,
   OrganizationMembershipType,
   OrganizationProduct,
   PayoutScheduleType,
@@ -134,11 +141,11 @@ import type {
   ScheduleStartMode,
   Show,
   ShowDay,
-  ShowScoreClassSetup,
+  ShowScoreBlockSetup,
   StallOption,
 } from "../../types/domain";
 import type { NavItem, Notice, ViewKey } from "../../types/ui";
-import { sortRecordsForOrganization, buildNotificationItems } from "./shared";
+import { sortRecordsForOrganization, buildNotificationItems, todayDateValue } from "./shared";
 import { NotificationsView } from "../notifications/NotificationsView";
 import { OverviewView } from "../overview/OverviewView";
 import { ShowsView } from "../shows/ShowsView";
@@ -146,6 +153,7 @@ import { PeopleView } from "../people/PeopleView";
 import { MyContactsView } from "../people/MyContactsView";
 import { MyHorsesView } from "../horses/MyHorsesView";
 import { HealthCenterView } from "../health/HealthCenterView";
+import { useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { ClassesView } from "../classes/ClassesView";
 import { EntriesView } from "../entries/EntriesView";
 import { MyEntriesView } from "../entries/MyEntriesView";
@@ -154,12 +162,13 @@ import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
+import { IncentiveProgramsSettings } from "../settings/IncentiveProgramsSettings";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
 import { ClientDashboardView } from "./ClientDashboardView";
 import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
 
 const SHOW_CONTEXT_VIEW_KEYS = new Set<ViewKey>([
-  "classes",
+  "blocks",
   "entries",
   "stalls",
   "scoring",
@@ -188,13 +197,15 @@ export function Dashboard({
   onUpdateBackNumberStatus,
   onDeleteBackNumber,
   onCancelManualSale,
-  onCreateClass,
+  onCreateBlock,
+  onCreateBlockTemplate,
   onCreateClassTemplate,
-  onCreateClassTemplateDivision,
   onCreateContact,
   onCreateContactOrganizationMembership,
   onCreateManualSale,
-  onCreateDivision,
+  onLinkContactToDirectory,
+  onLinkHorseToDirectory,
+  onCreateClass,
   onCreateEntry,
   onCreateHorse,
   onCreateHorseHealthDocument,
@@ -202,35 +213,38 @@ export function Dashboard({
   onCreateOrganizationMembershipType,
   onCreateOrganizationProduct,
   onCreateShow,
+  onCreateSlate,
   onCreateShowAnnouncement,
   onDeleteShowAnnouncement,
+  onDeleteSlate,
   onCreateStallBooking,
   onCreateStallOption,
-  onDeleteClass,
+  onDeleteBlock,
+  onDeleteBlockTemplate,
   onDeleteClassTemplate,
-  onDeleteClassTemplateDivision,
   onDeleteContact,
-  onDeleteDivision,
+  onDeleteClass,
   onDeleteEntry,
   onDeleteHorse,
   onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
-  onSyncShowScoreDrawEntryImportBatch,
-  onCleanupShowScoreDrawEntryImportBatch,
   onSaveShowScorePaidWarmup,
   onDeleteShowScorePaidWarmup,
   onRefresh,
   onReplaceNrhaRiderRankings,
-  onReviewHorseHealthDocument,
+  onReviewOrganizationHealthDocuments,
   onSavePayoutCalculationDraft,
   onSignOut,
+  onUnlinkContactFromDirectory,
+  onUnlinkHorseFromDirectory,
   onSetExternalMembershipRequirement,
-  onUpdateClass,
+  onSetOrganizationHealthPolicy,
+  onUpdateBlock,
+  onUpdateBlockTemplate,
   onUpdateClassTemplate,
-  onUpdateClassTemplateDivision,
   onUpdateContact,
-  onUpdateDivision,
+  onUpdateClass,
   onUpdateEntry,
   onUpdateHorse,
   onUpdateOrganizationHealthSettings,
@@ -243,6 +257,7 @@ export function Dashboard({
   onVerifyNrhaHorse,
   onVerifyNrhaMember,
   onUpdateShow,
+  onUpdateSlate,
   onUpdateShowScorePaidWarmup,
   onUpdateStallBooking,
   onUpdateStallOption,
@@ -265,13 +280,15 @@ export function Dashboard({
   onUpdateBackNumberStatus: (id: string, status: Parameters<typeof updateBackNumberStatus>[1]) => Promise<void>;
   onDeleteBackNumber: (id: Parameters<typeof deleteBackNumber>[0]) => Promise<void>;
   onCancelManualSale: (id: Parameters<typeof cancelManualSale>[0]) => Promise<void>;
-  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<ClassRecord>;
+  onCreateBlock: (input: Parameters<typeof createBlock>[0]) => Promise<Block>;
+  onCreateBlockTemplate: (input: Parameters<typeof createBlockTemplate>[0]) => Promise<void>;
   onCreateClassTemplate: (input: Parameters<typeof createClassTemplate>[0]) => Promise<void>;
-  onCreateClassTemplateDivision: (input: Parameters<typeof createClassTemplateDivision>[0]) => Promise<void>;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateContactOrganizationMembership: (input: Parameters<typeof createContactOrganizationMembership>[0]) => Promise<ContactOrganizationMembership>;
   onCreateManualSale: (input: Parameters<typeof createManualSale>[0]) => Promise<ManualSale>;
-  onCreateDivision: (input: Parameters<typeof createDivision>[0]) => Promise<void>;
+  onLinkContactToDirectory: (input: Parameters<typeof linkContactToDirectory>[0]) => Promise<void>;
+  onLinkHorseToDirectory: (input: Parameters<typeof linkHorseToDirectory>[0]) => Promise<void>;
+  onCreateClass: (input: Parameters<typeof createClass>[0]) => Promise<void>;
   onCreateEntry: (input: Parameters<typeof createEntry>[0]) => Promise<void>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
   onCreateHorseHealthDocument: (input: Parameters<typeof createUploadedHorseHealthDocument>[0]) => Promise<HorseHealthDocument>;
@@ -279,35 +296,38 @@ export function Dashboard({
   onCreateOrganizationMembershipType: (input: Parameters<typeof createOrganizationMembershipType>[0]) => Promise<void>;
   onCreateOrganizationProduct: (input: Parameters<typeof createOrganizationProduct>[0]) => Promise<void>;
   onCreateShow: (input: Parameters<typeof createShow>[0]) => Promise<Show>;
+  onCreateSlate: (input: Parameters<typeof createSlate>[0]) => Promise<void>;
   onCreateShowAnnouncement: (input: Parameters<typeof createShowAnnouncement>[0]) => Promise<void>;
   onDeleteShowAnnouncement: (id: string) => Promise<void>;
+  onDeleteSlate: (id: Parameters<typeof deleteSlate>[0]) => Promise<void>;
   onCreateStallBooking: (input: Parameters<typeof createStallBooking>[0]) => Promise<void>;
   onCreateStallOption: (input: Parameters<typeof createStallOption>[0]) => Promise<void>;
-  onDeleteClass: (id: Parameters<typeof deleteClass>[0]) => Promise<void>;
+  onDeleteBlock: (id: Parameters<typeof deleteBlock>[0]) => Promise<void>;
+  onDeleteBlockTemplate: (id: Parameters<typeof deleteBlockTemplate>[0]) => Promise<void>;
   onDeleteClassTemplate: (id: Parameters<typeof deleteClassTemplate>[0]) => Promise<void>;
-  onDeleteClassTemplateDivision: (id: Parameters<typeof deleteClassTemplateDivision>[0]) => Promise<void>;
   onDeleteContact: (id: Parameters<typeof deleteContact>[0]) => Promise<void>;
-  onDeleteDivision: (id: Parameters<typeof deleteDivision>[0]) => Promise<void>;
+  onDeleteClass: (id: Parameters<typeof deleteClass>[0]) => Promise<void>;
   onDeleteEntry: (id: Parameters<typeof deleteEntry>[0]) => Promise<void>;
   onDeleteHorse: (id: Parameters<typeof deleteHorse>[0]) => Promise<void>;
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
-  onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
-  onSyncShowScoreDrawEntryImportBatch: (showId: string, classIds?: string[]) => Promise<void>;
-  onCleanupShowScoreDrawEntryImportBatch: (batchId: string) => Promise<void>;
+  onPrepareShowScoreClass: (block: Block) => Promise<void>;
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
   onReplaceNrhaRiderRankings: (input: Parameters<typeof replaceNrhaRiderRankings>[0]) => Promise<void>;
-  onReviewHorseHealthDocument: (id: string, input: Parameters<typeof reviewHorseHealthDocument>[1]) => Promise<void>;
+  onReviewOrganizationHealthDocuments: (inputs: Parameters<typeof createOrganizationHealthDocumentReview>[0][]) => Promise<void>;
   onSavePayoutCalculationDraft: (input: Parameters<typeof savePayoutCalculationDraft>[0]) => Promise<void>;
   onSignOut: () => void;
-  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalMembershipRequirement>[0]) => Promise<void>;
-  onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
+  onUnlinkContactFromDirectory: (...args: Parameters<typeof unlinkContactFromDirectory>) => Promise<void>;
+  onUnlinkHorseFromDirectory: (...args: Parameters<typeof unlinkHorseFromDirectory>) => Promise<void>;
+  onSetExternalMembershipRequirement: (input: Parameters<typeof setOrganizationExternalCredentialRequirement>[0]) => Promise<void>;
+  onSetOrganizationHealthPolicy: (input: Parameters<typeof setOrganizationHealthPolicy>[0]) => Promise<void>;
+  onUpdateBlock: (id: string, input: Parameters<typeof updateBlock>[1]) => Promise<void>;
+  onUpdateBlockTemplate: (id: string, input: Parameters<typeof updateBlockTemplate>[1]) => Promise<void>;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
-  onUpdateClassTemplateDivision: (id: string, input: Parameters<typeof updateClassTemplateDivision>[1]) => Promise<void>;
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
-  onUpdateDivision: (id: string, input: Parameters<typeof updateDivision>[1]) => Promise<void>;
+  onUpdateClass: (id: string, input: Parameters<typeof updateClass>[1]) => Promise<void>;
   onUpdateEntry: (id: string, input: Parameters<typeof updateEntry>[1]) => Promise<void>;
   onUpdateHorse: (id: string, input: Parameters<typeof updateHorse>[1]) => Promise<void>;
   onUpdateOrganizationHealthSettings: (id: string, input: Parameters<typeof updateOrganizationHealthSettings>[1]) => Promise<void>;
@@ -320,6 +340,7 @@ export function Dashboard({
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
+  onUpdateSlate: (id: string, input: Parameters<typeof updateSlate>[1]) => Promise<void>;
   onUpdateShowScorePaidWarmup: (id: string, input: Parameters<typeof updateShowScorePaidWarmup>[1]) => Promise<void>;
   onUpdateStallBooking: (id: string, input: Parameters<typeof updateStallBooking>[1]) => Promise<void>;
   onUpdateStallOption: (id: string, input: Parameters<typeof updateStallOption>[1]) => Promise<void>;
@@ -331,10 +352,12 @@ export function Dashboard({
   const organizationMembers = context?.organizationMembers ?? [];
   const shows = context?.shows ?? [];
   const showDays = context?.showDays ?? [];
+  const disciplines = context?.disciplines ?? [];
+  const organizationDisciplines = context?.organizationDisciplines ?? [];
+  const slates = context?.slates ?? [];
   const showAnnouncements = context?.showAnnouncements ?? [];
   const showScoreClassSetups = context?.showScoreClassSetups ?? [];
   const showScorePaidWarmups = context?.showScorePaidWarmups ?? [];
-  const entryImportBatches = context?.entryImportBatches ?? [];
   const entryResults = context?.entryResults ?? [];
   const payoutSchedules = context?.payoutSchedules ?? [];
   const payoutScheduleBrackets = context?.payoutScheduleBrackets ?? [];
@@ -342,25 +365,31 @@ export function Dashboard({
   const payoutAwards = context?.payoutAwards ?? [];
   const contacts = context?.contacts ?? [];
   const contactOrganizationLinks = context?.contactOrganizationLinks ?? [];
+  const directoryContacts = context?.directoryContacts ?? [];
   const contactRoles = context?.contactRoles ?? [];
-  const externalOrganizations = context?.externalOrganizations ?? [];
-  const organizationExternalMembershipRequirements = context?.organizationExternalMembershipRequirements ?? [];
+  const externalCredentialIssuers = context?.externalCredentialIssuers ?? [];
+  const organizationExternalCredentialRequirements = context?.organizationExternalCredentialRequirements ?? [];
+  const organizationHealthPolicies = context?.organizationHealthPolicies ?? [];
+  const organizationHealthDocumentReviews = context?.organizationHealthDocumentReviews ?? [];
   const organizationMembershipTypes = context?.organizationMembershipTypes ?? [];
   const contactOrganizationMemberships = context?.contactOrganizationMemberships ?? [];
   const organizationProducts = context?.organizationProducts ?? [];
   const manualSales = context?.manualSales ?? [];
   const nrhaRiderRankings = context?.nrhaRiderRankings ?? [];
-  const contactExternalMemberships = context?.contactExternalMemberships ?? [];
-  const horseExternalMemberships = context?.horseExternalMemberships ?? [];
+  const contactExternalIdentifiers = context?.contactExternalIdentifiers ?? [];
+  const horseExternalIdentifiers = context?.horseExternalIdentifiers ?? [];
   const horseHealthDocuments = context?.horseHealthDocuments ?? [];
   const horses = context?.horses ?? [];
   const horseContacts = context?.horseContacts ?? [];
   const horseOrganizationLinks = context?.horseOrganizationLinks ?? [];
+  const directoryHorses = context?.directoryHorses ?? [];
   const organizationBackNumbers = context?.organizationBackNumbers ?? [];
-  const classes = context?.classes ?? [];
+  const blocks = context?.blocks ?? [];
+  const blockJudgeAssignments = context?.blockJudgeAssignments ?? [];
+  const blockConcurrencyGroupMembers = context?.blockConcurrencyGroupMembers ?? [];
+  const blockTemplates = context?.blockTemplates ?? [];
   const classTemplates = context?.classTemplates ?? [];
-  const classTemplateDivisions = context?.classTemplateDivisions ?? [];
-  const divisions = context?.divisions ?? [];
+  const classes = context?.classes ?? [];
   const sanctioningBodies = context?.sanctioningBodies ?? [];
   const entries = context?.entries ?? [];
   const stallOptions = context?.stallOptions ?? [];
@@ -368,6 +397,22 @@ export function Dashboard({
   const invoices = context?.invoices ?? [];
   const invoiceLineItems = context?.invoiceLineItems ?? [];
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? organizations[0] ?? null;
+  const healthPolicyReferenceDate = todayDateValue();
+  const selectedOrganizationHealthPolicies = selectedOrganization
+    ? organizationHealthPolicies.filter((policy) => policy.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationHealthPolicy: OrganizationHealthPolicy | null = selectedOrganization
+    ? selectedOrganizationHealthPolicies.find(
+        (policy) =>
+          policy.effective_from <= healthPolicyReferenceDate
+          && (!policy.effective_until || policy.effective_until >= healthPolicyReferenceDate),
+      ) ?? null
+    : null;
+  const healthComplianceRevision = [
+    ...horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`),
+    ...organizationHealthDocumentReviews.map((review) => `${review.id}:${review.version}:${review.status}`),
+    ...organizationHealthPolicies.map((policy) => `${policy.id}:${policy.updated_at}`),
+  ].join("|");
   const selectedMembership = selectedOrganization
     ? organizationMembers.find((member) => member.organization_id === selectedOrganization.id && member.user_id === context?.profile.id)
     : null;
@@ -393,9 +438,6 @@ export function Dashboard({
   const selectedOrganizationShowScorePaidWarmups = selectedOrganization
     ? showScorePaidWarmups.filter((warmup) => warmup.organization_id === selectedOrganization.id)
     : [];
-  const selectedOrganizationEntryImportBatches = selectedOrganization
-    ? entryImportBatches.filter((batch: EntryImportBatch) => batch.organization_id === selectedOrganization.id)
-    : [];
   const selectedOrganizationInvoices = selectedOrganization
     ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
     : [];
@@ -409,20 +451,18 @@ export function Dashboard({
     ? new Set(
         contactOrganizationLinks
           .filter((link) => link.organization_id === selectedOrganization.id)
-          .map((link) => link.contact_id)
-          .concat(contacts.filter((contact) => contact.organization_id === selectedOrganization.id).map((contact) => contact.id)),
+          .map((link) => link.contact_id),
       )
     : new Set<string>();
   const selectedOrganizationHorseIds = selectedOrganization
     ? new Set(
         horseOrganizationLinks
           .filter((link) => link.organization_id === selectedOrganization.id)
-          .map((link) => link.horse_id)
-          .concat(horses.filter((horse) => horse.organization_id === selectedOrganization.id).map((horse) => horse.id)),
+          .map((link) => link.horse_id),
       )
     : new Set<string>();
   const selectedOrganizationHorseHealthDocuments = selectedOrganization
-    ? horseHealthDocuments.filter((document) => document.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(document.horse_id))
+    ? horseHealthDocuments.filter((document) => selectedOrganizationHorseIds.has(document.horse_id))
     : [];
   const selectedOrganizationContacts = selectedOrganization
     ? sortRecordsForOrganization(contacts, selectedOrganizationContactIds)
@@ -431,7 +471,7 @@ export function Dashboard({
     ? contactRoles.filter((role) => role.organization_id === selectedOrganization.id || selectedOrganizationContactIds.has(role.contact_id))
     : [];
   const selectedOrganizationMembershipRequirements = selectedOrganization
-    ? organizationExternalMembershipRequirements.filter((requirement) => requirement.organization_id === selectedOrganization.id)
+    ? organizationExternalCredentialRequirements.filter((requirement) => requirement.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationMembershipTypes = selectedOrganization
     ? organizationMembershipTypes.filter((type: OrganizationMembershipType) => type.organization_id === selectedOrganization.id)
@@ -449,22 +489,34 @@ export function Dashboard({
     ? sortRecordsForOrganization(horses, selectedOrganizationHorseIds)
     : [];
   const selectedOrganizationHorseContacts = selectedOrganization
-    ? horseContacts.filter((horseContact) => horseContact.organization_id === selectedOrganization.id || selectedOrganizationHorseIds.has(horseContact.horse_id))
+    ? horseContacts.filter((horseContact) => selectedOrganizationHorseIds.has(horseContact.horse_id))
     : [];
   const selectedOrganizationBackNumbers = selectedOrganization
     ? organizationBackNumbers.filter((backNumber) => backNumber.organization_id === selectedOrganization.id)
     : [];
-  const selectedOrganizationClasses = selectedOrganization
-    ? classes.filter((classRecord) => classRecord.organization_id === selectedOrganization.id)
+  const selectedOrganizationBlocks = selectedOrganization
+    ? blocks.filter((block) => block.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationBlockIds = new Set(selectedOrganizationBlocks.map((block) => block.id));
+  const selectedOrganizationBlockJudgeAssignments = blockJudgeAssignments.filter((assignment) => selectedOrganizationBlockIds.has(assignment.block_id));
+  const selectedOrganizationBlockConcurrencyGroupMembers = blockConcurrencyGroupMembers.filter((member) => selectedOrganizationBlockIds.has(member.block_id));
+  const selectedOrganizationDisciplines = selectedOrganization
+    ? organizationDisciplines.filter((discipline) => discipline.organization_id === selectedOrganization.id && discipline.is_active)
+    : [];
+  const selectedOrganizationDisciplineIds = new Set(selectedOrganizationDisciplines.map((discipline) => discipline.id));
+  const selectedOrganizationDirectoryContacts = directoryContacts.filter((directoryContact) => selectedOrganizationDisciplineIds.has(directoryContact.organization_discipline_id));
+  const selectedOrganizationDirectoryHorses = directoryHorses.filter((directoryHorse) => selectedOrganizationDisciplineIds.has(directoryHorse.organization_discipline_id));
+  const selectedOrganizationSlates = selectedOrganization
+    ? slates.filter((slate) => slate.organization_id === selectedOrganization.id)
+    : [];
+  const selectedOrganizationBlockTemplates = selectedOrganization
+    ? blockTemplates.filter((template) => template.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationClassTemplates = selectedOrganization
-    ? classTemplates.filter((template) => template.organization_id === selectedOrganization.id)
+    ? classTemplates.filter((classTemplate) => classTemplate.organization_id === selectedOrganization.id)
     : [];
-  const selectedOrganizationClassTemplateDivisions = selectedOrganization
-    ? classTemplateDivisions.filter((division) => division.organization_id === selectedOrganization.id)
-    : [];
-  const selectedOrganizationDivisions = selectedOrganization
-    ? divisions.filter((division) => division.organization_id === selectedOrganization.id)
+  const selectedOrganizationClasses = selectedOrganization
+    ? classes.filter((classRecord) => classRecord.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationEntries = selectedOrganization
     ? entries.filter((entry) => entry.organization_id === selectedOrganization.id)
@@ -481,12 +533,18 @@ export function Dashboard({
   const selectedShow = selectedOrganizationShows.find((show) => show.id === selectedShowId) ?? selectedOrganizationShows[0] ?? null;
   const activeShowId = selectedShow?.id ?? "";
   const activeShowList = selectedShow ? [selectedShow] : selectedOrganizationShows;
+  const selectedShowBlocks = selectedShow
+    ? selectedOrganizationBlocks.filter((block) => block.show_id === selectedShow.id)
+    : selectedOrganizationBlocks;
+  const selectedShowBlockIds = new Set(selectedShowBlocks.map((block) => block.id));
+  const selectedShowBlockJudgeAssignments = selectedOrganizationBlockJudgeAssignments.filter((assignment) => selectedShowBlockIds.has(assignment.block_id));
+  const selectedShowBlockConcurrencyGroupMembers = selectedOrganizationBlockConcurrencyGroupMembers.filter((member) => selectedShowBlockIds.has(member.block_id));
+  const selectedShowSlates = selectedShow
+    ? selectedOrganizationSlates.filter((slate) => slate.show_id === selectedShow.id)
+    : selectedOrganizationSlates;
   const selectedShowClasses = selectedShow
     ? selectedOrganizationClasses.filter((classRecord) => classRecord.show_id === selectedShow.id)
     : selectedOrganizationClasses;
-  const selectedShowDivisions = selectedShow
-    ? selectedOrganizationDivisions.filter((division) => division.show_id === selectedShow.id)
-    : selectedOrganizationDivisions;
   const selectedShowEntries = selectedShow
     ? selectedOrganizationEntries.filter((entry) => entry.show_id === selectedShow.id)
     : selectedOrganizationEntries;
@@ -499,9 +557,6 @@ export function Dashboard({
   const selectedShowShowScorePaidWarmups = selectedShow
     ? selectedOrganizationShowScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShow.id)
     : selectedOrganizationShowScorePaidWarmups;
-  const selectedShowEntryImportBatches = selectedShow
-    ? selectedOrganizationEntryImportBatches.filter((batch) => batch.show_id === selectedShow.id)
-    : selectedOrganizationEntryImportBatches;
   const selectedShowEntryResults = selectedShow
     ? selectedOrganizationEntryResults.filter((result) => result.show_id === selectedShow.id)
     : selectedOrganizationEntryResults;
@@ -537,10 +592,10 @@ export function Dashboard({
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
   const personalContactMemberships = contactOrganizationMemberships.filter((membership) => personalContactIds.has(membership.contact_id));
   const selectedOrganizationPersonalContacts = selectedOrganization
-    ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id) || contact.organization_id === selectedOrganization.id)
+    ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id))
     : personalContacts;
   const selectedOrganizationPersonalHorses = selectedOrganization
-    ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id) || horse.organization_id === selectedOrganization.id)
+    ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id))
     : personalHorses;
   const personalBackNumbers = selectedOrganizationBackNumbers.filter(
     (backNumber) =>
@@ -582,15 +637,25 @@ export function Dashboard({
   const selectedShowUnpaidBalance = selectedShowInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
   const selectedShowPersonalUnpaidBalance = selectedShowPersonalInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
   const shouldShowShowContext = selectedOrganizationShows.length > 0 && SHOW_CONTEXT_VIEW_KEYS.has(effectiveView);
+  const notificationToday = todayDateValue();
+  const notificationReferenceShow = [...selectedOrganizationShows]
+    .filter((show) => show.status !== "archived" && show.end_date >= notificationToday)
+    .sort((first, second) => first.start_date.localeCompare(second.start_date))[0] ?? null;
+  const notificationHealthCompliance = useHorseHealthComplianceOverview({
+    horseIds: selectedOrganizationHorses.map((horse) => horse.id),
+    organizationId: selectedOrganization?.id,
+    referenceDate: notificationReferenceShow?.start_date ?? notificationToday,
+    refreshToken: healthComplianceRevision,
+  });
   const selectedOrganizationNotifications = buildNotificationItems({
     backNumbers: selectedOrganizationBackNumbers,
-    classes: selectedOrganizationClasses,
-    contactExternalMemberships,
+    blocks: selectedOrganizationBlocks,
+    contactExternalIdentifiers,
     contacts: selectedOrganizationContacts,
-    divisions: selectedOrganizationDivisions,
+    classes: selectedOrganizationClasses,
     entries: selectedOrganizationEntries,
-    externalOrganizations,
-    horseHealthDocuments: selectedOrganizationHorseHealthDocuments,
+    externalCredentialIssuers,
+    healthComplianceResults: notificationHealthCompliance.results,
     horses: selectedOrganizationHorses,
     invoices: selectedOrganizationInvoices,
     membershipRequirements: selectedOrganizationMembershipRequirements,
@@ -763,12 +828,13 @@ export function Dashboard({
             shows={selectedOrganizationShows}
             contacts={selectedOrganizationContacts}
             horses={selectedOrganizationHorses}
-            classes={selectedOrganizationClasses}
+            blocks={selectedOrganizationBlocks}
             entries={selectedOrganizationEntries}
             stallOptions={selectedOrganizationStallOptions}
             stallBookings={selectedOrganizationStallBookings}
             invoices={selectedOrganizationInvoices}
             unpaidBalance={unpaidBalance}
+            disciplines={disciplines}
             onCreateOrganization={onCreateOrganization}
           />
         ) : null}
@@ -784,8 +850,8 @@ export function Dashboard({
         {effectiveView === "shows" ? (
           <ShowsView
             locale={locale}
+            blocks={selectedOrganizationBlocks}
             classes={selectedOrganizationClasses}
-            divisions={selectedOrganizationDivisions}
             entries={selectedOrganizationEntries}
             invoices={selectedOrganizationInvoices}
             organization={selectedOrganization}
@@ -806,87 +872,113 @@ export function Dashboard({
           <PeopleView
             locale={locale}
             contacts={selectedOrganizationContacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
+            contactInsuranceEvidence={context?.contactInsuranceEvidence ?? []}
             contactOrganizationMemberships={selectedOrganizationContactMemberships}
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
-            externalOrganizations={externalOrganizations}
-            canManageHealthDocuments={canManageAssociation}
-            horseExternalMemberships={horseExternalMemberships}
+            directoryContacts={selectedOrganizationDirectoryContacts}
+            directoryHorses={selectedOrganizationDirectoryHorses}
+            disciplines={disciplines}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             horseContacts={selectedOrganizationHorseContacts}
+            healthComplianceRevision={healthComplianceRevision}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organizationMembershipTypes={selectedOrganizationMembershipTypes}
             organization={selectedOrganization}
+            organizationDisciplines={selectedOrganizationDisciplines}
             onCreateContact={onCreateContact}
             onCreateContactOrganizationMembership={onCreateContactOrganizationMembership}
             onCreateHorse={onCreateHorse}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onLinkContactToDirectory={onLinkContactToDirectory}
+            onLinkHorseToDirectory={onLinkHorseToDirectory}
             onDeleteContact={onDeleteContact}
             onDeleteHorse={onDeleteHorse}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+            onUnlinkContactFromDirectory={onUnlinkContactFromDirectory}
+            onUnlinkHorseFromDirectory={onUnlinkHorseFromDirectory}
             onUpdateContact={onUpdateContact}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
             onVerifyNrhaMember={onVerifyNrhaMember}
+            onRefresh={onRefresh}
           />
         ) : null}
 
         {effectiveView === "health" ? (
           <HealthCenterView
             locale={locale}
-            canManageHealthDocuments={canManageAssociation}
+            canManageHealthDocuments={canManageAssociation || isPlatformAdmin}
+            complianceRevision={healthComplianceRevision}
             contacts={selectedOrganizationContacts}
             contactRoles={selectedOrganizationContactRoles}
             createdByUserId={context?.profile.id ?? ""}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             horseContacts={selectedOrganizationHorseContacts}
-            horseExternalMemberships={horseExternalMemberships}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
-            profileId={context?.profile.id ?? ""}
             shows={selectedOrganizationShows}
             onCreateContact={onCreateContact}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
+            onReviewOrganizationHealthDocuments={onReviewOrganizationHealthDocuments}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
           />
         ) : null}
 
-        {effectiveView === "classes" ? (
+        {effectiveView === "blocks" ? (
           <ClassesView
             locale={locale}
-            classes={selectedShowClasses}
-            classTemplateDivisions={selectedOrganizationClassTemplateDivisions}
+            blocks={selectedShowBlocks}
+            blockConcurrencyGroupMembers={selectedShowBlockConcurrencyGroupMembers}
+            blockJudgeAssignments={selectedShowBlockJudgeAssignments}
             classTemplates={selectedOrganizationClassTemplates}
+            blockTemplates={selectedOrganizationBlockTemplates}
             contacts={selectedOrganizationContacts}
-            divisions={selectedShowDivisions}
+            disciplines={disciplines}
+            disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
+            eligibilityRequirements={context?.eligibilityRequirements ?? []}
+            incentivePrograms={context?.incentivePrograms ?? []}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
+            classes={selectedShowClasses}
             entries={selectedShowEntries}
             horses={selectedOrganizationHorses}
             organization={selectedOrganization}
+            organizationDisciplines={selectedOrganizationDisciplines}
+            organizationDisciplineGoverningBodies={context?.organizationDisciplineGoverningBodies ?? []}
             sanctioningBodies={sanctioningBodies}
             showDays={selectedShowShowDays}
             showScorePaidWarmups={selectedShowShowScorePaidWarmups}
+            slates={selectedShowSlates}
             shows={activeShowList}
-            onCreateClass={onCreateClass}
+            onCreateBlock={onCreateBlock}
+            onCreateBlockTemplate={onCreateBlockTemplate}
             onCreateClassTemplate={onCreateClassTemplate}
-            onCreateClassTemplateDivision={onCreateClassTemplateDivision}
-            onCreateDivision={onCreateDivision}
-            onDeleteClass={onDeleteClass}
+            onCreateClass={onCreateClass}
+            onCreateSlate={onCreateSlate}
+            onDeleteBlock={onDeleteBlock}
+            onDeleteBlockTemplate={onDeleteBlockTemplate}
             onDeleteClassTemplate={onDeleteClassTemplate}
-            onDeleteClassTemplateDivision={onDeleteClassTemplateDivision}
-            onDeleteDivision={onDeleteDivision}
+            onDeleteClass={onDeleteClass}
+            onDeleteSlate={onDeleteSlate}
             onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
             onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
-            onUpdateClass={onUpdateClass}
+            onUpdateBlock={onUpdateBlock}
+            onUpdateBlockTemplate={onUpdateBlockTemplate}
             onUpdateClassTemplate={onUpdateClassTemplate}
-            onUpdateClassTemplateDivision={onUpdateClassTemplateDivision}
-            onUpdateDivision={onUpdateDivision}
+            onUpdateClass={onUpdateClass}
+            onUpdateSlate={onUpdateSlate}
+            currentUserProfileId={context?.profile.id ?? ""}
+            onRefresh={onRefresh}
             onUpdateShowScorePaidWarmup={onUpdateShowScorePaidWarmup}
           />
         ) : null}
@@ -894,14 +986,14 @@ export function Dashboard({
         {effectiveView === "entries" ? (
           <EntriesView
             locale={locale}
-            classes={selectedShowClasses}
+            blocks={selectedShowBlocks}
             contacts={selectedOrganizationContacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
             contactRoles={selectedOrganizationContactRoles}
-            divisions={selectedShowDivisions}
+            classes={selectedShowClasses}
             entries={selectedShowEntries}
-            externalOrganizations={externalOrganizations}
-            horseExternalMemberships={horseExternalMemberships}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -970,20 +1062,17 @@ export function Dashboard({
           selectedOrganization && hasPlanFeature(selectedOrganization, 'show_score') ? (
             <ScoringView
               locale={locale}
-              classes={selectedShowClasses}
+              blocks={selectedShowBlocks}
               contacts={selectedOrganizationContacts}
-              divisions={selectedShowDivisions}
+              classes={selectedShowClasses}
               entries={selectedShowEntries}
-              entryImportBatches={selectedShowEntryImportBatches}
               horses={selectedOrganizationHorses}
               showDays={selectedShowShowDays}
               showScoreClassSetups={selectedShowShowScoreSetups}
               showScorePaidWarmups={selectedShowShowScorePaidWarmups}
               shows={activeShowList}
               onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
-              onCleanupShowScoreDrawEntryImportBatch={onCleanupShowScoreDrawEntryImportBatch}
               onPrepareShowScoreClass={onPrepareShowScoreClass}
-              onSyncShowScoreDrawEntryImportBatch={onSyncShowScoreDrawEntryImportBatch}
             />
           ) : (
             <UpgradePrompt feature="ShowScore Live Scoring" requiredPlan="professional" />
@@ -993,9 +1082,9 @@ export function Dashboard({
         {effectiveView === "results" ? (
           <ResultsView
             locale={locale}
-            classes={selectedShowClasses}
+            blocks={selectedShowBlocks}
             contacts={selectedOrganizationContacts}
-            divisions={selectedShowDivisions}
+            classes={selectedShowClasses}
             entries={selectedShowEntries}
             entryResults={selectedShowEntryResults}
             horses={selectedOrganizationHorses}
@@ -1037,7 +1126,7 @@ export function Dashboard({
           <ClientDashboardView
             locale={locale}
             contacts={personalContacts}
-            divisions={selectedShowDivisions}
+            classes={selectedShowClasses}
             entries={selectedShowPersonalEntries}
             horses={personalHorses}
             invoices={selectedShowPersonalInvoices}
@@ -1067,23 +1156,27 @@ export function Dashboard({
             locale={locale}
             contacts={personalContacts}
             contactRoles={contactRoles}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={selectedOrganizationMembershipRequirements}
-            canManageHealthDocuments={canManageAssociation}
             horses={personalHorses}
-            horseExternalMemberships={horseExternalMemberships}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={personalHorseHealthDocuments}
             horseContacts={horseContacts}
+            incentivePrograms={context?.incentivePrograms ?? []}
+            incentiveProgramNominations={context?.incentiveProgramNominations ?? []}
+            payerContacts={selectedOrganizationPersonalContacts}
+            programHorses={selectedOrganizationPersonalHorses}
+            healthComplianceRevision={healthComplianceRevision}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             onCreateContact={onCreateContact}
             onCreateHorse={onCreateHorse}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onDeleteHorse={onDeleteHorse}
-            onReviewHorseHealthDocument={onReviewHorseHealthDocument}
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+            onRefresh={onRefresh}
           />
         ) : null}
 
@@ -1091,9 +1184,10 @@ export function Dashboard({
           <MyContactsView
             locale={locale}
             contacts={personalContacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
             contactOrganizationMemberships={personalContactMemberships}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             organizationMembershipTypes={organizationMembershipTypes}
             organizations={organizations}
@@ -1110,14 +1204,14 @@ export function Dashboard({
         {effectiveView === "my-entries" ? (
           <MyEntriesView
             locale={locale}
-            classes={selectedShowClasses}
+            blocks={selectedShowBlocks}
             contacts={selectedOrganizationPersonalContacts}
-            contactExternalMemberships={contactExternalMemberships}
+            contactExternalIdentifiers={contactExternalIdentifiers}
             contactRoles={selectedOrganizationContactRoles}
-            divisions={selectedShowDivisions}
+            classes={selectedShowClasses}
             entries={selectedShowPersonalEntries}
-            externalOrganizations={externalOrganizations}
-            horseExternalMemberships={horseExternalMemberships}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
             membershipRequirements={selectedOrganizationMembershipRequirements}
@@ -1191,20 +1285,44 @@ export function Dashboard({
           />
         ) : null}
 
+        {effectiveView === "programs" && context && selectedOrganization ? (
+          <div className="content-grid">
+            <ViewIntro
+              eyebrow={locale === "fr" ? "Association" : "Association"}
+              title={locale === "fr" ? "Programmes" : "Programs"}
+              description={locale === "fr" ? "Gère les programmes incitatifs, les tarifs selon l’âge, les nominations et les imports NRHA." : "Manage incentive programs, age-based pricing, nominations, and NRHA imports."}
+              stats={[
+                { label: locale === "fr" ? "Programmes actifs" : "Active programs", value: String(context.incentivePrograms.filter((program) => program.organization_id === selectedOrganization.id && program.is_active).length) },
+                { label: locale === "fr" ? "Nominations" : "Nominations", value: String(context.incentiveProgramNominations.filter((nomination) => nomination.organization_id === selectedOrganization.id).length) },
+              ]}
+            />
+            <IncentiveProgramsSettings
+              context={context}
+              locale={locale}
+              organization={selectedOrganization}
+              onRefresh={onRefresh}
+            />
+          </div>
+        ) : null}
+
         {effectiveView === "settings" ? (
           <SettingsView
             locale={locale}
             context={context}
-            externalOrganizations={externalOrganizations}
+            externalCredentialIssuers={externalCredentialIssuers}
+            healthPolicy={selectedOrganizationHealthPolicy}
+            healthPolicies={selectedOrganizationHealthPolicies}
             membershipRequirements={selectedOrganizationMembershipRequirements}
             membershipTypes={selectedOrganizationMembershipTypes}
             organization={selectedOrganization}
             onCreateOrganizationMembershipType={onCreateOrganizationMembershipType}
             onCreateOrganizationProduct={onCreateOrganizationProduct}
             onSetExternalMembershipRequirement={onSetExternalMembershipRequirement}
+            onSetOrganizationHealthPolicy={onSetOrganizationHealthPolicy}
             onUpdateOrganizationHealthSettings={onUpdateOrganizationHealthSettings}
             onUpdateOrganizationMembershipType={onUpdateOrganizationMembershipType}
             onUpdateOrganizationProduct={onUpdateOrganizationProduct}
+            onRefresh={onRefresh}
             products={selectedOrganizationProducts}
           />
         ) : null}
@@ -1214,6 +1332,12 @@ export function Dashboard({
             currentUserProfileId={context?.profile.id ?? null}
             nrhaRiderRankings={nrhaRiderRankings}
             organizations={organizations}
+            disciplines={disciplines}
+            disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
+            disciplineGoverningBodies={context?.disciplineGoverningBodies ?? []}
+            externalCredentialIssuers={externalCredentialIssuers}
+            externalCredentialProducts={context?.externalCredentialProducts ?? []}
+            governingBodies={sanctioningBodies}
             onImportNrhaRiderRankings={onReplaceNrhaRiderRankings}
             onRefresh={onRefresh}
           />
@@ -1242,7 +1366,7 @@ function NavigationSection({
       {items.map((item) => {
         const Icon = item.icon;
         return (
-          <button className={activeView === item.key ? "active" : ""} key={item.key} type="button" onClick={() => onViewChange(item.key)}>
+          <button className={activeView === item.key ? "active" : ""} data-view={item.key} key={item.key} type="button" onClick={() => onViewChange(item.key)}>
             <Icon size={18} />
             {t.nav[item.labelKey]}
           </button>

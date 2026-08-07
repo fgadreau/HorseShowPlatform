@@ -4,8 +4,7 @@ import {
   defaultPayoutSchedules,
   payoutNeedsScheduleBHint,
 } from "../src/lib/payouts";
-import { AQR_AUDIT_IMPORT_SOURCE } from "../src/lib/aqrAuditImport";
-import type { Contact, Division, Entry, EntryResult, Horse, Organization, PayoutScheduleType, Show } from "../src/types/domain";
+import type { Contact, ClassRecord, Entry, EntryResult, Horse, Organization, PayoutScheduleType, Show } from "../src/types/domain";
 
 const organizationId = "payout-test-organization";
 const showId = "payout-test-show";
@@ -24,7 +23,6 @@ function main() {
   testRoundingResidualGoesToBestRank();
   testHouseCustom();
   testJackpotDefaultRetainage();
-  testAuditImportBatchTagging();
 
   console.log("Payout test program OK");
 }
@@ -186,22 +184,6 @@ function testJackpotDefaultRetainage() {
   assertMoney(draft.awards[1].amount, 80, "Jackpot second payout");
 }
 
-function testAuditImportBatchTagging() {
-  const fixture = buildFixture({ entryCount: 2, entryFee: 100, scheduleType: "nrha_schedule_a", scores: [75, 74] });
-  fixture.entries = fixture.entries.map((entry) => ({
-    ...entry,
-    import_source: AQR_AUDIT_IMPORT_SOURCE,
-    import_batch_id: "aqr-batch-1",
-  }));
-
-  const draft = buildDraft(fixture);
-  assertEqual(draft.calculation.import_batch_id, "aqr-batch-1", "AQR payout calculation keeps import batch id");
-
-  fixture.entries[1] = { ...fixture.entries[1], import_batch_id: "aqr-batch-2" };
-  const mixedDraft = buildDraft(fixture);
-  assertEqual(mixedDraft.calculation.import_batch_id, null, "Mixed import batches are not batch-tagged");
-}
-
 type BuildFixtureOptions = {
   addedMoney?: number;
   customBrackets?: Array<{ max_entries: string; min_entries: string; percentages: string }>;
@@ -217,7 +199,7 @@ type BuildFixtureOptions = {
 
 type PayoutFixture = {
   contacts: Contact[];
-  division: Division;
+  classRecord: ClassRecord;
   entries: Entry[];
   entryResults: EntryResult[];
   horses: Horse[];
@@ -229,16 +211,16 @@ function buildFixture(options: BuildFixtureOptions): PayoutFixture {
   const owner = makeContact("owner-1", "Owner", "One");
   const riders = Array.from({ length: options.entryCount }, (_, index) => makeContact(`rider-${index + 1}`, "Rider", String(index + 1)));
   const contacts = [owner, ...riders];
-  const division = makeDivision(options);
+  const classRecord = makeClassRecord(options);
   const horses = Array.from({ length: options.entryCount }, (_, index) => makeHorse(`horse-${index + 1}`, `Horse ${index + 1}`, owner.id));
-  const entries = horses.map((horse, index) => makeEntry(`entry-${index + 1}`, division, horse, riders[index], index + 1));
+  const entries = horses.map((horse, index) => makeEntry(`entry-${index + 1}`, classRecord, horse, riders[index], index + 1));
   const entryResults = entries.map((entry, index) =>
     makeEntryResult(entry, options.resultStatuses?.[index] ?? (options.scores[index] == null ? "no_score" : "scored"), options.scores[index] ?? null),
   );
 
   return {
     contacts,
-    division,
+    classRecord,
     entries,
     entryResults,
     horses,
@@ -250,7 +232,7 @@ function buildFixture(options: BuildFixtureOptions): PayoutFixture {
 function buildDraft(fixture: PayoutFixture) {
   return buildPayoutDraft({
     contacts: fixture.contacts,
-    division: fixture.division,
+    classRecord: fixture.classRecord,
     entries: fixture.entries,
     entryResults: fixture.entryResults,
     horses: fixture.horses,
@@ -290,8 +272,6 @@ function makeOrganization(): Organization {
     secondary_tax_name: null,
     secondary_tax_number: null,
     back_number_policy: "horse",
-    health_verification_required: false,
-    coggins_validity_months: 12,
     subscription_plan: "community",
     subscription_status: "active",
     subscription_expires_at: null,
@@ -330,18 +310,25 @@ function makeShow(): Show {
     entry_preauth_amount_strategy: "entry_balance",
     entry_preauth_margin_percent: 0,
     is_public: true,
+    entry_deadline_mode: "block",
+    entries_close_at: null,
+    reservations_close_at: null,
+    late_entries_allowed: true,
+    late_entry_fee_percent: 50,
     created_at: createdAt,
   };
 }
 
-function makeDivision(options: BuildFixtureOptions): Division {
+function makeClassRecord(options: BuildFixtureOptions): ClassRecord {
   return {
-    id: "division-1",
+    id: "classRecord-1",
     organization_id: organizationId,
     show_id: showId,
-    class_id: classId,
-    class_template_division_id: null,
-    name: "Payout Division",
+    block_id: classId,
+    class_template_id: null,
+    organization_discipline_id: "payout-test-discipline",
+    name: "Payout ClassRecord",
+    description: null,
     level: null,
     code: "1100",
     entry_fee: options.entryFee,
@@ -356,18 +343,32 @@ function makeDivision(options: BuildFixtureOptions): Division {
       ...(options.payoutRules ?? {}),
     },
     payout_notes: null,
-    sanctioning_body_codes: options.scheduleType.startsWith("nrha") ? ["NRHA"] : [],
+    minimum_entries: 2,
+    registration_status: "open",
+    is_public: true,
+    back_number_policy_override: null,
+    sort_order: 1,
+    governing_body_assignments: options.scheduleType.startsWith("nrha") ? [{
+      governing_body_id: "nrha-body",
+      code: "NRHA",
+      name: "National Reining Horse Association",
+      reporting_class_code: "1100",
+      eligibility_profile_code: "category_1_ancillary_year_end",
+      sanction_metadata: {},
+    }] : [],
     eligibility_rules: {},
+    notes: null,
     created_at: createdAt,
+    updated_at: createdAt,
   };
 }
 
 function makeContact(id: string, firstName: string, lastName: string): Contact {
   return {
     id,
-    organization_id: organizationId,
     type: "rider",
     first_name: firstName,
+    middle_name: null,
     last_name: lastName,
     email: `${id}@example.test`,
     phone: null,
@@ -387,7 +388,6 @@ function makeContact(id: string, firstName: string, lastName: string): Contact {
 function makeHorse(id: string, name: string, ownerContactId: string): Horse {
   return {
     id,
-    organization_id: organizationId,
     name,
     breed: "Quarter Horse",
     color: "Bay",
@@ -395,30 +395,29 @@ function makeHorse(id: string, name: string, ownerContactId: string): Horse {
     date_of_birth: null,
     birth_year: null,
     registration_number: id.toUpperCase(),
+    registration_status: "registered",
+    sire_name: null,
+    dam_name: null,
     primary_owner_contact_id: ownerContactId,
     created_at: createdAt,
   };
 }
 
-function makeEntry(id: string, division: Division, horse: Horse, rider: Contact, entryNumber: number): Entry {
+function makeEntry(id: string, classRecord: ClassRecord, horse: Horse, rider: Contact, entryNumber: number): Entry {
   return {
     id,
     organization_id: organizationId,
     show_id: showId,
     horse_id: horse.id,
-    division_id: division.id,
-    import_source: null,
-    import_batch_id: null,
-    external_source_key: null,
-    source_payload: {},
+    class_id: classRecord.id,
     created_by_user_id: "payout-test-user",
     owner_contact_id: horse.primary_owner_contact_id,
     rider_contact_id: rider.id,
     payer_contact_id: horse.primary_owner_contact_id,
     status: "active",
     entry_number: entryNumber,
-    base_fee: division.entry_fee,
-    total_fees: division.entry_fee,
+    base_fee: classRecord.entry_fee,
+    total_fees: classRecord.entry_fee,
     is_late: false,
     late_fee_percent: 0,
     late_fee_amount: 0,
@@ -432,7 +431,7 @@ function makeEntryResult(entry: Entry, status: EntryResult["status"], finalScore
     run_id: `run-${entry.id}`,
     block_run_id: `block-run-${entry.id}`,
     block_id: classId,
-    division_id: entry.division_id,
+    class_id: entry.class_id,
     show_id: entry.show_id,
     final_score: finalScore,
     status,

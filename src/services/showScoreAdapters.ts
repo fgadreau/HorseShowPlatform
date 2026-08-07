@@ -1,7 +1,7 @@
 import type {
-  ClassRecord,
+  Block,
   Contact,
-  Division,
+  ClassRecord,
   Entry,
   Horse,
   Organization,
@@ -61,6 +61,7 @@ export type ShowScoreRun = {
   entryId: string;
   entryIds: string[];
   classId: string;
+  /** Clés historiques du contrat ShowScore; elles transportent maintenant des IDs de classes HSP. */
   divisionId: string;
   divisionIds: string[];
   horseId: string;
@@ -73,6 +74,7 @@ export type ShowScoreRun = {
   rider: string;
   horse: string;
   owner: string;
+  classCodes: string[];
   divisionNames: string[];
   isLate: boolean;
   drawGroup: "late" | "regular";
@@ -93,11 +95,11 @@ export type ShowScoreContext = {
   associations: ShowScoreAssociation[];
   shows: ShowScoreShow[];
   days: ShowScoreDay[];
-  classes: ShowScoreClass[];
+  blocks: ShowScoreClass[];
 };
 
 type RunRelations = {
-  divisions: Division[];
+  classes: ClassRecord[];
   horses: Horse[];
   contacts: Contact[];
 };
@@ -106,7 +108,7 @@ type ShowScoreAdapterContext = {
   organizations: Organization[];
   shows: Show[];
   showDays: ShowDay[];
-  classes: ClassRecord[];
+  blocks: Block[];
 };
 
 const inactiveEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
@@ -147,19 +149,19 @@ export function toShowScoreDay(day: ShowDay): ShowScoreDay {
   };
 }
 
-export function toShowScoreClass(classRecord: ClassRecord): ShowScoreClass {
+export function toShowScoreClass(block: Block): ShowScoreClass {
   return {
-    id: classRecord.id,
-    associationId: classRecord.organization_id,
-    showId: classRecord.show_id,
-    dayId: classRecord.show_day_id || "",
-    name: classRecord.name,
-    classCode: classRecord.code || "",
-    arena: classRecord.arena || "",
-    pattern: classRecord.pattern || "",
-    customPattern: classRecord.custom_pattern,
-    judgeName: classRecord.judge_name || "",
-    sortOrder: classRecord.sort_order || 1,
+    id: block.id,
+    associationId: block.organization_id,
+    showId: block.show_id,
+    dayId: block.show_day_id || "",
+    name: block.name,
+    classCode: block.display_label || block.name,
+    arena: block.arena || "",
+    pattern: block.pattern || "",
+    customPattern: block.custom_pattern,
+    judgeName: block.judge_display_name || "",
+    sortOrder: block.sort_order || 1,
   };
 }
 
@@ -179,7 +181,7 @@ export function buildShowScoreContext(context: ShowScoreAdapterContext, organiza
       .map(toShowScoreAssociation),
     shows: context.shows.filter((show) => showIds.has(show.id)).map(toShowScoreShow),
     days: context.showDays.filter((day) => showIds.has(day.show_id)).map(toShowScoreDay),
-    classes: context.classes.filter((classRecord) => showIds.has(classRecord.show_id)).map(toShowScoreClass),
+    blocks: context.blocks.filter((block) => showIds.has(block.show_id)).map(toShowScoreClass),
   };
 }
 
@@ -188,13 +190,13 @@ export function buildShowScoreRunsForClass(
   entries: Entry[],
   relations: RunRelations,
 ): ShowScoreRun[] {
-  const divisionsById = new Map(relations.divisions.map((division) => [division.id, division]));
-  const classDivisionIds = new Set(
-    relations.divisions
-      .filter((division) => division.class_id === classId)
-      .map((division) => division.id),
+  const classesById = new Map(relations.classes.map((classRecord) => [classRecord.id, classRecord]));
+  const blockClassIds = new Set(
+    relations.classes
+      .filter((classRecord) => classRecord.block_id === classId)
+      .map((classRecord) => classRecord.id),
   );
-  const eligibleEntries = entries.filter((entry) => classDivisionIds.has(entry.division_id) && !inactiveEntryStatuses.has(entry.status));
+  const eligibleEntries = entries.filter((entry) => blockClassIds.has(entry.class_id) && !inactiveEntryStatuses.has(entry.status));
   const eligibleRunGroups = groupEntriesForPhysicalRuns(eligibleEntries);
   const lateRunGroups = stableShuffle(
     eligibleRunGroups.filter((group) => group.is_late),
@@ -211,7 +213,7 @@ export function buildShowScoreRunsForClass(
   return orderedRunGroups
     .map((group, index) => {
       const draw = index < lateRunCount ? index - lateRunCount : index - lateRunCount + 1;
-      return toShowScoreRun(group, draw, divisionsById, relations);
+      return toShowScoreRun(group, draw, classesById, relations);
     })
     .filter((run): run is ShowScoreRun => Boolean(run));
 }
@@ -219,24 +221,24 @@ export function buildShowScoreRunsForClass(
 function toShowScoreRun(
   group: EntryRunGroup,
   fallbackDraw: number,
-  divisionsById: Map<string, Division>,
+  classesById: Map<string, ClassRecord>,
   relations: RunRelations,
 ): ShowScoreRun | null {
   const representativeEntry = group.entries[0];
-  const division = divisionsById.get(representativeEntry.division_id);
+  const classRecord = classesById.get(representativeEntry.class_id);
   const horse = relations.horses.find((candidate) => candidate.id === group.horse_id);
   const owner = relations.contacts.find((candidate) => candidate.id === group.owner_contact_id);
   const rider = group.rider_contact_id
     ? relations.contacts.find((candidate) => candidate.id === group.rider_contact_id)
     : owner;
 
-  if (!representativeEntry || !division || !horse || !owner) {
+  if (!representativeEntry || !classRecord || !horse || !owner) {
     return null;
   }
 
   const draw = fallbackDraw;
   const entryIds = group.entries.map((entry) => entry.id);
-  const divisionIds = Array.from(new Set(group.entries.map((entry) => entry.division_id)));
+  const classIds = Array.from(new Set(group.entries.map((entry) => entry.class_id)));
 
   return {
     id: group.id,
@@ -244,9 +246,9 @@ function toShowScoreRun(
     blockRunId: group.id,
     entryId: representativeEntry.id,
     entryIds,
-    classId: division.class_id,
-    divisionId: division.id,
-    divisionIds,
+    classId: classRecord.block_id,
+    divisionId: classRecord.id,
+    divisionIds: classIds,
     horseId: horse.id,
     riderContactId: group.rider_contact_id,
     ownerContactId: owner.id,
@@ -257,10 +259,17 @@ function toShowScoreRun(
     rider: formatContactName(rider),
     horse: horse.name,
     owner: formatContactName(owner),
+    classCodes: Array.from(
+      new Set(
+        group.entries
+          .map((entry) => classesById.get(entry.class_id)?.code)
+          .filter((code): code is string => Boolean(code)),
+      ),
+    ),
     divisionNames: group.entries
-      .map((entry) => divisionsById.get(entry.division_id))
-      .filter((entryDivision): entryDivision is Division => Boolean(entryDivision))
-      .map(divisionDisplayName),
+      .map((entry) => classesById.get(entry.class_id))
+      .filter((entryClass): entryClass is ClassRecord => Boolean(entryClass))
+      .map(classDisplayName),
     isLate: group.is_late,
     drawGroup: group.is_late ? "late" : "regular",
   };
@@ -286,8 +295,8 @@ function formatContactName(contact: Contact | undefined) {
   return [contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" ").trim();
 }
 
-function divisionDisplayName(division: Division) {
-  return [division.code, division.name].filter(Boolean).join(" - ");
+function classDisplayName(classRecord: ClassRecord) {
+  return [classRecord.code, classRecord.name].filter(Boolean).join(" - ");
 }
 
 function formatLocation(show: Show) {

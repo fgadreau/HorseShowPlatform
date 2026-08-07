@@ -1,13 +1,12 @@
-name: Production readiness rehearsal
+name: Production readiness and cutover
 
-# GitHub only exposes workflow_dispatch files registered on the default branch.
-# The executable workflow lives on preprod and must always be dispatched with
-# --ref preprod. This main-branch registration stub fails closed by design.
+run-name: Production readiness for ${{ github.ref_name }}
+
 on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type DRY-RUN PROD to authorize the non-writing production migration check
+        description: Type DRY-RUN PROD for the plan or APPLY PROD for the protected production migration
         required: true
         type: string
 
@@ -15,10 +14,111 @@ permissions:
   contents: read
 
 jobs:
-  require-preprod-ref:
+  authorize:
     runs-on: ubuntu-latest
     steps:
-      - name: Refuse the registration stub
+      - name: Require an explicit supported authorization
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "DRY-RUN PROD" || test "$CONFIRMATION" = "APPLY PROD"
+
+  validate-candidate:
+    needs: authorize
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require the preprod branch
+        env:
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: test "$SOURCE_BRANCH" = "preprod"
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npm run test:draw
+      - run: npm run test:payout
+      - run: npm run test:identity
+      - run: npm run test:governing
+      - run: npm run test:eligibility
+      - name: Verify the migration chain
         run: |
-          echo "Dispatch this workflow with --ref preprod."
-          exit 1
+          git fetch origin main
+          npm run test:promotion
+
+  mega-preprod:
+    needs: validate-candidate
+    uses: ./.github/workflows/preprod-e2e.yml
+    with:
+      mode: mega
+    secrets:
+      PREPROD_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.PREPROD_SUPABASE_PUBLISHABLE_KEY }}
+      PREPROD_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.PREPROD_SUPABASE_SERVICE_ROLE_KEY }}
+      VERCEL_AUTOMATION_BYPASS_SECRET: ${{ secrets.VERCEL_AUTOMATION_BYPASS_SECRET }}
+
+  production-migration-dry-run:
+    needs: mega-preprod
+    if: inputs.confirmation == 'DRY-RUN PROD'
+    runs-on: ubuntu-latest
+    environment: production-readiness
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Confirm the non-writing production check
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "DRY-RUN PROD"
+      - name: Require the protected production connection
+        run: test -n "$DATABASE_URL"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Confirm the production project without printing credentials
+        run: node scripts/assert-database-target.mjs production
+      - name: Show the production migration plan without applying it
+        # PROD may already contain newer hotfix migrations. Include every
+        # missing local migration in the plan while --dry-run prevents writes.
+        run: npx supabase db push --dry-run --include-all --db-url "$DATABASE_URL"
+
+  production-migration-apply:
+    needs: mega-preprod
+    if: inputs.confirmation == 'APPLY PROD'
+    runs-on: ubuntu-latest
+    environment: production-readiness
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Confirm the production write authorization
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "APPLY PROD"
+      - name: Require the protected production connection
+        run: test -n "$DATABASE_URL"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Confirm the production project without printing credentials
+        run: node scripts/assert-database-target.mjs production
+      - name: Reconcile the legacy ShowScore hotfix migration ledger
+        # PROD received the original ShowScore setup columns manually before
+        # HSP owned this migration chain. Migration 20260801002300 therefore
+        # cannot run there, while the follow-up migration below safely brings
+        # that existing schema to the canonical block contract.
+        run: npx supabase migration repair 20260801002300 --status applied --db-url "$DATABASE_URL" --yes
+      - name: Apply every missing approved migration to production
+        run: npx supabase db push --include-all --db-url "$DATABASE_URL" --yes
+      - name: Confirm the remote migration ledger
+        run: npx supabase migration list --db-url "$DATABASE_URL"

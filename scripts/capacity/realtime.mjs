@@ -1,0 +1,181 @@
+const LIVE_TABLE_KEYS = new Map([
+  ["show_score_scoring_sessions", "block_id"],
+  ["show_score_announcer_live_sessions", "class_id"],
+]);
+
+export function parseRealtimeFrame(rawPayload) {
+  const binaryBroadcast = parseBinaryBroadcastFrame(rawPayload);
+  if (binaryBroadcast) return binaryBroadcast;
+
+  try {
+    const parsed = JSON.parse(String(rawPayload));
+    return {
+      event: Array.isArray(parsed) ? parsed[3] : parsed?.event,
+      payload: Array.isArray(parsed) ? parsed[4] : parsed?.payload,
+      topic: Array.isArray(parsed) ? parsed[2] : parsed?.topic,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function parseBinaryBroadcastFrame(rawPayload) {
+  let bytes;
+  if (rawPayload instanceof ArrayBuffer) {
+    bytes = new Uint8Array(rawPayload);
+  } else if (ArrayBuffer.isView(rawPayload)) {
+    bytes = new Uint8Array(
+      rawPayload.buffer,
+      rawPayload.byteOffset,
+      rawPayload.byteLength,
+    );
+  } else {
+    return null;
+  }
+
+  // Supabase Realtime's server-to-client user Broadcast frame (kind 4):
+  // kind, topic length, event length, metadata length, encoding, then data.
+  if (bytes.length < 5 || bytes[0] !== 4) return null;
+  const topicLength = bytes[1];
+  const eventLength = bytes[2];
+  const metadataLength = bytes[3];
+  const payloadEncoding = bytes[4];
+  const headerLength = 5 + topicLength + eventLength + metadataLength;
+  if (bytes.length < headerLength) return null;
+
+  try {
+    const decoder = new TextDecoder();
+    let offset = 5;
+    const topic = decoder.decode(bytes.subarray(offset, offset + topicLength));
+    offset += topicLength;
+    const broadcastEvent = decoder.decode(bytes.subarray(offset, offset + eventLength));
+    offset += eventLength;
+    const metadataText = decoder.decode(bytes.subarray(offset, offset + metadataLength));
+    offset += metadataLength;
+
+    // Capacity markers are JSON. Binary application payloads cannot contain
+    // the structured marker and are intentionally ignored.
+    if (payloadEncoding !== 1) return null;
+    const broadcastPayload = JSON.parse(decoder.decode(bytes.subarray(offset)));
+    const payload = {
+      event: broadcastEvent,
+      payload: broadcastPayload,
+      type: "broadcast",
+    };
+    if (metadataText) payload.meta = JSON.parse(metadataText);
+
+    return { event: "broadcast", payload, topic };
+  } catch {
+    return null;
+  }
+}
+
+export function summarizeRealtimeFrame(rawPayload, direction) {
+  const frame = parseRealtimeFrame(rawPayload);
+  if (!frame?.event) return null;
+  const { event, payload, topic } = frame;
+
+  if (direction === "sent" && event === "phx_join") {
+    return {
+      direction,
+      event,
+      private: payload?.config?.private === true,
+      subscriptions: (payload?.config?.postgres_changes || []).map((subscription) => ({
+        event: subscription.event,
+        filter: subscription.filter || "",
+        schema: subscription.schema,
+        table: subscription.table,
+      })),
+      topic,
+    };
+  }
+
+  const status = payload?.status || payload?.data?.status || "";
+  const message = payload?.message || payload?.response?.message || payload?.data?.message || "";
+  const isDiagnostic =
+    ["phx_error", "phx_close", "system"].includes(event)
+    || (event === "phx_reply" && status && status !== "ok");
+  if (!isDiagnostic) return null;
+
+  return {
+    channel: payload?.channel || payload?.data?.channel || "",
+    direction,
+    event,
+    extension: payload?.extension || payload?.data?.extension || "",
+    message,
+    status,
+    topic,
+  };
+}
+
+export function extractCapacityMutation(rawPayload, receivedAt = Date.now()) {
+  const frame = parseRealtimeFrame(rawPayload);
+  if (!frame) return null;
+
+  let data = null;
+  let record = null;
+  if (frame.event === "postgres_changes") {
+    data = frame.payload?.data || frame.payload;
+    record = data?.record || data?.new || data?.new_record;
+  } else if (frame.event === "broadcast") {
+    data = frame.payload?.payload || frame.payload?.data?.payload || frame.payload;
+    record = data?.new || data?.old;
+  } else {
+    return null;
+  }
+  const marker = Array.isArray(record?.runs)
+    ? record.runs.map((run) => run?.capacityMutation).find(Boolean)
+    : null;
+  if (!marker?.id || !marker?.sentAt) return null;
+
+  const sentAt = Date.parse(marker.sentAt);
+  if (!Number.isFinite(sentAt)) return null;
+  return {
+    id: String(marker.id),
+    latencyMs: Math.max(0, receivedAt - sentAt),
+    receivedAt: new Date(receivedAt).toISOString(),
+    sentAt: marker.sentAt,
+    table: String(data?.table || ""),
+  };
+}
+
+export function findSubscribedBlockId(viewers, configuredBlockId = "") {
+  const normalizedConfiguredBlockId = String(configuredBlockId).trim().toLowerCase();
+  if (normalizedConfiguredBlockId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedConfiguredBlockId)) {
+      throw new Error("CAPACITY_WRITER_BLOCK_ID doit être un UUID valide.");
+    }
+    return normalizedConfiguredBlockId;
+  }
+
+  const blockIds = new Set();
+  let broadcastDetected = false;
+  for (const viewer of viewers) {
+    for (const event of viewer.metrics.realtimeEvents) {
+      if (
+        event.event === "phx_join"
+        && event.private === true
+        && String(event.topic || "").startsWith("realtime:showscore-public:")
+      ) {
+        broadcastDetected = true;
+      }
+      for (const subscription of event.subscriptions || []) {
+        const expectedKey = LIVE_TABLE_KEYS.get(subscription.table);
+        if (!expectedKey) continue;
+        const match = String(subscription.filter).match(/^([^=]+)=eq\.([0-9a-f-]{36})$/i);
+        if (match?.[1] === expectedKey) blockIds.add(match[2].toLowerCase());
+      }
+    }
+  }
+  if (blockIds.size !== 1) {
+    if (broadcastDetected && blockIds.size === 0) {
+      throw new Error(
+        "Le canal Broadcast ne contient pas de filtre de bloc; CAPACITY_WRITER_BLOCK_ID est requis.",
+      );
+    }
+    throw new Error(
+      `Le producteur exige un seul bloc live souscrit; blocs détectés: ${blockIds.size || "aucun"}.`,
+    );
+  }
+  return Array.from(blockIds)[0];
+}

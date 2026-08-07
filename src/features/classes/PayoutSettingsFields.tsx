@@ -11,7 +11,7 @@ function PayoutSettingsFields({
   addedMoney,
   currency = "CAD",
   disabled = false,
-  divisionName = "",
+  className = "",
   entryFee,
   isNrha = false,
   payoutNotes,
@@ -32,7 +32,7 @@ function PayoutSettingsFields({
   addedMoney: string;
   currency?: string;
   disabled?: boolean;
-  divisionName?: string;
+  className?: string;
   entryFee: string;
   isNrha?: boolean;
   payoutNotes: string;
@@ -55,7 +55,7 @@ function PayoutSettingsFields({
   const customRows = payoutRuleRows(payoutRules);
   const youthExempt = payoutRules.nrha_youth_fee_exempt === true || payoutRules.nrha_youth_fee_exempt === "true";
   const hasYouthExemptFlag = Object.prototype.hasOwnProperty.call(payoutRules, "nrha_youth_fee_exempt");
-  const looksLikeYouth = isNrha && /\byouth\b|13\s*&\s*under|14\s*[-–]\s*18|short stirrup/i.test(divisionName);
+  const looksLikeYouth = isNrha && /\byouth\b|13\s*&\s*under|14\s*[-–]\s*18|short stirrup/i.test(className);
   const shouldShowScheduleBHint = payoutScheduleType === "nrha_schedule_a" && (numericValue(addedMoney) ?? 0) >= 2000;
   const preview = payoutPreview({
     addedMoney,

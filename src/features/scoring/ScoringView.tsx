@@ -1,99 +1,67 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Trash2 } from "lucide-react";
 import { EmptyState, Metric, SearchSelect, ViewIntro } from "../../components/ui";
-import { divisionLabel, findById, formatDate, showLabel } from "../../lib/display";
-import { AQR_AUDIT_IMPORT_SOURCE, previewShowScoreDrawEntryImport } from "../../lib/aqrAuditImport";
+import { classLabel, findById, formatDate, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { buildShowScoreRunsForClass, type ShowScoreRun } from "../../services/showScoreAdapters";
-import type { ClassRecord, Contact, Division, Entry, EntryImportBatch, Horse, Show, ShowDay, ShowScoreClassSetup, ShowScorePaidWarmup } from "../../types/domain";
+import type { Block, Contact, ClassRecord, Entry, Horse, Show, ShowDay, ShowScoreBlockSetup, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
-import { classEntriesCloseLabel, showDayLabel } from "../classes/classUtils";
+import { classEntriesCloseLabel, classScheduleStartLabel, showDayLabel } from "../classes/classUtils";
 import { classEntriesAreClosed } from "../dashboard/shared";
-
-const aqrAuditImportEnabled = import.meta.env.VITE_AQR_AUDIT_IMPORT_ENABLED !== "false";
 
 function ScoringView({
   locale,
-  classes,
+  blocks,
   contacts,
-  divisions,
+  classes,
   entries,
-  entryImportBatches,
   horses,
   showDays,
   showScoreClassSetups,
   showScorePaidWarmups,
   shows,
-  onCleanupShowScoreDrawEntryImportBatch,
   onDeleteShowScorePaidWarmup,
   onPrepareShowScoreClass,
-  onSyncShowScoreDrawEntryImportBatch,
 }: {
   locale: Locale;
-  classes: ClassRecord[];
+  blocks: Block[];
   contacts: Contact[];
-  divisions: Division[];
+  classes: ClassRecord[];
   entries: Entry[];
-  entryImportBatches: EntryImportBatch[];
   horses: Horse[];
   showDays: ShowDay[];
-  showScoreClassSetups: ShowScoreClassSetup[];
+  showScoreClassSetups: ShowScoreBlockSetup[];
   showScorePaidWarmups: ShowScorePaidWarmup[];
   shows: Show[];
-  onCleanupShowScoreDrawEntryImportBatch: (batchId: string) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: string) => Promise<void>;
-  onPrepareShowScoreClass: (classRecord: ClassRecord) => Promise<void>;
-  onSyncShowScoreDrawEntryImportBatch: (showId: string, classIds?: string[]) => Promise<void>;
+  onPrepareShowScoreClass: (block: Block) => Promise<void>;
 }) {
   const [showId, setShowId] = useState("");
   const [busyClassId, setBusyClassId] = useState("");
   const [busyWarmupId, setBusyWarmupId] = useState("");
-  const [busyAqrBatchId, setBusyAqrBatchId] = useState("");
-  const [isAqrSyncing, setIsAqrSyncing] = useState(false);
   const [expandedDrawClassIds, setExpandedDrawClassIds] = useState<string[]>([]);
   const [expandedWarmupIds, setExpandedWarmupIds] = useState<string[]>([]);
   const selectedShowId = showId || shows[0]?.id || "";
-  const visibleClasses = selectedShowId ? classes.filter((classRecord) => classRecord.show_id === selectedShowId) : classes;
+  const visibleClasses = selectedShowId ? blocks.filter((block) => block.show_id === selectedShowId) : blocks;
   const visiblePaidWarmups = selectedShowId ? showScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShowId) : showScorePaidWarmups;
   const sortedVisiblePaidWarmups = [...visiblePaidWarmups].sort(compareShowScorePaidWarmups);
-  const visibleAqrBatches = selectedShowId
-    ? entryImportBatches.filter((batch) => batch.show_id === selectedShowId && batch.source === AQR_AUDIT_IMPORT_SOURCE)
-    : [];
-  const activeAqrBatches = visibleAqrBatches.filter((batch) => batch.status !== "cleaned");
-  const aqrPreview = useMemo(
-    () =>
-      previewShowScoreDrawEntryImport({
-        showId: selectedShowId,
-        classes,
-        divisions,
-        showScoreClassSetups,
-      }),
-    [classes, divisions, selectedShowId, showScoreClassSetups],
-  );
-  const aqrPreviewClassIds = aqrPreview.classPreviews.map((classPreview) => classPreview.classRecord.id);
-  const canCreateAqrBatch =
-    aqrAuditImportEnabled &&
-    !activeAqrBatches.length &&
-    !aqrPreview.errors.length &&
-    aqrPreview.totalEntries > 0 &&
-    Boolean(selectedShowId);
-  const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.class_id));
+  const preparedClassIds = new Set(showScoreClassSetups.map((setup) => setup.block_id));
   const totalRuns = visibleClasses.reduce(
-    (sum, classRecord) =>
+    (sum, block) =>
       sum +
-      buildShowScoreRunsForClass(classRecord.id, entries, {
+      buildShowScoreRunsForClass(block.id, entries, {
         contacts,
-        divisions,
+        classes,
         horses,
       }).length,
     0,
   );
 
-  async function handlePrepare(classRecord: ClassRecord) {
-    setBusyClassId(classRecord.id);
+  async function handlePrepare(block: Block) {
+    setBusyClassId(block.id);
 
     try {
-      await onPrepareShowScoreClass(classRecord);
+      await onPrepareShowScoreClass(block);
     } finally {
       setBusyClassId("");
     }
@@ -110,30 +78,6 @@ function ScoringView({
       await onDeleteShowScorePaidWarmup(warmup.id);
     } finally {
       setBusyWarmupId("");
-    }
-  }
-
-  async function handleSyncAqrBatch() {
-    setIsAqrSyncing(true);
-
-    try {
-      await onSyncShowScoreDrawEntryImportBatch(selectedShowId, aqrPreviewClassIds);
-    } finally {
-      setIsAqrSyncing(false);
-    }
-  }
-
-  async function handleCleanupAqrBatch(batch: EntryImportBatch) {
-    if (!window.confirm(uiText(locale, "Nettoyer ce batch AQR et restaurer les métadonnées ShowScore?", "Clean this AQR batch and restore ShowScore metadata?"))) {
-      return;
-    }
-
-    setBusyAqrBatchId(batch.id);
-
-    try {
-      await onCleanupShowScoreDrawEntryImportBatch(batch.id);
-    } finally {
-      setBusyAqrBatchId("");
     }
   }
 
@@ -161,93 +105,9 @@ function ScoringView({
       <section className="metric-grid span-2">
         <Metric label={uiText(locale, "Blocs de pointage", "Scoring blocks")} value={String(visibleClasses.length)} />
         <Metric label={uiText(locale, "Runs depuis les inscriptions", "Runs from entries")} value={String(totalRuns)} />
-        <Metric label={uiText(locale, "Préparations prêtes", "Prepared setups")} value={String(visibleClasses.filter((classRecord) => preparedClassIds.has(classRecord.id)).length)} />
+        <Metric label={uiText(locale, "Préparations prêtes", "Prepared setups")} value={String(visibleClasses.filter((block) => preparedClassIds.has(block.id)).length)} />
         <Metric label="Paid warmups" value={String(visiblePaidWarmups.length)} />
       </section>
-
-      {aqrAuditImportEnabled ? (
-        <section className="panel span-2">
-          <div className="panel-header">
-            <div>
-              <h2>Audit AQR</h2>
-              <p>{uiText(locale, "Crée des entries et factures draft HSP depuis les draws déjà importés dans ShowScore.", "Create HSP entries and draft invoices from draws already imported in ShowScore.")}</p>
-            </div>
-            <button className="text-button" disabled={!canCreateAqrBatch || isAqrSyncing} type="button" onClick={handleSyncAqrBatch}>
-              {isAqrSyncing ? uiText(locale, "Création", "Creating") : uiText(locale, "Créer entries depuis draws", "Create entries from draws")}
-            </button>
-          </div>
-          <section className="metric-grid">
-            <Metric label={uiText(locale, "Draws importés", "Imported draws")} value={String(aqrPreview.classPreviews.length)} />
-            <Metric label="Runs" value={String(aqrPreview.totalRuns)} />
-            <Metric label="Entries HSP" value={String(aqrPreview.totalEntries)} />
-            <Metric label={uiText(locale, "Batch actif", "Active batch")} value={String(activeAqrBatches.length)} />
-          </section>
-          {aqrPreview.classPreviews.length ? (
-            <div className="table scoring-table">
-              <div className="table-row table-head">
-                <span>Bloc</span>
-                <span>Runs</span>
-                <span>Entries</span>
-                <span>{uiText(locale, "État", "Status")}</span>
-              </div>
-              {aqrPreview.classPreviews.map((classPreview) => (
-                <div className="table-row" key={classPreview.classRecord.id}>
-                  <div>
-                    <strong>{classPreview.classRecord.name}</strong>
-                    <span className="muted-line">{classPreview.classRecord.code || uiText(locale, "Sans code", "No code")}</span>
-                  </div>
-                  <span>{classPreview.runs.length}</span>
-                  <span>{classPreview.entryCount}</span>
-                  <span className={`badge ${classPreview.errors.length ? "warning" : "open"}`}>
-                    {classPreview.errors.length ? uiText(locale, "À corriger", "Needs fix") : uiText(locale, "Prêt", "Ready")}
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState label={uiText(locale, "Aucun draw ShowScore importé pour ce show.", "No imported ShowScore draw for this show.")} />
-          )}
-          {aqrPreview.errors.length ? (
-            <div className="draw-detail-summary">
-              {aqrPreview.errors.slice(0, 6).map((error, index) => (
-                <span className="badge warning" key={`${error}-${index}`}>{error}</span>
-              ))}
-              {aqrPreview.errors.length > 6 ? <span className="badge warning">+{aqrPreview.errors.length - 6}</span> : null}
-            </div>
-          ) : null}
-          {aqrPreview.warnings.length && !aqrPreview.errors.length ? (
-            <div className="draw-detail-summary">
-              {aqrPreview.warnings.slice(0, 4).map((warning, index) => (
-                <span className="badge info" key={`${warning}-${index}`}>{warning}</span>
-              ))}
-              {aqrPreview.warnings.length > 4 ? <span className="badge info">+{aqrPreview.warnings.length - 4}</span> : null}
-            </div>
-          ) : null}
-          {activeAqrBatches.length ? (
-            <div className="draw-list">
-              <div className="draw-list-row draw-list-head">
-                <span>Batch</span>
-                <span>Entries</span>
-                <span>{uiText(locale, "Statut", "Status")}</span>
-                <span>{uiText(locale, "Action", "Action")}</span>
-              </div>
-              {activeAqrBatches.map((batch) => {
-                const totalEntries = typeof batch.summary.totalEntries === "number" ? batch.summary.totalEntries : "-";
-                return (
-                  <div className="draw-list-row" key={batch.id}>
-                    <span>{formatDate(batch.created_at)}</span>
-                    <span>{totalEntries}</span>
-                    <span className={`badge ${batch.status === "failed" ? "warning" : "info"}`}>{batch.status}</span>
-                    <button className="text-button" disabled={busyAqrBatchId === batch.id} type="button" onClick={() => handleCleanupAqrBatch(batch)}>
-                      {busyAqrBatchId === batch.id ? uiText(locale, "Nettoyage", "Cleaning") : uiText(locale, "Nettoyer batch", "Clean batch")}
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          ) : null}
-        </section>
-      ) : null}
 
       <section className="panel span-2">
         <div className="panel-header">
@@ -270,40 +130,40 @@ function ScoringView({
             <span>Runs</span>
             <span>ShowScore</span>
           </div>
-          {visibleClasses.map((classRecord) => {
-            const setup = showScoreClassSetups.find((candidate) => candidate.class_id === classRecord.id);
-            const runs = buildShowScoreRunsForClass(classRecord.id, entries, {
+          {visibleClasses.map((block) => {
+            const setup = showScoreClassSetups.find((candidate) => candidate.block_id === block.id);
+            const runs = buildShowScoreRunsForClass(block.id, entries, {
               contacts,
-              divisions,
+              classes,
               horses,
             });
-            const day = findById(showDays, classRecord.show_day_id);
-            const show = findById(shows, classRecord.show_id);
+            const day = findById(showDays, block.show_day_id);
+            const show = findById(shows, block.show_id);
             const preparedRunCount = setup?.runs.length ?? 0;
-            const entriesClosed = classEntriesAreClosed(classRecord);
+            const entriesClosed = classEntriesAreClosed(block);
             const status = !entriesClosed ? uiText(locale, "Inscriptions ouvertes", "Entries open") : setup?.finalized ? uiText(locale, "Finalisé", "Finalized") : setup ? uiText(locale, "Ordre sorti", "Draw created") : runs.length ? uiText(locale, "Prêt à sortir", "Ready to draw") : uiText(locale, "Aucune inscription", "No entries");
             const statusClass = !entriesClosed ? "warning" : setup?.finalized ? "closed" : setup ? "info" : runs.length ? "open" : "draft";
             const canPrepare = entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
-            const prepareLabel = !entriesClosed ? uiText(locale, "Sortie après cutoff", "Draw after cutoff") : busyClassId === classRecord.id ? uiText(locale, "Préparation", "Preparing") : setup ? uiText(locale, "Rafraîchir ordre", "Refresh draw") : uiText(locale, "Sortir ordre", "Create draw");
+            const prepareLabel = !entriesClosed ? uiText(locale, "Sortie après cutoff", "Draw after cutoff") : busyClassId === block.id ? uiText(locale, "Préparation", "Preparing") : setup ? uiText(locale, "Rafraîchir ordre", "Refresh draw") : uiText(locale, "Sortir ordre", "Create draw");
 
             const drawRuns = setup?.runs.length ? normalizeShowScoreRuns(setup.runs) : runs;
-            const drawIsExpanded = expandedDrawClassIds.includes(classRecord.id);
+            const drawIsExpanded = expandedDrawClassIds.includes(block.id);
             const lateRunCount = drawRuns.filter((run) => run.isLate || run.drawGroup === "late").length;
             const regularRunCount = Math.max(0, drawRuns.length - lateRunCount);
             const lastRegularDraw = drawRuns.reduce((highest, run) => (run.draw > 0 ? Math.max(highest, run.draw) : highest), 0);
             const missingBackNumberCount = drawRuns.filter((run) => !run.backNumber.trim()).length;
 
             return (
-              <div className="scoring-class-group" key={classRecord.id}>
+              <div className="scoring-class-group" key={block.id}>
                 <div className="table-row">
                   <div>
-                    <strong>{classRecord.name}</strong>
-                    <span className="muted-line">{classRecord.code || uiText(locale, "Sans code", "No code")}</span>
+                    <strong>{block.name}</strong>
+                    <span className="muted-line">{block.display_label || block.name}</span>
                   </div>
                   <div>
                     <span>{showLabel(show)}</span>
                     <span className="muted-line">{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
-                    <span className="muted-line">{classEntriesCloseLabel(classRecord)}</span>
+                    <span className="muted-line">{classEntriesCloseLabel(block)}</span>
                   </div>
                   <div>
                     <strong>{runs.length}</strong>
@@ -311,10 +171,10 @@ function ScoringView({
                   </div>
                   <div className="row-actions">
                     <span className={`badge ${statusClass}`}>{status}</span>
-                    <button className="text-button" disabled={!canPrepare || busyClassId === classRecord.id} type="button" onClick={() => handlePrepare(classRecord)}>
+                    <button className="text-button" disabled={!canPrepare || busyClassId === block.id} type="button" onClick={() => handlePrepare(block)}>
                       {prepareLabel}
                     </button>
-                    <button className="text-button" disabled={!drawRuns.length} type="button" onClick={() => toggleDraw(classRecord.id)}>
+                    <button className="text-button" disabled={!drawRuns.length} type="button" onClick={() => toggleDraw(block.id)}>
                       {drawIsExpanded ? uiText(locale, "Masquer ordre", "Hide draw") : uiText(locale, "Voir ordre", "View draw")}
                     </button>
                   </div>
@@ -335,7 +195,7 @@ function ScoringView({
                         <span>{uiText(locale, "Cavalier", "Rider")}</span>
                         <span>{uiText(locale, "Cheval", "Horse")}</span>
                         <span>{uiText(locale, "Propriétaire", "Owner")}</span>
-                        <span>{uiText(locale, "Classes inscrites", "Entered classes")}</span>
+                        <span>{uiText(locale, "Classes inscrites", "Entered blocks")}</span>
                         <span>{uiText(locale, "Statut", "Status")}</span>
                       </div>
                       {drawRuns.map((run) => (
@@ -345,7 +205,7 @@ function ScoringView({
                           <span>{run.rider || "-"}</span>
                           <span>{run.horse || "-"}</span>
                           <span>{run.owner || "-"}</span>
-                          <span>{formatRunDivisionNames(run, divisions, classes)}</span>
+                          <span>{formatRunClassNames(run, classes, blocks)}</span>
                           <span className={`badge ${run.isLate || run.drawGroup === "late" ? "warning" : "info"}`}>
                             {run.isLate || run.drawGroup === "late" ? uiText(locale, "Tardif", "Late") : uiText(locale, "Régulier", "Regular")}
                           </span>
@@ -378,7 +238,7 @@ function ScoringView({
           </div>
           {sortedVisiblePaidWarmups.map((warmup) => {
             const sourceClassId = sourceClassIdFromWarmup(warmup);
-            const sourceClass = sourceClassId ? findById(classes, sourceClassId) : null;
+            const sourceClass = sourceClassId ? findById(blocks, sourceClassId) : null;
             const day = findById(showDays, warmup.show_day_id);
             const warmupEntries = normalizePaidWarmupEntries(warmup.entries);
             const expanded = expandedWarmupIds.includes(warmup.id);
@@ -393,7 +253,7 @@ function ScoringView({
                   </div>
                   <div>
                     <span>{day ? `${day.day_name || uiText(locale, "Jour", "Day")} - ${formatDate(day.day_date)}` : uiText(locale, "Aucune journée assignée", "No day assigned")}</span>
-                    <span className="muted-line">{formatPaidWarmupSchedule(warmup, locale)}</span>
+                    <span className="muted-line">{formatPaidWarmupSchedule(warmup, locale, blocks)}</span>
                   </div>
                   <div>
                     <strong>{warmupEntries.length}</strong>
@@ -463,7 +323,7 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
       }
 
       const drawGroup = stringFromRecord(run, "drawGroup") === "late" || booleanFromRecord(run, "isLate") ? "late" : "regular";
-      const divisionNames = stringArrayFromRecord(run, "divisionNames");
+      const classNames = stringArrayFromRecord(run, "divisionNames");
 
       return {
         id: stringFromRecord(run, "id") || entryId,
@@ -479,13 +339,13 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
           : stringArrayFromRecord(run, "entry_ids").length
             ? stringArrayFromRecord(run, "entry_ids")
             : [entryId],
-        classId: stringFromRecord(run, "classId") || stringFromRecord(run, "class_id"),
-        divisionId: stringFromRecord(run, "divisionId") || stringFromRecord(run, "division_id"),
+        classId: stringFromRecord(run, "classId") || stringFromRecord(run, "block_id"),
+        divisionId: stringFromRecord(run, "divisionId") || stringFromRecord(run, "class_id"),
         divisionIds: stringArrayFromRecord(run, "divisionIds").length
           ? stringArrayFromRecord(run, "divisionIds")
-          : stringArrayFromRecord(run, "division_ids").length
-            ? stringArrayFromRecord(run, "division_ids")
-            : [stringFromRecord(run, "divisionId") || stringFromRecord(run, "division_id")].filter(Boolean),
+          : stringArrayFromRecord(run, "class_ids").length
+            ? stringArrayFromRecord(run, "class_ids")
+            : [stringFromRecord(run, "divisionId") || stringFromRecord(run, "class_id")].filter(Boolean),
         horseId: stringFromRecord(run, "horseId") || stringFromRecord(run, "horse_id"),
         riderContactId: stringFromRecord(run, "riderContactId") || stringFromRecord(run, "rider_contact_id") || null,
         ownerContactId: stringFromRecord(run, "ownerContactId") || stringFromRecord(run, "owner_contact_id"),
@@ -496,7 +356,7 @@ function normalizeShowScoreRuns(runs: Array<Record<string, unknown>>): ShowScore
         rider: stringFromRecord(run, "rider"),
         horse: stringFromRecord(run, "horse"),
         owner: stringFromRecord(run, "owner"),
-        divisionNames: divisionNames.length ? divisionNames : stringArrayFromRecord(run, "division_names"),
+        divisionNames: classNames.length ? classNames : stringArrayFromRecord(run, "division_names"),
         isLate: drawGroup === "late",
         drawGroup,
       };
@@ -555,13 +415,13 @@ function formatBackNumber(backNumber: string) {
   return backNumber.trim() || "A assigner";
 }
 
-function formatRunDivisionNames(run: ShowScoreRun, divisions: Division[], classes: ClassRecord[]) {
+function formatRunClassNames(run: ShowScoreRun, classes: ClassRecord[], blocks: Block[]) {
   if (run.divisionNames.length) {
     return run.divisionNames.join(", ");
   }
 
-  const division = findById(divisions, run.divisionId);
-  return division ? divisionLabel(division, classes) : run.divisionId || "-";
+  const classRecord = findById(classes, run.divisionId);
+  return classRecord ? classLabel(classRecord, blocks) : run.divisionId || "-";
 }
 
 function compareShowScorePaidWarmups(first: ShowScorePaidWarmup, second: ShowScorePaidWarmup) {
@@ -579,7 +439,7 @@ function sourceClassIdFromWarmup(warmup: ShowScorePaidWarmup) {
     return "";
   }
 
-  const sourceClassId = payload.source_class_id ?? payload.sourceClassId;
+  const sourceClassId = payload.source_block_id ?? payload.sourceClassId;
   return typeof sourceClassId === "string" ? sourceClassId : "";
 }
 
@@ -589,7 +449,12 @@ function normalizePaidWarmupEntries(entries: ShowScorePaidWarmup["entries"]) {
     .sort((first, second) => first.order - second.order);
 }
 
-function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale) {
+function formatPaidWarmupSchedule(warmup: ShowScorePaidWarmup, locale: Locale, blocks: Block[]) {
+  const canonicalBlock = blocks.find((block) => block.id === warmup.block_id || block.id === warmup.id);
+  if (canonicalBlock) {
+    return classScheduleStartLabel(canonicalBlock, locale, blocks);
+  }
+
   if (warmup.schedule_start_mode === "after_previous") {
     return uiText(locale, "Après le bloc", "After block");
   }

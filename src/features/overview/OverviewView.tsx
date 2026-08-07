@@ -6,7 +6,7 @@ import { contactLabel, errorMessage, formatCurrency, formatDate, showLabel } fro
 import type { Locale } from "../../lib/i18n";
 import type { AppContext } from "../../services/supabaseServices";
 import { createOrganization, slugify } from "../../services/supabaseServices";
-import type { ClassRecord, Contact, Entry, Horse, Invoice, Organization, Show, StallBooking, StallOption } from "../../types/domain";
+import type { Block, Contact, Discipline, Entry, Horse, Invoice, Organization, Show, StallBooking, StallOption } from "../../types/domain";
 import { uiText, showStatusLabel } from "../dashboard/shared";
 
 function OverviewView({
@@ -16,12 +16,13 @@ function OverviewView({
   shows,
   contacts,
   horses,
-  classes,
+  blocks,
   entries,
   stallOptions,
   stallBookings,
   invoices,
   unpaidBalance,
+  disciplines,
   onCreateOrganization,
 }: {
   locale: Locale;
@@ -30,12 +31,13 @@ function OverviewView({
   shows: Show[];
   contacts: Contact[];
   horses: Horse[];
-  classes: ClassRecord[];
+  blocks: Block[];
   entries: Entry[];
   stallOptions: AppContext["stallOptions"];
   stallBookings: AppContext["stallBookings"];
   invoices: AppContext["invoices"];
   unpaidBalance: number;
+  disciplines: Discipline[];
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
 }) {
   const upcomingShows = useMemo(
@@ -50,7 +52,7 @@ function OverviewView({
   const activeShowId = upcomingShow?.id ?? "";
   const currency = organization?.currency ?? "CAD";
   const showEntries = activeShowId ? entries.filter((entry) => entry.show_id === activeShowId) : entries;
-  const showClasses = activeShowId ? classes.filter((classRecord) => classRecord.show_id === activeShowId) : classes;
+  const showClasses = activeShowId ? blocks.filter((block) => block.show_id === activeShowId) : blocks;
   const showStallOptions = activeShowId ? stallOptions.filter((option) => option.show_id === activeShowId) : stallOptions;
   const showStallBookings = activeShowId ? stallBookings.filter((booking) => booking.show_id === activeShowId) : stallBookings;
   const showInvoices = activeShowId ? invoices.filter((invoice) => invoice.show_id === activeShowId) : invoices;
@@ -208,7 +210,7 @@ function OverviewView({
         </div>
       </section>
 
-      <OrganizationForm locale={locale} onCreateOrganization={onCreateOrganization} />
+      <OrganizationForm disciplines={disciplines} locale={locale} onCreateOrganization={onCreateOrganization} />
     </div>
   );
 }
@@ -227,14 +229,18 @@ function ProgressMeter({ detail, label, value }: { detail: string; label: string
   );
 }
 
-function OrganizationForm({ locale = "fr", onCreateOrganization }: { locale?: Locale; onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void> }) {
+function OrganizationForm({ disciplines, locale = "fr", onCreateOrganization }: { disciplines: Discipline[]; locale?: Locale; onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void> }) {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [email, setEmail] = useState("");
+  const [disciplineIds, setDisciplineIds] = useState<string[]>([]);
+  const [defaultDisciplineId, setDefaultDisciplineId] = useState("");
+  const [requiresHostMembership, setRequiresHostMembership] = useState(true);
   const [busy, setBusy] = useState(false);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!disciplineIds.length || !defaultDisciplineId) return;
     setBusy(true);
 
     try {
@@ -244,10 +250,15 @@ function OrganizationForm({ locale = "fr", onCreateOrganization }: { locale?: Lo
         primary_contact_email: email,
         timezone: "America/Toronto",
         currency: "CAD",
+        discipline_ids: disciplineIds,
+        default_discipline_id: defaultDisciplineId,
+        requires_host_membership: requiresHostMembership,
       });
       setName("");
       setSlug("");
       setEmail("");
+      setDisciplineIds([]);
+      setDefaultDisciplineId("");
     } finally {
       setBusy(false);
     }
@@ -261,7 +272,7 @@ function OrganizationForm({ locale = "fr", onCreateOrganization }: { locale?: Lo
           <p>{uiText(locale, "Point de départ pour les concours, contacts, inscriptions et facturation.", "Root workspace for shows, contacts, entries and billing.")}</p>
         </div>
       </div>
-      <form className="stack" onSubmit={handleSubmit}>
+      <form className="stack" data-testid="organization-create-form" onSubmit={handleSubmit}>
         <label>
           {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
@@ -274,7 +285,42 @@ function OrganizationForm({ locale = "fr", onCreateOrganization }: { locale?: Lo
           {uiText(locale, "Courriel de contact", "Contact email")}
           <input type="email" value={email} onChange={(event) => setEmail(event.target.value)} />
         </label>
-        <button className="primary-button" disabled={busy} type="submit">
+        <fieldset className="stack nested-fieldset">
+          <legend>{uiText(locale, "Disciplines et répertoires", "Disciplines and directories")}</legend>
+          <div className="checkbox-grid">
+            {disciplines.map((discipline) => (
+              <label className="check-row" key={discipline.id}>
+                <input
+                  checked={disciplineIds.includes(discipline.id)}
+                  type="checkbox"
+                  onChange={() => {
+                    const selected = disciplineIds.includes(discipline.id)
+                      ? disciplineIds.filter((id) => id !== discipline.id)
+                      : [...disciplineIds, discipline.id];
+                    setDisciplineIds(selected);
+                    if (!selected.includes(defaultDisciplineId)) setDefaultDisciplineId(selected[0] ?? "");
+                  }}
+                />
+                <span>{discipline.name}</span>
+              </label>
+            ))}
+          </div>
+          {!disciplines.length ? <span className="muted-line">{uiText(locale, "Le Platform Admin doit d’abord créer une discipline.", "A Platform Admin must create a discipline first.")}</span> : null}
+          <label>
+            {uiText(locale, "Répertoire par défaut", "Default directory")}
+            <select disabled={!disciplineIds.length} required value={defaultDisciplineId} onChange={(event) => setDefaultDisciplineId(event.target.value)}>
+              <option value="">{uiText(locale, "Choisir", "Choose")}</option>
+              {disciplines.filter((discipline) => disciplineIds.includes(discipline.id)).map((discipline) => (
+                <option key={discipline.id} value={discipline.id}>{discipline.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="check-row">
+            <input checked={requiresHostMembership} type="checkbox" onChange={(event) => setRequiresHostMembership(event.target.checked)} />
+            <span>{uiText(locale, "Exiger par défaut la carte de membre de l’association pour le cavalier", "Require the host association membership by default for the rider")}</span>
+          </label>
+        </fieldset>
+        <button className="primary-button" disabled={busy || !disciplineIds.length || !defaultDisciplineId} type="submit">
           <Plus size={18} />
           {uiText(locale, "Créer l'association", "Create organization")}
         </button>
