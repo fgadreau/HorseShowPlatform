@@ -43,7 +43,8 @@ revoke all on function public.showscore_can_receive_public_broadcast(text)
 grant execute on function public.showscore_can_receive_public_broadcast(text)
   to anon, authenticated;
 
-alter table realtime.messages enable row level security;
+-- Supabase owns realtime.messages and enables RLS on it. Migration roles are
+-- intentionally not table owners, so they must only manage the policy below.
 
 drop policy if exists "ShowScore public displays can receive private broadcasts"
   on realtime.messages;
