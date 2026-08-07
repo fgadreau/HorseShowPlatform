@@ -72,7 +72,7 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
   async function runFor(durationMs) {
     const deadline = now() + durationMs;
     let sequence = 0;
-    while (now() < deadline) {
+    while (hasCapacityDeliveryWindow(now(), deadline, config.writerIntervalMs)) {
       sequence += 1;
       const sentAtMs = now();
       const marker = {
@@ -164,6 +164,10 @@ export async function createCapacityWriter(config, blockId, dependencies = {}) {
   }
 
   return { activate, restore, runFor, summary };
+}
+
+export function hasCapacityDeliveryWindow(nowMs, deadlineMs, intervalMs) {
+  return nowMs + intervalMs <= deadlineMs;
 }
 
 export function mutateRuns(originalRuns, marker, sequence) {
