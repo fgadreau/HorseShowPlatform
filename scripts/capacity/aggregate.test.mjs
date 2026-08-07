@@ -129,3 +129,33 @@ test("sépare une reconnexion récupérée d’une déconnexion finale", () => {
   assert.equal(disconnected.metrics.realtimeConnections.unrecoveredFailures, 1);
   assert.equal(disconnected.passed, false);
 });
+
+test("accepte six shards et 517 vues lorsqu’ils sont explicitement attendus", () => {
+  const mutationId = "mutation-500";
+  const writer = {
+    errors: [],
+    mutations: [{ id: mutationId }],
+    restored: true,
+  };
+  const shardSizes = [88, 88, 86, 85, 85, 85];
+  const reports = shardSizes.map((size, index) => report(
+    index,
+    Array.from({ length: size }, (_, viewerIndex) => viewer(
+      `shard-${index}-mobile-${String(viewerIndex + 1).padStart(3, "0")}`,
+      "mobile",
+      [mutationId],
+    )),
+    index === 0 ? writer : null,
+  ));
+
+  const aggregate = aggregateCapacityReports(reports, {
+    expectedShards: 6,
+    expectedViewers: 517,
+    profileName: "distributed500",
+  });
+
+  assert.equal(aggregate.passed, true);
+  assert.equal(aggregate.profile.profile, "distributed500");
+  assert.equal(aggregate.profile.viewers.total, 517);
+  assert.equal(aggregate.shards.length, 6);
+});

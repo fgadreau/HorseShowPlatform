@@ -17,6 +17,7 @@ on:
           - intermediate
           - distributed167
           - endurance167
+          - distributed500
           - high
           - target
 
@@ -29,7 +30,7 @@ permissions:
 
 jobs:
   capacity:
-    if: inputs.profile != 'distributed167' && inputs.profile != 'endurance167'
+    if: inputs.profile != 'distributed167' && inputs.profile != 'endurance167' && inputs.profile != 'distributed500'
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment:
@@ -73,17 +74,34 @@ jobs:
           retention-days: 30
 
   distributed-prepare:
-    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167' || inputs.profile == 'distributed500'
     runs-on: ubuntu-latest
     outputs:
+      expected_shards: ${{ steps.distribution.outputs.expected_shards }}
+      expected_viewers: ${{ steps.distribution.outputs.expected_viewers }}
+      matrix: ${{ steps.distribution.outputs.matrix }}
       start_at: ${{ steps.clock.outputs.start_at }}
     steps:
+      - id: distribution
+        name: Choose the distributed runner matrix
+        env:
+          PROFILE: ${{ inputs.profile }}
+        run: |
+          if [[ "$PROFILE" == "distributed500" ]]; then
+            echo 'expected_shards=6' >> "$GITHUB_OUTPUT"
+            echo 'expected_viewers=517' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"shard":0,"mobile":84,"obs":1,"tv":3,"writer":"true"},{"shard":1,"mobile":84,"obs":1,"tv":3,"writer":"false"},{"shard":2,"mobile":83,"obs":0,"tv":3,"writer":"false"},{"shard":3,"mobile":83,"obs":0,"tv":2,"writer":"false"},{"shard":4,"mobile":83,"obs":0,"tv":2,"writer":"false"},{"shard":5,"mobile":83,"obs":0,"tv":2,"writer":"false"}]}' >> "$GITHUB_OUTPUT"
+          else
+            echo 'expected_shards=2' >> "$GITHUB_OUTPUT"
+            echo 'expected_viewers=167' >> "$GITHUB_OUTPUT"
+            echo 'matrix={"include":[{"shard":0,"mobile":75,"obs":1,"tv":8,"writer":"true"},{"shard":1,"mobile":75,"obs":1,"tv":7,"writer":"false"}]}' >> "$GITHUB_OUTPUT"
+          fi
       - id: clock
         name: Choose a common mutation start time
         run: echo "start_at=$(date -u -d '+150 seconds' '+%Y-%m-%dT%H:%M:%SZ')" >> "$GITHUB_OUTPUT"
 
   distributed-capacity:
-    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167' || inputs.profile == 'distributed500'
     needs: distributed-prepare
     runs-on: ubuntu-latest
     timeout-minutes: 45
@@ -92,18 +110,7 @@ jobs:
       url: ${{ vars.PREPROD_SHOWSCORE_URL }}
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - shard: 0
-            mobile: 75
-            obs: 1
-            tv: 8
-            writer: "true"
-          - shard: 1
-            mobile: 75
-            obs: 1
-            tv: 7
-            writer: "false"
+      matrix: ${{ fromJSON(needs.distributed-prepare.outputs.matrix) }}
     env:
       CAPACITY_ALLOW_TRAFFIC: "true"
       CAPACITY_ALLOW_WRITES: "true"
@@ -148,9 +155,15 @@ jobs:
           retention-days: 30
 
   distributed-aggregate:
-    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167'
-    needs: distributed-capacity
+    if: inputs.profile == 'distributed167' || inputs.profile == 'endurance167' || inputs.profile == 'distributed500'
+    needs:
+      - distributed-prepare
+      - distributed-capacity
     runs-on: ubuntu-latest
+    env:
+      CAPACITY_AGGREGATE_PROFILE: ${{ inputs.profile }}
+      CAPACITY_EXPECTED_SHARDS: ${{ needs.distributed-prepare.outputs.expected_shards }}
+      CAPACITY_EXPECTED_VIEWERS: ${{ needs.distributed-prepare.outputs.expected_viewers }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

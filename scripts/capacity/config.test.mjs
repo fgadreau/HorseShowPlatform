@@ -78,6 +78,18 @@ test("le profil d’endurance maintient 167 vues pendant 15 minutes", () => {
   );
 });
 
+test("le profil distribué maximal représente 517 sorties pendant cinq minutes", () => {
+  const config = readCapacityConfig(environment({ CAPACITY_PROFILE: "distributed500" }));
+
+  assert.deepEqual(capacitySummary(config).viewers, {
+    mobile: 500,
+    obs: 2,
+    total: 517,
+    tv: 15,
+  });
+  assert.equal(capacitySummary(config).duration.holdSeconds, 300);
+});
+
 test("une date de départ coordonné invalide est refusée", () => {
   assert.throws(
     () => readCapacityConfig(environment({ CAPACITY_COORDINATED_START_AT: "demain matin" })),
