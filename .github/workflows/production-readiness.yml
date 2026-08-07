@@ -1,4 +1,4 @@
-name: Production readiness rehearsal
+name: Production readiness and cutover
 
 run-name: Production readiness for ${{ github.ref_name }}
 
@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       confirmation:
-        description: Type DRY-RUN PROD to authorize the non-writing production migration check
+        description: Type DRY-RUN PROD for the plan or APPLY PROD for the protected production migration
         required: true
         type: string
 
@@ -14,7 +14,16 @@ permissions:
   contents: read
 
 jobs:
+  authorize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require an explicit supported authorization
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "DRY-RUN PROD" || test "$CONFIRMATION" = "APPLY PROD"
+
   validate-candidate:
+    needs: authorize
     runs-on: ubuntu-latest
     steps:
       - name: Require the preprod branch
@@ -52,6 +61,7 @@ jobs:
 
   production-migration-dry-run:
     needs: mega-preprod
+    if: inputs.confirmation == 'DRY-RUN PROD'
     runs-on: ubuntu-latest
     environment: production-readiness
     env:
@@ -77,3 +87,32 @@ jobs:
         # PROD may already contain newer hotfix migrations. Include every
         # missing local migration in the plan while --dry-run prevents writes.
         run: npx supabase db push --dry-run --include-all --db-url "$DATABASE_URL"
+
+  production-migration-apply:
+    needs: mega-preprod
+    if: inputs.confirmation == 'APPLY PROD'
+    runs-on: ubuntu-latest
+    environment: production-readiness
+    env:
+      DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+      EXPECTED_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+      PRODUCTION_SUPABASE_PROJECT_REF: ${{ vars.PRODUCTION_SUPABASE_PROJECT_REF }}
+    steps:
+      - name: Confirm the production write authorization
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+        run: test "$CONFIRMATION" = "APPLY PROD"
+      - name: Require the protected production connection
+        run: test -n "$DATABASE_URL"
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Confirm the production project without printing credentials
+        run: node scripts/assert-database-target.mjs production
+      - name: Apply every missing approved migration to production
+        run: npx supabase db push --include-all --db-url "$DATABASE_URL" --yes
+      - name: Confirm the remote migration ledger
+        run: npx supabase migration list --db-url "$DATABASE_URL"
