@@ -25,6 +25,7 @@ export function summarizeRealtimeFrame(rawPayload, direction) {
     return {
       direction,
       event,
+      private: payload?.config?.private === true,
       subscriptions: (payload?.config?.postgres_changes || []).map((subscription) => ({
         event: subscription.event,
         filter: subscription.filter || "",
@@ -55,10 +56,19 @@ export function summarizeRealtimeFrame(rawPayload, direction) {
 
 export function extractCapacityMutation(rawPayload, receivedAt = Date.now()) {
   const frame = parseRealtimeFrame(rawPayload);
-  if (frame?.event !== "postgres_changes") return null;
+  if (!frame) return null;
 
-  const data = frame.payload?.data || frame.payload;
-  const record = data?.record || data?.new || data?.new_record;
+  let data = null;
+  let record = null;
+  if (frame.event === "postgres_changes") {
+    data = frame.payload?.data || frame.payload;
+    record = data?.record || data?.new || data?.new_record;
+  } else if (frame.event === "broadcast") {
+    data = frame.payload?.payload || frame.payload?.data?.payload || frame.payload;
+    record = data?.new || data?.old;
+  } else {
+    return null;
+  }
   const marker = Array.isArray(record?.runs)
     ? record.runs.map((run) => run?.capacityMutation).find(Boolean)
     : null;
@@ -75,10 +85,26 @@ export function extractCapacityMutation(rawPayload, receivedAt = Date.now()) {
   };
 }
 
-export function findSubscribedBlockId(viewers) {
+export function findSubscribedBlockId(viewers, configuredBlockId = "") {
+  const normalizedConfiguredBlockId = String(configuredBlockId).trim().toLowerCase();
+  if (normalizedConfiguredBlockId) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(normalizedConfiguredBlockId)) {
+      throw new Error("CAPACITY_WRITER_BLOCK_ID doit être un UUID valide.");
+    }
+    return normalizedConfiguredBlockId;
+  }
+
   const blockIds = new Set();
+  let broadcastDetected = false;
   for (const viewer of viewers) {
     for (const event of viewer.metrics.realtimeEvents) {
+      if (
+        event.event === "phx_join"
+        && event.private === true
+        && String(event.topic || "").startsWith("realtime:showscore-public:")
+      ) {
+        broadcastDetected = true;
+      }
       for (const subscription of event.subscriptions || []) {
         const expectedKey = LIVE_TABLE_KEYS.get(subscription.table);
         if (!expectedKey) continue;
@@ -88,6 +114,11 @@ export function findSubscribedBlockId(viewers) {
     }
   }
   if (blockIds.size !== 1) {
+    if (broadcastDetected && blockIds.size === 0) {
+      throw new Error(
+        "Le canal Broadcast ne contient pas de filtre de bloc; CAPACITY_WRITER_BLOCK_ID est requis.",
+      );
+    }
     throw new Error(
       `Le producteur exige un seul bloc live souscrit; blocs détectés: ${blockIds.size || "aucun"}.`,
     );

@@ -24,6 +24,25 @@ test("les abonnements Realtime révèlent un unique bloc live", () => {
   assert.equal(findSubscribedBlockId(viewers), BLOCK_ID);
 });
 
+test("le bloc explicite est utilisé avec un canal Broadcast privé", () => {
+  const viewers = [{
+    metrics: {
+      realtimeEvents: [{
+        event: "phx_join",
+        private: true,
+        subscriptions: [],
+        topic: "realtime:showscore-public:e3000000-0000-0000-0000-000000000099",
+      }],
+    },
+  }];
+
+  assert.equal(findSubscribedBlockId(viewers, BLOCK_ID.toUpperCase()), BLOCK_ID);
+  assert.throws(
+    () => findSubscribedBlockId(viewers),
+    /CAPACITY_WRITER_BLOCK_ID est requis/,
+  );
+});
+
 test("une mutation du producteur est extraite d’une trame postgres_changes", () => {
   const sentAt = "2026-08-06T03:00:00.000Z";
   const payload = JSON.stringify({
@@ -44,6 +63,50 @@ test("une mutation du producteur est extraite d’une trame postgres_changes", (
     receivedAt: "2026-08-06T03:00:00.125Z",
     sentAt,
     table: "show_score_scoring_sessions",
+  });
+});
+
+test("une mutation du producteur est extraite d’une trame Broadcast", () => {
+  const sentAt = "2026-08-06T03:00:00.000Z";
+  const payload = JSON.stringify({
+    event: "broadcast",
+    payload: {
+      event: "change",
+      payload: {
+        event_seq: 42,
+        eventType: "UPDATE",
+        new: {
+          block_id: BLOCK_ID,
+          runs: [{ capacityMutation: { id: "showscore-capacity-broadcast", sentAt } }],
+        },
+        table: "show_score_scoring_sessions",
+      },
+    },
+    topic: "realtime:showscore-public:e3000000-0000-0000-0000-000000000099",
+  });
+
+  assert.deepEqual(extractCapacityMutation(payload, Date.parse(sentAt) + 87), {
+    id: "showscore-capacity-broadcast",
+    latencyMs: 87,
+    receivedAt: "2026-08-06T03:00:00.087Z",
+    sentAt,
+    table: "show_score_scoring_sessions",
+  });
+});
+
+test("la jointure Broadcast privée est conservée dans les diagnostics", () => {
+  const payload = JSON.stringify({
+    event: "phx_join",
+    payload: { config: { broadcast: { ack: false }, private: true } },
+    topic: "realtime:showscore-public:e3000000-0000-0000-0000-000000000099",
+  });
+
+  assert.deepEqual(summarizeRealtimeFrame(payload, "sent"), {
+    direction: "sent",
+    event: "phx_join",
+    private: true,
+    subscriptions: [],
+    topic: "realtime:showscore-public:e3000000-0000-0000-0000-000000000099",
   });
 });
 

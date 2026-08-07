@@ -179,6 +179,7 @@ export function readCapacityConfig(environment = process.env) {
     vercelProtectionBypass: textValue(environment.SHOWSCORE_VERCEL_AUTOMATION_BYPASS_SECRET),
     viewerIdPrefix: textValue(environment.CAPACITY_VIEWER_ID_PREFIX),
     writerEnabled: environment.CAPACITY_WRITER_ENABLED === "true",
+    writerBlockId: textValue(environment.CAPACITY_WRITER_BLOCK_ID).toLowerCase(),
     writerIntervalMs: integerValue(environment.CAPACITY_WRITER_INTERVAL_MS, 5_000, 1_000, 60_000),
     writerSettleMs: integerValue(environment.CAPACITY_WRITER_SETTLE_MS, 3_000, 0, 60_000),
   };
@@ -259,6 +260,7 @@ export function capacitySummary(config) {
       tv: config.tvViewers,
     },
     writer: {
+      blockId: config.writerBlockId || null,
       enabled: config.writerEnabled,
       intervalMs: config.writerIntervalMs,
       settleMs: config.writerSettleMs,
@@ -290,6 +292,12 @@ function assertCapacityConfiguration(config) {
     ].filter(([, value]) => !value).map(([name]) => name);
     if (missing.length) {
       throw new Error(`Configuration du producteur incomplète: ${missing.join(", ")}.`);
+    }
+    if (
+      config.writerBlockId
+      && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(config.writerBlockId)
+    ) {
+      throw new Error("CAPACITY_WRITER_BLOCK_ID doit être un UUID valide.");
     }
   }
 }
