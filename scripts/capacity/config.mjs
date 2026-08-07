@@ -88,7 +88,7 @@ export const CAPACITY_PROFILES = Object.freeze({
     holdSeconds: 300,
     mobileViewers: 500,
     obsViewers: 2,
-    rampBatchSize: 25,
+    rampBatchSize: 4,
     rampDelayMs: 1_000,
     settleSeconds: 30,
     tvViewers: 15,

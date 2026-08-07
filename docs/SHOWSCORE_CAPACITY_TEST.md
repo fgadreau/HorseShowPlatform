@@ -174,6 +174,9 @@ rapport est conservé comme artefact pendant 30 jours.
 
 `distributed167` et `endurance167` répartissent les vues en deux shards de 84
 et 83 vues. `distributed500` utilise six shards contenant entre 85 et 88 sorties.
+Chaque shard de `distributed500` ouvre au plus quatre vues par vague, soit au
+plus 24 nouvelles vues par vague sur les six runners, afin de mesurer la capacité
+stable sans provoquer artificiellement une tempête de 150 abonnements simultanés.
 Tous les runners attendent une même heure UTC; un seul active le producteur,
 puis un job final exige tous les rapports et agrège exactement 167 ou 517 journaux
 de vues avant de recalculer les budgets. Les identifiants de vues doivent être

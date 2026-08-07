@@ -88,6 +88,10 @@ test("le profil distribué maximal représente 517 sorties pendant cinq minutes"
     tv: 15,
   });
   assert.equal(capacitySummary(config).duration.holdSeconds, 300);
+  assert.deepEqual(capacitySummary(config).ramp, {
+    batchSize: 4,
+    delayMs: 1_000,
+  });
 });
 
 test("une date de départ coordonné invalide est refusée", () => {
