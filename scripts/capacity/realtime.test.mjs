@@ -94,6 +94,32 @@ test("une mutation du producteur est extraite d’une trame Broadcast", () => {
   });
 });
 
+test("une mutation du producteur est extraite d’une trame Broadcast binaire", () => {
+  const sentAt = "2026-08-06T03:00:00.000Z";
+  const payload = encodeBinaryBroadcast({
+    event: "change",
+    payload: {
+      event_seq: 43,
+      eventType: "UPDATE",
+      new: {
+        block_id: BLOCK_ID,
+        runs: [{ capacityMutation: { id: "showscore-capacity-binary", sentAt } }],
+      },
+      table: "show_score_scoring_sessions",
+    },
+    topic: "realtime:showscore-public:e3000000-0000-0000-0000-000000000099",
+  });
+
+  assert.equal(parseRealtimeFrame(payload)?.payload?.event, "change");
+  assert.deepEqual(extractCapacityMutation(payload, Date.parse(sentAt) + 64), {
+    id: "showscore-capacity-binary",
+    latencyMs: 64,
+    receivedAt: "2026-08-06T03:00:00.064Z",
+    sentAt,
+    table: "show_score_scoring_sessions",
+  });
+});
+
 test("la jointure Broadcast privée est conservée dans les diagnostics", () => {
   const payload = JSON.stringify({
     event: "phx_join",
@@ -129,3 +155,16 @@ test("le producteur clone les passages et alterne un score réaliste", () => {
   assert.deepEqual(mutated[0].capacityMutation, marker);
   assert.deepEqual(original, [{ id: "run-1", scoreTotal: 72.5 }]);
 });
+
+function encodeBinaryBroadcast({ event, payload, topic }) {
+  const encoder = new TextEncoder();
+  const topicBytes = encoder.encode(topic);
+  const eventBytes = encoder.encode(event);
+  const payloadBytes = encoder.encode(JSON.stringify(payload));
+  const frame = new Uint8Array(5 + topicBytes.length + eventBytes.length + payloadBytes.length);
+  frame.set([4, topicBytes.length, eventBytes.length, 0, 1]);
+  frame.set(topicBytes, 5);
+  frame.set(eventBytes, 5 + topicBytes.length);
+  frame.set(payloadBytes, 5 + topicBytes.length + eventBytes.length);
+  return Buffer.from(frame);
+}
