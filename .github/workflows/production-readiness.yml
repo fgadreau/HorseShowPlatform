@@ -112,6 +112,12 @@ jobs:
       - run: npm ci
       - name: Confirm the production project without printing credentials
         run: node scripts/assert-database-target.mjs production
+      - name: Reconcile the legacy ShowScore hotfix migration ledger
+        # PROD received the original ShowScore setup columns manually before
+        # HSP owned this migration chain. Migration 20260801002300 therefore
+        # cannot run there, while the follow-up migration below safely brings
+        # that existing schema to the canonical block contract.
+        run: npx supabase migration repair 20260801002300 --status applied --db-url "$DATABASE_URL" --yes
       - name: Apply every missing approved migration to production
         run: npx supabase db push --include-all --db-url "$DATABASE_URL" --yes
       - name: Confirm the remote migration ledger
