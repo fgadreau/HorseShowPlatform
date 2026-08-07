@@ -1,0 +1,28 @@
+name: Production data rehearsal
+
+# GitHub only exposes workflow_dispatch files registered on the default branch.
+# The executable workflow lives on preprod and must always be dispatched with
+# --ref preprod. This main-branch registration stub fails closed by design.
+on:
+  workflow_dispatch:
+    inputs:
+      rehearsal_project_ref:
+        description: Supabase ref of the private temporary production copy
+        required: true
+        type: string
+      confirmation:
+        description: Type APPLY TO REHEARSAL (never use the production ref)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  require-preprod-ref:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Refuse the registration stub
+        run: |
+          echo "Dispatch this workflow with --ref preprod."
+          exit 1
