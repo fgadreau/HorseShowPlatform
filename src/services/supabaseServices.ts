@@ -3944,6 +3944,24 @@ export async function createClassTemplate(input: ClassTemplateInput) {
   const client = requireSupabase();
   const organizationDisciplineId = input.organization_discipline_id
     ?? await findDefaultOrganizationDisciplineId(input.organization_id);
+  let sortOrder = input.sort_order;
+
+  if (sortOrder == null) {
+    const { data: lastTemplate, error: sortOrderError, count: templateCount } = await client
+      .from("class_templates")
+      .select("sort_order", { count: "exact" })
+      .eq("block_template_id", input.block_template_id)
+      .order("sort_order", { ascending: false })
+      .limit(1)
+      .maybeSingle<{ sort_order: number }>();
+
+    if (sortOrderError) {
+      throw sortOrderError;
+    }
+
+    sortOrder = Math.max(lastTemplate?.sort_order ?? 0, templateCount ?? 0) + 1;
+  }
+
   const { data, error } = await client
     .from("class_templates")
     .insert({
@@ -3964,7 +3982,7 @@ export async function createClassTemplate(input: ClassTemplateInput) {
       default_payout_notes: input.default_payout_notes || null,
       back_number_policy_override: input.back_number_policy_override ?? null,
       eligibility_rules: input.eligibility_rules ?? {},
-      sort_order: input.sort_order ?? 1,
+      sort_order: sortOrder,
       notes: input.notes || null,
     })
     .select("*")
