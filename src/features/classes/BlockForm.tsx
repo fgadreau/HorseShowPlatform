@@ -153,7 +153,14 @@ function BlockForm({
         sort_order: nextSortOrder,
       });
 
-      for (const classTemplate of selectedTemplateClasses) {
+      const orderedTemplateClasses = [...selectedTemplateClasses].sort(
+        (first, second) =>
+          first.sort_order - second.sort_order
+          || first.created_at.localeCompare(second.created_at)
+          || first.id.localeCompare(second.id),
+      );
+
+      for (const [index, classTemplate] of orderedTemplateClasses.entries()) {
         await onCreateClass({
           organization_id: organization.id,
           show_id: selectedShowId,
@@ -172,6 +179,9 @@ function BlockForm({
           sanctioning_fee_percent: classTemplate.default_sanctioning_fee_percent ?? null,
           payout_rules: classTemplate.default_payout_rules ?? {},
           payout_notes: classTemplate.default_payout_notes ?? null,
+          back_number_policy_override: classTemplate.back_number_policy_override,
+          sort_order: index + 1,
+          notes: classTemplate.notes,
           governing_body_assignments: classTemplate.governing_body_assignments.map((assignment) => ({
             governing_body_id: assignment.governing_body_id,
             reporting_class_code: assignment.reporting_class_code,
