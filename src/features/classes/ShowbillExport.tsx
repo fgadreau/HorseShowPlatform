@@ -1,5 +1,5 @@
 import { Download, Printer } from "lucide-react";
-import { formatCurrency, formatDate } from "../../lib/display";
+import { formatCurrency } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { Block, ClassRecord, Organization, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
@@ -21,6 +21,11 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
     .filter((day) => day.show_id === show.id)
     .sort((first, second) => first.sort_order - second.sort_order || first.day_date.localeCompare(second.day_date));
   const currency = show.default_currency || "CAD";
+  const showClasses = classes.filter((classRecord) => classRecord.show_id === show.id);
+  const showAddedMoney = showClasses.some((classRecord) => Number(classRecord.added_money) > 0);
+  const showEntryFees = showClasses.some((classRecord) => Number(classRecord.entry_fee) > 0);
+  const showJudgeFees = showClasses.some((classRecord) => Number(classRecord.judge_fee) > 0);
+  const tableColumnCount = 2 + Number(showAddedMoney) + Number(showEntryFees) + Number(showJudgeFees);
 
   function downloadGoogleSheetsCsv() {
     const headers = [
@@ -85,6 +90,51 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
     URL.revokeObjectURL(url);
   }
 
+  function printShowbill() {
+    const source = document.querySelector<HTMLElement>(".showbill-print-root");
+    const printWindow = window.open("", "_blank", "width=900,height=1200");
+
+    if (!source || !printWindow) {
+      window.alert(uiText(
+        locale,
+        "Autorise les fenêtres contextuelles pour imprimer le showbill.",
+        "Allow pop-ups to print the showbill.",
+      ));
+      return;
+    }
+
+    printWindow.opener = null;
+    printWindow.document.open();
+    printWindow.document.write("<!doctype html><html><head><meta charset=\"utf-8\"></head><body></body></html>");
+    printWindow.document.close();
+    printWindow.document.documentElement.lang = locale;
+    printWindow.document.title = `${show.name} · Showbill`;
+    printWindow.document.body.className = "showbill-print-document";
+    printWindow.document.body.append(source.cloneNode(true));
+
+    document.querySelectorAll<HTMLStyleElement>("style").forEach((style) => {
+      printWindow.document.head.append(style.cloneNode(true));
+    });
+
+    const stylesheetLoads = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')).map((stylesheet) => (
+      new Promise<void>((resolve) => {
+        const clone = printWindow.document.createElement("link");
+        clone.rel = "stylesheet";
+        clone.href = stylesheet.href;
+        clone.addEventListener("load", () => resolve(), { once: true });
+        clone.addEventListener("error", () => resolve(), { once: true });
+        printWindow.document.head.append(clone);
+      })
+    ));
+
+    void Promise.all(stylesheetLoads).then(() => {
+      window.setTimeout(() => {
+        printWindow.focus();
+        printWindow.print();
+      }, 150);
+    });
+  }
+
   return (
     <div className="showbill-export-shell">
       <div className="showbill-toolbar">
@@ -94,7 +144,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
             <Download size={17} />
             {uiText(locale, "CSV Google Sheets", "Google Sheets CSV")}
           </button>
-          <button className="primary-button" type="button" onClick={() => window.print()}>
+          <button className="primary-button" type="button" onClick={printShowbill}>
             <Printer size={17} />
             {uiText(locale, "Imprimer / PDF", "Print / PDF")}
           </button>
@@ -106,7 +156,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
           <span>{uiText(locale, "HORAIRE · SHOWBILL", "SCHEDULE · SHOWBILL")}</span>
           <h1>{show.name}</h1>
           <p>{[organization?.name, show.venue, show.location].filter(Boolean).join(" · ")}</p>
-          <strong>{showDateRange(show.start_date, show.end_date)}</strong>
+          <strong>{showDateRange(show.start_date, show.end_date, locale)}</strong>
         </header>
 
         {sortedDays.map((day) => {
@@ -117,31 +167,31 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
             <section className="showbill-day" key={day.id}>
               <div className="showbill-day-heading">
                 <h2>{day.day_name || uiText(locale, `Journée ${day.day_number ?? ""}`.trim(), `Day ${day.day_number ?? ""}`.trim())}</h2>
-                <span>{formatDate(day.day_date)}</span>
+                <span>{formatShowbillDate(day.day_date, locale)}</span>
               </div>
 
               <div className="showbill-arena-grid">
                 {arenas.map(({ arena, blocks: arenaBlocks }) => (
                   <section className="showbill-arena" key={arena}>
-                    <h3>{arena === "__no_arena__" ? uiText(locale, "Arène à préciser", "Arena to confirm") : arena}</h3>
+                    <h3>{arena === "__general__" ? uiText(locale, "Général", "General") : arena}</h3>
                     <table>
                       <thead>
                         <tr>
                           <th>{uiText(locale, "Classe / bloc", "Class / block")}</th>
                           <th>{uiText(locale, "Patron", "Pattern")}</th>
-                          <th>{uiText(locale, "Added", "Added")}</th>
-                          <th>{uiText(locale, "Inscr.", "Entry")}</th>
-                          <th>{uiText(locale, "Juges", "Judges")}</th>
+                          {showAddedMoney ? <th>{uiText(locale, "Added", "Added")}</th> : null}
+                          {showEntryFees ? <th>{uiText(locale, "Inscr.", "Entry")}</th> : null}
+                          {showJudgeFees ? <th>{uiText(locale, "Juges", "Judges")}</th> : null}
                         </tr>
                       </thead>
                       <tbody>
                         {arenaBlocks.flatMap((block) => {
-                          const blockClasses = classes
+                          const blockClasses = showClasses
                             .filter((classRecord) => classRecord.block_id === block.id)
                             .sort((first, second) => first.sort_order - second.sort_order || first.name.localeCompare(second.name));
                           const heading = (
                             <tr className="showbill-block-row" key={`${block.id}-heading`}>
-                              <th colSpan={5}>
+                              <th colSpan={tableColumnCount}>
                                 <span>{block.display_label || block.name}</span>
                                 <small>{classScheduleStartLabel(block, locale, showBlocks)}</small>
                               </th>
@@ -150,11 +200,15 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
 
                           if (!blockClasses.length) {
                             return [
-                              heading,
-                              <tr key={`${block.id}-event`}>
-                                <td>{block.name}</td>
+                              <tr className="showbill-event-row" key={`${block.id}-event`}>
+                                <td>
+                                  <strong>{block.display_label || block.name}</strong>
+                                  <small>{classScheduleStartLabel(block, locale, showBlocks)}</small>
+                                </td>
                                 <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
-                                <td>—</td><td>—</td><td>—</td>
+                                {showAddedMoney ? <td>—</td> : null}
+                                {showEntryFees ? <td>—</td> : null}
+                                {showJudgeFees ? <td>—</td> : null}
                               </tr>,
                             ];
                           }
@@ -165,9 +219,9 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                               <tr key={classRecord.id}>
                                 <td>{[classRecord.code, classRecord.name].filter(Boolean).join(" · ")}</td>
                                 <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
-                                <td>{moneyCell(classRecord.added_money, currency)}</td>
-                                <td>{moneyCell(classRecord.entry_fee, currency)}</td>
-                                <td>{moneyCell(classRecord.judge_fee, currency)}</td>
+                                {showAddedMoney ? <td>{moneyCell(classRecord.added_money, currency)}</td> : null}
+                                {showEntryFees ? <td>{moneyCell(classRecord.entry_fee, currency)}</td> : null}
+                                {showJudgeFees ? <td>{moneyCell(classRecord.judge_fee, currency)}</td> : null}
                               </tr>
                             )),
                           ];
@@ -189,7 +243,7 @@ function groupBlocksByArena(blocks: Block[]) {
   const grouped = new Map<string, Block[]>();
 
   for (const block of blocks) {
-    const arena = block.arena?.trim() || "__no_arena__";
+    const arena = block.arena?.trim() || "__general__";
     grouped.set(arena, [...(grouped.get(arena) ?? []), block]);
   }
 
@@ -200,8 +254,18 @@ function moneyCell(value: number | null | undefined, currency: string) {
   return value == null || value === 0 ? "—" : formatCurrency(value, currency);
 }
 
-function showDateRange(startDate: string, endDate: string) {
-  return startDate === endDate ? formatDate(startDate) : `${formatDate(startDate)} – ${formatDate(endDate)}`;
+function formatShowbillDate(value: string, locale: Locale) {
+  return new Intl.DateTimeFormat(locale === "en" ? "en-CA" : "fr-CA", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(`${value}T00:00:00`));
+}
+
+function showDateRange(startDate: string, endDate: string, locale: Locale) {
+  return startDate === endDate
+    ? formatShowbillDate(startDate, locale)
+    : `${formatShowbillDate(startDate, locale)} – ${formatShowbillDate(endDate, locale)}`;
 }
 
 function safeFilename(value: string) {
