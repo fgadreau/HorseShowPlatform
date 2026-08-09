@@ -6051,13 +6051,8 @@ button:focus-visible {
 }
 
 .showbill-day {
-  break-after: page;
   display: grid;
   gap: 12px;
-}
-
-.showbill-day:last-child {
-  break-after: auto;
 }
 
 .showbill-day-heading {
@@ -6134,6 +6129,18 @@ button:focus-visible {
   margin-top: 2px;
 }
 
+.showbill-event-row strong,
+.showbill-event-row small {
+  display: block;
+}
+
+.showbill-event-row small {
+  color: #4e615b;
+  font-size: 0.88em;
+  font-weight: 600;
+  margin-top: 2px;
+}
+
 @media (max-width: 720px) {
   .showbill-toolbar {
     align-items: stretch;
@@ -6147,28 +6154,143 @@ button:focus-visible {
 
 @media print {
   @page {
-    margin: 8mm;
-    size: landscape;
+    margin: 6mm;
+    size: portrait;
   }
 
-  body * {
-    visibility: hidden !important;
+  html,
+  body,
+  .showbill-print-document {
+    background: white !important;
+    margin: 0;
+    padding: 0;
   }
 
-  .showbill-print-root,
-  .showbill-print-root * {
-    visibility: visible !important;
+  .showbill-print-document {
+    color: #101817;
+    font-family: Arial, Helvetica, sans-serif;
   }
 
   .showbill-print-root {
-    left: 0;
+    display: block;
     padding: 0;
-    position: absolute;
-    top: 0;
+    position: static;
     width: 100%;
   }
 
+  .showbill-title {
+    border-bottom-width: 2px;
+    gap: 1px;
+    margin-bottom: 5px;
+    padding: 0 0 5px;
+  }
+
+  .showbill-title span,
+  .showbill-title strong {
+    font-size: 8px;
+    letter-spacing: 0.06em;
+  }
+
+  .showbill-title h1 {
+    font-size: 20px;
+    line-height: 1.05;
+  }
+
+  .showbill-title p {
+    font-size: 9px;
+    line-height: 1.15;
+  }
+
+  .showbill-day {
+    break-after: auto;
+    break-inside: auto;
+    gap: 3px;
+    margin: 0 0 5px;
+  }
+
+  .showbill-day-heading {
+    background: #ffffff;
+    border-bottom: 1.5px solid #0e756d;
+    color: #0a5c55;
+    padding: 2px 4px;
+  }
+
+  .showbill-day-heading h2 {
+    font-size: 12px;
+    line-height: 1.15;
+  }
+
+  .showbill-day-heading span {
+    font-size: 9px;
+  }
+
   .showbill-arena-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    align-items: start;
+    gap: 4px;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 80mm), 1fr));
+  }
+
+  .showbill-arena {
+    align-self: start;
+    background: #ffffff;
+    border-color: #8da09a;
+    break-inside: auto;
+  }
+
+  .showbill-arena h3 {
+    background: #eef7f5;
+    font-size: 9px;
+    line-height: 1.15;
+    padding: 2px 4px;
+  }
+
+  .showbill-arena table {
+    font-size: 8.5px;
+    line-height: 1.16;
+  }
+
+  .showbill-arena thead {
+    display: table-header-group;
+  }
+
+  .showbill-arena th,
+  .showbill-arena td {
+    padding: 1.6px 3px;
+  }
+
+  .showbill-arena th:first-child,
+  .showbill-arena td:first-child {
+    width: 55%;
+  }
+
+  .showbill-arena tr,
+  .showbill-block-row {
+    break-inside: avoid;
+  }
+
+  .showbill-block-row {
+    break-after: avoid;
+  }
+
+  .showbill-block-row th {
+    padding: 2px 3px;
+  }
+
+  .showbill-block-row small {
+    display: inline;
+    margin: 0 0 0 3px;
+  }
+
+  .showbill-block-row small::before {
+    content: "· ";
+  }
+
+  .showbill-event-row small {
+    display: inline;
+    margin: 0 0 0 3px;
+  }
+
+  .showbill-event-row small::before {
+    content: "· ";
   }
 }
