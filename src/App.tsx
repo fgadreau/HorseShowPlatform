@@ -5,6 +5,8 @@ import { LoadingScreen } from "./features/setup/LoadingScreen";
 import { SetupScreen } from "./features/setup/SetupScreen";
 import { LandingPage } from "./features/shows/LandingPage";
 import { PublicShowPage } from "./features/shows/PublicShowPage";
+import { savePaidWarmupWithRefresh } from "./features/classes/paidWarmupSubmission";
+import { uiText } from "./features/dashboard/shared";
 import { isSupabaseConfigured } from "./lib/env";
 import { errorMessage } from "./lib/display";
 import { getInitialLocale, saveLocale, translations } from "./lib/i18n";
@@ -179,9 +181,13 @@ export default function App() {
     }
   }, [context, selectedOrganizationId]);
 
-  async function refreshContext(activeSession = session, organizationId = selectedOrganizationId) {
+  async function refreshContext(
+    activeSession = session,
+    organizationId = selectedOrganizationId,
+    { preserveContextOnError = false }: { preserveContextOnError?: boolean } = {},
+  ) {
     if (!activeSession?.user) {
-      return;
+      return false;
     }
 
     setLoading(true);
@@ -191,11 +197,15 @@ export default function App() {
       const nextContext = await loadAppContext(activeSession.user, organizationId || undefined);
       setContext(nextContext);
       setContextLoadError("");
+      return true;
     } catch (error) {
       const message = errorMessage(error);
-      setContext(null);
-      setContextLoadError(message);
-      setNotice({ tone: "error", message });
+      if (!preserveContextOnError) {
+        setContext(null);
+        setContextLoadError(message);
+        setNotice({ tone: "error", message });
+      }
+      return false;
     } finally {
       setLoading(false);
     }
@@ -593,14 +603,21 @@ export default function App() {
         }
       }}
       onSaveShowScorePaidWarmup={async (input) => {
-        try {
-          const warmup = await saveShowScorePaidWarmup(input);
-          setNotice({ tone: "success", message: `Paid warm up créé avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
-          await refreshContext();
-        } catch (error) {
-          setNotice({ tone: "error", message: errorMessage(error) });
-        }
+        await savePaidWarmupWithRefresh({
+          save: () => saveShowScorePaidWarmup(input),
+          refresh: () => refreshContext(session, selectedOrganizationId, { preserveContextOnError: true }),
+          onSaveSuccess: (warmup) => setNotice({ tone: "success", message: `Paid warm up créé avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` }),
+          onRefreshError: () => setNotice({
+            tone: "info",
+            message: uiText(
+              locale,
+              "Paid warm-up enregistré, mais l’affichage n’a pas pu être actualisé. Les données affichées peuvent être anciennes; rechargez la page.",
+              "Paid warm-up saved, but the display could not be refreshed. The displayed data may be outdated; reload the page.",
+            ),
+          }),
+        });
       }}
+      onShowScorePaidWarmupSaveError={(error) => setNotice({ tone: "error", message: errorMessage(error) })}
       onDeleteShowScorePaidWarmup={async (id) => {
         await deleteShowScorePaidWarmup(id);
         setNotice({ tone: "success", message: "Paid warm up supprimé." });
@@ -644,13 +661,19 @@ export default function App() {
         await refreshContext();
       }}
       onUpdateShowScorePaidWarmup={async (id, input) => {
-        try {
-          const warmup = await updateShowScorePaidWarmup(id, input);
-          setNotice({ tone: "success", message: `Paid warm up mis à jour avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` });
-          await refreshContext();
-        } catch (error) {
-          setNotice({ tone: "error", message: errorMessage(error) });
-        }
+        await savePaidWarmupWithRefresh({
+          save: () => updateShowScorePaidWarmup(id, input),
+          refresh: () => refreshContext(session, selectedOrganizationId, { preserveContextOnError: true }),
+          onSaveSuccess: (warmup) => setNotice({ tone: "success", message: `Paid warm up mis à jour avec ${warmup.entries.length} inscription${warmup.entries.length === 1 ? "" : "s"}.` }),
+          onRefreshError: () => setNotice({
+            tone: "info",
+            message: uiText(
+              locale,
+              "Paid warm-up enregistré, mais l’affichage n’a pas pu être actualisé. Les données affichées peuvent être anciennes; rechargez la page.",
+              "Paid warm-up saved, but the display could not be refreshed. The displayed data may be outdated; reload the page.",
+            ),
+          }),
+        });
       }}
       onUpdateUserProfile={async (id, input) => {
         await updateUserProfile(id, input);
