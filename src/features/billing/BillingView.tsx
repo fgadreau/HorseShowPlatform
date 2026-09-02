@@ -8,6 +8,9 @@ import { cancelManualSale, createManualSale } from "../../services/supabaseServi
 import type { AppContext } from "../../services/supabaseServices";
 import type { Contact, Invoice, InvoiceLineItem, ManualSale, Organization, OrganizationProduct, Show } from "../../types/domain";
 import { uiText, formatInvoiceNumber } from "../dashboard/shared";
+import { PaymentWallet } from "./PaymentWallet";
+import { InvoicePayment } from "./InvoicePayment";
+import { StripeConnectPanel } from "./StripeConnectPanel";
 
 function CollapsiblePanel({
   children,
@@ -65,6 +68,9 @@ function BillingView({
   profileId = "",
   shows,
   unpaidBalance,
+  walletContacts = [],
+  paymentsEnabled = false,
+  showConnectManagement = false,
   onCancelManualSale,
   onCreateManualSale,
 }: {
@@ -82,6 +88,9 @@ function BillingView({
   profileId?: string;
   shows: AppContext["shows"];
   unpaidBalance: number;
+  walletContacts?: Contact[];
+  paymentsEnabled?: boolean;
+  showConnectManagement?: boolean;
   onCancelManualSale?: (id: Parameters<typeof cancelManualSale>[0]) => Promise<void>;
   onCreateManualSale?: (input: Parameters<typeof createManualSale>[0]) => Promise<ManualSale>;
 }) {
@@ -203,13 +212,17 @@ function BillingView({
     <div className="content-grid">
       <ViewIntro
         eyebrow={uiText(locale, "Facturation", "Billing")}
-        title={uiText(locale, "Factures", "Invoices")}
-        description={uiText(locale, "Suis les factures, soldes ouverts et lignes créées par les inscriptions ou réservations.", "Track invoices, open balances and lines created by entries or reservations.")}
+        title={uiText(locale, "Facturation et paiements", "Billing & payments")}
+        description={uiText(locale, "Retrouve les factures, soldes ouverts et modes de paiement sécurisés.", "Review invoices, open balances and secure payment methods.")}
         stats={[
           { label: uiText(locale, "Factures", "Invoices"), value: String(invoices.length) },
           { label: uiText(locale, "Solde", "Balance"), value: formatCurrency(unpaidBalance, currency) },
         ]}
       />
+
+      {showConnectManagement && organization ? <StripeConnectPanel locale={locale} organizationId={organization.id} /> : null}
+
+      {walletContacts.length ? <PaymentWallet contacts={walletContacts} locale={locale} /> : null}
 
       <section className="metric-grid span-2">
         <Metric label={uiText(locale, "Factures", "Invoices")} value={String(invoices.length)} />
@@ -323,6 +336,7 @@ function BillingView({
           organization={organization}
           payerContact={selectedInvoicePayer}
           show={selectedInvoiceShow}
+          paymentsEnabled={paymentsEnabled && walletContacts.some((contact) => contact.id === selectedInvoice.payer_contact_id)}
           onClose={() => setSelectedInvoiceId("")}
         />
       ) : null}
@@ -407,6 +421,7 @@ function InvoiceDetailPanel({
   organization,
   payerContact,
   show,
+  paymentsEnabled,
   onClose,
 }: {
   locale: Locale;
@@ -416,6 +431,7 @@ function InvoiceDetailPanel({
   organization: Organization | null;
   payerContact: Contact | undefined;
   show: Show | undefined;
+  paymentsEnabled: boolean;
   onClose: () => void;
 }) {
   const invoiceDocument = buildInvoiceDocumentData({ currency, invoice, lineItems, locale, organization, payerContact, show });
@@ -438,6 +454,10 @@ function InvoiceDetailPanel({
           </button>
         </div>
       </div>
+
+      {paymentsEnabled && Number(invoice.balance_due) > 0 && !["paid", "void"].includes(invoice.status) ? (
+        <InvoicePayment invoice={invoice} locale={locale} />
+      ) : null}
 
       <article className="invoice-document" aria-label={`${uiText(locale, "Facture", "Invoice")} ${invoiceDocument.invoiceNumber}`}>
         <header className="invoice-document-header">

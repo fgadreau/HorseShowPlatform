@@ -1117,6 +1117,7 @@ export function Dashboard({
             profileId={context?.profile.id ?? ""}
             shows={activeShowList}
             unpaidBalance={selectedShowUnpaidBalance}
+            showConnectManagement={canManageAssociation}
             onCancelManualSale={onCancelManualSale}
             onCreateManualSale={onCreateManualSale}
           />
@@ -1282,6 +1283,8 @@ export function Dashboard({
             profileId={context?.profile.id ?? ""}
             shows={activeShowList}
             unpaidBalance={selectedShowPersonalUnpaidBalance}
+            walletContacts={selectedOrganizationPersonalContacts.filter((contact) => contact.linked_user_id === context?.profile.id)}
+            paymentsEnabled
           />
         ) : null}
 

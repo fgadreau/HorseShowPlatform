@@ -30,6 +30,7 @@ export const appEnv = {
   ),
   supabaseProjectRef: cleanEnvironmentValue(import.meta.env.VITE_SUPABASE_PROJECT_REF),
   productionSupabaseProjectRef: cleanEnvironmentValue(import.meta.env.VITE_PRODUCTION_SUPABASE_PROJECT_REF),
+  stripePublishableKey: cleanEnvironmentValue(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY),
 };
 
 export function getSupabaseConfigurationError() {

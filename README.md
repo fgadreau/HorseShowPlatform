@@ -38,6 +38,7 @@ schéma partagé avec ShowScore.
    ```bash
    VITE_SUPABASE_URL=http://127.0.0.1:54321
    VITE_SUPABASE_PUBLISHABLE_KEY=your-local-publishable-key
+   VITE_STRIPE_PUBLISHABLE_KEY=pk_test_your_sandbox_key
    ```
 
 4. Apply the Supabase migration:
@@ -76,7 +77,25 @@ All three use `phase1-password`. If login fails after resetting the database, re
 
 - `VITE_SUPABASE_PUBLISHABLE_KEY` is safe for browser use when RLS is correct. Legacy projects can still use `VITE_SUPABASE_ANON_KEY`.
 - `SUPABASE_SERVICE_ROLE_KEY`, `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `RESEND_API_KEY` and `NRHA_API_KEY` must never be used in frontend code.
+- `VITE_STRIPE_PUBLISHABLE_KEY` is the browser-safe Stripe Sandbox key. Configure `STRIPE_SECRET_KEY` only as a Supabase Edge Function secret.
 - Stripe, invoice finalization, email sending and sensitive payment updates should be implemented as Supabase Edge Functions.
+
+### Stripe Sandbox wallet
+
+Apply migrations, deploy the `stripe-wallet` Edge Function, then configure the matching Sandbox keys:
+
+```bash
+supabase functions deploy stripe-wallet
+supabase functions deploy stripe-invoice-payment
+supabase functions deploy stripe-capture-payment
+supabase functions deploy stripe-webhook --no-verify-jwt
+supabase secrets set STRIPE_SECRET_KEY=sk_test_your_sandbox_key
+supabase secrets set STRIPE_WEBHOOK_SECRET=whsec_your_sandbox_endpoint_secret
+```
+
+The app stores only the opaque Stripe Customer identifier. Card number and CVC fields are hosted by Stripe Elements and never pass through the frontend application server or Supabase database.
+
+Create a Stripe Sandbox webhook endpoint pointing to `https://<project-ref>.supabase.co/functions/v1/stripe-webhook` for `payment_intent.succeeded`, `payment_intent.payment_failed`, `payment_intent.processing`, `payment_intent.amount_capturable_updated`, and `payment_intent.canceled`. The webhook function verifies Stripe's signature against the raw request body and records processed event IDs to make retries idempotent.
 
 ## Next Build Steps
 

@@ -25,6 +25,8 @@
     "test:broadcast": "node scripts/verify-showscore-public-broadcast.mjs"
   },
   "dependencies": {
+    "@stripe/react-stripe-js": "^6.8.1",
+    "@stripe/stripe-js": "^9.13.0",
     "@supabase/supabase-js": "^2.106.2",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.17.0",
