@@ -1,0 +1,171 @@
+baseline-reset-stop: PASS
+baseline-reset: PASS
+fixture: PASS
+preflight-before: PASS
+before-show_score_block_setups: PASS
+before-show_score_announcer_live_sessions: PASS
+before-show_score_paid_warmups: PASS
+before-blocks: PASS
+before-classes: PASS
+before-class_governing_bodies: PASS
+before-eligibility_requirements: PASS
+before-entries: PASS
+before-invoices: PASS
+before-payments: PASS
+count-show_score_block_setups: PASS
+count-show_score_judge_sessions: PASS
+count-class_templates: PASS
+count-blocks: PASS
+count-classes: PASS
+count-class_governing_bodies: PASS
+count-organizations: PASS
+count-show_score_paid_warmups: PASS
+count-show_score_announcer_live_sessions: PASS
+count-eligibility_requirements: PASS
+count-entries: PASS
+count-invoices: PASS
+count-payments: PASS
+catchup-dry-run: PASS
+catchup: PASS
+after-show_score_block_setups: PASS
+after-show_score_announcer_live_sessions: PASS
+after-show_score_paid_warmups: PASS
+after-blocks: PASS
+after-classes: PASS
+after-class_governing_bodies: PASS
+after-eligibility_requirements: PASS
+after-entries: PASS
+after-invoices: PASS
+after-payments: PASS
+preflight-after: PASS
+assertions: PASS
+repeat-20260904000100_secure_association_creation: PASS
+repeat-20260904000200_restore_announcer_setup_defaults: PASS
+repeat-show_score_block_setups: PASS
+repeat-show_score_announcer_live_sessions: PASS
+repeat-show_score_paid_warmups: PASS
+repeat-blocks: PASS
+repeat-classes: PASS
+repeat-class_governing_bodies: PASS
+repeat-eligibility_requirements: PASS
+repeat-entries: PASS
+repeat-invoices: PASS
+repeat-payments: PASS
+repeat-batch-20260801002350_reconcile_showscore_live_setup_compatibility: PASS
+historical-default-regression: PASS
+repeat-batch-20260807000400_repair_recurring_block_class_copy: PASS
+repeat-batch-20260824130000_showscore_announcer_paid_warmup_live: PASS
+repeat-batch-20260824131000_showscore_secretary_schedule_writes: PASS
+repeat-batch-20260904000100_secure_association_creation: PASS
+repeat-batch-20260904000200_restore_announcer_setup_defaults: PASS
+repeat-batch-show_score_block_setups: PASS
+repeat-batch-show_score_announcer_live_sessions: PASS
+repeat-batch-show_score_paid_warmups: PASS
+repeat-batch-blocks: PASS
+repeat-batch-classes: PASS
+repeat-batch-class_governing_bodies: PASS
+repeat-batch-eligibility_requirements: PASS
+repeat-batch-entries: PASS
+repeat-batch-invoices: PASS
+repeat-batch-payments: PASS
+concurrency: PASS
+catchup-schema: PASS
+chronological-reset-stop: PASS
+chronological-reset: PASS
+chronological-schema: PASS
+canonical-seed: PASS
+sql-audited_horse_identity_corrections: PASS
+sql-bloc1_integrated_workflows: PASS
+BEGIN
+NOTICE:  ok - legacy health view, functions and organization columns are removed
+DO
+INSERT 0 1
+SET
+authenticated
+10000000-0000-0000-0000-000000000006
+(656cdbd4-c167-4712-9003-736ab66e2fff,30000000-0000-0000-0000-000000000002,2026-09-04,,f,rolling_months,12,f,f,t,6,none,f,blocking,"Matrice finale Bloc 3",20000000-0000-0000-0000-000000000006,20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:36.976259+00","2026-09-04 20:14:36.976259+00")
+10000000-0000-0000-0000-000000000004
+ERROR:  One global horse should have independent association results: A {"horse_id":"80000000-0000-0000-0000-000000000001","organization_id":"30000000-0000-0000-0000-000000000001","reference_date":"2026-09-04","policy_id":"c40b9e89-fa9e-4ecb-ae25-8943a4c94882","policy_effective_from":"1900-01-01","compliance_status":"non_compliant","can_proceed":false,"enforcement_mode":"blocking","requirements":{"rhino": {"status": "expired", "required": true, "expires_on": "2026-07-15", "document_id": "82000000-0000-0000-0000-000000000002", "document_type": "combo_vaccine", "document_status": "approved", "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": "2026-01-15", "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}, "coggins": {"status": "valid", "required": true, "expires_on": "2027-01-15", "document_id": "82000000-0000-0000-0000-000000000001", "document_type": "coggins_eia", "document_status": "approved", "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": "2026-01-15", "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}, "influenza": {"status": "expired", "required": true, "expires_on": "2026-07-15", "document_id": "82000000-0000-0000-0000-000000000002", "document_type": "combo_vaccine", "document_status": "approved", "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": "2026-01-15", "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}},"reasons":[{"code": "health.influenza.expired", "status": "expired", "expires_on": "2026-07-15", "document_id": "82000000-0000-0000-0000-000000000002", "requirement": "influenza"}, {"code": "health.rhino.expired", "status": "expired", "expires_on": "2026-07-15", "document_id": "82000000-0000-0000-0000-000000000002", "requirement": "rhino"}]}, B {"horse_id":"80000000-0000-0000-0000-000000000001","organization_id":"30000000-0000-0000-0000-000000000002","reference_date":"2026-09-04","policy_id":"656cdbd4-c167-4712-9003-736ab66e2fff","policy_effective_from":"2026-09-04","compliance_status":"not_required","can_proceed":true,"enforcement_mode":"blocking","requirements":{"rhino": {"status": "not_required", "required": false, "expires_on": null, "document_id": null, "document_type": null, "document_status": null, "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": null, "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}, "coggins": {"status": "not_required", "required": false, "expires_on": null, "document_id": null, "document_type": null, "document_status": null, "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": null, "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}, "influenza": {"status": "not_required", "required": false, "expires_on": null, "document_id": null, "document_type": null, "document_status": null, "association_review_id": null, "identity_validation_id": null, "test_or_administered_on": null, "association_review_status": null, "identity_validation_status": null, "identity_validation_verdict": null}},"reasons":[]}
+CONTEXT:  PL/pgSQL function inline_code_block line 25 at RAISE
+
+sql-blocks_classes_core: PASS
+sql-class_governing_bodies_integration: PASS
+BEGIN
+INSERT 0 6
+INSERT 0 6
+INSERT 0 0
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+INSERT 0 5
+INSERT 0 0
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 6
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 4
+UPDATE 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+DO
+CREATE SCHEMA
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+SET
+
+NOTICE:  ok - anonymous users retain public association access
+
+NOTICE:  ok - anonymous users cannot read private show days
+NOTICE:  ok - anonymous users cannot read memberships
+
+RESET
+SET
+
+ERROR:  organization admins read only their organization days expected 1, got 3
+CONTEXT:  PL/pgSQL function compatibility_view_test.assert_count(text,text,bigint) line 7 at RAISE
+
+sql-configurable_eligibility_requirements: PASS
+sql-directory_identity_authority: PASS
+sql-entry_reservation_health_compliance: PASS
+sql-external_sources_catalog: PASS
+sql-foundation_catalogs_directories: PASS
+sql-horse_creator_access: PASS
+sql-horse_document_identity_validations: PASS
+sql-horse_documents_independence: PASS
+sql-horse_health_compliance: PASS
+sql-horse_health_compliance_presentation: PASS
+sql-identity_similarity_search: PASS
+sql-incentive_nomination_programs: PASS
+sql-organization_health_policies: PASS
+sql-phase1_rls: PASS
+sql-results_payouts: PASS
+sql-showscore_announcer_paid_warmup_live: PASS
+sql-showscore_announcer_session_initialization: PASS
+sql-showscore_public_broadcast: PASS
+sql-showscore_secretary_schedule_writes: PASS
+sql-stall_booking_invoice: PASS
+sql-targeted_context_showscore: PASS
+sql-team_eligibility_decisions: PASS
+sql-verified_horse_identity_locks: PASS
+bloc3_final_validation.sql: SAME FAILURE WITHOUT CORRECTIONS
+compatibility_views_security_invoker.sql: SAME FAILURE WITHOUT CORRECTIONS
+canonical-fixture: PASS
+canonical-assertions: PASS
+api: PASS
+transaction-boundary-assertions: PASS
+RECONCILIATION CHECKS PASSED; historical SQL failures: ['bloc3_final_validation.sql', 'compatibility_views_security_invoker.sql']

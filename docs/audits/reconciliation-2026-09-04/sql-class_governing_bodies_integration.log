@@ -1,0 +1,17 @@
+BEGIN
+NOTICE:  ok - one class has independent multi-body reporting and eligibility metadata
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - class templates retain typed governing-body defaults and object metadata
+DO
+SET
+10000000-0000-0000-0000-000000000006
+authenticated
+NOTICE:  ok - another association cannot manage class governing bodies
+DO
+10000000-0000-0000-0000-000000000003
+NOTICE:  ok - authorized staff manages only its class governing-body metadata
+DO
+ROLLBACK

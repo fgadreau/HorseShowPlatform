@@ -1,0 +1,1513 @@
+{
+  "project_ref": "qaguotdproxamgudnnsd",
+  "read_only": true,
+  "exported_snapshot_shared_with_dump": true,
+  "backup_bytes": 2934394,
+  "backup_sha256": "55deaeae6550aa4e7565cf9c8527d2fa9735855b8ce384e9302db39db723cc2d",
+  "private_directory_mode": "0o700",
+  "archive_mode": "0o600",
+  "role_passwords_exported": false,
+  "public_table_counts": {
+    "app_events": 11013,
+    "association_invitations": 0,
+    "audit_events": 0,
+    "block_concurrency_group_members": 0,
+    "block_concurrency_groups": 0,
+    "block_judge_assignments": 0,
+    "block_result_publications": 1,
+    "block_run_class_entries": 0,
+    "block_run_entries": 0,
+    "block_templates": 0,
+    "blocks": 8,
+    "class_governing_bodies": 5,
+    "class_template_governing_bodies": 0,
+    "class_templates": 0,
+    "classes": 7,
+    "contact_external_identifiers": 0,
+    "contact_insurance_evidence": 0,
+    "contact_organization_memberships": 0,
+    "contact_roles": 26,
+    "contact_similarity_dismissals": 7,
+    "contacts": 42,
+    "credential_issuer_governing_bodies": 5,
+    "directory_contacts": 38,
+    "directory_horses": 37,
+    "discipline_credential_issuers": 4,
+    "discipline_governing_bodies": 3,
+    "disciplines": 2,
+    "eligibility_requirements": 7,
+    "entries": 50,
+    "entry_results": 0,
+    "external_credential_issuers": 7,
+    "external_credential_products": 0,
+    "external_data_snapshot_contacts": 0,
+    "external_data_snapshot_horses": 0,
+    "external_data_snapshots": 0,
+    "external_data_sources": 7,
+    "external_source_governing_bodies": 5,
+    "governing_bodies": 7,
+    "horse_contacts": 39,
+    "horse_document_validations": 78,
+    "horse_documents": 78,
+    "horse_external_identifiers": 0,
+    "horse_identity_corrections": 0,
+    "horse_similarity_dismissals": 0,
+    "horses": 39,
+    "incentive_program_nominations": 0,
+    "incentive_programs": 1,
+    "invoice_line_items": 0,
+    "invoices": 0,
+    "manual_sales": 0,
+    "nrha_rider_rankings": 0,
+    "organization_back_numbers": 0,
+    "organization_deadline_policies": 0,
+    "organization_discipline_governing_bodies": 2,
+    "organization_disciplines": 6,
+    "organization_external_credential_requirements": 0,
+    "organization_governing_bodies": 0,
+    "organization_health_document_reviews": 0,
+    "organization_health_policies": 5,
+    "organization_members": 4,
+    "organization_membership_types": 0,
+    "organization_products": 0,
+    "organizations": 4,
+    "payments": 0,
+    "payout_awards": 0,
+    "payout_calculations": 0,
+    "payout_schedule_brackets": 240,
+    "payout_schedules": 2,
+    "platform_admins": 1,
+    "sanctioning_bodies": 6,
+    "scored_runs": 0,
+    "show_announcements": 2,
+    "show_days": 10,
+    "show_roles": 0,
+    "show_score_announcer_live_sessions": 6,
+    "show_score_block_setups": 7,
+    "show_score_championship_seasons": 76,
+    "show_score_championship_update_campaigns": 0,
+    "show_score_championship_update_deliveries": 0,
+    "show_score_championship_update_subscribers": 0,
+    "show_score_class_documents": 0,
+    "show_score_judge_sessions": 0,
+    "show_score_official_results": 1,
+    "show_score_paid_warmups": 1,
+    "show_score_public_championship_seasons": 76,
+    "show_score_publication_states": 6,
+    "show_score_scoring_sessions": 1,
+    "shows": 4,
+    "slates": 0,
+    "stall_bookings": 0,
+    "stall_options": 0,
+    "team_eligibility_decisions": 0,
+    "team_eligibility_snapshots": 0,
+    "user_profiles": 4
+  },
+  "catalog_sha256": {
+    "history": "b82ff267a8bb15831be792fa1008c6c801963365f3003f9121a792e951752283",
+    "roles": "db48971afbce5ae3625c546f22faef4f13954cbfc89275febfc83258ac9a2d7b",
+    "memberships": "e045a62484a98e8b375661d1f6a4ba10456e578196b91eff421cf518e1aac917",
+    "grants": "1ce55a35d350e885f1235aaeb72ad934bced56142832424616538a1194d90388",
+    "policies": "6d731d7cdcfc20ad32b74485c88427dedc18dd37e02dd3babd4d77da89bba438",
+    "functions": "754c7a817437daf5efa4cd05f71b14a707022fc635a63b7ce4e4183f67af3071",
+    "columns": "0e6b734eb006cd517827fc0ae4d0b3e4f873bcdd0ac9f23a864448124ffadc35",
+    "default_acl": "9f16b253695b4d5dea92c0755583ba772f88738e7cce6d44cb5b6ba52d0b3e08"
+  },
+  "restored_role_attributes_equal": true,
+  "tests_restored_initial": {
+    "audited_horse_identity_corrections.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "0fef1097d339e2ada2223557e924151299bdac0faeacee9a67cb372267a84b9b"
+    },
+    "bloc1_integrated_workflows.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c357be37d8fd8406ee1033b48da8737658380d8ee4402722888b4b9d9fc0b501"
+    },
+    "bloc3_final_validation.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "87b5a39b796a481223b12860e41647f7d16ea2a56ceeb4d9413ba15166aa6844"
+    },
+    "blocks_classes_core.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "df6bf13733d166e609dec7435cb2e66e538a09abcba644d63266e281fd1a4448"
+    },
+    "class_governing_bodies_integration.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "4630534df1337b33e64168b1e59cbfe471caf68705468059f5963f6ec3369100"
+    },
+    "compatibility_views_security_invoker.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "debe4478a4b8b77361126387ce7fd05b39bd6e2e73ccb2f110eae9d8ba4bff20"
+    },
+    "configurable_eligibility_requirements.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "baa643886ab4d96506da9ca4e3d4cb81bfd0c0b899937b809e996038af711003"
+    },
+    "directory_identity_authority.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "00fafaba47991442e5115e4b92c9420510973a0e8fa96a9e834764a73493b029"
+    },
+    "entry_reservation_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "24677887cf3aa51e011d18a60b5c1b6200f122848d6d32d91ca50ec55b527264"
+    },
+    "external_sources_catalog.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b193182b5dad4f12f3b2ad726b85ba536f81091668c3caf1b8f45fb2029a2968"
+    },
+    "foundation_catalogs_directories.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "73ab16dc23c18ad9f0525ea12838cde34df633d8a4ad73a44f0caed1eb8f2958"
+    },
+    "horse_creator_access.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "horse_document_identity_validations.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b69391101d0b8f692c8c78b9bddec398eceb32a0b10c193965a8c0d94f4f35fb"
+    },
+    "horse_documents_independence.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "dc745133dfa1627159105e58937434f5b213cd05cc03eda555f73f15f42c00d3"
+    },
+    "horse_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "33918cea9a04e284de03dfae81277173a1266432ed158326d3ee0e527d451054"
+    },
+    "horse_health_compliance_presentation.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "5fae6c2fbd7d02d2e3192402ef339ad22db51203a0c3ee5189bd468f4552c7ef"
+    },
+    "identity_similarity_search.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3a41bc3c35c12eb81a38c7e9efc776d969504570ea2fd782ab7cfac4bca8172"
+    },
+    "incentive_nomination_programs.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "bbae5332a95ef58541f0402aafb277cb27e0f5c59ad4c545a30ce7ab25500ee8"
+    },
+    "organization_health_policies.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "63cf43128feabda94a3f1adaaf4dba2f1cb4c30241fab353209dbcf74699bc3d"
+    },
+    "phase1_rls.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "7c6ed9b3c028a116dcc851a47b6527d4529640baa39a727975b3e7c55372fbf5"
+    },
+    "results_payouts.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d78e3a70212a117e66ddaba9e9c9e957a2bc0d333ef4b020ca0a7321226e8f51"
+    },
+    "showscore_announcer_paid_warmup_live.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "91ed62516998c4a6004743f323b5950ded44b6ea44762566630106744dbe116e"
+    },
+    "showscore_announcer_session_initialization.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c93f9e1d76d931cced002069beb199c668d68088191c3bbbbaadd57b39bbf187"
+    },
+    "showscore_public_broadcast.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "f86e47274f32a9b9a8de643a6c3a8de60e491d87a1f5cb9bbea8ecbca6abd787"
+    },
+    "showscore_secretary_schedule_writes.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "42703",
+      "stderr_sha256": "d8e1daf29da848435b1f1f46995162451961ce7a051bd308b9c61fcaee79914f"
+    },
+    "stall_booking_invoice.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "targeted_context_showscore.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "9750f7c51ab7150a646564e82436ed2980da91d44cdab5b105e07a434f08f65d"
+    },
+    "team_eligibility_decisions.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d1e68106c40963baf8a4c63955331e6776293101558937c1c91bf5f83752ad69"
+    },
+    "verified_horse_identity_locks.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d14c02feda4152e362600cdc87f98f88aa3871bb970f854650a4c9a5c0c89aae"
+    }
+  },
+  "first_dry_run_versions": [
+    "20260801002350",
+    "20260807000400",
+    "20260824130000",
+    "20260824131000",
+    "20260904000100",
+    "20260904000200"
+  ],
+  "historical_applied_versions": [
+    "20260801002350",
+    "20260807000400",
+    "20260824130000",
+    "20260824131000"
+  ],
+  "tests_after_four": {
+    "audited_horse_identity_corrections.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "0fef1097d339e2ada2223557e924151299bdac0faeacee9a67cb372267a84b9b"
+    },
+    "bloc1_integrated_workflows.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c357be37d8fd8406ee1033b48da8737658380d8ee4402722888b4b9d9fc0b501"
+    },
+    "bloc3_final_validation.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "86f92b6e0942f356f2dd942ede86917bfb619d9634852dbffeb93b62b52f33d0"
+    },
+    "blocks_classes_core.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "df6bf13733d166e609dec7435cb2e66e538a09abcba644d63266e281fd1a4448"
+    },
+    "class_governing_bodies_integration.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "4630534df1337b33e64168b1e59cbfe471caf68705468059f5963f6ec3369100"
+    },
+    "compatibility_views_security_invoker.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "debe4478a4b8b77361126387ce7fd05b39bd6e2e73ccb2f110eae9d8ba4bff20"
+    },
+    "configurable_eligibility_requirements.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "baa643886ab4d96506da9ca4e3d4cb81bfd0c0b899937b809e996038af711003"
+    },
+    "directory_identity_authority.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "00fafaba47991442e5115e4b92c9420510973a0e8fa96a9e834764a73493b029"
+    },
+    "entry_reservation_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "24677887cf3aa51e011d18a60b5c1b6200f122848d6d32d91ca50ec55b527264"
+    },
+    "external_sources_catalog.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b193182b5dad4f12f3b2ad726b85ba536f81091668c3caf1b8f45fb2029a2968"
+    },
+    "foundation_catalogs_directories.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "73ab16dc23c18ad9f0525ea12838cde34df633d8a4ad73a44f0caed1eb8f2958"
+    },
+    "horse_creator_access.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "horse_document_identity_validations.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b69391101d0b8f692c8c78b9bddec398eceb32a0b10c193965a8c0d94f4f35fb"
+    },
+    "horse_documents_independence.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "dc745133dfa1627159105e58937434f5b213cd05cc03eda555f73f15f42c00d3"
+    },
+    "horse_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "33918cea9a04e284de03dfae81277173a1266432ed158326d3ee0e527d451054"
+    },
+    "horse_health_compliance_presentation.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "5fae6c2fbd7d02d2e3192402ef339ad22db51203a0c3ee5189bd468f4552c7ef"
+    },
+    "identity_similarity_search.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3a41bc3c35c12eb81a38c7e9efc776d969504570ea2fd782ab7cfac4bca8172"
+    },
+    "incentive_nomination_programs.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "bbae5332a95ef58541f0402aafb277cb27e0f5c59ad4c545a30ce7ab25500ee8"
+    },
+    "organization_health_policies.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "63cf43128feabda94a3f1adaaf4dba2f1cb4c30241fab353209dbcf74699bc3d"
+    },
+    "phase1_rls.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "7c6ed9b3c028a116dcc851a47b6527d4529640baa39a727975b3e7c55372fbf5"
+    },
+    "results_payouts.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d78e3a70212a117e66ddaba9e9c9e957a2bc0d333ef4b020ca0a7321226e8f51"
+    },
+    "showscore_announcer_paid_warmup_live.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "showscore_announcer_session_initialization.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c93f9e1d76d931cced002069beb199c668d68088191c3bbbbaadd57b39bbf187"
+    },
+    "showscore_public_broadcast.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "f86e47274f32a9b9a8de643a6c3a8de60e491d87a1f5cb9bbea8ecbca6abd787"
+    },
+    "showscore_secretary_schedule_writes.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stall_booking_invoice.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "targeted_context_showscore.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "9750f7c51ab7150a646564e82436ed2980da91d44cdab5b105e07a434f08f65d"
+    },
+    "team_eligibility_decisions.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d1e68106c40963baf8a4c63955331e6776293101558937c1c91bf5f83752ad69"
+    },
+    "verified_horse_identity_locks.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d14c02feda4152e362600cdc87f98f88aa3871bb970f854650a4c9a5c0c89aae"
+    }
+  },
+  "corrective_applied_versions": [
+    "20260904000100",
+    "20260904000200"
+  ],
+  "tests_after_six": {
+    "audited_horse_identity_corrections.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "0fef1097d339e2ada2223557e924151299bdac0faeacee9a67cb372267a84b9b"
+    },
+    "bloc1_integrated_workflows.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c357be37d8fd8406ee1033b48da8737658380d8ee4402722888b4b9d9fc0b501"
+    },
+    "bloc3_final_validation.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "9180f2f7940a9ed3a677e4f4ee291a7f15e64f83900ce26c7f914b4ddee493c1"
+    },
+    "blocks_classes_core.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "df6bf13733d166e609dec7435cb2e66e538a09abcba644d63266e281fd1a4448"
+    },
+    "class_governing_bodies_integration.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "4630534df1337b33e64168b1e59cbfe471caf68705468059f5963f6ec3369100"
+    },
+    "compatibility_views_security_invoker.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "debe4478a4b8b77361126387ce7fd05b39bd6e2e73ccb2f110eae9d8ba4bff20"
+    },
+    "configurable_eligibility_requirements.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "baa643886ab4d96506da9ca4e3d4cb81bfd0c0b899937b809e996038af711003"
+    },
+    "directory_identity_authority.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "00fafaba47991442e5115e4b92c9420510973a0e8fa96a9e834764a73493b029"
+    },
+    "entry_reservation_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "24677887cf3aa51e011d18a60b5c1b6200f122848d6d32d91ca50ec55b527264"
+    },
+    "external_sources_catalog.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b193182b5dad4f12f3b2ad726b85ba536f81091668c3caf1b8f45fb2029a2968"
+    },
+    "foundation_catalogs_directories.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "73ab16dc23c18ad9f0525ea12838cde34df633d8a4ad73a44f0caed1eb8f2958"
+    },
+    "horse_creator_access.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "horse_document_identity_validations.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "b69391101d0b8f692c8c78b9bddec398eceb32a0b10c193965a8c0d94f4f35fb"
+    },
+    "horse_documents_independence.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "dc745133dfa1627159105e58937434f5b213cd05cc03eda555f73f15f42c00d3"
+    },
+    "horse_health_compliance.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "33918cea9a04e284de03dfae81277173a1266432ed158326d3ee0e527d451054"
+    },
+    "horse_health_compliance_presentation.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "5fae6c2fbd7d02d2e3192402ef339ad22db51203a0c3ee5189bd468f4552c7ef"
+    },
+    "identity_similarity_search.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3a41bc3c35c12eb81a38c7e9efc776d969504570ea2fd782ab7cfac4bca8172"
+    },
+    "incentive_nomination_programs.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "bbae5332a95ef58541f0402aafb277cb27e0f5c59ad4c545a30ce7ab25500ee8"
+    },
+    "organization_health_policies.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "63cf43128feabda94a3f1adaaf4dba2f1cb4c30241fab353209dbcf74699bc3d"
+    },
+    "phase1_rls.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "7c6ed9b3c028a116dcc851a47b6527d4529640baa39a727975b3e7c55372fbf5"
+    },
+    "results_payouts.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d78e3a70212a117e66ddaba9e9c9e957a2bc0d333ef4b020ca0a7321226e8f51"
+    },
+    "showscore_announcer_paid_warmup_live.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "showscore_announcer_session_initialization.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "c93f9e1d76d931cced002069beb199c668d68088191c3bbbbaadd57b39bbf187"
+    },
+    "showscore_public_broadcast.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "f86e47274f32a9b9a8de643a6c3a8de60e491d87a1f5cb9bbea8ecbca6abd787"
+    },
+    "showscore_secretary_schedule_writes.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "stall_booking_invoice.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "targeted_context_showscore.sql": {
+      "passed": false,
+      "exit_code": 3,
+      "sqlstate": "P0001",
+      "stderr_sha256": "9750f7c51ab7150a646564e82436ed2980da91d44cdab5b105e07a434f08f65d"
+    },
+    "team_eligibility_decisions.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d1e68106c40963baf8a4c63955331e6776293101558937c1c91bf5f83752ad69"
+    },
+    "verified_horse_identity_locks.sql": {
+      "passed": true,
+      "exit_code": 0,
+      "sqlstate": null,
+      "stderr_sha256": "d14c02feda4152e362600cdc87f98f88aa3871bb970f854650a4c9a5c0c89aae"
+    }
+  },
+  "test_comparisons_four_vs_six": {
+    "audited_horse_identity_corrections.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "bloc1_integrated_workflows.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "bloc3_final_validation.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": false,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "blocks_classes_core.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "class_governing_bodies_integration.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "compatibility_views_security_invoker.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "configurable_eligibility_requirements.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "directory_identity_authority.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "entry_reservation_health_compliance.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "external_sources_catalog.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "foundation_catalogs_directories.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "horse_creator_access.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "horse_document_identity_validations.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "horse_documents_independence.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "horse_health_compliance.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "horse_health_compliance_presentation.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "identity_similarity_search.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "incentive_nomination_programs.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "organization_health_policies.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "phase1_rls.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "results_payouts.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "showscore_announcer_paid_warmup_live.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "showscore_announcer_session_initialization.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "showscore_public_broadcast.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "showscore_secretary_schedule_writes.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "stall_booking_invoice.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "targeted_context_showscore.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "team_eligibility_decisions.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    },
+    "verified_horse_identity_locks.sql": {
+      "status_equal": true,
+      "stderr_byte_identical": true,
+      "stderr_equal_ignoring_generated_uuids": true
+    }
+  },
+  "public_data_comparisons": {
+    "app_events": {
+      "before_count": 11013,
+      "after_count": 11013,
+      "equal_except_allowed_fields": true
+    },
+    "association_invitations": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "audit_events": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_concurrency_group_members": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_concurrency_groups": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_judge_assignments": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_result_publications": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "block_run_class_entries": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_run_entries": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "block_templates": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "blocks": {
+      "before_count": 8,
+      "after_count": 8,
+      "equal_except_allowed_fields": true
+    },
+    "class_governing_bodies": {
+      "before_count": 5,
+      "after_count": 5,
+      "equal_except_allowed_fields": true
+    },
+    "class_template_governing_bodies": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "class_templates": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "classes": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "contact_external_identifiers": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "contact_insurance_evidence": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "contact_organization_memberships": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "contact_roles": {
+      "before_count": 26,
+      "after_count": 26,
+      "equal_except_allowed_fields": true
+    },
+    "contact_similarity_dismissals": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "contacts": {
+      "before_count": 42,
+      "after_count": 42,
+      "equal_except_allowed_fields": true
+    },
+    "credential_issuer_governing_bodies": {
+      "before_count": 5,
+      "after_count": 5,
+      "equal_except_allowed_fields": true
+    },
+    "directory_contacts": {
+      "before_count": 38,
+      "after_count": 38,
+      "equal_except_allowed_fields": true
+    },
+    "directory_horses": {
+      "before_count": 37,
+      "after_count": 37,
+      "equal_except_allowed_fields": true
+    },
+    "discipline_credential_issuers": {
+      "before_count": 4,
+      "after_count": 4,
+      "equal_except_allowed_fields": true
+    },
+    "discipline_governing_bodies": {
+      "before_count": 3,
+      "after_count": 3,
+      "equal_except_allowed_fields": true
+    },
+    "disciplines": {
+      "before_count": 2,
+      "after_count": 2,
+      "equal_except_allowed_fields": true
+    },
+    "eligibility_requirements": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "entries": {
+      "before_count": 50,
+      "after_count": 50,
+      "equal_except_allowed_fields": true
+    },
+    "entry_results": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "external_credential_issuers": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "external_credential_products": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "external_data_snapshot_contacts": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "external_data_snapshot_horses": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "external_data_snapshots": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "external_data_sources": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "external_source_governing_bodies": {
+      "before_count": 5,
+      "after_count": 5,
+      "equal_except_allowed_fields": true
+    },
+    "governing_bodies": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "horse_contacts": {
+      "before_count": 39,
+      "after_count": 39,
+      "equal_except_allowed_fields": true
+    },
+    "horse_document_validations": {
+      "before_count": 78,
+      "after_count": 78,
+      "equal_except_allowed_fields": true
+    },
+    "horse_documents": {
+      "before_count": 78,
+      "after_count": 78,
+      "equal_except_allowed_fields": true
+    },
+    "horse_external_identifiers": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "horse_identity_corrections": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "horse_similarity_dismissals": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "horses": {
+      "before_count": 39,
+      "after_count": 39,
+      "equal_except_allowed_fields": true
+    },
+    "incentive_program_nominations": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "incentive_programs": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "invoice_line_items": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "invoices": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "manual_sales": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "nrha_rider_rankings": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_back_numbers": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_deadline_policies": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_discipline_governing_bodies": {
+      "before_count": 2,
+      "after_count": 2,
+      "equal_except_allowed_fields": true
+    },
+    "organization_disciplines": {
+      "before_count": 6,
+      "after_count": 6,
+      "equal_except_allowed_fields": true
+    },
+    "organization_external_credential_requirements": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_governing_bodies": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_health_document_reviews": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_health_policies": {
+      "before_count": 5,
+      "after_count": 5,
+      "equal_except_allowed_fields": true
+    },
+    "organization_members": {
+      "before_count": 4,
+      "after_count": 4,
+      "equal_except_allowed_fields": true
+    },
+    "organization_membership_types": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organization_products": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "organizations": {
+      "before_count": 4,
+      "after_count": 4,
+      "equal_except_allowed_fields": true
+    },
+    "payments": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "payout_awards": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "payout_calculations": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "payout_schedule_brackets": {
+      "before_count": 240,
+      "after_count": 240,
+      "equal_except_allowed_fields": true
+    },
+    "payout_schedules": {
+      "before_count": 2,
+      "after_count": 2,
+      "equal_except_allowed_fields": true
+    },
+    "platform_admins": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "sanctioning_bodies": {
+      "before_count": 6,
+      "after_count": 6,
+      "equal_except_allowed_fields": true
+    },
+    "scored_runs": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_announcements": {
+      "before_count": 2,
+      "after_count": 2,
+      "equal_except_allowed_fields": true
+    },
+    "show_days": {
+      "before_count": 10,
+      "after_count": 10,
+      "equal_except_allowed_fields": true
+    },
+    "show_roles": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_announcer_live_sessions": {
+      "before_count": 6,
+      "after_count": 6,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_block_setups": {
+      "before_count": 7,
+      "after_count": 7,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_championship_seasons": {
+      "before_count": 76,
+      "after_count": 76,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_championship_update_campaigns": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_championship_update_deliveries": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_championship_update_subscribers": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_class_documents": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_judge_sessions": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_official_results": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_paid_warmups": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_public_championship_seasons": {
+      "before_count": 76,
+      "after_count": 76,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_publication_states": {
+      "before_count": 6,
+      "after_count": 6,
+      "equal_except_allowed_fields": true
+    },
+    "show_score_scoring_sessions": {
+      "before_count": 1,
+      "after_count": 1,
+      "equal_except_allowed_fields": true
+    },
+    "shows": {
+      "before_count": 4,
+      "after_count": 4,
+      "equal_except_allowed_fields": true
+    },
+    "slates": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "stall_bookings": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "stall_options": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "team_eligibility_decisions": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "team_eligibility_snapshots": {
+      "before_count": 0,
+      "after_count": 0,
+      "equal_except_allowed_fields": true
+    },
+    "user_profiles": {
+      "before_count": 4,
+      "after_count": 4,
+      "equal_except_allowed_fields": true
+    }
+  },
+  "setups": [
+    {
+      "label": "setup-1",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 1,
+      "judges_after": 1,
+      "functional_before_sha256": "e82b2ef9ad0e84d1b3b5bf39a44ba437aa9640d54ad94e426ae05bae4ef14bfe",
+      "functional_after_sha256": "e82b2ef9ad0e84d1b3b5bf39a44ba437aa9640d54ad94e426ae05bae4ef14bfe",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-2",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 1,
+      "judges_after": 1,
+      "functional_before_sha256": "9d8cd329bfe5b9dcdc5ec66d1a2e595fea8cfb2f78cdce5d642cad6fbea60e74",
+      "functional_after_sha256": "9d8cd329bfe5b9dcdc5ec66d1a2e595fea8cfb2f78cdce5d642cad6fbea60e74",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-3",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 2,
+      "judges_after": 2,
+      "functional_before_sha256": "c7d03533551fe5ff9a54b691ff3a275c96355f018bc89340b9ab9dfd210c46c0",
+      "functional_after_sha256": "c7d03533551fe5ff9a54b691ff3a275c96355f018bc89340b9ab9dfd210c46c0",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-4",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 2,
+      "judges_after": 2,
+      "functional_before_sha256": "7dac16375aa4f8eb710019525da56d2c32bf955e21ca5392c20810d182d28eb1",
+      "functional_after_sha256": "7dac16375aa4f8eb710019525da56d2c32bf955e21ca5392c20810d182d28eb1",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-5",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 2,
+      "judges_after": 2,
+      "functional_before_sha256": "0601433b7cc7b93609fe610ed35afa6bf508dc93487411e8916234b5bf69fe07",
+      "functional_after_sha256": "0601433b7cc7b93609fe610ed35afa6bf508dc93487411e8916234b5bf69fe07",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-6",
+      "source_before": "announcer",
+      "source_after": "announcer",
+      "judges_before": 2,
+      "judges_after": 2,
+      "functional_before_sha256": "c97fe187cb4b0199c98cc82f7dc0afc14dcc969be61c056c345ff0c05196d49b",
+      "functional_after_sha256": "c97fe187cb4b0199c98cc82f7dc0afc14dcc969be61c056c345ff0c05196d49b",
+      "updated_at_changed": true
+    },
+    {
+      "label": "setup-7",
+      "source_before": "scribe",
+      "source_after": "scribe",
+      "judges_before": 1,
+      "judges_after": 1,
+      "functional_before_sha256": "6e4629c58d076d935a7f35bcf64da57dec079cbcf0b338860998142eba6829e7",
+      "functional_after_sha256": "6e4629c58d076d935a7f35bcf64da57dec079cbcf0b338860998142eba6829e7",
+      "updated_at_changed": true
+    }
+  ],
+  "six_versions_recorded": true,
+  "defaults": {
+    "qualified_rider_count": "6",
+    "live_data_source": "'announcer'::text"
+  },
+  "warmup_rpc": {
+    "signature": "save_show_score_paid_warmup_live(uuid,boolean,boolean,text,timestamp with time zone,jsonb)",
+    "result": "jsonb",
+    "security_definer": true,
+    "default_arguments": 5,
+    "argument_names": [
+      "target_paid_warmup_id",
+      "target_is_public_live",
+      "target_update_queue",
+      "target_active_entry_id",
+      "target_active_started_at",
+      "target_entries"
+    ],
+    "anon_execute": false,
+    "authenticated_execute": true
+  },
+  "permissions_on_restored_rows": {
+    "announcer_read": true,
+    "announcer_live_rpc": true,
+    "announcer_direct_update_denied": true,
+    "secretary_schedule_and_live": true,
+    "admin_live_rpc": true,
+    "foreign_admin_live_denied": true,
+    "anon_denied": true,
+    "cross_association_escalation_denied": true,
+    "profile_required": true,
+    "all_mutations_rolled_back": true
+  },
+  "second_dry_run_empty": true,
+  "catalog_after_sha256": {
+    "history": "3e733aaba45130496c4b396b6e5d2997ea0946db93554f26634f7094476bc160",
+    "roles": "db48971afbce5ae3625c546f22faef4f13954cbfc89275febfc83258ac9a2d7b",
+    "memberships": "e045a62484a98e8b375661d1f6a4ba10456e578196b91eff421cf518e1aac917",
+    "grants": "96a88d7b113c8ed9169dfe3b2710cd7da3d0b1369111119172dda372d114c573",
+    "policies": "810d9ca7c7d848f336382a374b0972dea8e80ee5e2a0a4184159b0a67f9e6dfe",
+    "functions": "6a58456e187dd5a4ae18a8de1bad7cd9690c2d378694d2e50d51ae6433e007c9",
+    "columns": "d3742a040d5001665da8bb553997806f8812b99f00ee41d2b767660a0241f0e0",
+    "default_acl": "9f16b253695b4d5dea92c0755583ba772f88738e7cce6d44cb5b6ba52d0b3e08"
+  },
+  "validation_complete": true,
+  "catalog_validation": {
+    "roles": true,
+    "memberships": true,
+    "table_grants_ignoring_database_alias": true,
+    "default_acls": true,
+    "baseline_functions_restored_exactly": true,
+    "baseline_columns_restored_exactly": true,
+    "existing_policies_unchanged": true,
+    "new_policy_count": 7
+  },
+  "bootstrap_extra_memberships_removed": 1,
+  "fixture_catalog_uuid_remapping": {
+    "codes": [
+      "REINING",
+      "GYMKHANA",
+      "PERFORMANCE"
+    ],
+    "source_sql_files_unchanged": true,
+    "same_mapping_at_all_test_stages": true
+  },
+  "app_results": {
+    "test:draw": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:payout": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:paid-warmup": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:identity": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:governing": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:eligibility": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "test:capacity:config": {
+      "exit_code": 0,
+      "passed": true
+    },
+    "build": {
+      "exit_code": 0,
+      "passed": true
+    }
+  },
+  "strict_historical_error_identity": {
+    "bloc3_final_validation.sql": false,
+    "compatibility_views_security_invoker.sql": true
+  },
+  "backup_completed_utc": "2026-09-04T20:30:11.549963+00:00",
+  "source_snapshot_transaction_utc": null,
+  "snapshot_time_note": "Exact transaction timestamp was not retained in this run; backup completion time is recorded. pg_dump shared the exported read-only snapshot.",
+  "rehearsal_completed_utc": "2026-09-04T20:58:18.364243+00:00",
+  "cli_version": "2.102.0",
+  "postgres_version": "17.6",
+  "postgres_image": "public.ecr.aws/supabase/postgres:17.6.1.131",
+  "container_network": "none",
+  "container_logging_driver": "none",
+  "cli_transport": "ephemeral TLS proxy bound to 127.0.0.1 forwarding to private local Unix socket",
+  "historical_migrations_unchanged": 126,
+  "migration_sha256": {
+    "20260904000200_restore_announcer_setup_defaults.sql": "5951022c649755a9c40638df6bbd676319af6102c2cf8b889b1c045ea60420b2",
+    "20260904000100_secure_association_creation.sql": "54dee3c6f9ba1b767a8e74dbee741d708a30a3545e04b2467422922003ed6b0c"
+  },
+  "sql_failure_diagnostics": {
+    "bloc3_final_validation.sql": {
+      "reason": "Seed vaccine expired on 2026-07-15; generated policy UUIDs differ between runs",
+      "strict_before_after_identical": false,
+      "identical_after_uuid_normalization": true
+    },
+    "compatibility_views_security_invoker.sql": {
+      "reason": "Public association count includes four restored PREPROD organizations; expected 2, got 6",
+      "strict_before_after_identical": true,
+      "same_assertion_as_synthetic_rehearsal": false
+    },
+    "organization_health_policies.sql": {
+      "reason": "Global default-policy assertion assumes only seeded organizations",
+      "strict_before_after_identical": true
+    },
+    "phase1_rls.sql": {
+      "reason": "Anonymous show count includes three restored public shows; expected 0, got 3",
+      "strict_before_after_identical": true
+    },
+    "targeted_context_showscore.sql": {
+      "reason": "Organization B query also sees legitimately public restored blocks from other associations",
+      "strict_before_after_identical": true
+    }
+  },
+  "draft_pr_ready": true,
+  "preprod_application_ready": false,
+  "application_blockers": [
+    "Five SQL tests fail on the restored-data test clone; fixture isolation or explicit acceptance remains outstanding.",
+    "The requested strict identity of both historical error diagnostics is not established: Bloc 3 differs by generated UUIDs."
+  ],
+  "no_remote_writes": true,
+  "no_migration_repair": true,
+  "no_commit_push_pr": true,
+  "tests_executed_per_final_rehearsal": 87,
+  "cleanup": {
+    "container_destroyed": true,
+    "archive_deleted": true,
+    "private_captures_and_keys_deleted": true,
+    "temporary_directory_deleted": true,
+    "verified_utc": "2026-09-04T20:58:25.273855+00:00"
+  }
+}

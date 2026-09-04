@@ -1,0 +1,2 @@
+# Rehearsal evidence is intentionally versioned; root ignores generic logs.
+!*.log

@@ -1,0 +1,36 @@
+BEGIN
+NOTICE:  trigger "stamp_show_score_live_source_change" for relation "public.show_score_block_setups" does not exist, skipping
+DROP TRIGGER
+NOTICE:  function public.stamp_show_score_live_source_change() does not exist, skipping
+DROP FUNCTION
+ALTER TABLE
+NOTICE:  column "set_approval_mode" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "set_approvals" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "live_data_source" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "live_display_mode" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "qualified_rider_count" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "live_source_changed_at" of relation "show_score_block_setups" already exists, skipping
+NOTICE:  column "live_source_changed_by" of relation "show_score_block_setups" already exists, skipping
+ALTER TABLE
+UPDATE 7
+ALTER TABLE
+NOTICE:  constraint "show_score_class_setups_set_approval_mode_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE:  constraint "show_score_class_setups_live_data_source_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE:  constraint "show_score_class_setups_live_display_mode_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE:  constraint "show_score_class_setups_qualified_rider_count_check" of relation "show_score_block_setups" does not exist, skipping
+ALTER TABLE
+ALTER TABLE
+NOTICE:  column "set_approvals" of relation "show_score_judge_sessions" already exists, skipping
+ALTER TABLE
+UPDATE 0
+ALTER TABLE
+DROP FUNCTION
+CREATE FUNCTION
+DROP FUNCTION
+CREATE FUNCTION
+REVOKE
+REVOKE
+GRANT
+GRANT
+NOTIFY
+COMMIT

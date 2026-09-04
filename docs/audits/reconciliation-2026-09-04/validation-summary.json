@@ -1,0 +1,150 @@
+{
+  "branch": "fix/preprod-migration-reconciliation-2026-09-04",
+  "base_commit": "8214db4904b47cf6b5a1bcd3d69752a8e917af56",
+  "completed_utc": "2026-09-04T20:15:39.471521+00:00",
+  "cli": "2.102.0",
+  "postgres": "17.6",
+  "new_migrations": {
+    "20260904000200_restore_announcer_setup_defaults.sql": "5951022c649755a9c40638df6bbd676319af6102c2cf8b889b1c045ea60420b2",
+    "20260904000100_secure_association_creation.sql": "54dee3c6f9ba1b767a8e74dbee741d708a30a3545e04b2467422922003ed6b0c"
+  },
+  "historical_files_unchanged": 126,
+  "public_schema_normalized_sha256": "922abae9a1617f033582ca6cb30ab9f4edf12878acd25c32f35567cbaa717ced",
+  "schemas_equal": true,
+  "setup_updated_at_changes": 7,
+  "counts_before_after": {
+    "show_score_block_setups": [
+      7,
+      7
+    ],
+    "show_score_announcer_live_sessions": [
+      6,
+      6
+    ],
+    "show_score_paid_warmups": [
+      1,
+      1
+    ],
+    "blocks": [
+      8,
+      8
+    ],
+    "classes": [
+      7,
+      7
+    ],
+    "class_governing_bodies": [
+      5,
+      5
+    ],
+    "eligibility_requirements": [
+      7,
+      7
+    ],
+    "entries": [
+      50,
+      50
+    ],
+    "invoices": [
+      0,
+      0
+    ],
+    "payments": [
+      0,
+      0
+    ]
+  },
+  "sql_results": {
+    "audited_horse_identity_corrections.sql": "PASS",
+    "bloc1_integrated_workflows.sql": "PASS",
+    "bloc3_final_validation.sql": "FAIL",
+    "blocks_classes_core.sql": "PASS",
+    "class_governing_bodies_integration.sql": "PASS",
+    "compatibility_views_security_invoker.sql": "FAIL",
+    "configurable_eligibility_requirements.sql": "PASS",
+    "directory_identity_authority.sql": "PASS",
+    "entry_reservation_health_compliance.sql": "PASS",
+    "external_sources_catalog.sql": "PASS",
+    "foundation_catalogs_directories.sql": "PASS",
+    "horse_creator_access.sql": "PASS",
+    "horse_document_identity_validations.sql": "PASS",
+    "horse_documents_independence.sql": "PASS",
+    "horse_health_compliance.sql": "PASS",
+    "horse_health_compliance_presentation.sql": "PASS",
+    "identity_similarity_search.sql": "PASS",
+    "incentive_nomination_programs.sql": "PASS",
+    "organization_health_policies.sql": "PASS",
+    "phase1_rls.sql": "PASS",
+    "results_payouts.sql": "PASS",
+    "showscore_announcer_paid_warmup_live.sql": "PASS",
+    "showscore_announcer_session_initialization.sql": "PASS",
+    "showscore_public_broadcast.sql": "PASS",
+    "showscore_secretary_schedule_writes.sql": "PASS",
+    "stall_booking_invoice.sql": "PASS",
+    "targeted_context_showscore.sql": "PASS",
+    "team_eligibility_decisions.sql": "PASS",
+    "verified_horse_identity_locks.sql": "PASS"
+  },
+  "reconciliation_assertions": "PASS in catchup and chronological states",
+  "api": "PASS",
+  "concurrency": "PASS",
+  "transaction_boundary": "true|true|1|0",
+  "application_tests": [
+    "draw",
+    "payout",
+    "paid-warmup (8)",
+    "identity",
+    "governing",
+    "eligibility",
+    "capacity:config"
+  ],
+  "build": "PASS with large-chunk warning",
+  "runner_exit_code": 1,
+  "runner_exit_reason": "Two unchanged historical SQL failures reproduced without corrections; reconciliation checks passed",
+  "remote_database_writes": false,
+  "migration_repair": false,
+  "commit_push_pr": false,
+  "disposable_instance_destroyed": true,
+  "restored_rehearsal": {
+    "evidence_file": "restored-validation.json",
+    "backup_restored": true,
+    "public_tables_verified": 94,
+    "sql_passed_initial": 22,
+    "sql_passed_after_four": 24,
+    "sql_passed_after_six": 24,
+    "sql_total_each_stage": 29,
+    "sql_executions": 87,
+    "new_failure_statuses_after_correctives": 0,
+    "strict_identity_of_both_historical_errors": false,
+    "historical_error_difference": "Bloc 3 generated UUIDs",
+    "all_functional_preservation_checks_passed": true,
+    "announcer_secretary_admin_permissions_passed": true,
+    "inter_association_escalation_denied": true,
+    "six_migrations_recorded": true,
+    "second_local_dry_run_empty": true,
+    "app_tests_and_build_passed": true,
+    "draft_pr_ready": true,
+    "preprod_application_ready": false,
+    "cleanup": {
+      "container_destroyed": true,
+      "archive_deleted": true,
+      "private_captures_and_keys_deleted": true,
+      "temporary_directory_deleted": true,
+      "verified_utc": "2026-09-04T20:58:25.273855+00:00"
+    },
+    "completed_utc": "2026-09-04T20:58:18.364243+00:00",
+    "runner_exit_code": 0,
+    "runner_exit_scope": "All reconciliation checks executed; SQL test suite remains 24/29."
+  },
+  "current_verdict": {
+    "draft_pr": "ready for review",
+    "preprod_application": "not ready",
+    "blocking_conditions": [
+      "Five SQL tests fail on the restored-data test clone; fixture isolation or explicit acceptance remains outstanding.",
+      "The requested strict identity of both historical error diagnostics is not established: Bloc 3 differs by generated UUIDs."
+    ]
+  },
+  "no_remote_writes": true,
+  "no_commit_push_pr": true,
+  "legacy_top_level_results_scope": "synthetic rehearsal; current verdict and restored_rehearsal supersede it"
+}

@@ -1,0 +1,24 @@
+BEGIN
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+SET
+10000000-0000-0000-0000-000000000004
+authenticated
+(d649a285-18d1-4413-aeed-18eeb052030c,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,verified,manual,health_document_horse,"Phase One Whiz",2018-05-01,,,,G,,,P1-A-001,,"{""name"": ""Phase One Whiz"", ""breed"": ""Quarter Horse"", ""gender"": ""G"", ""birth_year"": 2018, ""date_of_birth"": ""2018-05-01"", ""registration_number"": ""P1-A-001""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}, {""field"": ""date_of_birth"", ""reason"": ""same_date_of_birth"", ""outcome"": ""exact""}, {""field"": ""gender"", ""reason"": ""same_gender"", ""outcome"": ""exact""}, {""field"": ""identifier"", ""reason"": ""same_identifier"", ""outcome"": ""exact""}, {""field"": ""breed"", ""reason"": ""missing_breed"", ""outcome"": ""missing""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:44.01621+00",,,,,)
+(e2abed39-0326-472f-afc9-98dff17702ed,82000000-0000-0000-0000-000000000002,80000000-0000-0000-0000-000000000001,1,mismatch,manual,health_document_horse,"Another Horse",,,,,,"Paint Horse",,,,"{""name"": ""Phase One Whiz"", ""breed"": ""Quarter Horse""}","{""score"": 0, ""verdict"": ""mismatch""}","[{""field"": ""name"", ""reason"": ""different_name"", ""outcome"": ""different""}, {""field"": ""breed"", ""reason"": ""different_breed"", ""outcome"": ""different""}]",{},{},mismatch,0,weak,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:44.01621+00",,,,,)
+(2c4ae2a0-db7e-4bcf-9d1e-d810513016e5,93000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,verified,manual,external_horse,"Phase One Whiz",,,,,,,,AQHA-LOCK-100,,"{""name"": ""Phase One Whiz"", ""external_identifier"": ""AQHA-LOCK-100"", ""registration_number"": ""P1-A-001""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}, {""field"": ""identifier"", ""reason"": ""same_identifier"", ""outcome"": ""exact""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:44.01621+00",,,,,)
+NOTICE:  ok - lock inventory is field-specific and ignores mismatch evidence
+DO
+NOTICE:  ok - ordinary updates cannot change fields used by verified evidence
+DO
+UPDATE 1
+NOTICE:  ok - fields not used by verified evidence remain editable
+DO
+UPDATE 1
+NOTICE:  ok - verified external numbers and their source document are protected
+DO
+10000000-0000-0000-0000-000000000006
+DO
+NOTICE:  ok - lock inventory follows horse access authority
+ROLLBACK

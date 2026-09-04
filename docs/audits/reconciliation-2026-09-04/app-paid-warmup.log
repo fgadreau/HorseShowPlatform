@@ -1,0 +1,20 @@
+
+> horseshowplatform@0.1.0 test:paid-warmup
+> tsc -p tsconfig.paid-warmup-test.json && cp scripts/draw-test-package.json .tmp/paid-warmup-tests/package.json && node .tmp/paid-warmup-tests/scripts/paid-warmup-submission.test.js
+
+✔ a rejected save reports the error, releases busy state, and does not call onSaved (5.98929ms)
+✔ a successful save calls onSaved exactly once (1.728437ms)
+✔ a rejected refresh does not turn a successful save into a failed save (0.594189ms)
+✔ a false refresh result reports a warning without rejecting (0.339965ms)
+✔ savePaidWarmupWithRefresh does not absorb a rejected save (1.895738ms)
+✔ the synchronous lock ignores a second submission (0.367005ms)
+✔ a retry reuses the same generated UUID (5.593451ms)
+✔ editing uses the existing warm-up ID without generating another (0.213358ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 32.652968

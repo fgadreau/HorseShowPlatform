@@ -1,0 +1,14 @@
+BEGIN
+DO
+NOTICE:  ok - NRHA eligibility source is separate from member and horse lookup
+SET
+10000000-0000-0000-0000-000000000004
+authenticated
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - eligibility proof, decision, TTL and FK context are enforced
+DO
+10000000-0000-0000-0000-000000000006
+NOTICE:  ok - eligibility decisions remain scoped by association and team access
+DO
+ROLLBACK

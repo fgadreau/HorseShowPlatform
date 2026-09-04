@@ -1,0 +1,27 @@
+BEGIN
+NOTICE:  ok - canonical blocks/classes and ShowScore block setup names
+DO
+INSERT 0 1
+INSERT 0 1
+DO
+DO
+NOTICE:  ok - multiple class entries share one block pass
+NOTICE:  ok - duplicate entry in the same true class is refused
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - different concurrent patterns are refused
+DO
+UPDATE 1
+INSERT 0 1
+NOTICE:  ok - a concurrent block pattern cannot drift later
+DO
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+DO
+NOTICE:  ok - scored run fans out to every true class
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - paid warmup, RLS policies and ShowScore event block reference
+DO
+ROLLBACK

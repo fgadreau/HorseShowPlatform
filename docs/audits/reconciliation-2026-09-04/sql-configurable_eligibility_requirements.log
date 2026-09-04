@@ -1,0 +1,55 @@
+BEGIN
+INSERT 0 3
+INSERT 0 3
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+NOTICE:  ok - organization, block and class requirements are cumulative
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+NOTICE:  ok - an accepted membership product can satisfy rider insurance
+DO
+DELETE 1
+SET
+10000000-0000-0000-0000-000000000004
+authenticated
+INSERT 0 1
+DO
+NOTICE:  ok - a rider cannot approve their own insurance evidence
+10000000-0000-0000-0000-000000000002
+UPDATE 1
+RESET
+NOTICE:  ok - approved private insurance is an alternative to optional OPTS membership
+DO
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - block rules affect every class while class rules remain additional
+DO
+DELETE 1
+UPDATE 1
+NOTICE:  ok - unmet blocking requirements prevent entry activation
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - recurring requirements are copied to real blocks and classes
+DO
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+DO
+NOTICE:  ok - associations can only select governing bodies allowed for the discipline
+SET
+10000000-0000-0000-0000-000000000002
+authenticated
+NOTICE:  ok - a discipline directory in use cannot be deactivated accidentally
+DO
+ROLLBACK

@@ -1,0 +1,5 @@
+
+> horseshowplatform@0.1.0 test:eligibility
+> tsc -p tsconfig.eligibility-test.json && cp scripts/draw-test-package.json .tmp/eligibility-tests/package.json && node .tmp/eligibility-tests/scripts/eligibility-engine-test.js
+
+eligibility engine tests passed

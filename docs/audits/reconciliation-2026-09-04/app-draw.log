@@ -1,0 +1,7 @@
+
+> horseshowplatform@0.1.0 test:draw
+> tsc -p tsconfig.draw-test.json && cp scripts/draw-test-package.json .tmp/draw-tests/package.json && node .tmp/draw-tests/scripts/draw-test-program.js
+
+Draw test program OK
+Large bloc: 45 runs, 3 late, minimum repeated-rider gap 14.
+Impossible edge case: 7 runs, minimum repeated-rider gap 1.

@@ -1,0 +1,19 @@
+BEGIN
+INSERT 0 2
+UPDATE 3
+INSERT 0 1
+NOTICE:  ok - one default discipline per organization
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - slate organization must match show organization
+DO
+DELETE 1
+INSERT 0 1
+NOTICE:  ok - default entry deadline is per block, previous day at 18:00
+DO
+UPDATE 1
+DO
+NOTICE:  ok - show entry and reservation deadlines are independent
+ROLLBACK

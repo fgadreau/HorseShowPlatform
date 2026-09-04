@@ -1,0 +1,5 @@
+
+> horseshowplatform@0.1.0 test:identity
+> tsc -p tsconfig.identity-test.json && cp scripts/draw-test-package.json .tmp/identity-tests/package.json && node .tmp/identity-tests/scripts/identity-comparison-test.js
+
+identity comparison tests passed

@@ -1,0 +1,66 @@
+BEGIN
+INSERT 0 6
+INSERT 0 6
+INSERT 0 0
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+INSERT 0 5
+INSERT 0 0
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 6
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 4
+UPDATE 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+UPDATE 1
+DELETE 5
+NOTICE:  ok - private topic authorization and function privileges
+DO
+SET
+NOTICE:  ok - authenticated cannot forge a Broadcast message
+DO
+RESET
+INSERT 0 1
+UPDATE 1
+DELETE 2
+UPDATE 1
+NOTICE:  ok - last public publication becoming hidden still invalidates safely
+DO
+DELETE 1
+UPDATE 1
+DELETE 2
+UPDATE 1
+NOTICE:  ok - public block update emits a projected ordered payload
+DO
+DELETE 1
+UPDATE 1
+NOTICE:  ok - public to hidden transition emits only invalidation
+DO
+DELETE 1
+UPDATE 1
+NOTICE:  ok - hidden block rows are not broadcast
+DO
+UPDATE 1
+DELETE 1
+UPDATE 1
+NOTICE:  ok - 167-run payload remains within the safety cap (34010)
+DO
+DELETE 2
+DELETE 1
+NOTICE:  ok - block deletion invalidates before child cascades
+DO
+ROLLBACK

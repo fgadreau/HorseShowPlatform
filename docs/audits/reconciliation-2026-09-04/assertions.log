@@ -1,0 +1,41 @@
+BEGIN
+CREATE FUNCTION
+INSERT 0 1
+INSERT 0 1
+DO
+SELECT 4
+SELECT 3
+SET
+
+
+SET
+
+
+10000000-0000-0000-0000-000000000099
+
+10000000-0000-0000-0000-000000000004
+
+
+{"id":"30000000-0000-0000-0000-000000000099","name":"New association","short_name":"","timezone":"America/Toronto","logo_data_url":null,"website_url":null,"sponsor_logos":[],"created_at":"2026-09-04T20:12:56.434083+00:00","updated_at":"2026-09-04T20:12:56.434083+00:00"}
+
+RESET
+DO
+DELETE 1
+SET
+10000000-0000-0000-0000-000000000003
+DO
+
+
+RESET
+UPDATE 1
+SET
+DO
+
+10000000-0000-0000-0000-000000000006
+
+
+10000000-0000-0000-0000-000000000002
+{"id": "50000000-0000-0000-0000-000000000008", "name": "Fixture warmup", "arena": null, "entries": [{"id": "entry-1", "order": 1, "status": "done"}, {"id": "entry-2", "order": 2, "status": "pending"}], "show_id": "40000000-0000-0000-0000-000000000001", "block_id": "50000000-0000-0000-0000-000000000008", "created_at": "2026-09-04T20:12:43.530382+00:00", "sort_order": 8, "updated_at": "2026-09-04T20:12:56.434083+00:00", "show_day_id": "41000000-0000-0000-0000-000000000001", "drag_interval": null, "is_public_live": false, "legacy_payload": null, "active_entry_id": "entry-1", "organization_id": "30000000-0000-0000-0000-000000000001", "active_started_at": "2026-09-04T20:12:56.434083+00:00", "schedule_start_mode": "after_previous", "schedule_start_time": null, "drag_duration_minutes": 8, "duration_minutes_per_rider": 5, "legacy_showscore_paid_warmup_id": null}
+10000000-0000-0000-0000-000000000001
+{"id": "50000000-0000-0000-0000-000000000008", "name": "Fixture warmup", "arena": null, "entries": [{"id": "entry-1", "order": 1, "status": "done"}, {"id": "entry-2", "order": 2, "status": "pending"}], "show_id": "40000000-0000-0000-0000-000000000001", "block_id": "50000000-0000-0000-0000-000000000008", "created_at": "2026-09-04T20:12:43.530382+00:00", "sort_order": 8, "updated_at": "2026-09-04T20:12:56.434083+00:00", "show_day_id": "41000000-0000-0000-0000-000000000001", "drag_interval": null, "is_public_live": true, "legacy_payload": null, "active_entry_id": "entry-1", "organization_id": "30000000-0000-0000-0000-000000000001", "active_started_at": "2026-09-04T20:12:56.434083+00:00", "schedule_start_mode": "after_previous", "schedule_start_time": null, "drag_duration_minutes": 8, "duration_minutes_per_rider": 5, "legacy_showscore_paid_warmup_id": null}
+ROLLBACK

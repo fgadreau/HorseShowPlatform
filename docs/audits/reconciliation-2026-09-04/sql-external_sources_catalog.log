@@ -1,0 +1,27 @@
+BEGIN
+NOTICE:  ok - external sources are distinct, extensible technical channels
+DO
+DO
+NOTICE:  ok - OPTS is a configurable issuer category, not Cheval Quebec-specific logic
+SET
+10000000-0000-0000-0000-000000000006
+authenticated
+DO
+NOTICE:  ok - association staff can read but cannot redefine the global source catalog
+INSERT 0 2
+INSERT 0 1
+NOTICE:  ok - an association can require active OPTS membership independently of discipline
+DO
+INSERT 0 1
+NOTICE:  ok - external evidence is stored separately from the identity and requirement decision
+DO
+RESET
+SET
+10000000-0000-0000-0000-000000000001
+authenticated
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - another province or technical provider requires data only, not a schema change
+DO
+RESET
+ROLLBACK

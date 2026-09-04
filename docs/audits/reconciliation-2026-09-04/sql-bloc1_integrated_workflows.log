@@ -1,0 +1,42 @@
+BEGIN
+CREATE SCHEMA
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+SET
+
+INSERT 0 1
+(c3d3bf15-718a-45f3-8ef1-24c4203dbf35,30000000-0000-0000-0000-000000000002,912,assigned,horse,80000000-0000-0000-0000-000000000002,,"2026-09-04 20:14:36.691216+00",20000000-0000-0000-0000-000000000006,,"2026-09-04 20:14:36.691216+00","2026-09-04 20:14:36.691216+00")
+
+NOTICE:  ok - directory-linked horse receives an organization back number
+INSERT 0 1
+
+NOTICE:  ok - entry creates one invoice line for the true class
+INSERT 0 1
+NOTICE:  ok - entry and stall share the same draft invoice
+
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - ShowScore result fans out to the entered true class
+
+INSERT 0 1
+NOTICE:  ok - payout is attached to the true class result
+
+RESET
+SET
+
+
+NOTICE:  ok - other organization user cannot see integrated entry
+NOTICE:  ok - other organization user cannot see integrated invoice lines
+
+NOTICE:  ok - other organization user cannot see integrated ShowScore result
+
+NOTICE:  ok - other organization user cannot see integrated payout
+
+
+NOTICE:  ok - other organization user cannot see integrated back number
+RESET
+ROLLBACK

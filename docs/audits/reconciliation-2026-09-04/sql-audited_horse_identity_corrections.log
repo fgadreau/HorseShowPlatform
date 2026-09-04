@@ -1,0 +1,31 @@
+BEGIN
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+SET
+10000000-0000-0000-0000-000000000004
+authenticated
+(6cd259e7-163f-483e-ab32-cc9aeedc6401,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,verified,manual,health_document_horse,"Phase One Whiz",2018-05-01,,,,,,,,,"{""name"": ""Phase One Whiz"", ""date_of_birth"": ""2018-05-01""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}, {""field"": ""date_of_birth"", ""reason"": ""same_date_of_birth"", ""outcome"": ""exact""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:36.375156+00",,,,,)
+(288cf06a-460a-4acd-9527-a6f3b32b5316,96000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,verified,manual,external_horse,"Phase One Whiz",,,,,,,,AQHA-BEFORE-100,,"{""name"": ""Phase One Whiz"", ""external_identifier"": ""AQHA-BEFORE-100""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}, {""field"": ""identifier"", ""reason"": ""same_identifier"", ""outcome"": ""exact""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:36.375156+00",,,,,)
+10000000-0000-0000-0000-000000000003
+DO
+NOTICE:  ok - association staff can identify documents but cannot correct global identity
+10000000-0000-0000-0000-000000000004
+NOTICE:  ok - a meaningful correction reason is mandatory
+DO
+(d48a3a65-9994-4727-8453-3d7459b5b13b,80000000-0000-0000-0000-000000000001,"Erreur de saisie confirmee par le proprietaire","{name,date_of_birth,external_identifier:c4e848d1-2f8a-40ce-9fdf-ed7567922063:registration}","{""name"": ""Phase One Whiz"", ""breed"": ""Quarter Horse"", ""gender"": ""G"", ""birth_year"": 2018, ""date_of_birth"": ""2018-05-01"", ""registration_number"": ""P1-A-001"", ""registration_status"": ""registered"", ""external_identifiers"": [{""identifier_type"": ""competition_license"", ""identifier_value"": ""NSBA-UNCHANGED-300"", ""external_credential_issuer_id"": ""a4e8b04d-5bd6-4a2b-9f34-94ca44ca1c33""}, {""identifier_type"": ""registration"", ""identifier_value"": ""AQHA-BEFORE-100"", ""external_credential_issuer_id"": ""c4e848d1-2f8a-40ce-9fdf-ed7567922063""}]}","{""name"": ""Corrected Whiz"", ""breed"": ""Quarter Horse"", ""gender"": ""G"", ""birth_year"": 2018, ""date_of_birth"": ""2018-05-02"", ""registration_number"": ""P1-A-001"", ""registration_status"": ""registered"", ""external_identifiers"": [{""identifier_type"": ""competition_license"", ""identifier_value"": ""NSBA-UNCHANGED-300"", ""external_credential_issuer_id"": ""a4e8b04d-5bd6-4a2b-9f34-94ca44ca1c33""}, {""identifier_type"": ""registration"", ""identifier_value"": ""AQHA-AFTER-200"", ""external_credential_issuer_id"": ""c4e848d1-2f8a-40ce-9fdf-ed7567922063""}]}",applied,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:36.375156+00","2026-09-04 20:14:36.375156+00")
+NOTICE:  ok - correction preserves before/after and invalidates every affected reading
+DO
+(f970e22a-de42-4533-8645-f93f8a7049a8,96000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,2,verified,manual,external_horse,"Corrected Whiz",,,,,,,,AQHA-AFTER-200,,"{""name"": ""Corrected Whiz"", ""external_identifier"": ""AQHA-AFTER-200""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}, {""field"": ""identifier"", ""reason"": ""same_identifier"", ""outcome"": ""exact""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:36.375156+00",,,,,)
+NOTICE:  ok - revalidation creates a new version and restores locks
+DO
+(049bcc14-dc77-495f-a89c-50676cb4a6c7,80000000-0000-0000-0000-000000000001,"Proprietaire confirme que le cheval est finalement grade","{registration_number,registration_status,external_identifier:c4e848d1-2f8a-40ce-9fdf-ed7567922063:registration}","{""name"": ""Corrected Whiz"", ""breed"": ""Quarter Horse"", ""gender"": ""G"", ""birth_year"": 2018, ""date_of_birth"": ""2018-05-02"", ""registration_number"": ""P1-A-001"", ""registration_status"": ""registered"", ""external_identifiers"": [{""identifier_type"": ""competition_license"", ""identifier_value"": ""NSBA-UNCHANGED-300"", ""external_credential_issuer_id"": ""a4e8b04d-5bd6-4a2b-9f34-94ca44ca1c33""}, {""identifier_type"": ""registration"", ""identifier_value"": ""AQHA-AFTER-200"", ""external_credential_issuer_id"": ""c4e848d1-2f8a-40ce-9fdf-ed7567922063""}]}","{""name"": ""Corrected Whiz"", ""breed"": ""Quarter Horse"", ""gender"": ""G"", ""birth_year"": 2018, ""date_of_birth"": ""2018-05-02"", ""registration_number"": null, ""registration_status"": ""grade"", ""external_identifiers"": [{""identifier_type"": ""competition_license"", ""identifier_value"": ""NSBA-UNCHANGED-300"", ""external_credential_issuer_id"": ""a4e8b04d-5bd6-4a2b-9f34-94ca44ca1c33""}]}",applied,20000000-0000-0000-0000-000000000004,"2026-09-04 20:14:36.375156+00","2026-09-04 20:14:36.375156+00")
+NOTICE:  ok - grade transition and registry removal are one audited operation
+DO
+NOTICE:  ok - correction audit writes are restricted to the controlled RPC
+DO
+10000000-0000-0000-0000-000000000006
+DO
+NOTICE:  ok - correction history follows horse access RLS
+ROLLBACK

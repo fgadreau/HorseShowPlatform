@@ -1,0 +1,37 @@
+BEGIN
+DO
+NOTICE:  ok - legacy identity organization paths are physically removed
+SET
+10000000-0000-0000-0000-000000000006
+authenticated
+INSERT 0 1
+INSERT 0 1
+DO
+NOTICE:  ok - staff can link and read, but cannot edit global identity
+DO
+NOTICE:  ok - association admin identity update denied by RLS
+INSERT 0 1
+INSERT 0 1
+DELETE 1
+DELETE 1
+NOTICE:  ok - multi-discipline links are independent and identities survive unlinking
+DO
+NOTICE:  ok - exact contact reuse links without overwriting identity
+DO
+NOTICE:  ok - back number eligibility uses directory membership
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - staff draft authority ends after directory placement
+DO
+RESET
+SET
+10000000-0000-0000-0000-000000000004
+authenticated
+DO
+NOTICE:  ok - linked owner retains identity authority
+RESET
+ROLLBACK

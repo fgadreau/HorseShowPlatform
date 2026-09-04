@@ -1,0 +1,49 @@
+BEGIN
+CREATE FUNCTION
+INSERT 0 6
+INSERT 0 6
+INSERT 0 0
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+INSERT 0 5
+INSERT 0 0
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 6
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 4
+UPDATE 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+DO
+CREATE SCHEMA
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+GRANT
+GRANT
+SET
+NOTICE:  ok - anonymous users retain public association access
+
+NOTICE:  ok - anonymous users cannot read private show days
+
+
+NOTICE:  ok - anonymous users cannot read memberships
+RESET
+SET
+
+ERROR:  organization admins read only their organization days expected 1, got 3
+CONTEXT:  PL/pgSQL function compatibility_view_test.assert_count(text,text,bigint) line 7 at RAISE

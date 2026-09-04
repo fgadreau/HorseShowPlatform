@@ -1,0 +1,25 @@
+BEGIN
+DO
+NOTICE:  ok - every association has one discipline-independent default health policy
+INSERT 0 1
+SET
+10000000-0000-0000-0000-000000000003
+authenticated
+(af196f4e-8aec-4153-b5b8-a2c34fa54d21,30000000-0000-0000-0000-000000000001,2026-09-04,,t,calendar_year,12,t,f,t,6,verified,t,warning,"Politique A distincte de toute discipline",20000000-0000-0000-0000-000000000003,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:40.258335+00","2026-09-04 20:14:40.258335+00")
+NOTICE:  ok - dated policies preserve history and differ between associations
+DO
+(67397d50-4fcf-4340-8ec4-ae7123a81e5b,30000000-0000-0000-0000-000000000001,82000000-0000-0000-0000-000000000001,af196f4e-8aec-4153-b5b8-a2c34fa54d21,1,approved,"Association A accepte ce document",20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:40.258335+00","2026-09-04 20:14:40.258335+00")
+NOTICE:  ok - an effective historical policy is immutable
+DO
+10000000-0000-0000-0000-000000000006
+(a886c1b6-7b9b-4e34-ae5a-f5dfc9d34a90,30000000-0000-0000-0000-000000000002,82000000-0000-0000-0000-000000000001,efacb024-3c3b-488b-a811-235dd19364bc,1,rejected,"Association B exige une nouvelle copie",20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:40.258335+00","2026-09-04 20:14:40.258335+00")
+DO
+NOTICE:  ok - associations can reach opposite review decisions without mutating the document
+10000000-0000-0000-0000-000000000004
+DO
+NOTICE:  ok - policy writes are staff-only while the horse authority sees association decisions
+RESET
+SET
+DO
+NOTICE:  ok - association health requirements are publicly readable
+ROLLBACK

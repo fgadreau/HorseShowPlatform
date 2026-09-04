@@ -1,0 +1,30 @@
+BEGIN
+DO
+UPDATE 1
+SET
+authenticated
+10000000-0000-0000-0000-000000000004
+NOTICE:  ok - blocking uses the exact show date and returns stable reasons
+DO
+DO
+NOTICE:  ok - entries and horse-linked reservations share the central block
+RESET
+UPDATE 1
+SET
+authenticated
+10000000-0000-0000-0000-000000000004
+INSERT 0 1
+INSERT 0 1
+DO
+NOTICE:  ok - warning mode preserves the visible issue without blocking
+RESET
+UPDATE 1
+SET
+authenticated
+10000000-0000-0000-0000-000000000004
+UPDATE 1
+UPDATE 1
+INSERT 0 1
+DO
+NOTICE:  ok - cancellations and reservations without a horse stay available
+ROLLBACK

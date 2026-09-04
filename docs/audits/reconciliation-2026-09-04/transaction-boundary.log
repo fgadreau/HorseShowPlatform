@@ -1,0 +1,13 @@
+Using workdir /tmp/hsp-reconciliation-20260904
+Connecting to local database...
+Do you want to push these migrations to the local database?
+ • 20260904999800_transaction_probe_first.sql
+ • 20260904999900_transaction_probe_failure.sql
+
+ [Y/n] y
+Applying migration 20260904999800_transaction_probe_first.sql...
+Applying migration 20260904999900_transaction_probe_failure.sql...
+ERROR: intentional transaction probe (SQLSTATE P0001)              
+At statement: 1                                                    
+do $$ begin raise exception 'intentional transaction probe'; end $$
+Try rerunning the command with --debug to troubleshoot the error.

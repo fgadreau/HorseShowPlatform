@@ -1,0 +1,40 @@
+BEGIN
+INSERT 0 6
+INSERT 0 6
+INSERT 0 0
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+INSERT 0 5
+INSERT 0 0
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 6
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 4
+UPDATE 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+DELETE 0
+INSERT 0 1
+NOTICE:  ok - default announcer setup initializes its live session
+DO
+UPDATE 1
+NOTICE:  ok - unstarted announcer session follows setup runs
+DO
+UPDATE 1
+UPDATE 1
+NOTICE:  ok - started announcer session is protected from setup changes
+DO
+ROLLBACK

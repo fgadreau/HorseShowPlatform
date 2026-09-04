@@ -1,0 +1,44 @@
+BEGIN
+INSERT 0 1
+NOTICE:  ok - programs remain optional until a class selects one
+DO
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+NOTICE:  ok - combined stallion and foal programs require both active records
+DO
+UPDATE 1
+UPDATE 1
+INSERT 0 1
+NOTICE:  ok - nomination price uses the horse age on January 1 of the season
+DO
+DO
+NOTICE:  ok - age-priced nominations require the horse date of birth
+DO
+NOTICE:  ok - an explicitly selected class program is blocking
+INSERT 0 1
+DO
+NOTICE:  ok - an active nomination satisfies the optional class rule
+SET
+10000000-0000-0000-0000-000000000002
+authenticated
+{"errors": [], "failed": 0, "imported": 1}
+{"errors": [], "failed": 0, "imported": 1}
+10000000-0000-0000-0000-000000000004
+NOTICE:  ok - a horse owner can purchase a nomination directly
+DO
+RESET
+DO
+NOTICE:  ok - a direct nomination purchase creates a draft invoice
+UPDATE 1
+DO
+NOTICE:  ok - paying the invoice activates the nomination
+NOTICE:  ok - CSV rows import by registration number
+DO
+DO
+NOTICE:  ok - CSV rows import through an active NRHA horse profile
+ROLLBACK

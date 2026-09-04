@@ -1,0 +1,5 @@
+
+> horseshowplatform@0.1.0 test:governing
+> tsc -p tsconfig.governing-test.json && cp scripts/draw-test-package.json .tmp/governing-tests/package.json && node .tmp/governing-tests/scripts/governing-bodies-test.js
+
+governing body assignment tests passed

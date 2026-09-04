@@ -1,0 +1,104 @@
+BEGIN
+INSERT 0 6
+INSERT 0 6
+INSERT 0 0
+INSERT 0 2
+INSERT 0 3
+INSERT 0 3
+INSERT 0 5
+INSERT 0 0
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 6
+INSERT 0 3
+INSERT 0 3
+INSERT 0 3
+INSERT 0 4
+INSERT 0 4
+INSERT 0 2
+INSERT 0 2
+INSERT 0 0
+INSERT 0 0
+INSERT 0 4
+UPDATE 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 2
+INSERT 0 1
+GRANT
+GRANT
+CREATE SCHEMA
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+SET
+NOTICE:  ok - anon cannot see private shows
+
+NOTICE:  ok - anon cannot see private ShowScore setups
+
+RESET
+SET
+
+NOTICE:  ok - platform admin sees both organizations
+
+NOTICE:  ok - platform admin sees both entries
+
+RESET
+SET
+
+NOTICE:  ok - org A admin sees public organization metadata catalog
+NOTICE:  ok - org A admin can see org B public organization metadata
+
+
+NOTICE:  ok - org A admin sees contacts linked to org A directories
+
+NOTICE:  ok - org A admin sees org A seeded invoices
+
+RESET
+SET
+
+NOTICE:  ok - org A secretary sees org A entries
+
+
+RESET
+SET
+
+NOTICE:  ok - org A secretary can create an org A invoice
+NOTICE:  ok - owner sees no organization membership rows
+
+NOTICE:  ok - owner sees own linked contacts
+
+NOTICE:  ok - owner sees own horse
+
+NOTICE:  ok - owner sees own entry
+
+NOTICE:  ok - owner sees own invoices
+
+NOTICE:  ok - owner can create a second draft entry for own horse
+
+NOTICE:  ok - owner cannot create an entry for org B horse
+
+RESET
+SET
+
+NOTICE:  ok - show judge can view ShowScore setup for assigned show
+
+NOTICE:  ok - show judge cannot update ShowScore class setup
+
+NOTICE:  ok - show judge can create a scoring session
+
+RESET
+SET
+
+NOTICE:  ok - org B admin sees public organization metadata catalog
+
+NOTICE:  ok - org B admin cannot see org A invoice
+
+NOTICE:  ok - org B admin sees org B entry
+
+RESET
+ROLLBACK

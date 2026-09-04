@@ -1,0 +1,60 @@
+BEGIN
+GRANT
+GRANT
+DELETE 0
+DELETE 0
+DELETE 0
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+UPDATE 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+INSERT 0 2
+INSERT 0 1
+CREATE SCHEMA
+GRANT
+CREATE FUNCTION
+CREATE FUNCTION
+GRANT
+SET
+
+INSERT 0 1
+INSERT 0 1
+NOTICE:  ok - staff can persist payout calculation
+
+RESET
+SET
+
+NOTICE:  ok - anon cannot read draft payout calculation
+NOTICE:  ok - anon cannot read draft payout award
+
+RESET
+SET
+
+NOTICE:  ok - draft payout calculation cannot publish directly
+DO
+UPDATE 1
+UPDATE 1
+RESET
+NOTICE:  ok - anon cannot read published payout calculation for private show
+SET
+
+NOTICE:  ok - anon cannot read published payout award for private show
+
+RESET
+SET
+
+UPDATE 1
+RESET
+SET
+NOTICE:  ok - anon can read published payout calculation for public show
+
+NOTICE:  ok - anon can read published payout award for public show
+
+ROLLBACK

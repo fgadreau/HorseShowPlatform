@@ -1,0 +1,20 @@
+BEGIN
+SET
+10000000-0000-0000-0000-000000000003
+authenticated
+(be4e46d2-5f11-407b-abf6-303bcfe20bc3,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,verified,manual,health_document_horse,"Phase One Whiz",,2018,,,G,"Quarter Horse",,,,"{""name"": ""Phase One Whiz"", ""registration_number"": ""P1-A-001""}","{""score"": 100, ""verdict"": ""match""}","[{""field"": ""name"", ""reason"": ""same_name"", ""outcome"": ""exact""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.103925+00",,,,,)
+(7e3fa5b6-a0f7-415e-8dfc-30daa0116f0d,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,2,mismatch,ocr,health_document_horse,"Phase One Wiz",,2019,,,M,"Quarter Horse",,,,"{""name"": ""Phase One Whiz"", ""registration_number"": ""P1-A-001""}","{""score"": 20, ""verdict"": ""mismatch""}","[{""field"": ""birth_year"", ""reason"": ""different_birth_year"", ""outcome"": ""different""}]","{""ocr_engine"": ""test""}",{manual_review_required},mismatch,20,weak,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.103925+00",,,,,)
+NOTICE:  ok - document readings are versioned and do not mutate horse identity
+DO
+DO
+NOTICE:  ok - clients cannot insert or rewrite validation evidence directly
+10000000-0000-0000-0000-000000000006
+NOTICE:  ok - validation visibility and creation follow horse directory authority
+DO
+RESET
+NOTICE:  ok - stored validation evidence is immutable
+DO
+DELETE 1
+DO
+NOTICE:  ok - deleting a document removes its private validation history without orphan rows
+ROLLBACK

@@ -1,0 +1,16 @@
+BEGIN
+SET
+10000000-0000-0000-0000-000000000006
+authenticated
+NOTICE:  ok - staff finds a safe cross-association contact candidate
+DO
+NOTICE:  ok - staff finds a typo-tolerant horse candidate with exact registration
+DO
+NOTICE:  ok - a confirmed false positive is remembered for the same proposed identity
+DO
+NOTICE:  ok - barn is not an identity-search input
+DO
+10000000-0000-0000-0000-000000000004
+DO
+NOTICE:  ok - non-staff users cannot search global identities
+ROLLBACK

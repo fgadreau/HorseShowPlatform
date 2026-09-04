@@ -1,0 +1,12 @@
+BEGIN
+NOTICE:  ok - authenticated application tables reach their RLS policies
+DO
+SET
+10000000-0000-0000-0000-000000000006
+authenticated
+NOTICE:  ok - targeted context and ShowScore compatibility functions execute
+DO
+RESET
+NOTICE:  ok - active ShowScore public/timing functions use canonical block references
+DO
+ROLLBACK

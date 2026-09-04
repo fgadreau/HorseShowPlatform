@@ -1,0 +1,17 @@
+
+> horseshowplatform@0.1.0 test:capacity:config
+> node --test scripts/capacity/*.test.mjs
+
+✔ scripts/capacity/aggregate.test.mjs (1949.790305ms)
+✔ scripts/capacity/config.test.mjs (692.479851ms)
+✔ scripts/capacity/realtime-connections.test.mjs (153.10607ms)
+✔ scripts/capacity/realtime.test.mjs (2252.216798ms)
+✔ scripts/capacity/writer.test.mjs (263.889593ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5440.512731

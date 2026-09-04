@@ -1,0 +1,41 @@
+BEGIN
+DO
+INSERT 0 1
+SET
+authenticated
+10000000-0000-0000-0000-000000000003
+(2b080942-e3b0-4b5d-94dc-8ecf4ce720a1,30000000-0000-0000-0000-000000000001,2026-09-04,,t,rolling_months,12,t,t,t,12,identified,f,blocking,,20000000-0000-0000-0000-000000000003,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+(6afa7f96-6239-4186-9d31-e974e47f17b0,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,1,identified,manual,health_document_horse,"Phase One Whiz",,,,,,,,,,"{""name"": ""Phase One Whiz""}","{""name"": ""match""}","[{""field"": ""horse_name""}]",{},{},possible_match,90,probable,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.361949+00",,,,,)
+(3ba57a76-4819-4a4a-b4a3-d29ba8b8491d,82000000-0000-0000-0000-000000000002,80000000-0000-0000-0000-000000000001,1,identified,manual,health_document_horse,"Phase One Whiz",,,,,,,,,,"{""name"": ""Phase One Whiz""}","{""name"": ""match""}","[{""field"": ""horse_name""}]",{},{},possible_match,90,probable,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.361949+00",,,,,)
+NOTICE:  ok - one combo document can satisfy both accepted vaccine requirements
+DO
+10000000-0000-0000-0000-000000000006
+(aa20efe4-650a-41eb-ae0d-e29cb3314415,30000000-0000-0000-0000-000000000002,2026-09-04,,t,rolling_months,12,t,t,t,12,verified,t,warning,,20000000-0000-0000-0000-000000000006,20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+NOTICE:  ok - the same documents produce a different explainable association result
+DO
+(b5da08a0-f7ac-43f7-b53a-3827dd4610af,82000000-0000-0000-0000-000000000001,80000000-0000-0000-0000-000000000001,2,verified,manual,health_document_horse,"Phase One Whiz",,,,,,,,,,"{""name"": ""Phase One Whiz""}","{""name"": ""match""}","[{""field"": ""horse_name""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00",,,,,)
+(598f6944-9be4-4ce2-9ac1-9f728c4ddfa7,82000000-0000-0000-0000-000000000002,80000000-0000-0000-0000-000000000001,2,verified,manual,health_document_horse,"Phase One Whiz",,,,,,,,,,"{""name"": ""Phase One Whiz""}","{""name"": ""match""}","[{""field"": ""horse_name""}]",{},{},match,100,certain,20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00",,,,,)
+(3ce02d82-eeed-46bf-8fac-ad1a39188fe4,30000000-0000-0000-0000-000000000002,82000000-0000-0000-0000-000000000001,aa20efe4-650a-41eb-ae0d-e29cb3314415,1,rejected,"Copie illisible pour cette association",20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+(a1e93009-276f-4d37-b142-e6c5e57b9bf5,30000000-0000-0000-0000-000000000002,82000000-0000-0000-0000-000000000002,aa20efe4-650a-41eb-ae0d-e29cb3314415,1,rejected,"Copie illisible pour cette association",20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+NOTICE:  ok - a local rejection is explicit and remains association-specific
+DO
+(6eca392e-af96-4052-95fa-19b10f6875ff,30000000-0000-0000-0000-000000000002,82000000-0000-0000-0000-000000000001,aa20efe4-650a-41eb-ae0d-e29cb3314415,2,approved,"Document accepte pour ce repertoire",20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+(d42cef29-c222-488a-bd22-ff79c314bb1e,30000000-0000-0000-0000-000000000002,82000000-0000-0000-0000-000000000002,aa20efe4-650a-41eb-ae0d-e29cb3314415,2,approved,"Document accepte pour ce repertoire",20000000-0000-0000-0000-000000000006,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+NOTICE:  ok - verified identity and association reviews complete the compliance result
+DO
+DO
+NOTICE:  ok - reference date, stable reasons and enforcement mode are calculated centrally
+10000000-0000-0000-0000-000000000006
+DO
+NOTICE:  ok - compliance lookup respects association and horse authority boundaries
+10000000-0000-0000-0000-000000000004
+NOTICE:  ok - horse identity authority can view every relevant association result
+DO
+10000000-0000-0000-0000-000000000003
+(2b080942-e3b0-4b5d-94dc-8ecf4ce720a1,30000000-0000-0000-0000-000000000001,2026-09-04,,t,calendar_year,12,t,t,t,12,identified,f,blocking,,20000000-0000-0000-0000-000000000003,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+NOTICE:  ok - calendar-year Coggins follows the show date instead of a rolling duration
+DO
+(2b080942-e3b0-4b5d-94dc-8ecf4ce720a1,30000000-0000-0000-0000-000000000001,2026-09-04,,f,calendar_year,12,f,f,t,12,identified,f,blocking,,20000000-0000-0000-0000-000000000003,20000000-0000-0000-0000-000000000003,"2026-09-04 20:14:39.361949+00","2026-09-04 20:14:39.361949+00")
+NOTICE:  ok - no-requirement policies return not_required explicitly
+DO
+ROLLBACK

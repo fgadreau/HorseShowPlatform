@@ -1,0 +1,3194 @@
+BEGIN
+SET
+SET
+postgres|postgres|2026-09-04 20:12:56.192925+00|on|PostgreSQL 17.6 on x86_64-pc-linux-gnu, compiled by gcc (GCC) 15.2.0, 64-bit
+0001|initial_schema
+0002|fix_organization_bootstrap_rls
+0003|show_score_alignment
+0004|phase1_rls_hardening
+0005|stall_booking_quantities
+0006|stall_booking_invoices
+0007|contact_roles
+0008|entry_invoices
+0009|stall_bookings_full_show
+0010|tack_stall_assignment_limits
+0011|unique_horse_stall_per_show
+0012|split_reservation_billing
+0013|invoice_line_descriptions_from_booking_notes
+0014|horse_contact_creator_management
+0015|class_program_templates
+0016|nrha_slate_numbers
+0017|aqr_house_sanctioning_body
+0018|entry_judge_fees_by_block
+0019|show_payment_settings
+0020|show_days_from_show_dates
+0021|fix_split_tack_invoice_quantities
+0022|test_cleanup_delete_policies
+0023|multiple_contacts_per_account
+0024|user_signup_contact_dedup
+0025|global_people_external_memberships
+0026|contact_delete_policy
+0027|horse_external_memberships
+0028|horse_health_documents
+0029|horse_date_of_birth
+0030|coggins_validity_rules
+0031|vaccine_health_rules
+0032|contact_creator_horse_access
+0033|health_document_storage_read_policy
+0034|division_payout_settings
+0035|entry_deadlines_late_fees_draw
+0036|entry_program_draw_rules
+0037|show_score_draw_visible_fields
+0038|invoice_program_nomenclature
+0039|back_number_management
+0040|user_back_number_claims
+0041|global_contact_email_dedup
+0042|organization_billing_settings
+0043|short_invoice_numbers
+0044|block_reservations_with_open_invoice_balance
+0045|class_schedule_start_mode
+0046|schedule_event_blocks
+0047|user_profile_enrichment
+0048|contact_rider_fields
+0049|show_announcements
+0050|showscore_compatibility
+0051|showscore_public_access
+0052|platform_admin
+0053|association_invitations
+0054|auto_create_user_profile
+0055|backfill_user_profiles
+0056|expand_org_member_roles
+0057|paid_warmup_missing_cols
+0058|showscore_timing_functions
+0059|showscore_app_events
+0060|showscore_remaining_compat_columns
+0061|showscore_public_visibility_policies
+0062|monetization_scaffold
+0063|showscore_scored_runs_results
+0064|results_payouts
+0065|aqr_audit_import_batches
+0066|showscore_scoring_session_scribe_rls
+0067|internal_memberships
+0068|invoice_refs_nullable_show
+0069|personal_internal_membership_sales
+0070|coowner_platform_admin_only
+0071|personal_membership_association_search
+0072|membership_purchase_public_catalog
+0073|horse_lineage_fields
+0074|nrha_rider_rankings
+0075|contacts_middle_name
+0076|entry_invoice_late_fees
+20260726141500|fix_platform_admin_identity
+20260727083000|add_class_scoresheet_documents
+20260730140000|add_obs_overlay_mode
+20260801000100|foundation_catalogs_directories_slates
+20260801000200|blocks_classes_core_rebuild
+20260801000300|directory_authority_identity_access
+20260801000400|remove_legacy_identity_organization_paths
+20260801000500|global_identity_table_privileges
+20260801000600|identity_similarity_search
+20260801000700|authenticated_application_table_privileges
+20260801000800|showscore_block_function_alignment
+20260801000900|external_data_sources_catalog
+20260801001000|external_credential_issuers_identifiers
+20260801001100|class_governing_body_metadata
+20260801001200|team_eligibility_decisions
+20260801001300|independent_horse_documents_and_registration_status
+20260801001400|versioned_horse_document_identity_validations
+20260801001500|lock_verified_horse_identity_fields
+20260801001600|audited_horse_identity_corrections
+20260801001700|organization_health_policies
+20260801001800|horse_health_compliance_engine
+20260801001900|horse_health_compliance_presentation
+20260801002000|entry_reservation_health_compliance
+20260801002100|bloc3_health_legacy_cleanup
+20260801002200|showscore_paid_warmup_block_sync
+20260801002300|showscore_live_setup_compatibility
+20260801002350|reconcile_showscore_live_setup_compatibility
+20260801002400|showscore_paid_warmup_existing_block_authority
+20260801002500|configurable_eligibility_requirements
+20260801002600|explicit_block_schedule_dependencies
+20260801002700|showscore_announcer_live_sessions
+20260801002800|showscore_championship_seasons
+20260801002900|fix_showscore_championship_manager_identity
+20260801003000|showscore_championship_updates
+20260805000100|showscore_tv_display_media
+20260805000200|remove_aqr_audit_import
+20260805000300|showscore_paid_warmup_active_item
+20260805000400|showscore_paid_warmup_realtime
+20260805000500|showscore_live_display_realtime
+20260805000600|showscore_setup_defaults
+20260805000700|showscore_announcer_live_realtime
+20260805000800|shows_realtime
+20260806000100|incentive_nomination_programs
+20260806000200|incentive_program_age_pricing
+20260807000100|showscore_public_broadcast
+20260807000200|compatibility_views_security_invoker
+20260807000300|initialize_announcer_live_sessions
+20260807000400|repair_recurring_block_class_copy
+20260824130000|showscore_announcer_paid_warmup_live
+20260824131000|showscore_secretary_schedule_writes
+20260904000100|secure_association_creation
+20260904000200|restore_announcer_setup_defaults
+class_templates|id|uuid|NO|gen_random_uuid()
+class_templates|organization_id|uuid|NO|
+class_templates|block_template_id|uuid|NO|
+class_templates|name|text|NO|
+class_templates|code|text|YES|
+class_templates|level|smallint|YES|
+class_templates|default_entry_fee|numeric|YES|
+class_templates|eligibility_rules|jsonb|NO|'{}'::jsonb
+class_templates|sort_order|integer|NO|1
+class_templates|notes|text|YES|
+class_templates|created_at|timestamp with time zone|NO|now()
+class_templates|updated_at|timestamp with time zone|NO|now()
+class_templates|default_judge_fee|numeric|YES|
+class_templates|default_payout_schedule_type|text|NO|'none'::text
+class_templates|default_added_money|numeric|NO|0
+class_templates|default_retainage_percent|numeric|YES|
+class_templates|default_trophy_or_plaque_fee|numeric|NO|0
+class_templates|default_sanctioning_fee_percent|numeric|YES|
+class_templates|default_payout_rules|jsonb|NO|'{}'::jsonb
+class_templates|default_payout_notes|text|YES|
+class_templates|organization_discipline_id|uuid|NO|
+class_templates|back_number_policy_override|text|YES|
+classes|id|uuid|NO|gen_random_uuid()
+classes|organization_id|uuid|NO|
+classes|show_id|uuid|NO|
+classes|block_id|uuid|NO|
+classes|name|character varying|NO|
+classes|level|smallint|YES|
+classes|code|character varying|YES|
+classes|entry_fee|numeric|YES|
+classes|notes|text|YES|
+classes|created_at|timestamp with time zone|NO|now()
+classes|updated_at|timestamp with time zone|NO|now()
+classes|class_template_id|uuid|YES|
+classes|eligibility_rules|jsonb|NO|'{}'::jsonb
+classes|judge_fee|numeric|YES|
+classes|payout_schedule_type|text|NO|'none'::text
+classes|added_money|numeric|NO|0
+classes|retainage_percent|numeric|YES|
+classes|trophy_or_plaque_fee|numeric|NO|0
+classes|sanctioning_fee_percent|numeric|YES|
+classes|payout_rules|jsonb|NO|'{}'::jsonb
+classes|payout_notes|text|YES|
+classes|organization_discipline_id|uuid|NO|
+classes|description|text|YES|
+classes|minimum_entries|smallint|NO|2
+classes|registration_status|text|NO|'open'::text
+classes|is_public|boolean|NO|true
+classes|back_number_policy_override|text|YES|
+classes|sort_order|integer|NO|1
+organizations|id|uuid|NO|gen_random_uuid()
+organizations|name|character varying|NO|
+organizations|slug|character varying|NO|
+organizations|description|text|YES|
+organizations|primary_contact_name|character varying|YES|
+organizations|primary_contact_email|character varying|YES|
+organizations|primary_contact_phone|character varying|YES|
+organizations|address|character varying|YES|
+organizations|city|character varying|YES|
+organizations|state|character varying|YES|
+organizations|zip_code|character varying|YES|
+organizations|country|character varying|YES|
+organizations|logo_url|text|YES|
+organizations|website_url|text|YES|
+organizations|subscription_plan|character varying|NO|'premium'::character varying
+organizations|subscription_status|character varying|NO|'active'::character varying
+organizations|stripe_customer_id|character varying|YES|
+organizations|timezone|character varying|NO|'UTC'::character varying
+organizations|currency|character varying|NO|'USD'::character varying
+organizations|modules_enabled|jsonb|NO|'{"show_score": true}'::jsonb
+organizations|tax_rate|numeric|NO|0.00
+organizations|default_refund_policy|character varying|NO|'full_refund'::character varying
+organizations|created_by_user_id|uuid|YES|
+organizations|created_at|timestamp with time zone|NO|now()
+organizations|updated_at|timestamp with time zone|NO|now()
+organizations|short_name|character varying|YES|
+organizations|legacy_showscore_association_id|text|YES|
+organizations|back_number_policy|character varying|NO|'horse'::character varying
+organizations|billing_name|character varying|YES|
+organizations|billing_email|character varying|YES|
+organizations|billing_phone|character varying|YES|
+organizations|address_line2|character varying|YES|
+organizations|tax_name|character varying|YES|
+organizations|tax_number|character varying|YES|
+organizations|secondary_tax_name|character varying|YES|
+organizations|secondary_tax_number|character varying|YES|
+organizations|sponsor_logos|jsonb|NO|'[]'::jsonb
+organizations|logo_data_url|text|YES|
+organizations|subscription_expires_at|timestamp with time zone|YES|'2027-01-01 04:59:59+00'::timestamp with time zone
+organizations|subscription_notes|text|YES|
+organizations|is_test_mode|boolean|NO|false
+show_score_block_setups|block_id|uuid|NO|
+show_score_block_setups|organization_id|uuid|NO|
+show_score_block_setups|show_id|uuid|NO|
+show_score_block_setups|show_day_id|uuid|YES|
+show_score_block_setups|pattern|text|YES|
+show_score_block_setups|custom_pattern|jsonb|YES|
+show_score_block_setups|runs|jsonb|NO|'[]'::jsonb
+show_score_block_setups|schedule_details|jsonb|NO|'{}'::jsonb
+show_score_block_setups|judges|jsonb|NO|'[{"id": "judge-1", "name": "", "order": 1}]'::jsonb
+show_score_block_setups|is_draw_imported|boolean|NO|false
+show_score_block_setups|started_at|timestamp with time zone|YES|
+show_score_block_setups|drag_interval|integer|YES|
+show_score_block_setups|drag_duration_minutes|integer|NO|8
+show_score_block_setups|locked_at|timestamp with time zone|YES|
+show_score_block_setups|locked_by_user_id|uuid|YES|
+show_score_block_setups|locked_by_label|text|YES|
+show_score_block_setups|finalized|boolean|NO|false
+show_score_block_setups|finalized_at|timestamp with time zone|YES|
+show_score_block_setups|finalized_by_user_id|uuid|YES|
+show_score_block_setups|legacy_showscore_class_id|text|YES|
+show_score_block_setups|legacy_payload|jsonb|YES|
+show_score_block_setups|created_at|timestamp with time zone|NO|now()
+show_score_block_setups|updated_at|timestamp with time zone|NO|now()
+show_score_block_setups|block_classes|jsonb|NO|'[]'::jsonb
+show_score_block_setups|judge_name|text|YES|
+show_score_block_setups|judge_signature|text|YES|
+show_score_block_setups|judge_signed_at|timestamp with time zone|YES|
+show_score_block_setups|final_pdf_file_name|text|YES|
+show_score_block_setups|user_id|uuid|YES|
+show_score_block_setups|set_approval_mode|text|NO|'class_end'::text
+show_score_block_setups|set_approvals|jsonb|NO|'[]'::jsonb
+show_score_block_setups|live_data_source|text|NO|'announcer'::text
+show_score_block_setups|live_display_mode|text|NO|'full'::text
+show_score_block_setups|qualified_rider_count|integer|YES|6
+show_score_block_setups|live_source_changed_at|timestamp with time zone|YES|
+show_score_block_setups|live_source_changed_by|text|YES|
+show_score_judge_sessions|block_id|uuid|NO|
+show_score_judge_sessions|judge_id|text|NO|
+show_score_judge_sessions|organization_id|uuid|NO|
+show_score_judge_sessions|show_id|uuid|NO|
+show_score_judge_sessions|judge_user_id|uuid|YES|
+show_score_judge_sessions|judge_name|text|YES|
+show_score_judge_sessions|claimed_by_user_id|uuid|YES|
+show_score_judge_sessions|claimed_by_email|text|YES|
+show_score_judge_sessions|claimed_at|timestamp with time zone|YES|
+show_score_judge_sessions|runs|jsonb|NO|'[]'::jsonb
+show_score_judge_sessions|active_manoeuvre|jsonb|YES|
+show_score_judge_sessions|judge_signature|text|YES|
+show_score_judge_sessions|finalized|boolean|NO|false
+show_score_judge_sessions|finalized_at|timestamp with time zone|YES|
+show_score_judge_sessions|judge_signed_at|timestamp with time zone|YES|
+show_score_judge_sessions|legacy_payload|jsonb|YES|
+show_score_judge_sessions|created_at|timestamp with time zone|NO|now()
+show_score_judge_sessions|updated_at|timestamp with time zone|NO|now()
+show_score_judge_sessions|claimed_by|text|YES|
+show_score_judge_sessions|set_approvals|jsonb|NO|'[]'::jsonb
+blocks|blocks_follows_block_id_fkey|FOREIGN KEY (follows_block_id) REFERENCES blocks(id) ON DELETE SET NULL
+blocks|blocks_identity_context_key|UNIQUE (id, organization_id, show_id)
+blocks|blocks_pkey|PRIMARY KEY (id)
+blocks|blocks_slate_id_fkey|FOREIGN KEY (slate_id) REFERENCES slates(id) ON DELETE SET NULL
+blocks|blocks_type_check|CHECK ((block_type = ANY (ARRAY['competition'::text, 'paid_warmup'::text, 'event'::text, 'break'::text, 'ceremony'::text])))
+blocks|classes_class_template_id_fkey|FOREIGN KEY (block_template_id) REFERENCES block_templates(id) ON DELETE SET NULL
+blocks|classes_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+blocks|classes_schedule_start_mode_check|CHECK ((schedule_start_mode = ANY (ARRAY['fixed'::text, 'after_previous'::text, 'unscheduled'::text])))
+blocks|classes_show_day_id_fkey|FOREIGN KEY (show_day_id) REFERENCES show_days(id)
+blocks|classes_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+blocks|classes_status_check|CHECK (((schedule_status)::text = ANY ((ARRAY['open'::character varying, 'closed'::character varying, 'running'::character varying, 'finished'::character varying])::text[])))
+class_governing_bodies|class_governing_bodies_class_id_fkey|FOREIGN KEY (class_id) REFERENCES classes(id) ON DELETE CASCADE
+class_governing_bodies|class_governing_bodies_created_by_user_id_fkey|FOREIGN KEY (created_by_user_id) REFERENCES user_profiles(id) ON DELETE SET NULL
+class_governing_bodies|class_governing_bodies_eligibility_profile_check|CHECK (((eligibility_profile_code IS NULL) OR (btrim(eligibility_profile_code) <> ''::text)))
+class_governing_bodies|class_governing_bodies_governing_body_id_fkey|FOREIGN KEY (governing_body_id) REFERENCES governing_bodies(id) ON DELETE RESTRICT
+class_governing_bodies|class_governing_bodies_metadata_object_check|CHECK ((jsonb_typeof(sanction_metadata) = 'object'::text))
+class_governing_bodies|class_governing_bodies_pkey|PRIMARY KEY (class_id, governing_body_id)
+class_governing_bodies|class_governing_bodies_reporting_code_check|CHECK (((reporting_class_code IS NULL) OR (btrim(reporting_class_code) <> ''::text)))
+class_templates|class_template_divisions_class_template_id_fkey|FOREIGN KEY (block_template_id) REFERENCES block_templates(id) ON DELETE CASCADE
+class_templates|class_template_divisions_class_template_id_name_key|UNIQUE (block_template_id, name)
+class_templates|class_template_divisions_default_payout_money_check|CHECK (((default_added_money >= (0)::numeric) AND (default_trophy_or_plaque_fee >= (0)::numeric)))
+class_templates|class_template_divisions_default_payout_percent_check|CHECK ((((default_retainage_percent IS NULL) OR ((default_retainage_percent >= (0)::numeric) AND (default_retainage_percent <= (100)::numeric))) AND ((default_sanctioning_fee_percent IS NULL) OR ((default_sanctioning_fee_percent >= (0)::numeric) AND (default_sanctioning_fee_percent <= (100)::numeric)))))
+class_templates|class_template_divisions_default_payout_schedule_type_check|CHECK ((default_payout_schedule_type = ANY (ARRAY['none'::text, 'nrha_schedule_a'::text, 'nrha_schedule_b'::text, 'house_concentrated'::text, 'house_distributed'::text, 'house_custom'::text, 'jackpot_100'::text])))
+class_templates|class_template_divisions_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+class_templates|class_template_divisions_pkey|PRIMARY KEY (id)
+class_templates|class_templates_back_number_policy_override_check|CHECK (((back_number_policy_override IS NULL) OR (back_number_policy_override = ANY (ARRAY['horse'::text, 'rider'::text, 'horse_rider_team'::text, 'entry'::text, 'custom'::text]))))
+class_templates|class_templates_organization_discipline_id_fkey|FOREIGN KEY (organization_discipline_id) REFERENCES organization_disciplines(id) ON DELETE RESTRICT
+classes|classes_back_number_policy_override_check|CHECK (((back_number_policy_override IS NULL) OR (back_number_policy_override = ANY (ARRAY['horse'::text, 'rider'::text, 'horse_rider_team'::text, 'entry'::text, 'custom'::text]))))
+classes|classes_block_sort_key|UNIQUE (block_id, sort_order)
+classes|classes_identity_context_key|UNIQUE (id, organization_id, show_id)
+classes|classes_minimum_entries_check|CHECK ((minimum_entries >= 0))
+classes|classes_organization_discipline_id_fkey|FOREIGN KEY (organization_discipline_id) REFERENCES organization_disciplines(id) ON DELETE RESTRICT
+classes|classes_pkey|PRIMARY KEY (id)
+classes|classes_registration_status_check|CHECK ((registration_status = ANY (ARRAY['draft'::text, 'open'::text, 'closed'::text, 'cancelled'::text])))
+classes|classes_sort_order_check|CHECK ((sort_order > 0))
+classes|divisions_class_id_fkey|FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+classes|divisions_class_id_name_key|UNIQUE (block_id, name)
+classes|divisions_class_template_division_id_fkey|FOREIGN KEY (class_template_id) REFERENCES class_templates(id) ON DELETE SET NULL
+classes|divisions_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+classes|divisions_payout_money_check|CHECK (((added_money >= (0)::numeric) AND (trophy_or_plaque_fee >= (0)::numeric)))
+classes|divisions_payout_percent_check|CHECK ((((retainage_percent IS NULL) OR ((retainage_percent >= (0)::numeric) AND (retainage_percent <= (100)::numeric))) AND ((sanctioning_fee_percent IS NULL) OR ((sanctioning_fee_percent >= (0)::numeric) AND (sanctioning_fee_percent <= (100)::numeric)))))
+classes|divisions_payout_schedule_type_check|CHECK ((payout_schedule_type = ANY (ARRAY['none'::text, 'nrha_schedule_a'::text, 'nrha_schedule_b'::text, 'house_concentrated'::text, 'house_distributed'::text, 'house_custom'::text, 'jackpot_100'::text])))
+classes|divisions_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+show_days|show_days_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+show_days|show_days_pkey|PRIMARY KEY (id)
+show_days|show_days_show_id_day_date_key|UNIQUE (show_id, day_date)
+show_days|show_days_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+show_score_block_setups|show_score_block_setups_live_data_source_check|CHECK ((live_data_source = ANY (ARRAY['scribe'::text, 'announcer'::text])))
+show_score_block_setups|show_score_block_setups_live_display_mode_check|CHECK ((live_display_mode = ANY (ARRAY['full'::text, 'order_only'::text])))
+show_score_block_setups|show_score_block_setups_qualified_rider_count_check|CHECK (((qualified_rider_count IS NULL) OR (qualified_rider_count > 0)))
+show_score_block_setups|show_score_block_setups_set_approval_mode_check|CHECK ((set_approval_mode = ANY (ARRAY['class_end'::text, 'per_set'::text])))
+show_score_block_setups|show_score_class_setups_class_id_fkey|FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+show_score_block_setups|show_score_class_setups_finalized_by_user_id_fkey|FOREIGN KEY (finalized_by_user_id) REFERENCES user_profiles(id) ON DELETE SET NULL
+show_score_block_setups|show_score_class_setups_locked_by_user_id_fkey|FOREIGN KEY (locked_by_user_id) REFERENCES user_profiles(id) ON DELETE SET NULL
+show_score_block_setups|show_score_class_setups_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+show_score_block_setups|show_score_class_setups_pkey|PRIMARY KEY (block_id)
+show_score_block_setups|show_score_class_setups_show_day_id_fkey|FOREIGN KEY (show_day_id) REFERENCES show_days(id) ON DELETE SET NULL
+show_score_block_setups|show_score_class_setups_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+show_score_judge_sessions|show_score_judge_sessions_claimed_by_user_id_fkey|FOREIGN KEY (claimed_by_user_id) REFERENCES user_profiles(id) ON DELETE SET NULL
+show_score_judge_sessions|show_score_judge_sessions_class_id_fkey|FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+show_score_judge_sessions|show_score_judge_sessions_judge_user_id_fkey|FOREIGN KEY (judge_user_id) REFERENCES user_profiles(id) ON DELETE SET NULL
+show_score_judge_sessions|show_score_judge_sessions_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+show_score_judge_sessions|show_score_judge_sessions_pkey|PRIMARY KEY (block_id, judge_id)
+show_score_judge_sessions|show_score_judge_sessions_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+show_score_paid_warmups|show_score_paid_warmups_block_id_fkey|FOREIGN KEY (block_id) REFERENCES blocks(id) ON DELETE CASCADE
+show_score_paid_warmups|show_score_paid_warmups_block_key|UNIQUE (block_id)
+show_score_paid_warmups|show_score_paid_warmups_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+show_score_paid_warmups|show_score_paid_warmups_pkey|PRIMARY KEY (id)
+show_score_paid_warmups|show_score_paid_warmups_show_day_id_fkey|FOREIGN KEY (show_day_id) REFERENCES show_days(id) ON DELETE CASCADE
+show_score_paid_warmups|show_score_paid_warmups_show_id_fkey|FOREIGN KEY (show_id) REFERENCES shows(id) ON DELETE CASCADE
+shows|shows_created_by_user_id_fkey|FOREIGN KEY (created_by_user_id) REFERENCES user_profiles(id)
+shows|shows_entry_deadline_mode_check|CHECK ((entry_deadline_mode = ANY (ARRAY['show'::text, 'block'::text])))
+shows|shows_entry_payment_policy_check|CHECK ((entry_payment_policy = ANY (ARRAY['card_on_file_preauth'::text, 'manual'::text])))
+shows|shows_entry_preauth_amount_strategy_check|CHECK ((entry_preauth_amount_strategy = ANY (ARRAY['entry_balance'::text, 'entry_balance_with_margin'::text])))
+shows|shows_entry_preauth_margin_percent_check|CHECK ((entry_preauth_margin_percent >= (0)::numeric))
+shows|shows_entry_preauth_timing_check|CHECK ((entry_preauth_timing = ANY (ARRAY['show_start'::text, 'manual'::text])))
+shows|shows_entry_settlement_timing_check|CHECK ((entry_settlement_timing = ANY (ARRAY['show_end'::text, 'manual'::text])))
+shows|shows_late_entry_fee_percent_check|CHECK (((late_entry_fee_percent >= (0)::numeric) AND (late_entry_fee_percent <= (1000)::numeric)))
+shows|shows_obs_overlay_mode_check|CHECK ((obs_overlay_mode = ANY (ARRAY['live'::text, 'neutral'::text])))
+shows|shows_organization_id_fkey|FOREIGN KEY (organization_id) REFERENCES organizations(id) ON DELETE CASCADE
+shows|shows_organization_id_slug_key|UNIQUE (organization_id, slug)
+shows|shows_pkey|PRIMARY KEY (id)
+shows|shows_reservation_payment_policy_check|CHECK ((reservation_payment_policy = ANY (ARRAY['pay_at_booking'::text, 'manual'::text])))
+shows|shows_status_check|CHECK (((status)::text = ANY ((ARRAY['draft'::character varying, 'open'::character varying, 'closed'::character varying, 'archived'::character varying])::text[])))
+shows|shows_tv_display_video_size_check|CHECK (((tv_display_video_size >= 0) AND (tv_display_video_size <= '2147483648'::bigint)))
+can_manage_show_score_show(uuid,text[])|CREATE OR REPLACE FUNCTION public.can_manage_show_score_show(target_show_id uuid, accepted_show_roles text[] DEFAULT ARRAY['organizer'::text, 'secretary'::text])
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.shows s
+    where s.id = target_show_id
+      and (
+        public.is_platform_admin()
+        or public.is_org_member(s.organization_id, array['admin', 'secretary'])
+        or public.has_show_role(s.id, accepted_show_roles)
+      )
+  )
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+create_association_with_owner(text,text,text,text,text,text,jsonb)|CREATE OR REPLACE FUNCTION public.create_association_with_owner(target_id text, target_name text, target_short_name text DEFAULT ''::text, target_timezone text DEFAULT 'America/Toronto'::text, target_logo_data_url text DEFAULT NULL::text, target_website_url text DEFAULT NULL::text, target_sponsor_logos jsonb DEFAULT '[]'::jsonb)
+ RETURNS json
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'pg_catalog', 'public'
+AS $function$
+declare
+  v_org_id uuid;
+  v_profile_id uuid;
+  v_slug text;
+  v_result json;
+begin
+  if auth.uid() is null then
+    raise exception 'Authentication required' using errcode = '42501';
+  end if;
+  select id into v_profile_id from public.user_profiles where user_id = auth.uid();
+  if v_profile_id is null then
+    raise exception 'User profile required' using errcode = '42501';
+  end if;
+
+  v_org_id := coalesce(nullif(target_id, '')::uuid, gen_random_uuid());
+  v_slug := lower(regexp_replace(coalesce(target_name, ''), '[^a-zA-Z0-9]+', '-', 'g'))
+            || '-' || substring(v_org_id::text, 1, 8);
+
+  insert into public.organizations (id, name, short_name, timezone, logo_url, website_url, sponsor_logos, slug)
+  values (v_org_id, target_name, coalesce(target_short_name,''), coalesce(target_timezone,'America/Toronto'),
+          target_logo_data_url, target_website_url, coalesce(target_sponsor_logos,'[]'::jsonb), v_slug);
+
+  -- A plain INSERT rejects existing IDs, including concurrent creations.
+  -- Never update an existing association or grant membership on conflict.
+  insert into public.organization_members (user_id, organization_id, role)
+  values (v_profile_id, v_org_id, 'admin');
+
+  select row_to_json(o) into v_result
+  from (
+    select id, name, short_name, timezone, logo_url as logo_data_url, website_url, sponsor_logos, created_at, updated_at
+    from public.organizations where id = v_org_id
+  ) o;
+
+  return v_result;
+end;
+$function$
+|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+has_show_role(uuid,text[])|CREATE OR REPLACE FUNCTION public.has_show_role(target_show_id uuid, accepted_roles text[] DEFAULT NULL::text[])
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.show_roles
+    where show_id = target_show_id
+      and user_id = public.current_profile_id()
+      and (accepted_roles is null or role = any(accepted_roles))
+  )
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+is_org_member(uuid,text[])|CREATE OR REPLACE FUNCTION public.is_org_member(target_organization_id uuid, accepted_roles text[] DEFAULT NULL::text[])
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.organization_members
+    where organization_id = target_organization_id
+      and user_id = public.current_profile_id()
+      and (accepted_roles is null or role = any(accepted_roles))
+  )
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+is_platform_admin()|CREATE OR REPLACE FUNCTION public.is_platform_admin()
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  select exists (
+    select 1
+    from public.platform_admins admin
+    where admin.user_id = public.current_profile_id()
+       or admin.user_id = auth.uid()
+       or admin.id = public.current_profile_id()
+       or admin.id = auth.uid()
+       or (
+         nullif(lower(btrim(admin.email)), '') is not null
+         and lower(btrim(admin.email)) =
+           lower(coalesce(auth.jwt() ->> 'email', ''))
+       )
+  );
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+save_show_score_paid_warmup_live(uuid,boolean,boolean,text,timestamp with time zone,jsonb)|CREATE OR REPLACE FUNCTION public.save_show_score_paid_warmup_live(target_paid_warmup_id uuid, target_is_public_live boolean DEFAULT NULL::boolean, target_update_queue boolean DEFAULT false, target_active_entry_id text DEFAULT NULL::text, target_active_started_at timestamp with time zone DEFAULT NULL::timestamp with time zone, target_entries jsonb DEFAULT NULL::jsonb)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  current_warmup public.show_score_paid_warmups%rowtype;
+  updated_warmup public.show_score_paid_warmups%rowtype;
+  current_queue_identity jsonb;
+  target_queue_identity jsonb;
+begin
+  select *
+  into current_warmup
+  from public.show_score_paid_warmups
+  where id = target_paid_warmup_id
+  for update;
+
+  if not found then
+    raise exception 'Paid warmup % does not exist', target_paid_warmup_id
+      using errcode = 'no_data_found';
+  end if;
+
+  if not (
+    public.is_platform_admin()
+    or public.is_org_member(
+      current_warmup.organization_id,
+      array['admin', 'secretary', 'announcer']
+    )
+    or public.has_show_role(
+      current_warmup.show_id,
+      array['organizer', 'secretary', 'announcer']
+    )
+  ) then
+    raise exception 'Insufficient permissions for paid warmup live management'
+      using errcode = 'insufficient_privilege';
+  end if;
+
+  if target_update_queue then
+    if target_entries is null or jsonb_typeof(target_entries) <> 'array' then
+      raise exception 'Paid warmup live entries must be an array'
+        using errcode = 'check_violation';
+    end if;
+
+    select coalesce(
+      jsonb_agg(entry.value - 'status' - 'completedAt' order by entry.ordinality),
+      '[]'::jsonb
+    )
+    into current_queue_identity
+    from jsonb_array_elements(coalesce(current_warmup.entries, '[]'::jsonb))
+      with ordinality as entry(value, ordinality);
+
+    select coalesce(
+      jsonb_agg(entry.value - 'status' - 'completedAt' order by entry.ordinality),
+      '[]'::jsonb
+    )
+    into target_queue_identity
+    from jsonb_array_elements(target_entries)
+      with ordinality as entry(value, ordinality);
+
+    if current_queue_identity is distinct from target_queue_identity then
+      raise exception 'Announcers cannot change the paid warmup draw'
+        using errcode = 'insufficient_privilege';
+    end if;
+
+    if exists (
+      select 1
+      from jsonb_array_elements(target_entries) entry
+      where coalesce(entry ->> 'status', 'pending') not in (
+        'pending', 'done', 'no_show', 'scratch'
+      )
+    ) then
+      raise exception 'Invalid paid warmup live entry status'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  update public.show_score_paid_warmups
+  set
+    is_public_live = coalesce(
+      target_is_public_live,
+      current_warmup.is_public_live
+    ),
+    active_entry_id = case
+      when target_update_queue then target_active_entry_id
+      else current_warmup.active_entry_id
+    end,
+    active_started_at = case
+      when target_update_queue then target_active_started_at
+      else current_warmup.active_started_at
+    end,
+    entries = case
+      when target_update_queue then target_entries
+      else current_warmup.entries
+    end
+  where id = target_paid_warmup_id
+  returning * into updated_warmup;
+
+  return to_jsonb(updated_warmup);
+end;
+$function$
+|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_class_refs()|CREATE OR REPLACE FUNCTION public.set_class_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+  directory_organization_id uuid;
+  template_record record;
+begin
+  select organization_id, show_id into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  select organization_id into directory_organization_id
+  from public.organization_disciplines
+  where id = new.organization_discipline_id
+    and is_active;
+
+  if directory_organization_id is null
+    or directory_organization_id is distinct from block_record.organization_id then
+    raise exception 'Class discipline directory must be active and belong to the block organization'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.class_template_id is not null then
+    select organization_id, organization_discipline_id into template_record
+    from public.class_templates
+    where id = new.class_template_id;
+
+    if not found
+      or template_record.organization_id is distinct from block_record.organization_id
+      or template_record.organization_discipline_id is distinct from new.organization_discipline_id then
+      raise exception 'Class template must belong to the same organization and discipline directory'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.organization_id is not null
+    and new.organization_id is distinct from block_record.organization_id then
+    raise exception 'Class organization must match its block organization'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.show_id is not null
+    and new.show_id is distinct from block_record.show_id then
+    raise exception 'Class show must match its block show'
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  return new;
+end;
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_show_score_block_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_block_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  select organization_id, show_id into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  return new;
+end;
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_show_score_block_setup_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_block_setup_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  select organization_id, show_id, show_day_id, pattern, custom_pattern
+  into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  new.show_day_id := block_record.show_day_id;
+  new.pattern := block_record.pattern;
+  new.custom_pattern := block_record.custom_pattern;
+  return new;
+end;
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_show_score_live_data_source(uuid,text)|CREATE OR REPLACE FUNCTION public.set_show_score_live_data_source(target_class_id uuid, target_source text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if target_source not in ('scribe', 'announcer') then
+    raise exception 'Invalid ShowScore live data source'
+      using errcode = 'invalid_parameter_value';
+  end if;
+
+  insert into public.show_score_block_setups (
+    block_id,
+    live_data_source,
+    live_source_changed_at,
+    live_source_changed_by
+  )
+  values (
+    target_class_id,
+    target_source,
+    now(),
+    auth.email()
+  )
+  on conflict (block_id) do update
+  set live_data_source = excluded.live_data_source,
+      live_source_changed_at = excluded.live_source_changed_at,
+      live_source_changed_by = excluded.live_source_changed_by,
+      updated_at = now();
+end;
+$function$
+|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_show_score_live_display_mode(uuid,text)|CREATE OR REPLACE FUNCTION public.set_show_score_live_display_mode(target_class_id uuid, target_mode text)
+ RETURNS void
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if target_mode not in ('full', 'order_only') then
+    raise exception 'Invalid ShowScore live display mode'
+      using errcode = 'invalid_parameter_value';
+  end if;
+
+  insert into public.show_score_block_setups (block_id, live_display_mode)
+  values (target_class_id, target_mode)
+  on conflict (block_id) do update
+  set live_display_mode = excluded.live_display_mode,
+      updated_at = now();
+end;
+$function$
+|{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+set_show_score_paid_warmup_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_paid_warmup_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  new.block_id := coalesce(new.block_id, new.id);
+
+  select b.block_type
+  into block_record
+  from public.blocks b
+  where b.id = new.block_id;
+
+  if found and block_record.block_type <> 'paid_warmup' then
+    raise exception 'Paid warmup block % must have block_type paid_warmup', new.block_id
+      using errcode = 'check_violation';
+  end if;
+
+  if found and new.block_id = new.id then
+    update public.blocks
+    set
+      organization_id = new.organization_id,
+      show_id = new.show_id,
+      show_day_id = new.show_day_id,
+      name = coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      display_label = coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      arena = new.arena,
+      schedule_start_mode = coalesce(new.schedule_start_mode, 'after_previous'),
+      scheduled_time = case
+        when coalesce(new.schedule_start_mode, 'after_previous') = 'fixed'
+          then nullif(new.schedule_start_time, '')::time
+        else null
+      end,
+      sort_order = coalesce(new.sort_order, 1),
+      updated_at = now()
+    where id = new.block_id;
+  elsif not found then
+    insert into public.blocks (
+      id,
+      organization_id,
+      show_id,
+      show_day_id,
+      name,
+      display_label,
+      block_type,
+      arena,
+      schedule_start_mode,
+      scheduled_time,
+      sort_order,
+      schedule_status,
+      schedule_is_public,
+      results_are_public
+    )
+    values (
+      new.block_id,
+      new.organization_id,
+      new.show_id,
+      new.show_day_id,
+      coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      'paid_warmup',
+      new.arena,
+      coalesce(new.schedule_start_mode, 'after_previous'),
+      case
+        when coalesce(new.schedule_start_mode, 'after_previous') = 'fixed'
+          then nullif(new.schedule_start_time, '')::time
+        else null
+      end,
+      coalesce(new.sort_order, 1),
+      'open',
+      true,
+      false
+    );
+  end if;
+
+  select
+    b.organization_id,
+    b.show_id,
+    b.show_day_id,
+    b.name,
+    b.arena,
+    b.schedule_start_mode,
+    b.scheduled_time,
+    b.sort_order
+  into block_record
+  from public.blocks b
+  where b.id = new.block_id;
+
+  if new.active_entry_id is not null
+    and not exists (
+      select 1
+      from public.entries e
+      join public.classes c on c.id = e.class_id
+      where e.id::text = new.active_entry_id
+        and c.block_id = new.block_id
+    )
+    and not exists (
+      select 1
+      from jsonb_array_elements(coalesce(new.entries, '[]'::jsonb)) entry
+      where new.active_entry_id in (
+        entry ->> 'id',
+        'drag-after-' || (entry ->> 'id'),
+        'completed:drag-after-' || (entry ->> 'id')
+      )
+    )
+  then
+    raise exception 'Active item % does not belong to paid warmup block %', new.active_entry_id, new.block_id
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  new.show_day_id := block_record.show_day_id;
+  new.name := block_record.name;
+  new.arena := block_record.arena;
+  new.schedule_start_mode := block_record.schedule_start_mode;
+  new.schedule_start_time := block_record.scheduled_time::text;
+  new.sort_order := block_record.sort_order;
+  return new;
+end;
+$function$
+|{=X/postgres,postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}|postgres
+public|blocks|Anyone can view classes of public shows|PERMISSIVE|{public}|SELECT|(EXISTS ( SELECT 1
+   FROM shows s
+  WHERE ((s.id = blocks.show_id) AND (s.is_public = true))))|
+public|blocks|Association secretaries can create blocks|PERMISSIVE|{authenticated}|INSERT||is_org_member(organization_id, ARRAY['secretary'::text])
+public|blocks|Association secretaries can update blocks|PERMISSIVE|{authenticated}|UPDATE|is_org_member(organization_id, ARRAY['secretary'::text])|is_org_member(organization_id, ARRAY['secretary'::text])
+public|blocks|Public and members can view classes|PERMISSIVE|{public}|SELECT|(is_platform_admin() OR is_org_member(organization_id) OR (schedule_is_public AND (EXISTS ( SELECT 1
+   FROM shows s
+  WHERE ((s.id = blocks.show_id) AND (s.is_public OR s.show_schedule_public))))))|
+public|blocks|Show organizers manage classes|PERMISSIVE|{public}|ALL|can_manage_show(show_id, ARRAY['organizer'::text])|can_manage_show(show_id, ARRAY['organizer'::text])
+public|blocks|ShowScore public can view visible classes|PERMISSIVE|{anon,authenticated}|SELECT|((schedule_is_public = true) AND showscore_public_show_exists(show_id))|
+public|show_days|Anyone can view days of public shows|PERMISSIVE|{public}|SELECT|(EXISTS ( SELECT 1
+   FROM shows s
+  WHERE ((s.id = show_days.show_id) AND (s.is_public = true))))|
+public|show_days|Association secretaries can create show days|PERMISSIVE|{authenticated}|INSERT||is_org_member(organization_id, ARRAY['secretary'::text])
+public|show_days|Association secretaries can update show days|PERMISSIVE|{authenticated}|UPDATE|is_org_member(organization_id, ARRAY['secretary'::text])|is_org_member(organization_id, ARRAY['secretary'::text])
+public|show_days|Linked contacts can view show days|PERMISSIVE|{public}|SELECT|has_linked_contact_in_org(organization_id)|
+public|show_days|Public and members can view show days|PERMISSIVE|{public}|SELECT|(is_platform_admin() OR is_org_member(organization_id) OR (EXISTS ( SELECT 1
+   FROM shows s
+  WHERE ((s.id = show_days.show_id) AND (s.is_public OR s.show_schedule_public)))))|
+public|show_days|Show organizers manage show days|PERMISSIVE|{public}|ALL|can_manage_show(show_id, ARRAY['organizer'::text])|can_manage_show(show_id, ARRAY['organizer'::text])
+public|show_days|ShowScore public can view visible show days|PERMISSIVE|{anon,authenticated}|SELECT|showscore_public_show_exists(show_id)|
+public|show_score_block_setups|Anyone can view class setups of public shows|PERMISSIVE|{public}|SELECT|(EXISTS ( SELECT 1
+   FROM (blocks c
+     JOIN shows s ON ((s.id = c.show_id)))
+  WHERE ((c.id = show_score_block_setups.block_id) AND (s.is_public = true))))|
+public|show_score_block_setups|ShowScore managers can manage class setups|PERMISSIVE|{public}|ALL|can_manage_show_score_class(block_id, ARRAY['organizer'::text, 'secretary'::text])|can_manage_show_score_class(block_id, ARRAY['organizer'::text, 'secretary'::text])
+public|show_score_block_setups|ShowScore public can view visible class setups|PERMISSIVE|{anon,authenticated}|SELECT|showscore_public_class_exists(block_id)|
+public|show_score_block_setups|ShowScore staff can view class setups|PERMISSIVE|{public}|SELECT|can_view_show_score_class(block_id)|
+public|show_score_paid_warmups|Association announcers can view paid warmups|PERMISSIVE|{authenticated}|SELECT|is_org_member(organization_id, ARRAY['announcer'::text])|
+public|show_score_paid_warmups|ShowScore managers can manage paid warmups|PERMISSIVE|{public}|ALL|can_manage_show_score_show(show_id, ARRAY['organizer'::text, 'secretary'::text])|can_manage_show_score_show(show_id, ARRAY['organizer'::text, 'secretary'::text])
+public|show_score_paid_warmups|ShowScore public can view visible paid warmups|PERMISSIVE|{anon,authenticated}|SELECT|((is_public_live = true) AND showscore_public_show_exists(show_id))|
+public|show_score_paid_warmups|ShowScore staff and public can view paid warmups|PERMISSIVE|{public}|SELECT|(can_view_show_score_show(show_id) OR (is_public_live AND (EXISTS ( SELECT 1
+   FROM shows s
+  WHERE ((s.id = show_score_paid_warmups.show_id) AND s.is_public)))))|
+public|shows|Anyone can view public shows|PERMISSIVE|{public}|SELECT|(is_public = true)|
+public|shows|Association secretaries can create shows|PERMISSIVE|{authenticated}|INSERT||is_org_member(organization_id, ARRAY['secretary'::text])
+public|shows|Association secretaries can update shows|PERMISSIVE|{authenticated}|UPDATE|is_org_member(organization_id, ARRAY['secretary'::text])|is_org_member(organization_id, ARRAY['secretary'::text])
+public|shows|Linked contacts can view shows|PERMISSIVE|{public}|SELECT|has_linked_contact_in_org(organization_id)|
+public|shows|Organization admins can create shows|PERMISSIVE|{public}|INSERT||(is_platform_admin() OR is_org_member(organization_id, ARRAY['admin'::text]))
+public|shows|Organization admins can delete shows|PERMISSIVE|{public}|DELETE|(is_platform_admin() OR is_org_member(organization_id, ARRAY['admin'::text]))|
+public|shows|Public and members can view shows|PERMISSIVE|{public}|SELECT|(is_public OR is_platform_admin() OR is_org_member(organization_id))|
+public|shows|Show managers can update shows|PERMISSIVE|{public}|UPDATE|(is_platform_admin() OR is_org_member(organization_id, ARRAY['admin'::text]) OR has_show_role(id, ARRAY['organizer'::text]))|(is_platform_admin() OR is_org_member(organization_id, ARRAY['admin'::text]) OR has_show_role(id, ARRAY['organizer'::text]))
+public|shows|ShowScore public can view visible shows|PERMISSIVE|{anon,authenticated}|SELECT|showscore_public_show_exists(id)|
+shows|t|f
+show_days|t|f
+blocks|t|f
+show_score_block_setups|t|f
+show_score_paid_warmups|t|f
+show_days|postgres|INSERT
+show_days|postgres|SELECT
+show_days|postgres|UPDATE
+show_days|postgres|DELETE
+show_days|postgres|TRUNCATE
+show_days|postgres|REFERENCES
+show_days|postgres|TRIGGER
+show_days|anon|INSERT
+show_days|anon|SELECT
+show_days|anon|UPDATE
+show_days|anon|DELETE
+show_days|anon|TRUNCATE
+show_days|anon|REFERENCES
+show_days|anon|TRIGGER
+show_days|authenticated|INSERT
+show_days|authenticated|SELECT
+show_days|authenticated|UPDATE
+show_days|authenticated|DELETE
+show_days|authenticated|TRUNCATE
+show_days|authenticated|REFERENCES
+show_days|authenticated|TRIGGER
+show_days|service_role|INSERT
+show_days|service_role|SELECT
+show_days|service_role|UPDATE
+show_days|service_role|DELETE
+show_days|service_role|TRUNCATE
+show_days|service_role|REFERENCES
+show_days|service_role|TRIGGER
+blocks|postgres|INSERT
+blocks|postgres|SELECT
+blocks|postgres|UPDATE
+blocks|postgres|DELETE
+blocks|postgres|TRUNCATE
+blocks|postgres|REFERENCES
+blocks|postgres|TRIGGER
+blocks|anon|INSERT
+blocks|anon|SELECT
+blocks|anon|UPDATE
+blocks|anon|DELETE
+blocks|anon|TRUNCATE
+blocks|anon|REFERENCES
+blocks|anon|TRIGGER
+blocks|authenticated|INSERT
+blocks|authenticated|SELECT
+blocks|authenticated|UPDATE
+blocks|authenticated|DELETE
+blocks|authenticated|TRUNCATE
+blocks|authenticated|REFERENCES
+blocks|authenticated|TRIGGER
+blocks|service_role|INSERT
+blocks|service_role|SELECT
+blocks|service_role|UPDATE
+blocks|service_role|DELETE
+blocks|service_role|TRUNCATE
+blocks|service_role|REFERENCES
+blocks|service_role|TRIGGER
+show_score_paid_warmups|postgres|INSERT
+show_score_paid_warmups|postgres|SELECT
+show_score_paid_warmups|postgres|UPDATE
+show_score_paid_warmups|postgres|DELETE
+show_score_paid_warmups|postgres|TRUNCATE
+show_score_paid_warmups|postgres|REFERENCES
+show_score_paid_warmups|postgres|TRIGGER
+show_score_paid_warmups|anon|INSERT
+show_score_paid_warmups|anon|SELECT
+show_score_paid_warmups|anon|UPDATE
+show_score_paid_warmups|anon|DELETE
+show_score_paid_warmups|anon|TRUNCATE
+show_score_paid_warmups|anon|REFERENCES
+show_score_paid_warmups|anon|TRIGGER
+show_score_paid_warmups|authenticated|INSERT
+show_score_paid_warmups|authenticated|SELECT
+show_score_paid_warmups|authenticated|UPDATE
+show_score_paid_warmups|authenticated|DELETE
+show_score_paid_warmups|authenticated|TRUNCATE
+show_score_paid_warmups|authenticated|REFERENCES
+show_score_paid_warmups|authenticated|TRIGGER
+show_score_paid_warmups|service_role|INSERT
+show_score_paid_warmups|service_role|SELECT
+show_score_paid_warmups|service_role|UPDATE
+show_score_paid_warmups|service_role|DELETE
+show_score_paid_warmups|service_role|TRUNCATE
+show_score_paid_warmups|service_role|REFERENCES
+show_score_paid_warmups|service_role|TRIGGER
+shows|postgres|INSERT
+shows|postgres|SELECT
+shows|postgres|UPDATE
+shows|postgres|DELETE
+shows|postgres|TRUNCATE
+shows|postgres|REFERENCES
+shows|postgres|TRIGGER
+shows|anon|INSERT
+shows|anon|SELECT
+shows|anon|UPDATE
+shows|anon|DELETE
+shows|anon|TRUNCATE
+shows|anon|REFERENCES
+shows|anon|TRIGGER
+shows|authenticated|INSERT
+shows|authenticated|SELECT
+shows|authenticated|UPDATE
+shows|authenticated|DELETE
+shows|authenticated|TRUNCATE
+shows|authenticated|REFERENCES
+shows|authenticated|TRIGGER
+shows|service_role|INSERT
+shows|service_role|SELECT
+shows|service_role|UPDATE
+shows|service_role|DELETE
+shows|service_role|TRUNCATE
+shows|service_role|REFERENCES
+shows|service_role|TRIGGER
+show_score_block_setups|postgres|INSERT
+show_score_block_setups|postgres|SELECT
+show_score_block_setups|postgres|UPDATE
+show_score_block_setups|postgres|DELETE
+show_score_block_setups|postgres|TRUNCATE
+show_score_block_setups|postgres|REFERENCES
+show_score_block_setups|postgres|TRIGGER
+show_score_block_setups|anon|INSERT
+show_score_block_setups|anon|SELECT
+show_score_block_setups|anon|UPDATE
+show_score_block_setups|anon|DELETE
+show_score_block_setups|anon|TRUNCATE
+show_score_block_setups|anon|REFERENCES
+show_score_block_setups|anon|TRIGGER
+show_score_block_setups|authenticated|INSERT
+show_score_block_setups|authenticated|SELECT
+show_score_block_setups|authenticated|UPDATE
+show_score_block_setups|authenticated|DELETE
+show_score_block_setups|authenticated|TRUNCATE
+show_score_block_setups|authenticated|REFERENCES
+show_score_block_setups|authenticated|TRIGGER
+show_score_block_setups|service_role|INSERT
+show_score_block_setups|service_role|SELECT
+show_score_block_setups|service_role|UPDATE
+show_score_block_setups|service_role|DELETE
+show_score_block_setups|service_role|TRUNCATE
+show_score_block_setups|service_role|REFERENCES
+show_score_block_setups|service_role|TRIGGER
+blocks|blocks_copy_template_eligibility_requirements|CREATE TRIGGER blocks_copy_template_eligibility_requirements AFTER INSERT ON public.blocks FOR EACH ROW EXECUTE FUNCTION copy_block_template_eligibility_requirements()|CREATE OR REPLACE FUNCTION public.copy_block_template_eligibility_requirements()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.block_template_id is not null then
+    insert into public.eligibility_requirements (
+      organization_id, scope_type, block_id, requirement_type, subject_type,
+      external_credential_issuer_id, credential_product_id, credential_type,
+      incentive_program_id, requirement_group_code, match_rule, validity_rule,
+      enforcement_mode, is_required, is_active, label, settings, created_by_user_id
+    )
+    select
+      new.organization_id, 'block', new.id, requirement_type, subject_type,
+      external_credential_issuer_id, credential_product_id, credential_type,
+      incentive_program_id,
+      case when requirement_group_code is null then null else requirement_group_code || ':' || new.id::text end,
+      match_rule, validity_rule, enforcement_mode, is_required, is_active, label,
+      settings || jsonb_build_object('copied_from_template_requirement_id', id),
+      public.current_profile_id()
+    from public.eligibility_requirements
+    where scope_type = 'block_template'
+      and block_template_id = new.block_template_id
+      and is_active;
+  end if;
+  return new;
+end;
+$function$
+
+blocks|blocks_set_refs|CREATE TRIGGER blocks_set_refs BEFORE INSERT OR UPDATE OF organization_id, show_id, show_day_id, slate_id, block_template_id ON public.blocks FOR EACH ROW EXECUTE FUNCTION set_block_refs()|CREATE OR REPLACE FUNCTION public.set_block_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  show_record record;
+  day_record record;
+  slate_record record;
+  template_organization_id uuid;
+begin
+  select organization_id into show_record
+  from public.shows
+  where id = new.show_id;
+
+  if not found then
+    raise exception 'Show % does not exist', new.show_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  if new.show_day_id is not null then
+    select organization_id, show_id into day_record
+    from public.show_days
+    where id = new.show_day_id;
+
+    if not found
+      or day_record.show_id is distinct from new.show_id
+      or day_record.organization_id is distinct from show_record.organization_id then
+      raise exception 'Block day must belong to the same show and organization'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.slate_id is not null then
+    select organization_id, show_id into slate_record
+    from public.slates
+    where id = new.slate_id;
+
+    if not found
+      or slate_record.show_id is distinct from new.show_id
+      or slate_record.organization_id is distinct from show_record.organization_id then
+      raise exception 'Block slate must belong to the same show and organization'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.block_template_id is not null then
+    select organization_id into template_organization_id
+    from public.block_templates
+    where id = new.block_template_id;
+
+    if template_organization_id is null
+      or template_organization_id is distinct from show_record.organization_id then
+      raise exception 'Block template must belong to the show organization'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.organization_id is not null
+    and new.organization_id is distinct from show_record.organization_id then
+    raise exception 'Block organization must match its show organization'
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := show_record.organization_id;
+  return new;
+end;
+$function$
+
+blocks|blocks_touch_updated_at|CREATE TRIGGER blocks_touch_updated_at BEFORE UPDATE ON public.blocks FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+blocks|blocks_validate_concurrent_pattern|CREATE TRIGGER blocks_validate_concurrent_pattern BEFORE UPDATE OF show_day_id, arena, pattern, custom_pattern ON public.blocks FOR EACH ROW EXECUTE FUNCTION validate_concurrent_block_pattern_update()|CREATE OR REPLACE FUNCTION public.validate_concurrent_block_pattern_update()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  if exists (
+    select 1
+    from public.block_concurrency_group_members own_membership
+    join public.block_concurrency_group_members other_membership
+      on other_membership.group_id = own_membership.group_id
+     and other_membership.block_id <> own_membership.block_id
+    join public.blocks other_block on other_block.id = other_membership.block_id
+    where own_membership.block_id = new.id
+      and (
+        other_block.show_day_id is distinct from new.show_day_id
+        or other_block.arena is distinct from new.arena
+        or other_block.pattern is distinct from new.pattern
+        or other_block.custom_pattern is distinct from new.custom_pattern
+      )
+  ) then
+    raise exception 'Concurrent blocks must share the same day, arena and pattern'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$function$
+
+blocks|blocks_validate_schedule_dependency|CREATE TRIGGER blocks_validate_schedule_dependency BEFORE INSERT OR UPDATE OF organization_id, show_id, show_day_id, arena, schedule_start_mode, follows_block_id ON public.blocks FOR EACH ROW EXECUTE FUNCTION validate_block_schedule_dependency()|CREATE OR REPLACE FUNCTION public.validate_block_schedule_dependency()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare
+  predecessor public.blocks%rowtype;
+begin
+  if new.schedule_start_mode <> 'after_previous' then
+    new.follows_block_id := null;
+    return new;
+  end if;
+
+  -- Null remains accepted for legacy ShowScore writers. HSP requires an
+  -- explicit predecessor for every new or edited after_previous block.
+  if new.follows_block_id is null then
+    return new;
+  end if;
+
+  if new.follows_block_id = new.id then
+    raise exception 'A block cannot follow itself'
+      using errcode = 'check_violation';
+  end if;
+
+  select block.*
+  into predecessor
+  from public.blocks block
+  where block.id = new.follows_block_id;
+
+  if not found then
+    raise exception 'The preceding block % does not exist', new.follows_block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  if predecessor.organization_id <> new.organization_id
+    or predecessor.show_id <> new.show_id
+    or predecessor.show_day_id is distinct from new.show_day_id
+    or coalesce(nullif(lower(btrim(predecessor.arena)), ''), '__no_arena__')
+       <> coalesce(nullif(lower(btrim(new.arena)), ''), '__no_arena__') then
+    raise exception 'A block must follow a block from the same show day and arena'
+      using errcode = 'check_violation';
+  end if;
+
+  if exists (
+    with recursive ancestors as (
+      select block.id, block.follows_block_id
+      from public.blocks block
+      where block.id = new.follows_block_id
+      union all
+      select block.id, block.follows_block_id
+      from public.blocks block
+      join ancestors ancestor on block.id = ancestor.follows_block_id
+    )
+    select 1 from ancestors where id = new.id
+  ) then
+    raise exception 'Block schedule dependencies cannot form a cycle'
+      using errcode = 'check_violation';
+  end if;
+
+  return new;
+end;
+$function$
+
+blocks|showscore_public_broadcast_blocks_delete|CREATE TRIGGER showscore_public_broadcast_blocks_delete BEFORE DELETE ON public.blocks FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+blocks|showscore_public_broadcast_blocks_visibility|CREATE TRIGGER showscore_public_broadcast_blocks_visibility AFTER UPDATE OF schedule_is_public, results_are_public ON public.blocks FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+class_governing_bodies|class_governing_bodies_touch_updated_at|CREATE TRIGGER class_governing_bodies_touch_updated_at BEFORE UPDATE ON public.class_governing_bodies FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+class_templates|class_template_divisions_touch_updated_at|CREATE TRIGGER class_template_divisions_touch_updated_at BEFORE UPDATE ON public.class_templates FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+class_templates|class_templates_set_context|CREATE TRIGGER class_templates_set_context BEFORE INSERT OR UPDATE OF organization_id, block_template_id, organization_discipline_id ON public.class_templates FOR EACH ROW EXECUTE FUNCTION set_class_template_context()|CREATE OR REPLACE FUNCTION public.set_class_template_context()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  parent_organization_id uuid;
+  directory_organization_id uuid;
+begin
+  select organization_id into parent_organization_id
+  from public.block_templates
+  where id = new.block_template_id;
+
+  if parent_organization_id is null then
+    raise exception 'Block template % does not exist', new.block_template_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  select organization_id into directory_organization_id
+  from public.organization_disciplines
+  where id = new.organization_discipline_id
+    and is_active;
+
+  if directory_organization_id is null
+    or directory_organization_id is distinct from parent_organization_id then
+    raise exception 'Class template discipline directory must belong to the block template organization'
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := parent_organization_id;
+  return new;
+end;
+$function$
+
+classes|classes_copy_template_eligibility_requirements|CREATE TRIGGER classes_copy_template_eligibility_requirements AFTER INSERT ON public.classes FOR EACH ROW EXECUTE FUNCTION copy_class_template_eligibility_requirements()|CREATE OR REPLACE FUNCTION public.copy_class_template_eligibility_requirements()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.class_template_id is not null then
+    insert into public.eligibility_requirements (
+      organization_id, scope_type, class_id, requirement_type, subject_type,
+      external_credential_issuer_id, credential_product_id, credential_type,
+      incentive_program_id, requirement_group_code, match_rule, validity_rule,
+      enforcement_mode, is_required, is_active, label, settings, created_by_user_id
+    )
+    select
+      new.organization_id, 'class', new.id, requirement_type, subject_type,
+      external_credential_issuer_id, credential_product_id, credential_type,
+      incentive_program_id,
+      case when requirement_group_code is null then null else requirement_group_code || ':' || new.id::text end,
+      match_rule, validity_rule, enforcement_mode, is_required, is_active, label,
+      settings || jsonb_build_object('copied_from_template_requirement_id', id),
+      public.current_profile_id()
+    from public.eligibility_requirements
+    where scope_type = 'class_template'
+      and class_template_id = new.class_template_id
+      and is_active;
+  end if;
+  return new;
+end;
+$function$
+
+classes|classes_set_refs|CREATE TRIGGER classes_set_refs BEFORE INSERT OR UPDATE OF organization_id, show_id, block_id, organization_discipline_id, class_template_id ON public.classes FOR EACH ROW EXECUTE FUNCTION set_class_refs()|CREATE OR REPLACE FUNCTION public.set_class_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+  directory_organization_id uuid;
+  template_record record;
+begin
+  select organization_id, show_id into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  select organization_id into directory_organization_id
+  from public.organization_disciplines
+  where id = new.organization_discipline_id
+    and is_active;
+
+  if directory_organization_id is null
+    or directory_organization_id is distinct from block_record.organization_id then
+    raise exception 'Class discipline directory must be active and belong to the block organization'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.class_template_id is not null then
+    select organization_id, organization_discipline_id into template_record
+    from public.class_templates
+    where id = new.class_template_id;
+
+    if not found
+      or template_record.organization_id is distinct from block_record.organization_id
+      or template_record.organization_discipline_id is distinct from new.organization_discipline_id then
+      raise exception 'Class template must belong to the same organization and discipline directory'
+        using errcode = 'check_violation';
+    end if;
+  end if;
+
+  if new.organization_id is not null
+    and new.organization_id is distinct from block_record.organization_id then
+    raise exception 'Class organization must match its block organization'
+      using errcode = 'check_violation';
+  end if;
+
+  if new.show_id is not null
+    and new.show_id is distinct from block_record.show_id then
+    raise exception 'Class show must match its block show'
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  return new;
+end;
+$function$
+
+classes|classes_touch_updated_at|CREATE TRIGGER classes_touch_updated_at BEFORE UPDATE ON public.classes FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+show_days|show_days_set_organization|CREATE TRIGGER show_days_set_organization BEFORE INSERT OR UPDATE ON public.show_days FOR EACH ROW EXECUTE FUNCTION set_show_day_organization()|CREATE OR REPLACE FUNCTION public.set_show_day_organization()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  show_org_id uuid;
+begin
+  select organization_id into show_org_id
+  from public.shows
+  where id = new.show_id;
+
+  if not found then
+    raise exception 'Show % does not exist', new.show_id using errcode = 'foreign_key_violation';
+  end if;
+
+  if new.organization_id is not null and new.organization_id is distinct from show_org_id then
+    raise exception 'Show day organization % does not match show organization %', new.organization_id, show_org_id
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := show_org_id;
+  return new;
+end;
+$function$
+
+show_days|show_days_touch_updated_at|CREATE TRIGGER show_days_touch_updated_at BEFORE UPDATE ON public.show_days FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+show_score_block_setups|show_score_block_setups_set_refs|CREATE TRIGGER show_score_block_setups_set_refs BEFORE INSERT OR UPDATE ON public.show_score_block_setups FOR EACH ROW EXECUTE FUNCTION set_show_score_block_setup_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_block_setup_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  select organization_id, show_id, show_day_id, pattern, custom_pattern
+  into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  new.show_day_id := block_record.show_day_id;
+  new.pattern := block_record.pattern;
+  new.custom_pattern := block_record.custom_pattern;
+  return new;
+end;
+$function$
+
+show_score_block_setups|show_score_block_setups_touch_updated_at|CREATE TRIGGER show_score_block_setups_touch_updated_at BEFORE UPDATE ON public.show_score_block_setups FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+show_score_block_setups|showscore_public_broadcast_show_score_block_setups|CREATE TRIGGER showscore_public_broadcast_show_score_block_setups AFTER INSERT OR DELETE OR UPDATE ON public.show_score_block_setups FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+show_score_block_setups|sync_show_score_announcer_session_from_setup|CREATE TRIGGER sync_show_score_announcer_session_from_setup AFTER INSERT OR UPDATE OF live_data_source, runs ON public.show_score_block_setups FOR EACH ROW EXECUTE FUNCTION sync_show_score_announcer_session_from_setup()|CREATE OR REPLACE FUNCTION public.sync_show_score_announcer_session_from_setup()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  if new.live_data_source <> 'announcer' then
+    return new;
+  end if;
+
+  insert into public.show_score_announcer_live_sessions (
+    class_id,
+    runs,
+    active_manoeuvre,
+    started_at,
+    completed_at,
+    completed_by,
+    revision
+  )
+  values (
+    new.block_id,
+    coalesce(new.runs, '[]'::jsonb),
+    null,
+    null,
+    null,
+    null,
+    0
+  )
+  on conflict (class_id) do update
+  set
+    runs = excluded.runs,
+    revision = show_score_announcer_live_sessions.revision + 1
+  where show_score_announcer_live_sessions.started_at is null
+    and show_score_announcer_live_sessions.completed_at is null
+    and show_score_announcer_live_sessions.runs is distinct from excluded.runs;
+
+  return new;
+end;
+$function$
+
+show_score_judge_sessions|show_score_judge_sessions_set_refs|CREATE TRIGGER show_score_judge_sessions_set_refs BEFORE INSERT OR UPDATE ON public.show_score_judge_sessions FOR EACH ROW EXECUTE FUNCTION set_show_score_block_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_block_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  select organization_id, show_id into block_record
+  from public.blocks
+  where id = new.block_id;
+
+  if not found then
+    raise exception 'Block % does not exist', new.block_id
+      using errcode = 'foreign_key_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  return new;
+end;
+$function$
+
+show_score_judge_sessions|show_score_judge_sessions_touch_updated_at|CREATE TRIGGER show_score_judge_sessions_touch_updated_at BEFORE UPDATE ON public.show_score_judge_sessions FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+show_score_judge_sessions|showscore_public_broadcast_show_score_judge_sessions|CREATE TRIGGER showscore_public_broadcast_show_score_judge_sessions AFTER INSERT OR DELETE OR UPDATE ON public.show_score_judge_sessions FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+show_score_paid_warmups|show_score_paid_warmups_delete_block|CREATE TRIGGER show_score_paid_warmups_delete_block AFTER DELETE ON public.show_score_paid_warmups FOR EACH ROW EXECUTE FUNCTION delete_show_score_paid_warmup_block()|CREATE OR REPLACE FUNCTION public.delete_show_score_paid_warmup_block()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  delete from public.blocks
+  where id = old.block_id
+    and block_type = 'paid_warmup';
+  return old;
+end;
+$function$
+
+show_score_paid_warmups|show_score_paid_warmups_set_refs|CREATE TRIGGER show_score_paid_warmups_set_refs BEFORE INSERT OR UPDATE ON public.show_score_paid_warmups FOR EACH ROW EXECUTE FUNCTION set_show_score_paid_warmup_refs()|CREATE OR REPLACE FUNCTION public.set_show_score_paid_warmup_refs()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+declare
+  block_record record;
+begin
+  new.block_id := coalesce(new.block_id, new.id);
+
+  select b.block_type
+  into block_record
+  from public.blocks b
+  where b.id = new.block_id;
+
+  if found and block_record.block_type <> 'paid_warmup' then
+    raise exception 'Paid warmup block % must have block_type paid_warmup', new.block_id
+      using errcode = 'check_violation';
+  end if;
+
+  if found and new.block_id = new.id then
+    update public.blocks
+    set
+      organization_id = new.organization_id,
+      show_id = new.show_id,
+      show_day_id = new.show_day_id,
+      name = coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      display_label = coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      arena = new.arena,
+      schedule_start_mode = coalesce(new.schedule_start_mode, 'after_previous'),
+      scheduled_time = case
+        when coalesce(new.schedule_start_mode, 'after_previous') = 'fixed'
+          then nullif(new.schedule_start_time, '')::time
+        else null
+      end,
+      sort_order = coalesce(new.sort_order, 1),
+      updated_at = now()
+    where id = new.block_id;
+  elsif not found then
+    insert into public.blocks (
+      id,
+      organization_id,
+      show_id,
+      show_day_id,
+      name,
+      display_label,
+      block_type,
+      arena,
+      schedule_start_mode,
+      scheduled_time,
+      sort_order,
+      schedule_status,
+      schedule_is_public,
+      results_are_public
+    )
+    values (
+      new.block_id,
+      new.organization_id,
+      new.show_id,
+      new.show_day_id,
+      coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      coalesce(nullif(btrim(new.name), ''), 'Paid warm up'),
+      'paid_warmup',
+      new.arena,
+      coalesce(new.schedule_start_mode, 'after_previous'),
+      case
+        when coalesce(new.schedule_start_mode, 'after_previous') = 'fixed'
+          then nullif(new.schedule_start_time, '')::time
+        else null
+      end,
+      coalesce(new.sort_order, 1),
+      'open',
+      true,
+      false
+    );
+  end if;
+
+  select
+    b.organization_id,
+    b.show_id,
+    b.show_day_id,
+    b.name,
+    b.arena,
+    b.schedule_start_mode,
+    b.scheduled_time,
+    b.sort_order
+  into block_record
+  from public.blocks b
+  where b.id = new.block_id;
+
+  if new.active_entry_id is not null
+    and not exists (
+      select 1
+      from public.entries e
+      join public.classes c on c.id = e.class_id
+      where e.id::text = new.active_entry_id
+        and c.block_id = new.block_id
+    )
+    and not exists (
+      select 1
+      from jsonb_array_elements(coalesce(new.entries, '[]'::jsonb)) entry
+      where new.active_entry_id in (
+        entry ->> 'id',
+        'drag-after-' || (entry ->> 'id'),
+        'completed:drag-after-' || (entry ->> 'id')
+      )
+    )
+  then
+    raise exception 'Active item % does not belong to paid warmup block %', new.active_entry_id, new.block_id
+      using errcode = 'check_violation';
+  end if;
+
+  new.organization_id := block_record.organization_id;
+  new.show_id := block_record.show_id;
+  new.show_day_id := block_record.show_day_id;
+  new.name := block_record.name;
+  new.arena := block_record.arena;
+  new.schedule_start_mode := block_record.schedule_start_mode;
+  new.schedule_start_time := block_record.scheduled_time::text;
+  new.sort_order := block_record.sort_order;
+  return new;
+end;
+$function$
+
+show_score_paid_warmups|show_score_paid_warmups_touch_updated_at|CREATE TRIGGER show_score_paid_warmups_touch_updated_at BEFORE UPDATE ON public.show_score_paid_warmups FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+show_score_paid_warmups|showscore_public_broadcast_show_score_paid_warmups|CREATE TRIGGER showscore_public_broadcast_show_score_paid_warmups AFTER INSERT OR DELETE OR UPDATE ON public.show_score_paid_warmups FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+shows|ensure_show_slug_trigger|CREATE TRIGGER ensure_show_slug_trigger BEFORE INSERT OR UPDATE ON public.shows FOR EACH ROW EXECUTE FUNCTION ensure_show_slug()|CREATE OR REPLACE FUNCTION public.ensure_show_slug()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  if new.slug is null or new.slug = '' then
+    new.slug := lower(regexp_replace(coalesce(new.name, ''), '[^a-zA-Z0-9]+', '-', 'g'))
+                || '-' || substring(new.id::text, 1, 8);
+  end if;
+  return new;
+end;
+$function$
+
+shows|shows_ensure_show_days|CREATE TRIGGER shows_ensure_show_days AFTER INSERT OR UPDATE OF start_date, end_date ON public.shows FOR EACH ROW EXECUTE FUNCTION ensure_show_days_from_show_dates()|CREATE OR REPLACE FUNCTION public.ensure_show_days_from_show_dates()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  insert into public.show_days (
+    organization_id,
+    show_id,
+    day_date,
+    day_name,
+    day_number,
+    sort_order
+  )
+  select
+    new.organization_id,
+    new.id,
+    generated_day.day_date::date,
+    'Day ' || generated_day.ordinality,
+    generated_day.ordinality,
+    generated_day.ordinality
+  from generate_series(new.start_date, new.end_date, interval '1 day') with ordinality as generated_day(day_date, ordinality)
+  on conflict (show_id, day_date) do nothing;
+
+  return new;
+end;
+$function$
+
+shows|shows_touch_updated_at|CREATE TRIGGER shows_touch_updated_at BEFORE UPDATE ON public.shows FOR EACH ROW EXECUTE FUNCTION touch_updated_at()|CREATE OR REPLACE FUNCTION public.touch_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+
+shows|showscore_public_broadcast_shows|CREATE TRIGGER showscore_public_broadcast_shows AFTER INSERT OR DELETE OR UPDATE ON public.shows FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+show_score_block_setups|7
+show_score_judge_sessions|0
+class_templates|0
+blocks|8
+classes|7
+class_governing_bodies|5
+organizations|4
+show_score_paid_warmups|1
+7|0|0|0
+0
+0
+array|1
+7|6|0|0
+7
+show_score_announcer_live_sessions|6
+eligibility_requirements|7
+entries|50
+invoices|0
+payments|0
+touch_show_score_announcer_live_session|CREATE TRIGGER touch_show_score_announcer_live_session BEFORE UPDATE ON public.show_score_announcer_live_sessions FOR EACH ROW EXECUTE FUNCTION touch_show_score_announcer_live_session()|CREATE OR REPLACE FUNCTION public.touch_show_score_announcer_live_session()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at := now();
+  return new;
+end;
+$function$
+
+showscore_public_broadcast_show_score_announcer_live_sessions|CREATE TRIGGER showscore_public_broadcast_show_score_announcer_live_sessions AFTER INSERT OR DELETE OR UPDATE ON public.show_score_announcer_live_sessions FOR EACH ROW EXECUTE FUNCTION showscore_broadcast_public_change()|CREATE OR REPLACE FUNCTION public.showscore_broadcast_public_change()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO ''
+AS $function$
+declare
+  new_row jsonb := case when tg_op = 'DELETE' then null else to_jsonb(new) end;
+  old_row jsonb := case when tg_op = 'INSERT' then null else to_jsonb(old) end;
+  source_row jsonb := coalesce(new_row, old_row);
+  target_show_id uuid;
+  target_block_id uuid;
+  target_row_key text;
+  event_sequence bigint;
+  event_identifier text;
+  should_broadcast boolean := false;
+  force_invalidation boolean := false;
+  projected_new jsonb;
+  projected_old jsonb;
+  outgoing_table text;
+  outgoing_event_type text;
+  event_payload jsonb;
+begin
+  case tg_table_name
+    when 'shows' then
+      target_show_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_show_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'blocks' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := (source_row ->> 'id')::uuid;
+      target_row_key := target_block_id::text;
+      should_broadcast := true;
+      force_invalidation := true;
+    when 'show_score_paid_warmups' then
+      target_show_id := (source_row ->> 'show_id')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      target_row_key := source_row ->> 'id';
+      force_invalidation := coalesce(
+        (old_row ->> 'is_public_live')::boolean,
+        false
+      ) is distinct from coalesce(
+        (new_row ->> 'is_public_live')::boolean,
+        false
+      );
+      should_broadcast := force_invalidation or (
+        public.showscore_public_show_exists(target_show_id)
+        and coalesce((new_row ->> 'is_public_live')::boolean, false)
+      );
+    when 'show_score_announcer_live_sessions' then
+      target_block_id := (source_row ->> 'class_id')::uuid;
+      select target_block.show_id
+      into target_show_id
+      from public.blocks target_block
+      where target_block.id = target_block_id;
+      target_row_key := target_block_id::text;
+      should_broadcast := public.showscore_public_class_exists(target_block_id);
+    else
+      target_show_id := nullif(source_row ->> 'show_id', '')::uuid;
+      target_block_id := nullif(source_row ->> 'block_id', '')::uuid;
+      if target_show_id is null and target_block_id is not null then
+        select target_block.show_id
+        into target_show_id
+        from public.blocks target_block
+        where target_block.id = target_block_id;
+      end if;
+      target_row_key := case
+        when tg_table_name = 'show_score_judge_sessions'
+          then concat(target_block_id::text, ':', source_row ->> 'judge_id')
+        else target_block_id::text
+      end;
+
+      case tg_table_name
+        when 'show_score_scoring_sessions', 'show_score_judge_sessions' then
+          should_broadcast := public.showscore_public_live_class_exists(target_block_id);
+        when 'show_score_block_setups', 'show_score_announcer_live_sessions' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id);
+        when 'show_score_publication_states' then
+          force_invalidation := (
+            coalesce(old_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          ) is distinct from (
+            coalesce(new_row ->> 'status', '') in (
+              'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+            )
+          );
+          should_broadcast := force_invalidation or (
+            public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce(new_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+              or coalesce(old_row ->> 'status', '') in (
+                'live', 'live_no_score', 'live_scoring', 'live_finished', 'official', 'published'
+              )
+            )
+          );
+        when 'show_score_official_results' then
+          should_broadcast := public.showscore_public_class_exists(target_block_id)
+            and (
+              coalesce((new_row ->> 'finalized')::boolean, false)
+              or coalesce((old_row ->> 'finalized')::boolean, false)
+            )
+            and exists (
+              select 1
+              from public.show_score_publication_states publication
+              where publication.block_id = target_block_id
+                and publication.status in ('official', 'published')
+            );
+        else
+          should_broadcast := false;
+      end case;
+  end case;
+
+  if not should_broadcast or target_show_id is null then
+    return case when tg_op = 'DELETE' then old else new end;
+  end if;
+
+  event_sequence := nextval('public.showscore_public_broadcast_seq'::regclass);
+  event_identifier := concat(tg_table_name, ':', target_row_key, ':', event_sequence);
+
+  if force_invalidation then
+    projected_new := null;
+    projected_old := null;
+  else
+    -- Public clients only need the current row for INSERT/UPDATE and the last
+    -- row for DELETE. Avoid sending pre-update drafts and duplicating large
+    -- run arrays on every score mutation.
+    projected_new := case
+      when tg_op = 'DELETE' then null
+      else public.showscore_public_broadcast_project_row(tg_table_name, new_row)
+    end;
+    projected_old := case
+      when tg_op = 'DELETE'
+        then public.showscore_public_broadcast_project_row(tg_table_name, old_row)
+      else null
+    end;
+  end if;
+
+  outgoing_table := case
+    when force_invalidation then 'public_show_snapshot'
+    else tg_table_name
+  end;
+  outgoing_event_type := case
+    when force_invalidation then 'INVALIDATE'
+    else tg_op
+  end;
+
+  event_payload := jsonb_build_object(
+    'version', 1,
+    'event_id', event_identifier,
+    'event_seq', event_sequence,
+    'row_key', target_row_key,
+    'schema', tg_table_schema,
+    'table', outgoing_table,
+    'eventType', outgoing_event_type,
+    'show_id', target_show_id,
+    'block_id', target_block_id,
+    'new', projected_new,
+    'old', projected_old
+  );
+
+  -- Realtime projects currently accept messages up to roughly 1 MB. Keep a
+  -- conservative margin. An oversized 167-run snapshot becomes one explicit
+  -- REST invalidation instead of failing the source write or dropping updates.
+  if octet_length(event_payload::text) > 524288 then
+    event_payload := jsonb_build_object(
+      'version', 1,
+      'event_id', event_identifier,
+      'event_seq', event_sequence,
+      'row_key', target_row_key,
+      'schema', tg_table_schema,
+      'table', 'public_show_snapshot',
+      'eventType', 'INVALIDATE',
+      'show_id', target_show_id,
+      'block_id', target_block_id,
+      'reason', 'payload_too_large',
+      'new', null,
+      'old', null
+    );
+  end if;
+
+  perform realtime.send(
+    event_payload,
+    'change',
+    concat('showscore-public:', target_show_id::text),
+    true
+  );
+
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$function$
+
+postgres|public|r|{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+postgres|public|f|{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+postgres|public|S|{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}
+supabase_admin|public|S|{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}
+supabase_admin|public|r|{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}
+supabase_admin|public|f|{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}
+postgres|storage|r|{postgres=arwdDxtm/postgres,anon=arwdDxtm/postgres,authenticated=arwdDxtm/postgres,service_role=arwdDxtm/postgres}
+postgres|storage|f|{postgres=X/postgres,anon=X/postgres,authenticated=X/postgres,service_role=X/postgres}
+postgres|storage|S|{postgres=rwU/postgres,anon=rwU/postgres,authenticated=rwU/postgres,service_role=rwU/postgres}
+supabase_auth_admin|auth|r|{postgres=arwdDxtm/supabase_auth_admin,dashboard_user=arwdDxtm/supabase_auth_admin}
+supabase_auth_admin|auth|S|{postgres=rwU/supabase_auth_admin,dashboard_user=rwU/supabase_auth_admin}
+supabase_auth_admin|auth|f|{postgres=X/supabase_auth_admin,dashboard_user=X/supabase_auth_admin}
+supabase_admin|realtime|r|{postgres=arwdDxtm/supabase_admin,dashboard_user=arwdDxtm/supabase_admin}
+supabase_admin|realtime|S|{postgres=rwU/supabase_admin,dashboard_user=rwU/supabase_admin}
+supabase_admin|realtime|f|{postgres=X/supabase_admin,dashboard_user=X/supabase_admin}
+supabase_admin|graphql_public|S|{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}
+supabase_admin|graphql_public|r|{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}
+supabase_admin|graphql_public|f|{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}
+supabase_admin|extensions|r|{postgres=a*r*w*d*D*x*t*m*/supabase_admin}
+supabase_admin|extensions|f|{postgres=X*/supabase_admin}
+supabase_admin|extensions|S|{postgres=r*w*U*/supabase_admin}
+supabase_admin|graphql|r|{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}
+supabase_admin|graphql|f|{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}
+supabase_admin|graphql|S|{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}
+supabase_admin|supabase_functions|r|{postgres=arwdDxtm/supabase_admin,anon=arwdDxtm/supabase_admin,authenticated=arwdDxtm/supabase_admin,service_role=arwdDxtm/supabase_admin}
+supabase_admin|supabase_functions|f|{postgres=X/supabase_admin,anon=X/supabase_admin,authenticated=X/supabase_admin,service_role=X/supabase_admin}
+supabase_admin|supabase_functions|S|{postgres=rwU/supabase_admin,anon=rwU/supabase_admin,authenticated=rwU/supabase_admin,service_role=rwU/supabase_admin}
+anon|f|f
+authenticated|f|t
+service_role|f|t
+1|0|0
+ROLLBACK

@@ -1,0 +1,41 @@
+Using workdir /tmp/hsp-reconciliation-20260904
+Connecting to local database...
+Do you want to push these migrations to the local database?
+ • 20260801002350_reconcile_showscore_live_setup_compatibility.sql
+ • 20260807000400_repair_recurring_block_class_copy.sql
+ • 20260824130000_showscore_announcer_paid_warmup_live.sql
+ • 20260824131000_showscore_secretary_schedule_writes.sql
+ • 20260904000100_secure_association_creation.sql
+ • 20260904000200_restore_announcer_setup_defaults.sql
+
+ [Y/n] y
+Applying migration 20260801002350_reconcile_showscore_live_setup_compatibility.sql...
+NOTICE (00000): trigger "stamp_show_score_live_source_change" for relation "public.show_score_block_setups" does not exist, skipping
+NOTICE (00000): function public.stamp_show_score_live_source_change() does not exist, skipping
+NOTICE (42701): column "set_approval_mode" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "set_approvals" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "live_data_source" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "live_display_mode" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "qualified_rider_count" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "live_source_changed_at" of relation "show_score_block_setups" already exists, skipping
+NOTICE (42701): column "live_source_changed_by" of relation "show_score_block_setups" already exists, skipping
+NOTICE (00000): constraint "show_score_class_setups_set_approval_mode_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE (00000): constraint "show_score_class_setups_live_data_source_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE (00000): constraint "show_score_class_setups_live_display_mode_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE (00000): constraint "show_score_class_setups_qualified_rider_count_check" of relation "show_score_block_setups" does not exist, skipping
+NOTICE (42701): column "set_approvals" of relation "show_score_judge_sessions" already exists, skipping
+Applying migration 20260807000400_repair_recurring_block_class_copy.sql...
+Applying migration 20260824130000_showscore_announcer_paid_warmup_live.sql...
+NOTICE (00000): policy "Association announcers can view paid warmups" for relation "public.show_score_paid_warmups" does not exist, skipping
+Applying migration 20260824131000_showscore_secretary_schedule_writes.sql...
+NOTICE (00000): policy "Association secretaries can create shows" for relation "public.shows" does not exist, skipping
+NOTICE (00000): policy "Association secretaries can update shows" for relation "public.shows" does not exist, skipping
+NOTICE (00000): policy "Association secretaries can create show days" for relation "public.show_days" does not exist, skipping
+NOTICE (00000): policy "Association secretaries can update show days" for relation "public.show_days" does not exist, skipping
+NOTICE (00000): policy "Association secretaries can create blocks" for relation "public.blocks" does not exist, skipping
+NOTICE (00000): policy "Association secretaries can update blocks" for relation "public.blocks" does not exist, skipping
+Applying migration 20260904000100_secure_association_creation.sql...
+Applying migration 20260904000200_restore_announcer_setup_defaults.sql...
+Finished supabase db push.
+A new version of Supabase CLI is available: v2.116.0 (currently installed v2.102.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

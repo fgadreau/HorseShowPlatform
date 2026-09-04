@@ -1,0 +1,5 @@
+
+> horseshowplatform@0.1.0 test:payout
+> tsc -p tsconfig.payout-test.json && cp scripts/draw-test-package.json .tmp/payout-tests/package.json && node .tmp/payout-tests/scripts/payout-test-program.js
+
+Payout test program OK

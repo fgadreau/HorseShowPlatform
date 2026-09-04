@@ -1,0 +1,13 @@
+Using workdir /tmp/hsp-reconciliation-20260904
+DRY RUN: migrations will *not* be pushed to the database.
+Connecting to local database...
+Would push these migrations:
+ • 20260801002350_reconcile_showscore_live_setup_compatibility.sql
+ • 20260807000400_repair_recurring_block_class_copy.sql
+ • 20260824130000_showscore_announcer_paid_warmup_live.sql
+ • 20260824131000_showscore_secretary_schedule_writes.sql
+ • 20260904000100_secure_association_creation.sql
+ • 20260904000200_restore_announcer_setup_defaults.sql
+Finished supabase db push.
+A new version of Supabase CLI is available: v2.116.0 (currently installed v2.102.0)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli

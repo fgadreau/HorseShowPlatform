@@ -1,0 +1,16 @@
+BEGIN
+NOTICE:  ok - horse documents are global horse-owned records
+DO
+UPDATE 1
+NOTICE:  ok - grade is an explicit unregistered status
+DO
+INSERT 0 1
+UPDATE 1
+INSERT 0 2
+NOTICE:  ok - one horse supports multiple breed registration documents without association ownership
+DO
+DO
+NOTICE:  ok - stored horse document files and checksums are immutable
+NOTICE:  ok - document table and storage paths use horse access rules
+DO
+ROLLBACK
