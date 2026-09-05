@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { ArrowDown, ArrowUp, X } from "lucide-react";
 import { FormActions, SearchSelect } from "../../components/ui";
@@ -7,6 +7,7 @@ import type { Locale } from "../../lib/i18n";
 import type { Block, Contact, ClassRecord, Entry, Horse, Organization, ScheduleStartMode, Show, ShowDay, ShowScorePaidWarmup, ShowScorePaidWarmupInput, ShowScorePaidWarmupUpdateInput } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showDayLabel } from "./classUtils";
+import { createPaidWarmupSubmissionId, runPaidWarmupSubmission } from "./paidWarmupSubmission";
 
 type PaidWarmupFormProps = {
   blocks: Block[];
@@ -23,6 +24,7 @@ type PaidWarmupFormProps = {
   shows: Show[];
   warmup?: ShowScorePaidWarmup | null;
   onCancel?: () => void;
+  onSaveError: (error: unknown) => void;
   onSaveShowScorePaidWarmup: (input: ShowScorePaidWarmupInput) => Promise<void>;
   onUpdateShowScorePaidWarmup?: (id: string, input: ShowScorePaidWarmupUpdateInput) => Promise<void>;
   onSaved?: () => void;
@@ -43,6 +45,7 @@ function PaidWarmupForm({
   shows,
   warmup,
   onCancel,
+  onSaveError,
   onSaveShowScorePaidWarmup,
   onUpdateShowScorePaidWarmup,
   onSaved,
@@ -63,6 +66,8 @@ function PaidWarmupForm({
   const [isPublicLive, setIsPublicLive] = useState(Boolean(warmup?.is_public_live));
   const [selectedEntryIds, setSelectedEntryIds] = useState<string[]>(() => warmup?.entries.map((entry) => entry.id) ?? []);
   const [saving, setSaving] = useState(false);
+  const [submissionId] = useState(() => createPaidWarmupSubmissionId(warmup?.id));
+  const submissionLock = useRef(false);
 
   const showItems = shows.map((show) => ({
     id: show.id,
@@ -144,44 +149,48 @@ function PaidWarmupForm({
       };
     });
 
-    setSaving(true);
+    const payload = {
+      show_day_id: showDayId,
+      name,
+      arena,
+      duration_minutes_per_rider: numericValue(durationMinutesPerRider) ?? 5,
+      drag_interval: numericValue(dragInterval) ?? null,
+      drag_duration_minutes: numericValue(dragDurationMinutes) ?? 8,
+      schedule_start_mode: scheduleStartMode,
+      schedule_start_time: scheduleStartMode === "fixed" ? scheduleStartTime : null,
+      follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
+      is_public_live: isPublicLive,
+      active_entry_id: warmup?.active_entry_id ?? null,
+      active_started_at: warmup?.active_started_at ?? null,
+      entries: paidWarmupEntries,
+      sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, blocks, showScorePaidWarmups),
+      legacy_payload: {
+        source: "hsp_paid_warmup",
+      },
+    };
 
-    try {
-      const payload = {
-        show_day_id: showDayId,
-        name,
-        arena,
-        duration_minutes_per_rider: numericValue(durationMinutesPerRider) ?? 5,
-        drag_interval: numericValue(dragInterval) ?? null,
-        drag_duration_minutes: numericValue(dragDurationMinutes) ?? 8,
-        schedule_start_mode: scheduleStartMode,
-        schedule_start_time: scheduleStartMode === "fixed" ? scheduleStartTime : null,
-        follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
-        is_public_live: isPublicLive,
-        active_entry_id: warmup?.active_entry_id ?? null,
-        active_started_at: warmup?.active_started_at ?? null,
-        entries: paidWarmupEntries,
-        sort_order: warmup?.sort_order ?? nextWarmupSortOrder(showDayId, blocks, showScorePaidWarmups),
-        legacy_payload: {
-          source: "hsp_paid_warmup",
-        },
-      };
+    // A rejected save never unmounts this form and no field state is reset here.
+    // DOM-level field preservation remains a future component-test concern.
+    await runPaidWarmupSubmission({
+      lock: submissionLock,
+      onSaveError,
+      onSaved,
+      onSavingChange: setSaving,
+      save: async () => {
+        if (warmup && onUpdateShowScorePaidWarmup) {
+          await onUpdateShowScorePaidWarmup(warmup.id, payload);
+          return;
+        }
 
-      if (warmup && onUpdateShowScorePaidWarmup) {
-        await onUpdateShowScorePaidWarmup(warmup.id, payload);
-      } else {
         await onSaveShowScorePaidWarmup({
           ...payload,
+          id: submissionId,
           organization_id: organization.id,
           show_id: showId,
           show_day_id: showDayId,
         });
-      }
-
-      onSaved?.();
-    } finally {
-      setSaving(false);
-    }
+      },
+    });
   }
 
   return (

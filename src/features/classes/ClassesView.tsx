@@ -59,6 +59,7 @@ function ClassesView({
   onDeleteSlate,
   onDeleteShowScorePaidWarmup,
   onSaveShowScorePaidWarmup,
+  onShowScorePaidWarmupSaveError,
   onUpdateBlock,
   onUpdateBlockTemplate,
   onUpdateClassTemplate,
@@ -104,6 +105,7 @@ function ClassesView({
   onDeleteSlate: (id: Parameters<typeof deleteSlate>[0]) => Promise<void>;
   onDeleteShowScorePaidWarmup: (id: string) => Promise<void>;
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
+  onShowScorePaidWarmupSaveError: (error: unknown) => void;
   onUpdateBlock: (id: string, input: Parameters<typeof updateBlock>[1]) => Promise<void>;
   onUpdateBlockTemplate: (id: string, input: Parameters<typeof updateBlockTemplate>[1]) => Promise<void>;
   onUpdateClassTemplate: (id: string, input: Parameters<typeof updateClassTemplate>[1]) => Promise<void>;
@@ -777,6 +779,7 @@ function ClassesView({
             shows={shows}
             onCancel={() => setCreatingPaidWarmup(null)}
             onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
+            onSaveError={onShowScorePaidWarmupSaveError}
             onSaved={() => setCreatingPaidWarmup(null)}
           />
         </ModalDialog>
@@ -929,6 +932,7 @@ function ClassesView({
             warmup={editingPaidWarmup}
             onCancel={() => setEditingPaidWarmup(null)}
             onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
+            onSaveError={onShowScorePaidWarmupSaveError}
             onUpdateShowScorePaidWarmup={onUpdateShowScorePaidWarmup}
             onSaved={() => setEditingPaidWarmup(null)}
           />

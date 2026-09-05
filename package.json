@@ -9,6 +9,7 @@
     "preview": "vite preview --host 0.0.0.0",
     "test:draw": "tsc -p tsconfig.draw-test.json && cp scripts/draw-test-package.json .tmp/draw-tests/package.json && node .tmp/draw-tests/scripts/draw-test-program.js",
     "test:payout": "tsc -p tsconfig.payout-test.json && cp scripts/draw-test-package.json .tmp/payout-tests/package.json && node .tmp/payout-tests/scripts/payout-test-program.js",
+    "test:paid-warmup": "tsc -p tsconfig.paid-warmup-test.json && cp scripts/draw-test-package.json .tmp/paid-warmup-tests/package.json && node .tmp/paid-warmup-tests/scripts/paid-warmup-submission.test.js",
     "test:identity": "tsc -p tsconfig.identity-test.json && cp scripts/draw-test-package.json .tmp/identity-tests/package.json && node .tmp/identity-tests/scripts/identity-comparison-test.js",
     "test:governing": "tsc -p tsconfig.governing-test.json && cp scripts/draw-test-package.json .tmp/governing-tests/package.json && node .tmp/governing-tests/scripts/governing-bodies-test.js",
     "test:eligibility": "tsc -p tsconfig.eligibility-test.json && cp scripts/draw-test-package.json .tmp/eligibility-tests/package.json && node .tmp/eligibility-tests/scripts/eligibility-engine-test.js",

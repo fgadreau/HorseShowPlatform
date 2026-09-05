@@ -230,6 +230,7 @@ export function Dashboard({
   onLocaleChange,
   onPrepareShowScoreClass,
   onSaveShowScorePaidWarmup,
+  onShowScorePaidWarmupSaveError,
   onDeleteShowScorePaidWarmup,
   onRefresh,
   onReplaceNrhaRiderRankings,
@@ -313,6 +314,7 @@ export function Dashboard({
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (block: Block) => Promise<void>;
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
+  onShowScorePaidWarmupSaveError: (error: unknown) => void;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
   onReplaceNrhaRiderRankings: (input: Parameters<typeof replaceNrhaRiderRankings>[0]) => Promise<void>;
@@ -972,6 +974,7 @@ export function Dashboard({
             onDeleteSlate={onDeleteSlate}
             onDeleteShowScorePaidWarmup={onDeleteShowScorePaidWarmup}
             onSaveShowScorePaidWarmup={onSaveShowScorePaidWarmup}
+            onShowScorePaidWarmupSaveError={onShowScorePaidWarmupSaveError}
             onUpdateBlock={onUpdateBlock}
             onUpdateBlockTemplate={onUpdateBlockTemplate}
             onUpdateClassTemplate={onUpdateClassTemplate}
