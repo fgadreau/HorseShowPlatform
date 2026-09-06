@@ -1,0 +1,10 @@
+import {useEffect,useRef,useState} from 'react';
+import {stripeAction} from '../../services/billingFolio';
+declare global {interface Window {Stripe?:any}}
+let loader:Promise<void>|undefined;
+function loadStripe(){return loader??=new Promise<void>((resolve,reject)=>{if(window.Stripe)return resolve();const s=document.createElement('script');s.src='https://js.stripe.com/v3/';s.onload=()=>resolve();s.onerror=()=>{loader=undefined;reject(Error('BILLING_PROVIDER_RETRY'));};document.head.append(s);});}
+export function PaymentElement({attempt,locale,onUpdated}:{attempt:any;locale:string;onUpdated:()=>void}){
+ const ref=useRef<HTMLDivElement>(null),api=useRef<any>(null);const [error,setError]=useState(''),[busy,setBusy]=useState(false),[ready,setReady]=useState(false);const fr=locale==='fr';
+ useEffect(()=>{let mounted=true,element:any;void loadStripe().then(()=>{if(!mounted)return;if(!attempt.publishable_key?.startsWith('pk_test_'))throw Error('BILLING_TEST_ONLY');const stripe=window.Stripe(attempt.publishable_key,{locale});const elements=stripe.elements({clientSecret:attempt.client_secret});element=elements.create('payment',{wallets:{applePay:'never',googlePay:'never'}});element.mount(ref.current);api.current={stripe,elements};setReady(true);}).catch(e=>setError(e.message));return()=>{mounted=false;element?.destroy();};},[attempt,locale]);
+ return <section aria-label={fr?'Paiement Stripe test':'Stripe test payment'}><div ref={ref}/>{error&&<p role="alert">{error}</p>}<button disabled={busy||!ready} onClick={async()=>{setBusy(true);setError('');try{if(!api.current)throw Error('BILLING_PROVIDER_RETRY');const result=await api.current.stripe.confirmPayment({elements:api.current.elements,confirmParams:{return_url:window.location.origin+window.location.pathname+window.location.search},redirect:'if_required'});if(result.error)setError(result.error.message);await stripeAction({action:'resume',attempt_id:attempt.attempt_id});onUpdated();}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>{busy?(fr?'Vérification serveur…':'Checking server…'):(fr?'Confirmer le paiement test':'Confirm test payment')}</button></section>;
+}

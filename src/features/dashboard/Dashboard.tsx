@@ -1,3 +1,6 @@
+import {FinanceView} from '../finance/FinanceView';
+import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
+import {billingRpc} from '../../services/billingFolio';
 import { Brand } from "../../components/Brand";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
@@ -173,11 +176,11 @@ const SHOW_CONTEXT_VIEW_KEYS = new Set<ViewKey>([
   "stalls",
   "scoring",
   "results",
-  "billing",
+  "shows",
+  "show-accounts",
   "my-overview",
   "my-entries",
   "my-stalls",
-  "my-invoices",
 ]);
 
 export function Dashboard({
@@ -349,7 +352,10 @@ export function Dashboard({
   onUpdateUserProfile: (id: string, input: Parameters<typeof updateUserProfile>[1]) => Promise<void>;
   onViewChange: (view: ViewKey) => void;
 }) {
-  const [selectedShowId, setSelectedShowId] = useState("");
+  const [selectedShowId, setSelectedShowId] = useState(()=>financeRoute()?.show??'');
+  const [navigationStaff,setNavigationStaff]=useState(false);
+  useEffect(()=>{let live=true;setNavigationStaff(false);if(selectedOrganizationId)void billingRpc('billing_navigation_scope',{p_org:selectedOrganizationId}).then(r=>{if(live)setNavigationStaff(r.staff);}).catch(()=>{});return()=>{live=false;};},[selectedOrganizationId]);
+  useEffect(()=>{const read=()=>{const r=financeRoute();if(r?.show)setSelectedShowId(r.show);};window.addEventListener('popstate',read);return()=>window.removeEventListener('popstate',read);},[]);
   const organizations = context?.organizations ?? [];
   const organizationMembers = context?.organizationMembers ?? [];
   const shows = context?.shows ?? [];
@@ -398,7 +404,7 @@ export function Dashboard({
   const stallBookings = context?.stallBookings ?? [];
   const invoices = context?.invoices ?? [];
   const invoiceLineItems = context?.invoiceLineItems ?? [];
-  const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? organizations[0] ?? null;
+  const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? (financeRoute()?.org ? null : organizations[0] ?? null);
   const healthPolicyReferenceDate = todayDateValue();
   const selectedOrganizationHealthPolicies = selectedOrganization
     ? organizationHealthPolicies.filter((policy) => policy.organization_id === selectedOrganization.id)
@@ -418,7 +424,7 @@ export function Dashboard({
   const selectedMembership = selectedOrganization
     ? organizationMembers.find((member) => member.organization_id === selectedOrganization.id && member.user_id === context?.profile.id)
     : null;
-  const canManageAssociation = selectedMembership?.role === "admin" || selectedMembership?.role === "secretary";
+  const canManageAssociation = navigationStaff || selectedMembership?.role === "admin" || selectedMembership?.role === "secretary";
   const isPlatformAdmin = context?.isPlatformAdmin ?? false;
   const profileIncomplete = context ? !profileIsComplete(context.profile) : false;
   const rawEffectiveView = canManageAssociation || isPlatformAdmin || !associationViewKeys.has(activeView) ? activeView : "my-overview";
@@ -532,7 +538,8 @@ export function Dashboard({
   const selectedOrganizationInvoiceLineItems = selectedOrganization
     ? invoiceLineItems.filter((item) => item.organization_id === selectedOrganization.id)
     : [];
-  const selectedShow = selectedOrganizationShows.find((show) => show.id === selectedShowId) ?? selectedOrganizationShows[0] ?? null;
+  const selectedShow = selectedOrganizationShows.find((show) => show.id === selectedShowId) ?? (financeRoute()?.show ? null : ([...selectedOrganizationShows].filter(s=>s.status!=='archived'&&s.end_date>=todayDateValue()).sort((a,b)=>a.start_date.localeCompare(b.start_date))[0]??[...selectedOrganizationShows].sort((a,b)=>b.start_date.localeCompare(a.start_date))[0]??null));
+  const showRouteUnavailable = Boolean(financeRoute()?.show && !selectedShow);
   const activeShowId = selectedShow?.id ?? "";
   const activeShowList = selectedShow ? [selectedShow] : selectedOrganizationShows;
   const selectedShowBlocks = selectedShow
@@ -668,11 +675,15 @@ export function Dashboard({
     stallOptions: selectedOrganizationStallOptions,
   });
   const activeNavItem = [...associationNavigation, ...personalNavigation].find((item) => item.key === effectiveView);
-  const activeViewLabel = effectiveView === "platform-admin" ? "Admin plans" : activeNavItem ? t.nav[activeNavItem.labelKey] : t.shell.productName;
+  const activeViewLabel = effectiveView === "show-accounts" ? (locale === "fr" ? "Comptes du concours" : "Show accounts") : effectiveView === "platform-admin" ? "Admin plans" : activeNavItem ? t.nav[activeNavItem.labelKey] : t.shell.productName;
 
   const handleViewChange = (view: ViewKey) => {
     setIsMobileMenuOpen(false);
-    onViewChange(view);
+    if(view==='billing')navigateBilling(`/associations/${selectedOrganization?.id}/finance`);
+    else if(view==='my-invoices')navigateBilling('/me/accounts');
+    else if(Object.values(showSections).includes(view)&&activeShowId)navigateBilling(`/associations/${selectedOrganization?.id}/shows/${activeShowId}/${Object.keys(showSections).find(k=>showSections[k]===view)}`);
+    else {window.history.pushState({},'', '/');onViewChange(view);}
+
   };
 
   useEffect(() => {
@@ -741,7 +752,7 @@ export function Dashboard({
         <div className="brand-lockup compact"><Brand /></div>
 
         <nav className="nav-list" id="primary-navigation" aria-label="Main navigation">
-          {canManageAssociation ? (
+          {canManageAssociation || isPlatformAdmin ? (
             <NavigationSection activeView={effectiveView} items={associationNavigation} label={t.nav.association} t={t} onViewChange={handleViewChange} />
           ) : null}
           <NavigationSection activeView={effectiveView} items={personalNavigation} label={t.nav.mySpace} t={t} onViewChange={handleViewChange} />
@@ -785,7 +796,7 @@ export function Dashboard({
           </div>
           <div className="header-actions">
             {!effectiveView.startsWith("my-") && organizations.length > 1 ? (
-              <select value={selectedOrganization?.id ?? ""} onChange={(event) => onChangeOrganization(event.target.value)}>
+              <select value={selectedOrganization?.id ?? ""} onChange={(event) => {onChangeOrganization(event.target.value);if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling(`/associations/${event.target.value}/finance`);else if(financeRoute())navigateBilling(`/associations/${event.target.value}/shows`);}}>
                 {organizations.map((organization) => (
                   <option key={organization.id} value={organization.id}>
                     {organization.name}
@@ -798,8 +809,9 @@ export function Dashboard({
                 aria-label={locale === "fr" ? "Show actuel" : "Current show"}
                 title={locale === "fr" ? "Show actuel" : "Current show"}
                 value={activeShowId}
-                onChange={(event) => setSelectedShowId(event.target.value)}
+                onChange={(event) => {setSelectedShowId(event.target.value);if(!effectiveView.startsWith('my-'))navigateBilling(`/associations/${selectedOrganization?.id}/shows/${event.target.value}/${Object.keys(showSections).find(k=>showSections[k]===effectiveView)??'overview'}`);}}
               >
+                <option value="" disabled>{locale==='fr'?'Choisir un concours':'Select a show'}</option>
                 {selectedOrganizationShows.map((show) => (
                   <option key={show.id} value={show.id}>
                     {showLabel(show)}
@@ -813,9 +825,11 @@ export function Dashboard({
           </div>
         </header>
 
+        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance"><p>{selectedShow?.name} · {selectedShow?.start_date} — {selectedShow?.end_date} · {selectedShow?.status}</p><nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
         {notice ? <NoticeBanner notice={notice} /> : null}
+        {showRouteUnavailable && <p role="alert">{locale==='fr'?'Concours indisponible ou non autorisé. Sélectionnez un concours accessible.':'Show unavailable or unauthorized. Select an accessible show.'}</p>}
 
-        {effectiveView === "overview" ? (
+        {!showRouteUnavailable && effectiveView === "overview" ? (
           <OverviewView
             locale={locale}
             openShows={openShows}
@@ -834,7 +848,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "notifications" ? (
+        {!showRouteUnavailable && effectiveView === "notifications" ? (
           <NotificationsView
             notifications={selectedOrganizationNotifications}
             organization={selectedOrganization}
@@ -842,7 +856,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "shows" ? (
+        {!showRouteUnavailable && effectiveView === "shows" ? (
           <ShowsView
             locale={locale}
             blocks={selectedOrganizationBlocks}
@@ -853,17 +867,17 @@ export function Dashboard({
             showAnnouncements={selectedOrganizationShowAnnouncements}
             showDays={selectedOrganizationShowDays}
             showScoreClassSetups={selectedOrganizationShowScoreSetups}
-            shows={selectedOrganizationShows}
+            shows={financeRoute()?.show?activeShowList:selectedOrganizationShows}
             stallOptions={selectedOrganizationStallOptions}
             onCreateShow={onCreateShow}
             onCreateShowAnnouncement={onCreateShowAnnouncement}
             onDeleteShowAnnouncement={onDeleteShowAnnouncement}
             onUpdateShow={onUpdateShow}
-            onViewChange={onViewChange}
+            onViewChange={handleViewChange}
           />
         ) : null}
 
-        {effectiveView === "people" ? (
+        {!showRouteUnavailable && effectiveView === "people" ? (
           <PeopleView
             locale={locale}
             contacts={selectedOrganizationContacts}
@@ -905,7 +919,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "health" ? (
+        {!showRouteUnavailable && effectiveView === "health" ? (
           <HealthCenterView
             locale={locale}
             canManageHealthDocuments={canManageAssociation || isPlatformAdmin}
@@ -929,7 +943,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "blocks" ? (
+        {!showRouteUnavailable && effectiveView === "blocks" ? (
           <ClassesView
             locale={locale}
             blocks={selectedShowBlocks}
@@ -979,7 +993,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "entries" ? (
+        {!showRouteUnavailable && effectiveView === "entries" ? (
           <EntriesView
             locale={locale}
             blocks={selectedShowBlocks}
@@ -1010,7 +1024,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "back-numbers" ? (
+        {!showRouteUnavailable && effectiveView === "back-numbers" ? (
           <BackNumbersView
             locale={locale}
             backNumbers={selectedOrganizationBackNumbers}
@@ -1028,7 +1042,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "stalls" ? (
+        {!showRouteUnavailable && effectiveView === "stalls" ? (
           <StallsView
             locale={locale}
             bookings={selectedShowStallBookings}
@@ -1054,7 +1068,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "scoring" ? (
+        {!showRouteUnavailable && effectiveView === "scoring" ? (
           selectedOrganization && hasPlanFeature(selectedOrganization, 'show_score') ? (
             <ScoringView
               locale={locale}
@@ -1075,7 +1089,7 @@ export function Dashboard({
           )
         ) : null}
 
-        {effectiveView === "results" ? (
+        {!showRouteUnavailable && effectiveView === "results" ? (
           <ResultsView
             locale={locale}
             blocks={selectedShowBlocks}
@@ -1097,8 +1111,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "billing" ? (
-          <BillingView
+        {!showRouteUnavailable && (effectiveView === "billing" || effectiveView === "show-accounts") ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={effectiveView==='show-accounts'?(financeRoute()?.show??activeShowId):''} personal={false} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
             locale={locale}
             contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
@@ -1115,10 +1128,9 @@ export function Dashboard({
             unpaidBalance={selectedShowUnpaidBalance}
             onCancelManualSale={onCancelManualSale}
             onCreateManualSale={onCreateManualSale}
-          />
-        ) : null}
+          />}/> : null}
 
-        {effectiveView === "my-overview" && context ? (
+        {!showRouteUnavailable && effectiveView === "my-overview" && context ? (
           <ClientDashboardView
             locale={locale}
             contacts={personalContacts}
@@ -1136,7 +1148,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-profile" && context ? (
+        {!showRouteUnavailable && effectiveView === "my-profile" && context ? (
           <ProfileView
             locale={locale}
             horses={personalHorses}
@@ -1147,7 +1159,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-horses" ? (
+        {!showRouteUnavailable && effectiveView === "my-horses" ? (
           <MyHorsesView
             locale={locale}
             contacts={personalContacts}
@@ -1176,7 +1188,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-riders" ? (
+        {!showRouteUnavailable && effectiveView === "my-riders" ? (
           <MyContactsView
             locale={locale}
             contacts={personalContacts}
@@ -1197,7 +1209,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-entries" ? (
+        {!showRouteUnavailable && effectiveView === "my-entries" ? (
           <MyEntriesView
             locale={locale}
             blocks={selectedShowBlocks}
@@ -1228,7 +1240,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-back-numbers" ? (
+        {!showRouteUnavailable && effectiveView === "my-back-numbers" ? (
           <MyBackNumbersView
             locale={locale}
             backNumbers={personalBackNumbers}
@@ -1239,7 +1251,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-stalls" ? (
+        {!showRouteUnavailable && effectiveView === "my-stalls" ? (
           <MyStallsView
             locale={locale}
             bookings={selectedShowPersonalStallBookings}
@@ -1262,8 +1274,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "my-invoices" ? (
-          <BillingView
+        {!showRouteUnavailable && effectiveView === "my-invoices" ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={''} personal={true} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
             locale={locale}
             contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
@@ -1278,10 +1289,9 @@ export function Dashboard({
             profileId={context?.profile.id ?? ""}
             shows={activeShowList}
             unpaidBalance={selectedShowPersonalUnpaidBalance}
-          />
-        ) : null}
+          />}/> : null}
 
-        {effectiveView === "programs" && context && selectedOrganization ? (
+        {!showRouteUnavailable && effectiveView === "programs" && context && selectedOrganization ? (
           <div className="content-grid">
             <ViewIntro
               eyebrow={locale === "fr" ? "Association" : "Association"}
@@ -1301,7 +1311,7 @@ export function Dashboard({
           </div>
         ) : null}
 
-        {effectiveView === "settings" ? (
+        {!showRouteUnavailable && effectiveView === "settings" ? (
           <SettingsView
             locale={locale}
             context={context}
@@ -1323,7 +1333,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {effectiveView === "platform-admin" && isPlatformAdmin ? (
+        {!showRouteUnavailable && effectiveView === "platform-admin" && isPlatformAdmin ? (
           <PlatformAdminView
             currentUserProfileId={context?.profile.id ?? null}
             nrhaRiderRankings={nrhaRiderRankings}

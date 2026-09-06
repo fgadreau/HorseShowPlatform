@@ -1,3 +1,4 @@
+import {financeRoute} from './features/finance/navigation';
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { AuthScreen } from "./features/auth/AuthScreen";
@@ -113,14 +114,16 @@ function HspApp() {
 
   const [session, setSession] = useState<Session | null>(null);
   const [context, setContext] = useState<AppContext | null>(null);
-  const [activeView, setActiveView] = useState<ViewKey>("overview");
+  const [activeView, setActiveView] = useState<ViewKey>(()=>financeRoute()?.view??"overview");
   const [locale, setLocale] = useState<Locale>(() => getInitialLocale());
-  const [selectedOrganizationId, setSelectedOrganizationId] = useState("");
+  const [selectedOrganizationId, setSelectedOrganizationId] = useState(()=>financeRoute()?.org??"");
   const [loading, setLoading] = useState(isSupabaseConfigured);
   const [contextLoadError, setContextLoadError] = useState("");
   const [showAuth, setShowAuth] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
   const t = translations[locale];
+
+  useEffect(()=>{const onPop=()=>{const route=financeRoute();if(route){setActiveView(route.view);if(route.org&&route.org!==selectedOrganizationId){setSelectedOrganizationId(route.org);void refreshContext(session,route.org);}}};window.addEventListener('popstate',onPop);return()=>window.removeEventListener('popstate',onPop);},[session,selectedOrganizationId]);
 
   function handleLocaleChange(nextLocale: Locale) {
     setLocale(nextLocale);
@@ -173,7 +176,7 @@ function HspApp() {
     if (!session?.user) {
       setContext(null);
       setContextLoadError("");
-      setSelectedOrganizationId("");
+      setSelectedOrganizationId(financeRoute()?.org??"");
       return;
     }
 
@@ -185,6 +188,7 @@ function HspApp() {
       return;
     }
 
+    if (financeRoute()?.org) return;
     if (!selectedOrganizationId || !context.organizations.some((organization) => organization.id === selectedOrganizationId)) {
       setSelectedOrganizationId(context.loadedOrganizationId ?? context.organizations[0].id);
     }
