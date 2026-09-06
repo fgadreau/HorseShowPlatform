@@ -145,7 +145,7 @@ export function PlatformAdminView({
             <h3 style={sectionTitleStyle}>Listes NRHA annuelles</h3>
             <p style={sectionSubtitleStyle}>Catégories 2 et 6</p>
           </div>
-          <FileText size={18} style={{ color: "#0f766e" }} />
+          <FileText size={18} style={{ color: "var(--brand)" }} />
         </div>
 
         <form className="form-grid" style={rankingImportGridStyle} onSubmit={handleImportRankings}>
@@ -456,7 +456,7 @@ const rankingSummaryLabelStyle: React.CSSProperties = {
 };
 
 const rankingSummaryValueStyle: React.CSSProperties = {
-  color: "#0f766e",
+  color: "var(--brand)",
   display: "block",
   fontSize: 24,
   lineHeight: 1,

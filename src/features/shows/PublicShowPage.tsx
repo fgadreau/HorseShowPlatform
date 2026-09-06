@@ -1,3 +1,4 @@
+import { Brand } from "../../components/Brand";
 import { useEffect, useState } from "react";
 import { AlertTriangle, CalendarDays, Clock, DollarSign, ExternalLink, MapPin, Shield, Stethoscope, Users } from "lucide-react";
 import { formatCurrency, formatDate } from "../../lib/display";
@@ -221,6 +222,7 @@ function PublicShowPage({ slug }: { slug: string }) {
 
   return (
     <div className="public-show-page">
+      <div className="public-brand-bar"><a href="/"><Brand /></a></div>
       <header className="public-show-header">
         <div className="public-show-header-inner">
           <div className="public-org-badge">{organization.name}</div>

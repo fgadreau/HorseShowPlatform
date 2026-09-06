@@ -1,3 +1,4 @@
+import { Brand } from "../../components/Brand";
 import { useVetServices } from './useVetServices';
 import { VetTestOutbox } from './VetTestOutbox';
 import { useEffect, useRef, useState } from 'react';
@@ -113,14 +114,14 @@ function VetPrivateApp() {
  const currentPractitioner = context?.practitioners.find(p => p.id === practitioner);
  const check = context?.checks.find(c => c.practitioner_id === practitioner);
  const readOnly = !!selected && selected.status !== 'draft';
- if (!supabase) return <main className="vet-app"><h1>Portail vétérinaire</h1><p>Configurer Supabase local pour accéder au pilote.</p></main>;
+ if (!supabase) return <main className="vet-app"><Brand /><h1>Portail vétérinaire</h1><p>Configurer Supabase local pour accéder au pilote.</p></main>;
  if (!ready) return <main className="vet-app">Chargement…</main>;
  return <main className="vet-app">
-  <header><div><p>HorseShowPlatform · Pilote privé</p><h1>Certificats vétérinaires</h1></div><nav><a href="/">HSP</a>{session && <button onClick={() => void act(async () => { const { error } = await supabase!.auth.signOut({ scope: 'local' }); if (error) throw error; })}>Déconnexion</button>}</nav></header>
+  <header><div><a href="/"><Brand /></a><p>HSP · Pilote privé</p><h1>Certificats vétérinaires</h1></div><nav><a href="/">HSP</a>{session && <button onClick={() => void act(async () => { const { error } = await supabase!.auth.signOut({ scope: 'local' }); if (error) throw error; })}>Déconnexion</button>}</nav></header>
   {!services.ready && <p className="vet-notice" role="status">PREPROD — préparation des certificats. {vetPendingServices}</p>}
   {notice && <p role="alert" className="vet-notice">{notice}</p>}
   {!session ? <form onSubmit={e => { e.preventDefault();void act(async () => { const { error } = await supabase!.auth.signInWithPassword({ email, password });if (error) throw error; }); }}>
-   <h2>Connexion privée</h2><p>Accès réservé aux comptes autorisés par HSP.</p><Field label="Courriel" value={email} onChange={setEmail} type="email" required /><Field label="Mot de passe" value={password} onChange={setPassword} type="password" required /><button disabled={busy}>Se connecter</button>
+   <h2>Connexion privée</h2><p>Accès réservé aux comptes autorisés par HSP.</p><Field label="Courriel" value={email} onChange={setEmail} type="email" required /><Field label="Mot de passe" value={password} onChange={setPassword} type="password" required /><button className="primary-button" disabled={busy}>Se connecter</button>
   </form> : !context ? <p>Chargement des accès…</p> : <>
    {!context.issuers.length && !context.admin && <p role="alert">Accès vétérinaire refusé. Votre compte ne possède aucun émetteur actif autorisé.</p>}
    {!!context.issuers.length && <label>Émetteur<select aria-label="Émetteur" value={context.issuerId} onChange={e => { open(null);void act(async () => { await refresh(e.target.value); }); }}>{context.issuers.map(i => <option key={i.id} value={i.id}>{i.name} — {i.status}</option>)}</select></label>}
@@ -133,7 +134,7 @@ function VetPrivateApp() {
     <h3>Vérification OMVQ</h3>{!vetLocalServices&&<button onClick={()=>void act(async()=>{await import('../../services/vetServices').then(m=>m.vetWorker('browser-check',{}));setNotice('Navigateur et génération PDF PREPROD opérationnels. Aucun accès OMVQ effectué.');})}>Tester le navigateur PREPROD</button>}<label><input type="checkbox" disabled={!services.omvq} checked={enabled} onChange={e => setEnabled(e.target.checked)} /> Autoriser la vérification OMVQ et l’émission</label><Field label="Fraîcheur maximale (heures, 1 à 168)" value={ttl} onChange={setTtl} type="number" /><button onClick={() => void act(async () => { await vetRpc('vet_admin_settings', { p_enabled: services.omvq && enabled, p_freshness_hours: Number(ttl) });setNotice('Configuration enregistrée.'); })}>Enregistrer la configuration</button>
     <h3>Autorisation préalable de signature</h3><Field label="Expiration du lien personnel (minutes, 5 à 120)" type="number" value={linkMinutes} onChange={setLinkMinutes}/><Field label="Durée de l’autorisation (jours, 1 à 365)" type="number" value={authorizationDays} onChange={setAuthorizationDays}/><button onClick={()=>void act(async()=>{await vetRpc('vet_set_signature_settings',{p_link_minutes:Number(linkMinutes),p_valid_days:Number(authorizationDays)});setNotice('Paramètres de signature enregistrés. Les autorisations existantes conservent leur échéance.');})}>Enregistrer les paramètres de signature</button>
    </fieldset></details>}
-   {issuer?.status === 'active' && <div className="vet-layout"><aside><h2>Certificats</h2><button disabled={busy} onClick={() => open(null)}>Nouveau brouillon</button><p>100 certificats les plus récents.</p>{context.certificates.map(c => <button className="vet-list-item" key={c.id} onClick={() => open(c)}>{c.payload.horse?.name || 'Cheval à rattacher'}<small>{certificateLabel(c)} · {c.number?.slice(-8) ?? c.id.slice(0, 8)}</small></button>)}</aside>
+   {issuer?.status === 'active' && <div className="vet-layout"><aside><h2>Certificats</h2><button className="primary-button" disabled={busy} onClick={() => open(null)}>Nouveau brouillon</button><p>100 certificats les plus récents.</p>{context.certificates.map(c => <button aria-pressed={selected?.id === c.id} className="vet-list-item" key={c.id} onClick={() => open(c)}>{c.payload.horse?.name || 'Cheval à rattacher'}<small>{certificateLabel(c)} · {c.number?.slice(-8) ?? c.id.slice(0, 8)}</small></button>)}</aside>
     <section><h2>{selected ? certificateLabel(selected) : 'Nouveau certificat'}</h2>
      {selected?.snapshot && (selected.snapshot.signature as {signed_content?:{test_only?:boolean}})?.signed_content?.test_only && <p className="vet-notice"><strong>TEST — autorisation simulée. Ce certificat ne constitue pas une preuve vaccinale reconnue.</strong></p>}
      {selected?.number && <p>{selected.number}<br />Émis le {selected.issued_at ? new Date(selected.issued_at).toLocaleString('fr-CA') : ''}</p>}

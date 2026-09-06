@@ -1,4 +1,4 @@
-import { ClipboardList } from "lucide-react";
+import { Brand } from "../../components/Brand";
 import type { Translation } from "../../lib/i18n";
 
 export function SetupScreen({ t }: { t: Translation }) {
@@ -6,9 +6,7 @@ export function SetupScreen({ t }: { t: Translation }) {
     <main className="setup-screen">
       <section className="setup-panel">
         <div className="brand-lockup">
-          <div className="brand-mark">
-            <ClipboardList size={26} />
-          </div>
+          <Brand symbol />
           <div>
             <p className="eyebrow">{t.shell.productName}</p>
             <h1>Environment setup required</h1>

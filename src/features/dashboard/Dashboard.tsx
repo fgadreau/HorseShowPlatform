@@ -1,3 +1,4 @@
+import { Brand } from "../../components/Brand";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import {
@@ -9,7 +10,6 @@ import {
   ChevronRight,
   CheckCircle2,
   CircleDollarSign,
-  ClipboardList,
   Download,
   FileText,
   LogOut,
@@ -721,6 +721,7 @@ export function Dashboard({
     <main className="app-shell">
       <aside className={`sidebar${isMobileMenuOpen ? " open" : ""}`}>
         <div className="mobile-menu-bar">
+          <Brand symbol />
           <div className="mobile-menu-title">
             <strong>{t.shell.productName}</strong>
             <span>{activeViewLabel}</span>
@@ -737,15 +738,7 @@ export function Dashboard({
           </button>
         </div>
 
-        <div className="brand-lockup compact">
-          <div className="brand-mark">
-            <ClipboardList size={22} />
-          </div>
-          <div>
-            <strong>Horse Show</strong>
-            <span>Platform</span>
-          </div>
-        </div>
+        <div className="brand-lockup compact"><Brand /></div>
 
         <nav className="nav-list" id="primary-navigation" aria-label="Main navigation">
           {canManageAssociation ? (

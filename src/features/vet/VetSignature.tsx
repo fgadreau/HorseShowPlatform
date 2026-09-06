@@ -1,3 +1,4 @@
+import { Brand } from "../../components/Brand";
 import { useVetServices } from './useVetServices';
 import { VetPublicCertificate, type PublicCertificate } from './VetPublicCertificate';
 import { useEffect,useRef,useState } from 'react';
@@ -55,7 +56,7 @@ export function VetPublicPage(){
  const verify=window.location.pathname.startsWith('/vet/verify/');
  useEffect(()=>{if(!verify){window.history.replaceState(null,'',window.location.pathname);return;}const number=window.location.pathname.split('/').pop();void vetRpc<PublicCertificate|null>('vet_public_certificate_status',{p_number:number}).then(v=>v?setStatus(v):setError('Certificat introuvable.')).catch(()=>setError('Vérification temporairement indisponible.'));},[]);
  const labels:Record<string,string>={test:'TEST — certificat simulé, sans valeur de preuve vaccinale',valid:'Certificat valide et signé',superseded:'Remplacé par une correction',revoked:'Révoqué',unverified:'Certificat non vérifié ou non signé'};
- return <main className="vet-app"><h1>{verify?'Vérifier un certificat HSP':'Autorisation personnelle du vétérinaire'}</h1>{error&&<p role="alert">{error}</p>}
+ return <main className="vet-app"><a href="/"><Brand /></a><h1>{verify?'Vérifier un certificat HSP':'Autorisation personnelle du vétérinaire'}</h1>{error&&<p role="alert">{error}</p>}
  {verify?status&&<div className="vet-guide"><h2>{labels[String(status.status)]}</h2><p>{String(status.number)} · Version {String(status.version)}</p>{!!status.issued_at&&<p>Émis le {date(String(status.issued_at))}</p>}{!!status.replacement_number&&<a href={`/vet/verify/${status.replacement_number}`}>Consulter la correction</a>}{status.status==='test'&&['revoked','superseded'].includes(status.certificate_status)&&<p>{labels[status.certificate_status]}</p>}<VetPublicCertificate certificate={status}/></div>:done?<p>Votre autorisation est enregistrée. Ce lien ne peut plus être utilisé. Vous pouvez fermer cette page.</p>:token?<SignAuthorization token={token} onDone={()=>setDone(true)}/>:<p>Lien absent ou incomplet. Ouvrez le lien personnel reçu de votre clinique.</p>}
  </main>;
 }
