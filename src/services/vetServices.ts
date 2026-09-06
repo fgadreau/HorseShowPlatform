@@ -1,7 +1,16 @@
 import { requireSupabase } from '../lib/supabase';
 import { vetAuthenticatedFetch } from './vetSession';
 export const vetLocalServices = import.meta.env.DEV && (import.meta.env.VITE_VET_LOCAL_PROXY === 'true' || ['localhost','127.0.0.1'].includes(window.location.hostname));
-export const vetPendingServices = 'En attente de vérification : le service vétérinaire hébergé n’est pas encore configuré. Le brouillon est conservé ; signature, émission, PDF et courriels restent indisponibles.';
+export const vetPendingServices = 'En attente de vérification : le service PREPROD doit être configuré. Le brouillon est conservé ; aucune vérification positive ne sera supposée.';
+function vetEndpoint(endpoint: string) {
+ if(vetLocalServices) return `${import.meta.env.VITE_VET_LOCAL_PROXY==='true'?'/__local-vet':'http://127.0.0.1:54330'}/${endpoint}`;
+ if(import.meta.env.VITE_DEPLOY_ENV==='staging' && import.meta.env.VITE_SUPABASE_PROJECT_REF==='qaguotdproxamgudnnsd') return `/api/vet/${endpoint}`;
+ throw new Error(vetPendingServices);
+}
+export async function vetCapabilities(): Promise<{ready:boolean;mail:boolean;omvq:boolean;missing:string[]}> {
+ if(vetLocalServices)return {ready:true,mail:true,omvq:true,missing:[]};
+ try{const r=await fetch(vetEndpoint('health'));if(!r.ok)throw Error();return await r.json();}catch{return {ready:false,mail:false,omvq:false,missing:[]};}
+}
 export type VetIssuer = { id: string; name: string; kind: 'clinic' | 'independent'; status: 'active' | 'suspended'; contact_details: string };
 export type VetPractitioner = { id: string; issuer_id: string; name: string; permit_number: string };
 export type VetAdministration = { product: string; manufacturer: string; lot: string; product_expires_on: string; administered_on: string; valid_until: string; declared_duration: string; diseases: string[] };
@@ -34,27 +43,22 @@ export async function vetLoad(issuerId?: string) {
  return { issuers: list, admin: !!admin.data, issuerId: id ?? '', certificates: (certificates.data ?? []) as VetCertificate[], practitioners: (practitioners.data ?? []) as VetPractitioner[], checks: checks.data ?? [] };
 }
 export async function vetVerify(practitionerId: string) {
- // This first slice deliberately has no remotely hosted browser endpoint.
- const localProxy = import.meta.env.DEV && import.meta.env.VITE_DEPLOY_ENV === 'local' && import.meta.env.VITE_VET_LOCAL_PROXY === 'true';
- if (!localProxy && !['localhost', '127.0.0.1'].includes(window.location.hostname)) throw new Error(vetPendingServices);
- const response = await vetAuthenticatedFetch(requireSupabase().auth, localProxy ? '/__local-vet/verify' : 'http://127.0.0.1:54330/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ practitioner_id: practitionerId }) });
+ const response = await vetAuthenticatedFetch(requireSupabase().auth, vetEndpoint('verify'), { method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({practitioner_id:practitionerId}) });
  const result = await response.json();
  if (!response.ok) throw new Error(result.error ?? 'Vérification indisponible.');
  return result as { result: string; cached: boolean };
 }
 
 export async function vetCertificateFile(certificateId: string, delivery?: { request_id: string; owner_email: string; agent_email: string }) {
- const localProxy = import.meta.env.DEV && import.meta.env.VITE_DEPLOY_ENV === 'local' && import.meta.env.VITE_VET_LOCAL_PROXY === 'true';
- if (!localProxy && !['localhost', '127.0.0.1'].includes(window.location.hostname)) throw new Error(vetPendingServices);
  const endpoint = delivery ? 'certificate-email' : 'certificate-pdf';
- const response = await vetAuthenticatedFetch(requireSupabase().auth, `${localProxy ? '/__local-vet' : 'http://127.0.0.1:54330'}/${endpoint}`, {
+ const response = await vetAuthenticatedFetch(requireSupabase().auth, vetEndpoint(endpoint), {
   method: 'POST', headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ certificate_id: certificateId, ...delivery }),
  });
  if (!response.ok) { const error = await response.json(); throw new Error(error.error ?? 'Opération impossible.'); }
  if (delivery) {
   const result = await response.json();
-  if (!result.results.every((r: {status: string}) => r.status === 'local_captured')) throw new Error('Envoi non confirmé pour au moins un destinataire. Consultez l’historique et Mailpit avant un nouvel essai.');
+  if (!result.results.every((r: {status: string}) => ['local_captured','preprod_captured'].includes(r.status))) throw new Error('Envoi non confirmé pour au moins un destinataire. Consultez l’historique et Mailpit avant un nouvel essai.');
   return;
  }
  const url = URL.createObjectURL(await response.blob());
@@ -63,9 +67,7 @@ export async function vetCertificateFile(certificateId: string, delivery?: { req
 }
 
 export async function vetWorker<T>(endpoint: string, body: Record<string,unknown>, anonymous=false): Promise<T> {
- const proxy = import.meta.env.DEV && import.meta.env.VITE_DEPLOY_ENV === 'local' && import.meta.env.VITE_VET_LOCAL_PROXY === 'true';
- if(!proxy && !['localhost','127.0.0.1'].includes(window.location.hostname)) throw new Error(vetPendingServices);
- const url = `${proxy?'/__local-vet':'http://127.0.0.1:54330'}/${endpoint}`;
+ const url=vetEndpoint(endpoint);
  const init = {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)};
  const response = anonymous ? await fetch(url,init) : await vetAuthenticatedFetch(requireSupabase().auth,url,init);
  const result=await response.json();if(!response.ok)throw new Error(result.error??'Opération impossible.');return result;

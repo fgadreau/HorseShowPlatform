@@ -178,4 +178,24 @@ select vet_test.ok((public.vet_get_certificate_health('a2000000-0000-0000-0000-0
 select vet_test.ok((public.vet_get_certificate_health('a2000000-0000-0000-0000-000000000009')#>>'{influenza,reason}')='test_certificate','simulation exclusion is explained');
 select vet_test.ok((select public.vet_public_certificate_status(public_number)->>'status'='test' from public.vet_certificates where id='a2000000-0000-0000-0000-000000000009'),'verification page exposes simulation, not validity');
 reset role;
+
+select vet_test.ok(public.vet_claim_omvq_lookup(),'first global worker lookup claimed');
+select vet_test.ok(not public.vet_claim_omvq_lookup(),'parallel worker lookup refused');
+select vet_test.ok(not has_function_privilege('authenticated','public.vet_claim_omvq_lookup()','execute'),'client cannot reset global throttle');
+insert into public.vet_preprod_outbox(id,issuer_id,created_by,recipient,kind,encrypted_message)
+values ('a6000000-0000-0000-0000-000000000001','a1000000-0000-0000-0000-000000000001','20000000-0000-0000-0000-000000000003','test@example.test','authorization','encrypted-fixture');
+set local role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000003',true);
+select vet_test.ok((select count(id)=1 from public.vet_preprod_outbox),'staff can list own test mail');
+select vet_test.denied($q$select encrypted_message from public.vet_preprod_outbox$q$,'permission denied');
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000004',true);
+select vet_test.ok((select count(id)=0 from public.vet_preprod_outbox),'ordinary user cannot read test mail');
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000006',true);
+select vet_test.ok((select count(id)=0 from public.vet_preprod_outbox),'other clinic cannot read test mail');
+reset role;
+update public.vet_preprod_outbox set expires_at=now()-interval '1 second';
+set local role authenticated;
+select set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000003',true);
+select vet_test.ok((select count(id)=0 from public.vet_preprod_outbox),'expired test mail hidden');
+reset role;
 rollback;

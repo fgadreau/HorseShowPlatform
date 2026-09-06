@@ -16,10 +16,12 @@ export function assessCards(cards, expected, count) {
  return { ...fields, result: card.status === 'Inactif' ? 'inactive' : 'ambiguous' };
 }
 export async function lookupOmvq(expected, { chromium, url = OMVQ_URL } = {}) {
- let browser;
+ let browser,timedOut=false;
+ const deadline=setTimeout(()=>{timedOut=true;void browser?.close().catch(()=>{});},45000);
  try {
   if (!/^[0-9]{1,12}$/.test(expected.permit_number)) return { result: 'ambiguous' };
-  browser = await chromium.launch({ headless: true });
+  browser = await chromium.launch({ headless: true, timeout:15000 });
+  if(timedOut)return {result:'unavailable'};
   const context = await browser.newContext({ acceptDownloads: false });
   const page = await context.newPage();
   page.setDefaultTimeout(15000);
@@ -42,7 +44,7 @@ export async function lookupOmvq(expected, { chromium, url = OMVQ_URL } = {}) {
    const label = [...element.querySelectorAll('.plabel')].find(el => el.textContent.trim() === 'Permis :');
    return { name: name?.textContent.trim(), status: name?.parentElement.querySelector('span.plabel')?.textContent.trim(), permit: label?.nextElementSibling?.textContent.trim() };
   }));
-  return assessCards(cards, expected, count);
+  return timedOut?{result:'unavailable'}:assessCards(cards, expected, count);
  } catch { return { result: 'unavailable' }; }
- finally { if (browser) await browser.close().catch(() => {}); }
+ finally { clearTimeout(deadline);if (browser) await browser.close().catch(() => {}); }
 }
