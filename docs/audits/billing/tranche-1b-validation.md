@@ -139,3 +139,25 @@ git diff --check
 Le premier lancement Chromium a été empêché par l'interdiction sandbox d'écouter sur loopback (`EPERM`). Le rejeu autorisé utilise uniquement le serveur local et des mocks. Aucun environnement distant n'est utilisé. Les SVG restent intacts et non suivis ; les artefacts `.tmp` restent ignorés.
 
 Limites : persistance liée au navigateur et à son origine ; vider son stockage supprime la commande locale. Les commandes d'une identité sont résolues avant d'en soumettre d'autres ; une reprise dont les permissions ont disparu reste bloquée. La qualification intégrée Stripe réelle demeure incomplète, et les PDF/worker restent en 1C. Aucun changement aux migrations, aux documents contractuels approuvés ou aux writers legacy.
+
+## Refus définitifs et opérations incertaines — correctif sur `361e3b567b634f1c61c82efed80296c9d752c716`
+
+Correctif validé localement, puis autorisé au commit et au push pour revue indépendante. Seuls `billingRecovery.ts`, ses tests de service et ce rapport changent. Aucun changement SQL, migration, interface ou configuration Stripe.
+
+Audit des refus :
+
+* `billing6_own_command` (migration 1A.6) prend le verrou, vérifie `billing_operations` et retourne le résultat original avant de vérifier l'admissibilité. Pour `finalize_own_billing_folio` et `prepare_own_billing_recap`, `BILLING_NOT_ADMISSIBLE` prouve donc que cette commande n'a pas été exécutée. Une fermeture préalable par la secrétaire libère la commande du participant dès réception de ce refus, sans créer une autre facture.
+* Les wrappers `billing_execute` de 1A.6 et 1A.7 excluent également les commandes déjà enregistrées avant les refus de capacité, concours archivé, blocage, paiement en attente ou montant réservé. Ces refus sont autorisés uniquement pour les RPC concernées.
+* Le moteur 1A vérifie son registre avant les validations métier : contexte fermé, payeur/bénéficiaire/produit invalide, configuration fiscale absente ou périmée, montant/source, compte fermé, version, affectations et récapitulatif. Les exceptions annulent la transaction, y compris les écritures provisoires d'affectation. La vérification du wrapper 1A.6 précède aussi `BILLING_UNEXPECTED_FIELD` dans ce parcours public.
+
+La liste de refus définitifs est désormais explicite **par nom de RPC**, et non une expression régulière générale. Un code métier identique provenant d'une RPC non auditée reste incertain. `BILLING_FORBIDDEN`, les conflits d'idempotence, les erreurs réseau/timeout, les erreurs fournisseur et tous les codes inconnus conservent la clé et le JSON original. Un retrait de droits ne prouve pas l'absence d'un effet antérieur. Aucun effacement général des commandes en erreur n'est ajouté.
+
+```sh
+node scripts/billing/recovery.test.mjs
+npm run build
+git diff --check
+```
+
+Résultats : **46 tests de service réussis, 0 échec** (5 scénarios de reprise, 33 cas de refus définitifs par RPC, 7 erreurs ambiguës et 1 RPC non auditée). Le scénario supplémentaire simule une fermeture par la secrétaire, puis une réponse de refus perdue : la clé reste conservée jusqu'au rejeu exact recevant `BILLING_NOT_ADMISSIBLE`. La commande est alors libérée ; le même participant finalise un autre compte avec une nouvelle clé. Le test vérifie une seule facture par compte et aucun nouvel effet lors d'un rejeu du résultat réussi. Le cas de refus reçu directement est couvert par la matrice. Build TypeScript/Vite réussi, avec les avertissements existants sur les chunks et l'import vétérinaire ; whitespace conforme.
+
+Ces nouveaux résultats utilisent des **RPC et un registre serveur simulés**. Les chemins SQL sont audités en lecture seule ; aucune suite PostgreSQL ni navigateur n'a été rejouée pour ce correctif de classification. Les résultats antérieurs restent historiques. **Stripe test reste à qualifier réellement : aucun appel fournisseur ni paiement effectif dans cette intervention.** Aucun changement de PROD, génération PDF ou travail 1C. Les SVG locaux et les artefacts temporaires restent exclus.
