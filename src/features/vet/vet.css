@@ -1,0 +1,13 @@
+.vet-app {max-width:1280px;margin:0 auto;padding:28px;color:#18312c;background:#f6f8f5;min-height:100vh}
+.vet-app header,.vet-app nav {display:flex;align-items:center;justify-content:space-between;gap:16px}
+.vet-app h1 {margin:4px 0 24px}.vet-app h2 {font-size:1.35rem}.vet-app h3 {margin-top:28px}
+.vet-app label {display:block;margin:12px 0}.vet-app input:not([type=checkbox]),.vet-app select,.vet-app textarea {display:block;width:100%;padding:10px;border:1px solid #aabcb4;border-radius:6px;background:white;color:#18312c}
+.vet-app input[type=checkbox] {margin-right:10px}.vet-app textarea {min-height:90px}
+.vet-app button {padding:10px 14px;margin:5px 8px 5px 0;border:1px solid #617e71;border-radius:6px;cursor:pointer}.vet-app button:disabled {opacity:.5;cursor:default}
+.vet-app fieldset {border:0;padding:0;min-width:0}.vet-app details {padding:14px;background:white;border:1px solid #d2ddd5;border-radius:8px;margin:12px 0}.vet-app summary {cursor:pointer;font-weight:600}
+.vet-layout {display:grid;grid-template-columns:260px minmax(0,1fr);gap:28px;margin-top:28px}.vet-layout section {min-width:0}
+.vet-list-item {display:block;width:100%;text-align:left}.vet-list-item small {display:block;margin-top:6px}.vet-grid {display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+.vet-administration {background:white;border:1px solid #d2ddd5;border-radius:8px;padding:18px;margin:16px 0}.vet-notice {padding:15px;border-left:4px solid #426f5d;background:#e5efe8}.vet-app pre {white-space:pre-wrap;overflow-wrap:anywhere}.vet-app table {width:100%;font-size:.85rem}.vet-app td,.vet-app th {padding:8px;text-align:left;overflow-wrap:anywhere}
+@media(max-width:760px){.vet-layout,.vet-grid{grid-template-columns:1fr}.vet-app{padding:16px}.vet-app header{align-items:flex-start}}
+
+.vet-guide {padding:16px 20px;background:#fff;border:1px solid #c8d9cf;border-radius:10px;margin:16px 0}.vet-guide p:first-child{margin-top:0}.vet-guide li{margin:8px 0}.vet-guide small{color:#496257}

@@ -5674,7 +5674,30 @@ button:focus-visible {
   justify-content: space-between;
   margin: 0 auto;
   max-width: 900px;
-  height: 60px;
+  min-height: 60px;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 10px 0;
+}
+
+.landing-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.landing-vet-btn {
+  font-size: 14px;
+  padding: 8px 12px;
+  text-decoration: none;
+  text-align: center;
+}
+
+@media (max-width: 540px) {
+  .landing-header { padding: 0 12px; }
+  .landing-header-actions { width: 100%; }
+  .landing-header-actions > * { flex: 1; }
+  .landing-header-actions .landing-signin-btn { padding: 8px; }
 }
 
 .landing-brand {

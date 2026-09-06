@@ -59,10 +59,13 @@ export function LandingPage({ onSignIn }: { onSignIn: () => void }) {
             </div>
             <span className="landing-brand-name">ShowPlatform</span>
           </div>
+          <nav className="landing-header-actions" aria-label="Accès aux portails">
+          <a className="secondary-button landing-vet-btn" href="/vet">Portail vétérinaire</a>
           <button className="primary-button landing-signin-btn" type="button" onClick={onSignIn}>
             <LogIn size={16} />
             Se connecter
           </button>
+          </nav>
         </div>
       </header>
 

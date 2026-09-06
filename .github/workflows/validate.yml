@@ -39,6 +39,7 @@ jobs:
       - run: npm run test:identity
       - run: npm run test:governing
       - run: npm run test:eligibility
+      - run: npm run test:vet
       - name: Verify immutable production migration chain
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
         run: |

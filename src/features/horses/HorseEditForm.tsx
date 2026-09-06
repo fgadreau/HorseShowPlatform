@@ -1,3 +1,4 @@
+import { VaccinationHistory } from "../health/VaccinationHistory";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { CheckCircle2, FileText, History, LockKeyhole, PencilLine, Plus, ShieldCheck } from "lucide-react";
@@ -1106,6 +1107,7 @@ function HorseEditForm({
           onCancel={identityCorrectionMode ? cancelIdentityCorrection : onCancel}
         />
       </form>
+      <VaccinationHistory key={horse.id} horseId={horse.id} locale={locale} />
     </section>
   );
 }
