@@ -1,11 +1,35 @@
 # Tranche 1A — serveur local et validation
 
-Base exacte : contrat documentaire `1ec44dbc8e476bffc87427071c73189db01fa9aa`.
-Branche locale : `feat/billing-folio-foundation`. L'ancienne branche/copie de travail
-est conservée sous `archive/billing-foundation-docs-local`; les trois documents
-approuvés restent inchangés. Aucun push, déploiement ou migration distante de cette
-tranche. L'application locale n'a pas reçu la migration non plus : seule une base
-jetable clonée dans Docker a été migrée puis supprimée.
+Contrat documentaire : `1ec44dbc8e476bffc87427071c73189db01fa9aa`.
+Correction de la fondation revue : `b43a4b1a2873ae2cb1785b78f1b618b4a4e5151a`.
+Branche : `feat/billing-folio-foundation`. Validation du 6 septembre 2026.
+Les trois documents approuvés restent inchangés. Les corrections ne sont pas
+poussées; aucune PR, fusion, migration distante ou modification PREPROD/PROD.
+Seule la migration 1A non appliquée à distance est corrigée; aucune migration
+antérieure n'est réécrite. La base locale de développement reste inchangée.
+
+## Corrections après revue
+
+- Fiscalité : le profil produit du contexte est l'unique autorité. Le champ legacy
+  `organization_products.tax_applicable` n'est plus consulté. Taxes et raison
+  d'exemption simultanées, ou absence des deux, sont refusées. Une raison vide ne
+  constitue pas une exemption. Aucun taux n'est inventé.
+- Prix : `unit_price` est retiré des clés autorisées de `add_billing_sale`, même
+  pour une valeur de zéro. Le tarif vient exclusivement du profil figé du contexte.
+  La gratuité exige un tarif configuré à `0.00`. Aucun remplacement négocié ajouté.
+- Confidentialité : instantanés et réponses documentaires construits par listes
+  explicites de champs. Les vues et privilèges de colonnes excluent les auteurs
+  internes et métadonnées de version. Les preuves complètes demeurent dans les
+  écritures/journaux protégés, accessibles au personnel habilité par
+  `billing_get_audit`. La version de concurrence reste dans les réponses de
+  commandes réservées au personnel, pas dans le document destiné au payeur.
+- Outbox : états `pending`, `processing`, `completed`, `failed`, tentatives,
+  erreur, prochaine tentative, dates de prise en charge/fin, bail et référence de
+  résultat. Prise exclusive avec `FOR UPDATE SKIP LOCKED`, jeton renouvelé à chaque
+  tentative, reprise après expiration et refus d'un ancien jeton. Transitions
+  contrôlées par triggers et journalisées dans `billing_outbox_events` immuable.
+  Seules les RPC de capacité `service_role` pilotent ces transitions; aucune
+  écriture libre n'est accordée. Aucun worker ou fichier n'est créé.
 
 ## Livré
 
@@ -38,11 +62,18 @@ Migration additive [20260906000900_billing_folio_foundation.sql](../../../supaba
 | `billing_create_context_type` | Configuration versionnée réservée à l'admin d'association/plateforme : noms FR/EN, séries, catégories, politiques, rôles; aucun type métier codé comme nouvel enum financier. |
 | `billing_create_context` | Crée et adopte explicitement un contexte neuf, sa devise, son calendrier, sa configuration et ses profils produit/taxes. Hors concours, hérite des catégories/droits/politiques du type. |
 | `billing_get_customer_account` | Résout/crée l'identité financière du contact; contexte optionnel pour les droits d'une secrétaire limitée à un concours. |
-| `add_billing_sale` | Clé de requête + source UUID stable, produit/quantité, éventuel prix explicite, compte client et bénéficiaire/cheval. Auteur/devise imposés par le serveur. |
+| `add_billing_sale` | Clé de requête + source UUID stable, produit/quantité, tarif imposé par le profil du contexte, compte client et bénéficiaire/cheval. Auteur/devise imposés par le serveur. |
 | `record_billing_payment` | Clé, compte/version, montant réellement reçu, date/moyen/référence, confirmation et affectations; retourne reçu et solde. |
 | `get_billing_statement` | Personnel autorisé : crée un relevé figé idempotent, sans numéro de facture. |
 | `finalize_billing_folio` | Clé, compte/version et **UUID du relevé confirmé**. Un relevé périmé, y compris après changement de coordonnées, impose une nouvelle confirmation. |
 | `find_billing_account`, `get_billing_document` | Recherche autorisée par numéro, consultation des documents figés; connaître une référence ne donne pas accès. |
+
+RPC internes supplémentaires : `billing_get_audit(uuid)` vérifie les droits du
+personnel et du contexte; `billing_claim_document(text, uuid, integer)` et
+`billing_finish_document(uuid, uuid, boolean, text, text, integer)` sont réservées
+à `service_role`. Le helper de projection documentaire n'est pas exécutable par
+le payeur. Le futur worker devra produire effectivement le résultat avant de
+marquer son travail terminé; cette tranche ne vérifie pas l'existence d'un fichier.
 
 La finalisation ajoute l'UUID du relevé au contrat initial de version : cela empêche
 d'émettre des coordonnées différentes de celles du récapitulatif confirmé, même
@@ -99,32 +130,92 @@ sources non raccordées. HSP reste le registre opérationnel, pas un grand livre
 
 ## Validation exécutée
 
-Commande : `npm run test:billing:sql`.
-Pré-requis : Docker local et conteneur `supabase_db_hsp-vet-local` issu des outils
-locaux existants. Le script refuse un socket distant et n'accepte aucune URL de
-base distante. Il clone schéma/données/propriétaires/droits dans une base nommée
-`billing_folio_test_<pid>`, utilise les rôles `authenticated` pour les RPC, puis
-supprime la base créée. Il ne rejoue pas l'ensemble des migrations depuis une
-base vide : la base source est le Supabase local existant.
+Commandes finales exécutées avec succès :
 
-Résultats :
+```sh
+npm run test:billing:sql
+npm run test:billing:rebuild
+node --check scripts/billing/test-sql-local.mjs
+git diff --check
+git diff --exit-code b43a4b1 -- docs/audits/billing/plan-et-scenarios.md docs/audits/billing/premiere-tranche.md docs/audits/billing/tests-acceptation.md
+```
 
-- 48 assertions SQL et 28 contrôles explicites de rejets attendus réussis dans
-  [billing_folio_foundation.sql](../../../supabase/tests/billing_folio_foundation.sql).
-- Tests existants `stall_booking_invoice.sql` et `incentive_nomination_programs.sql`
-  réussis après migration, chacun avec rollback de ses fixtures.
-- Deux secrétaires en sessions PostgreSQL indépendantes : un compte, deux ventes.
-  Le pilote de test observe réellement la seconde session bloquée sur le verrou
-  avant de libérer la première. Les retries simultanés restituent le même résultat.
-- Courses paiement/finalisation : un paiement/reçu et une facture finale; la
-  requête concurrente avec récapitulatif périmé est refusée. Pas de suraffectation.
-- Empreintes de toutes les lignes de sept tables historiques inchangées avant/après :
-  `invoices`, `invoice_line_items`, `payments`, `manual_sales`, `entries`,
-  `stall_bookings`, `contact_organization_memberships`.
-- Syntaxe du script vérifiée avec `node --check`; diff sans erreur de whitespace.
+| Vérification | Clone local | Reconstruction vierge |
+| --- | ---: | ---: |
+| Assertions SQL exécutées | 97 | 97 |
+| Rejets SQL attendus réellement observés | 49 | 49 |
+| Scénarios de concurrence indépendants | 5 | 5 |
+| Suites de régression legacy | 2 | 2 |
+| Migrations du dépôt rejouées depuis zéro | Sans objet | 143 |
+| Seed du dépôt après reconstruction | Sans objet | Réussi |
+| Résultat final | Réussi | Réussi |
 
-Le résultat machine est produit dans `.tmp/billing-tests/results.json` avec
-`complete: true`. Les tests sont de véritables transactions PostgreSQL locales;
-ils ne sont ni des mocks de service ni des E2E navigateur. Aucun stockage de
-fichiers n'est modifié par la migration; une vérification exhaustive des fichiers
-historiques distants reste hors de cette validation locale.
+Les compteurs SQL proviennent de l'exécution des helpers d'assertion/rejet des
+fichiers `billing_folio_foundation.sql` et `billing_folio_review.sql`, y compris
+les assertions exécutées en boucle. Ils ne comptent ni les assertions Node du
+pilote ni les assertions des suites legacy. Les courses ajoutent séparément trois
+rejets vérifiés : appel interdit d'un helper privé, paiement à version périmée,
+finalisation à version périmée. Une prise d'outbox concurrente sans travail retourne
+`null`, ce qui n'est pas une erreur. Total des rejets vérifiés dans la tranche,
+SQL et pilote réunis : **52 par mode**, hors suites legacy.
+
+Couverture des corrections : legacy faux explicitement taxé, legacy vrai
+explicitement exempté, ambiguïtés fiscales refusées, injection de prix par une
+secrétaire refusée (dont zéro), gratuité configurée, invariance des prix/taxes et
+documents après modification du catalogue legacy. Tests sous le véritable rôle
+`authenticated` du payeur sur compte, relevé, reçu et facture, contrôle récursif
+des clés internes absentes, refus des accès directs aux colonnes/helpers/journaux
+protégés; accès complet du personnel habilité au journal conservé. Tests outbox :
+échec/retry, délai avant reprise, succès idempotent, expiration/reprise, jeton
+périmé, écritures libres interdites et audit des transitions.
+
+Les cinq courses utilisent des sessions PostgreSQL distinctes : deux secrétaires
+créant les premières ventes; retries identiques; paiements simultanés;
+finalisations simultanées; prises simultanées du même travail documentaire. Pour
+la première course, le pilote observe la seconde session bloquée sur le verrou
+avant de libérer la première. Résultats : un compte, aucune duplication de frais,
+aucune suraffectation, une facture finale et une seule prise de travail.
+
+Régressions exécutées par les deux commandes : `stall_booking_invoice.sql` et
+`incentive_nomination_programs.sql`, avec rollback des fixtures. Empreintes de
+chaque ligne des sept tables historiques comparées avant/après : `invoices`,
+`invoice_line_items`, `payments`, `manual_sales`, `entries`, `stall_bookings`,
+`contact_organization_memberships`. Sur base vierge, ces comparaisons ne prouvent
+pas la préservation d'un historique réel; le mode clone apporte ce contrôle sur
+les données locales existantes. Aucun stockage documentaire n'est modifié.
+
+### Isolation et reconstruction
+
+Le mode clone copie schéma, données, propriétaires et droits de
+`supabase_db_hsp-vet-local` vers `billing_folio_test_<pid>`, applique 1A et supprime
+uniquement cette copie. Le mode vierge initialise un projet Supabase temporaire
+sans migrations du dépôt ni référence distante. `supabase db start --workdir`
+prépare seulement les schémas système officiels auth/storage. Le script rejoue
+ensuite les **143 fichiers SQL dans l'ordre lexical**, une transaction par fichier,
+applique `supabase/seed.sql`, puis exécute toutes les validations ci-dessus.
+
+Le projet/volume/conteneur porte un nom aléatoire propre au test, vérifié libre;
+les ports sont locaux et temporaires. Le nettoyage appelle `supabase stop
+--project-id <projet-jetable> --no-backup --workdir <répertoire-jetable>`, puis
+supprime uniquement son répertoire. Le pilote refuse les arguments de connexion,
+les sockets/contextes Docker distants et un fichier de liaison `project-ref`.
+Aucune URL de base distante ou identité du projet hébergé n'est utilisée.
+
+Contrôle final en lecture seule : aucun conteneur/volume de reconstruction ne
+subsiste; zéro base `billing_folio_test_%`; `billing_folios` reste absent de la base
+locale de développement. Les environnements jetables ont été supprimés.
+
+Pendant la préparation du pilote, un essai en autocommit a échoué dans `0024`
+(`contact_dedup_map`, table temporaire `ON COMMIT DROP`). Il s'agissait d'une erreur
+du pilote, corrigée par l'exécution transactionnelle par fichier. La migration
+historique est inchangée et passe désormais. Les avertissements « there is no
+transaction in progress » viennent des fichiers qui contiennent déjà leur propre
+`COMMIT`; ils n'empêchent pas le rejeu. Aucun échec préexistant de la chaîne ne
+subsiste dans cette validation.
+
+Résultats machine locaux : `.tmp/billing-tests/results.json` et
+`.tmp/billing-tests/rebuild-results.json`, tous deux `complete: true`, avec liste
+des migrations rejouées, compteurs, étapes et éventuel échec. Ces artefacts sont
+régénérés par les commandes; ils ne sont pas des données de production.
+Les tests sont de véritables transactions PostgreSQL locales, sans mocks.
+Les tests services/navigateur et les fichiers PDF restent hors de cette tranche.

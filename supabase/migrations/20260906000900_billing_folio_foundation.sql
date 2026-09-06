@@ -126,7 +126,15 @@ create table public.billing_audit_events (
  operation text not null, authorization_snapshot jsonb not null, payload jsonb not null, created_at timestamptz not null default clock_timestamp()
 );
 create table public.billing_outbox (
- document_id uuid primary key references public.billing_documents(id), created_at timestamptz not null default clock_timestamp()
+ document_id uuid primary key references public.billing_documents(id), created_at timestamptz not null default clock_timestamp(),
+ state text not null default 'pending' check(state in ('pending','processing','completed','failed')),
+ attempts integer not null default 0 check(attempts>=0), last_error text,
+ next_attempt_at timestamptz default clock_timestamp(), claimed_at timestamptz, finished_at timestamptz,
+ lease_until timestamptz, claim_token uuid, worker_id text, result_ref text,
+ check((state='pending' and attempts=0 and next_attempt_at is not null and claimed_at is null and finished_at is null and claim_token is null and worker_id is null and lease_until is null and result_ref is null and last_error is null)
+ or (state='processing' and attempts>0 and next_attempt_at is null and claimed_at is not null and finished_at is null and claim_token is not null and worker_id is not null and lease_until is not null and lease_until>claimed_at and result_ref is null)
+ or (state='completed' and attempts>0 and next_attempt_at is null and claimed_at is not null and finished_at is not null and finished_at>=claimed_at and claim_token is not null and worker_id is not null and lease_until is null and result_ref is not null and length(btrim(result_ref))>0 and last_error is null)
+ or (state='failed' and attempts>0 and next_attempt_at is not null and next_attempt_at>=finished_at and claimed_at is not null and finished_at is not null and finished_at>=claimed_at and claim_token is not null and worker_id is not null and lease_until is null and result_ref is null and last_error is not null and length(btrim(last_error))>0))
 );
 
 create function public.billing_immutable() returns trigger language plpgsql set search_path='' as $$
@@ -239,11 +247,11 @@ begin
   select * into prod from public.organization_products where id=(pr->>'product_id')::uuid and organization_id=p_org and is_active for share;
   if not found or not (cfg->'categories' ? prod.category) then raise exception 'BILLING_INVALID_PRODUCT'; end if;
   if jsonb_typeof(pr->'taxes') is distinct from 'array' then raise exception 'BILLING_TAX_CONFIG_REQUIRED'; end if;
-  if (not prod.tax_applicable and jsonb_array_length(pr->'taxes')>0) or
-    (jsonb_array_length(pr->'taxes')=0 and coalesce(length(trim(pr->>'exemption_reason')),0)=0) then raise exception 'BILLING_TAX_CONFIG_REQUIRED'; end if;
+  if (jsonb_array_length(pr->'taxes')>0 and nullif(btrim(pr->>'exemption_reason'),'') is not null) or
+    (jsonb_array_length(pr->'taxes')=0 and nullif(btrim(pr->>'exemption_reason'),'') is null) then raise exception 'BILLING_TAX_CONFIG_REQUIRED'; end if;
   if p_currency is distinct from (select currency from public.organizations where id=p_org) and not(pr ? 'unit_price') then raise exception 'BILLING_PRODUCT_PRICE_REQUIRED'; end if;
   if pr ? 'unit_price' and ((pr->>'unit_price') is null or (pr->>'unit_price')::numeric<>round((pr->>'unit_price')::numeric,2)) then raise exception 'BILLING_INVALID_AMOUNT'; end if;
-  insert into public.billing_product_tax_profiles values(i,prod.id,pr->>'exemption_reason',coalesce((pr->>'unit_price')::numeric,prod.default_price));
+  insert into public.billing_product_tax_profiles values(i,prod.id,nullif(btrim(pr->>'exemption_reason'),''),coalesce((pr->>'unit_price')::numeric,prod.default_price));
   for tr in select * from jsonb_array_elements(pr->'taxes') loop
    if exists(select 1 from jsonb_object_keys(tr) k where k not in ('code','name','jurisdiction','rate','version','valid_from','valid_until')) then raise exception 'BILLING_UNSUPPORTED_TAX_CONFIG'; end if;
    if (tr->>'rate')::numeric is null or (tr->>'rate')::numeric<>round((tr->>'rate')::numeric,6) then raise exception 'BILLING_INVALID_TAX_RATE'; end if;
@@ -266,18 +274,18 @@ begin
 end $$;
 
 create function public.billing_snapshot(p_folio uuid) returns jsonb language sql stable set search_path='' as $$
- select jsonb_build_object('folio_id',f.id,'account_number',f.public_number,'version',f.version,'state',f.state,'currency',f.currency,
+ select jsonb_build_object('folio_id',f.id,'account_number',f.public_number,'state',f.state,'currency',f.currency,
  'context',jsonb_build_object('id',c.id,'kind',c.kind,'show_id',c.show_id,'name_fr',c.config->>'name_fr','name_en',c.config->>'name_en','period',c.config->'period'),
  'payer',jsonb_build_object('customer_account_id',a.id,'contact_id',p.id,'first_name',p.first_name,'middle_name',p.middle_name,'last_name',p.last_name,
   'company_name',p.company_name,'address',p.address,'address_line2',p.address_line2,'city',p.city,'state',p.state,'zip_code',p.zip_code,'country',p.country,
-  'email',p.email,'phone',p.phone,'tax_identifiers',to_jsonb(p)->'tax_identifiers'),
- 'seller',jsonb_build_object('organization_id',o.id,'name',o.name,'billing_name',to_jsonb(o)->'billing_name','address',to_jsonb(o)->'address',
-  'address_line2',to_jsonb(o)->'address_line2','city',to_jsonb(o)->'city','state',to_jsonb(o)->'state','zip_code',to_jsonb(o)->'zip_code','country',to_jsonb(o)->'country',
-  'email',to_jsonb(o)->'billing_email','phone',to_jsonb(o)->'billing_phone','tax_name_1',to_jsonb(o)->'tax_name','tax_number_1',to_jsonb(o)->'tax_number',
-  'tax_name_2',to_jsonb(o)->'secondary_tax_name','tax_number_2',to_jsonb(o)->'secondary_tax_number'),
- 'charges',coalesce((select jsonb_agg(to_jsonb(ch)||jsonb_build_object('taxes',coalesce((select jsonb_agg(to_jsonb(t) order by t.code) from public.billing_charge_taxes t where t.charge_id=ch.id),'[]')) order by ch.created_at,ch.id)
+  'email',p.email,'phone',p.phone,'tax_identifiers',null),
+ 'seller',jsonb_build_object('organization_id',o.id,'name',o.name,'billing_name',o.billing_name,'address',o.address,
+  'address_line2',o.address_line2,'city',o.city,'state',o.state,'zip_code',o.zip_code,'country',o.country,
+  'email',o.billing_email,'phone',o.billing_phone,'tax_name_1',o.tax_name,'tax_number_1',o.tax_number,
+  'tax_name_2',o.secondary_tax_name,'tax_number_2',o.secondary_tax_number),
+ 'charges',coalesce((select jsonb_agg(jsonb_build_object('id',ch.id,'description',ch.description,'category',ch.category,'quantity',ch.quantity,'unit_price',ch.unit_price,'subtotal',ch.subtotal,'tax_amount',ch.tax_amount,'total',ch.total,'currency',ch.currency,'beneficiary_contact_id',ch.beneficiary_contact_id,'horse_id',ch.horse_id,'exemption_reason',ch.exemption_reason,'created_at',ch.created_at,'taxes',coalesce((select jsonb_agg(jsonb_build_object('name',t.name,'code',t.code,'jurisdiction',t.jurisdiction,'rate',t.rate,'base',t.base,'amount',t.amount) order by t.code) from public.billing_charge_taxes t where t.charge_id=ch.id),'[]')) order by ch.created_at,ch.id)
  from public.billing_charges ch where ch.folio_id=f.id),'[]'),
- 'payments',coalesce((select jsonb_agg(to_jsonb(pmt)||jsonb_build_object('allocations',coalesce((select jsonb_agg(to_jsonb(al) order by al.charge_id) from public.billing_payment_allocations al where al.payment_id=pmt.id),'[]')) order by pmt.created_at,pmt.id) from public.billing_payments pmt where pmt.folio_id=f.id),'[]'),
+ 'payments',coalesce((select jsonb_agg(jsonb_build_object('id',pmt.id,'amount',pmt.amount,'currency',pmt.currency,'method',pmt.method,'reference',pmt.reference,'received_at',pmt.received_at,'allocations',coalesce((select jsonb_agg(jsonb_build_object('charge_id',al.charge_id,'amount',al.amount) order by al.charge_id) from public.billing_payment_allocations al where al.payment_id=pmt.id),'[]')) order by pmt.created_at,pmt.id) from public.billing_payments pmt where pmt.folio_id=f.id),'[]'),
  'subtotal',coalesce((select sum(ch.subtotal) from public.billing_charges ch where ch.folio_id=f.id),0),
  'tax_amount',coalesce((select sum(ch.tax_amount) from public.billing_charges ch where ch.folio_id=f.id),0),
  'total',coalesce((select sum(ch.total) from public.billing_charges ch where ch.folio_id=f.id),0),
@@ -286,6 +294,13 @@ create function public.billing_snapshot(p_folio uuid) returns jsonb language sql
  from public.billing_folios f join public.billing_contexts c on c.id=f.billing_context_id
  join public.billing_customer_accounts a on a.id=f.payer_customer_account_id join public.contacts p on p.id=a.payer_contact_id
  join public.organizations o on o.id=f.organization_id where f.id=p_folio;
+$$;
+
+-- Explicit public document projection: actor/permission/audit fields stay in protected storage.
+create function public.billing_document_payload(p_id uuid) returns jsonb language sql stable set search_path='' as $$
+ select jsonb_build_object('id',d.id,'organization_id',d.organization_id,'folio_id',d.folio_id,'currency',d.currency,
+ 'kind',d.kind,'number',d.number,'payment_id',d.payment_id,'snapshot',d.snapshot,'created_at',d.created_at)
+ from public.billing_documents d where d.id=p_id;
 $$;
 
 -- One transaction boundary for the 1A commands. Public wrappers give each operation a typed name.
@@ -299,7 +314,7 @@ declare c public.billing_contexts; f public.billing_folios; a jsonb; actor uuid:
 begin
  if p_request_id is null or p_command is null or jsonb_typeof(p_command)<>'object' or op is null then raise exception 'BILLING_INVALID_REQUEST'; end if;
  if op='sale' then
-  allowed:=array['operation','context_id','payer_customer_account_id','product_id','quantity','unit_price','beneficiary_contact_id','horse_id','source_id'];
+  allowed:=array['operation','context_id','payer_customer_account_id','product_id','quantity','beneficiary_contact_id','horse_id','source_id'];
   select * into c from public.billing_contexts where id=(p_command->>'context_id')::uuid;
  else
   allowed:=case op when 'payment' then array['operation','folio_id','version','amount','method','reference','received_at','confirmed','allocations']
@@ -330,7 +345,7 @@ begin
   if not found then raise exception 'BILLING_TAX_CONFIG_REQUIRED'; end if;
   if exists(select 1 from public.billing_product_tax_rules m join public.billing_tax_rules t on t.id=m.tax_rule_id where m.context_id=c.id and m.product_id=product.id
     and ((clock_timestamp() at time zone (c.config->>'timezone'))::date<t.valid_from or (t.valid_until is not null and (clock_timestamp() at time zone (c.config->>'timezone'))::date>t.valid_until))) then raise exception 'BILLING_TAX_RULE_OUTSIDE_VALIDITY'; end if;
-  qty:=(p_command->>'quantity')::numeric; price:=coalesce((p_command->>'unit_price')::numeric,profile.unit_price);
+  qty:=(p_command->>'quantity')::numeric; price:=profile.unit_price;
   if qty is null or not(qty>0 and qty<1000000000) or qty<>round(qty,3) or not(price>=0 and price<10000000000) or price<>round(price,2) then raise exception 'BILLING_INVALID_AMOUNT'; end if;
   if (p_command->>'source_id') is null then raise exception 'BILLING_SOURCE_REQUIRED'; end if;
   base:=round(qty*price,2);
@@ -394,8 +409,8 @@ begin
     snap||jsonb_build_object('payment_id',pay,'issued_at',clock_timestamp())||case when pay is null then '{}'::jsonb else jsonb_build_object('receipt_payment',(select v from jsonb_array_elements(snap->'payments') v where v->>'id'=pay::text)) end,actor) returning id into doc;
   insert into public.billing_outbox(document_id) values(doc);
  end if;
- response:=jsonb_build_object('account',public.billing_snapshot(f.id),'charge_id',charge,'payment_id',pay,'document_id',doc);
- if doc is not null then response:=response||jsonb_build_object('document',(select to_jsonb(d) from public.billing_documents d where d.id=doc)); end if;
+ response:=jsonb_build_object('account',public.billing_snapshot(f.id)||jsonb_build_object('version',(select version from public.billing_folios where id=f.id)),'charge_id',charge,'payment_id',pay,'document_id',doc);
+ if doc is not null then response:=response||jsonb_build_object('document',public.billing_document_payload(doc)); end if;
  insert into public.billing_operations values(c.organization_id,actor,p_request_id,p_command,response,clock_timestamp());
  insert into public.billing_audit_events(organization_id,folio_id,actor_id,operation,authorization_snapshot,payload)
  values(c.organization_id,f.id,actor,op,a,jsonb_build_object('request_id',p_request_id,'charge_id',charge,'payment_id',pay,'document_id',doc));
@@ -437,7 +452,7 @@ create function public.find_billing_account(p_org uuid,p_number text) returns js
  select public.billing_snapshot(f.id) from public.billing_folios f where f.organization_id=p_org and f.public_number=p_number and public.billing_can_read(f.id);
 $$;
 create function public.get_billing_document(p_id uuid) returns jsonb language sql stable security definer set search_path='' as $$
- select to_jsonb(d) from public.billing_documents d where d.id=p_id and public.billing_can_read(d.folio_id);
+ select public.billing_document_payload(d.id) from public.billing_documents d where d.id=p_id and public.billing_can_read(d.folio_id);
 $$;
 
 create function public.billing_guard_folio() returns trigger language plpgsql set search_path='' as $$
@@ -458,6 +473,85 @@ begin
 end $$;
 create trigger billing_show_currency_guard before update on public.shows for each row execute function public.billing_guard_show_currency();
 
+-- Internal evidence is accessible through a separate staff-authorized RPC, never through documents.
+create function public.billing_get_audit(p_folio uuid) returns jsonb language plpgsql security definer set search_path='' as $$
+declare c public.billing_contexts; a jsonb;
+begin
+ select ctx.* into c from public.billing_folios f join public.billing_contexts ctx on ctx.id=f.billing_context_id where f.id=p_folio;
+ if not found then raise exception 'BILLING_FORBIDDEN' using errcode='42501'; end if;
+ a:=public.billing_assert_staff(c.organization_id,c.show_id);
+ if a->>'kind'<>'platform_admin' and not(c.config->'staff_roles' ? (a->>'role')) then raise exception 'BILLING_FORBIDDEN' using errcode='42501'; end if;
+ return jsonb_build_object('events',coalesce((select jsonb_agg(to_jsonb(e) order by e.created_at,e.id) from public.billing_audit_events e where e.folio_id=p_folio),'[]'),
+ 'charges',coalesce((select jsonb_agg(to_jsonb(ch) order by ch.created_at,ch.id) from public.billing_charges ch where ch.folio_id=p_folio),'[]'),
+ 'payments',coalesce((select jsonb_agg(to_jsonb(p) order by p.created_at,p.id) from public.billing_payments p where p.folio_id=p_folio),'[]'));
+end $$;
+
+create table public.billing_outbox_events (
+ id bigint generated always as identity primary key, document_id uuid not null references public.billing_documents(id),
+ from_state text, to_state text not null, attempt integer not null, worker_id text, claim_token uuid,
+ error text, result_ref text, database_actor text not null, created_at timestamptz not null default clock_timestamp()
+);
+create index billing_outbox_ready on public.billing_outbox(state,next_attempt_at,lease_until);
+create function public.billing_outbox_guard() returns trigger language plpgsql set search_path='' as $$
+begin
+ if tg_op='DELETE' then raise exception 'BILLING_OUTBOX_INVALID_TRANSITION'; end if;
+ if tg_op='INSERT' then
+  if new.state<>'pending' then raise exception 'BILLING_OUTBOX_INVALID_TRANSITION'; end if;
+  return new;
+ end if;
+ if new.document_id<>old.document_id or new.created_at<>old.created_at then raise exception 'BILLING_OUTBOX_IMMUTABLE_IDENTITY'; end if;
+ if new.state='processing' and (
+  (old.state in ('pending','failed') and old.next_attempt_at<=clock_timestamp()) or
+  (old.state='processing' and old.lease_until<=clock_timestamp())) then
+  if new.attempts<>old.attempts+1 or new.claim_token is not distinct from old.claim_token or new.claimed_at<old.created_at
+   or new.last_error is distinct from old.last_error then raise exception 'BILLING_OUTBOX_INVALID_CLAIM'; end if;
+ elsif old.state='processing' and old.lease_until>clock_timestamp() and new.state in ('completed','failed') then
+  if new.attempts<>old.attempts or new.claim_token<>old.claim_token or new.worker_id<>old.worker_id or new.claimed_at<>old.claimed_at
+   then raise exception 'BILLING_OUTBOX_INVALID_FINISH'; end if;
+ else raise exception 'BILLING_OUTBOX_INVALID_TRANSITION';
+ end if;
+ return new;
+end $$;
+create function public.billing_outbox_audit() returns trigger language plpgsql security definer set search_path='' as $$
+begin
+ insert into public.billing_outbox_events(document_id,from_state,to_state,attempt,worker_id,claim_token,error,result_ref,database_actor)
+ values(new.document_id,case when tg_op='INSERT' then null else old.state end,new.state,new.attempts,new.worker_id,new.claim_token,new.last_error,new.result_ref,session_user);
+ return new;
+end $$;
+create trigger billing_outbox_guard before insert or update or delete on public.billing_outbox for each row execute function public.billing_outbox_guard();
+create trigger billing_outbox_audit after insert or update on public.billing_outbox for each row execute function public.billing_outbox_audit();
+
+-- Service-role capability only. No worker is installed or scheduled by this migration.
+create function public.billing_claim_document(p_worker text,p_document uuid default null,p_lease_seconds integer default 300) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare j public.billing_outbox; at_time timestamptz:=clock_timestamp();
+begin
+ if coalesce(length(btrim(p_worker)),0)=0 or length(p_worker)>200 or p_lease_seconds is null or p_lease_seconds not between 1 and 3600 then raise exception 'BILLING_OUTBOX_INVALID_CLAIM'; end if;
+ select * into j from public.billing_outbox where (p_document is null or document_id=p_document)
+ and ((state in ('pending','failed') and next_attempt_at<=at_time) or (state='processing' and lease_until<=at_time))
+ order by created_at,document_id for update skip locked limit 1;
+ if not found then return null; end if;
+ update public.billing_outbox set state='processing',attempts=attempts+1,worker_id=btrim(p_worker),claim_token=gen_random_uuid(),claimed_at=at_time,
+ lease_until=at_time+make_interval(secs=>p_lease_seconds),finished_at=null,next_attempt_at=null,result_ref=null where document_id=j.document_id returning * into j;
+ return to_jsonb(j);
+end $$;
+create function public.billing_finish_document(p_document uuid,p_token uuid,p_success boolean,p_result_ref text default null,p_error text default null,p_retry_seconds integer default 60) returns jsonb
+language plpgsql security definer set search_path='' as $$
+declare j public.billing_outbox; at_time timestamptz:=clock_timestamp();
+begin
+ if p_success is null or p_token is null or p_retry_seconds is null or p_retry_seconds not between 0 and 86400
+ or (p_success and (coalesce(length(btrim(p_result_ref)),0)=0 or p_error is not null))
+ or (not p_success and (coalesce(length(btrim(p_error)),0)=0 or p_result_ref is not null)) then raise exception 'BILLING_OUTBOX_INVALID_FINISH'; end if;
+ select * into j from public.billing_outbox where document_id=p_document for update;
+ if not found or j.claim_token is distinct from p_token then raise exception 'BILLING_OUTBOX_STALE_CLAIM'; end if;
+ if (j.state='completed' and p_success and j.result_ref=p_result_ref) or (j.state='failed' and not p_success and j.last_error=p_error) then return to_jsonb(j); end if;
+ if j.state<>'processing' or j.lease_until<=at_time then raise exception 'BILLING_OUTBOX_STALE_CLAIM'; end if;
+ update public.billing_outbox set state=case when p_success then 'completed' else 'failed' end,finished_at=at_time,lease_until=null,
+ next_attempt_at=case when p_success then null else at_time+make_interval(secs=>p_retry_seconds) end,
+ result_ref=p_result_ref,last_error=p_error where document_id=p_document returning * into j;
+ return to_jsonb(j);
+end $$;
+
 do $$
 declare t text; f record;
 begin
@@ -467,7 +561,7 @@ begin
  for t in select tablename from pg_tables where schemaname='public' and tablename like 'billing\_%' escape '\' loop
   execute format('alter table public.%I enable row level security',t);
   execute format('revoke all on public.%I from public, anon, authenticated, service_role',t);
-  if t not in ('billing_folios','billing_number_sequences') then
+  if t not in ('billing_folios','billing_number_sequences','billing_outbox') then
    execute format('create trigger billing_immutable before update or delete on public.%I for each row execute function public.billing_immutable()',t);
   end if;
  end loop;
@@ -480,15 +574,17 @@ end $$;
 -- Reads return only a payer's own account or authorized staff scope; no agent-wide financial access.
 create policy billing_folio_read on public.billing_folios for select to authenticated using(public.billing_can_read(id));
 create policy billing_document_read on public.billing_documents for select to authenticated using(public.billing_can_read(folio_id));
-grant select on public.billing_folios,public.billing_documents to authenticated;
-grant execute on function public.billing_can_read(uuid) to authenticated;
+grant select(id,organization_id,billing_context_id,payer_customer_account_id,currency,public_number,state,created_at,closed_at) on public.billing_folios to authenticated;
+grant select(id,organization_id,folio_id,currency,kind,number,payment_id,snapshot,created_at) on public.billing_documents to authenticated;
+grant execute on function public.billing_can_read(uuid),public.billing_get_audit(uuid) to authenticated;
+grant execute on function public.billing_claim_document(text,uuid,integer),public.billing_finish_document(uuid,uuid,boolean,text,text,integer) to service_role;
 grant execute on function public.billing_create_context_type(uuid,text,integer,jsonb),
  public.billing_create_context(uuid,uuid,uuid,text,text,jsonb,timestamptz,timestamptz,jsonb),public.billing_get_customer_account(uuid,uuid,uuid),
  public.add_billing_sale(uuid,jsonb),public.record_billing_payment(uuid,jsonb),public.finalize_billing_folio(uuid,uuid,bigint,uuid),
  public.get_billing_statement(uuid,uuid),public.find_billing_account(uuid,text),public.get_billing_document(uuid) to authenticated;
-create view public.billing_receipts with(security_invoker=true) as select * from public.billing_documents where kind='receipt';
-create view public.billing_statements with(security_invoker=true) as select * from public.billing_documents where kind='statement';
-create view public.billing_final_invoices with(security_invoker=true) as select * from public.billing_documents where kind='invoice';
+create view public.billing_receipts with(security_invoker=true) as select id,organization_id,folio_id,currency,kind,number,payment_id,snapshot,created_at from public.billing_documents where kind='receipt';
+create view public.billing_statements with(security_invoker=true) as select id,organization_id,folio_id,currency,kind,number,payment_id,snapshot,created_at from public.billing_documents where kind='statement';
+create view public.billing_final_invoices with(security_invoker=true) as select id,organization_id,folio_id,currency,kind,number,payment_id,snapshot,created_at from public.billing_documents where kind='invoice';
 revoke all on public.billing_receipts,public.billing_statements,public.billing_final_invoices from public,anon,authenticated,service_role;
 grant select on public.billing_receipts,public.billing_statements,public.billing_final_invoices to authenticated;
 commit;

@@ -2,10 +2,19 @@
 -- Real PostgreSQL roles/RLS, no mock auth helper and no tax/legal presets.
 create table public.billing_test_fixture(key text primary key,value jsonb not null);
 grant all on public.billing_test_fixture to authenticated;
+create table public.billing_test_counts(kind text primary key,total integer not null);
+create function public.billing_test_count(p_kind text) returns void language sql security definer set search_path='' as $$
+ insert into public.billing_test_counts values(p_kind,1) on conflict(kind) do update set total=public.billing_test_counts.total+1;
+$$;
+create function public.billing_test_assert(p_condition boolean,p_message text) returns void language plpgsql as $$
+begin
+ assert p_condition is true,p_message;
+ perform public.billing_test_count('assertions');
+end $$;
 create function public.billing_test_error(q text,expected text) returns void language plpgsql as $$
 begin
  begin execute q; exception when others then
-  if position(expected in sqlerrm)>0 then return; end if;
+  if position(expected in sqlerrm)>0 then perform public.billing_test_count('expected_rejections'); return; end if;
   raise exception 'Unexpected error, expected %: %',expected,sqlerrm;
  end;
  raise exception 'Expected rejection: %',expected;
@@ -42,51 +51,51 @@ begin
  race:=public.billing_create_context(org,null,typ,'shop-race','CAD','{}',now()-interval '1 day',null,products);
  eventctx:=public.billing_create_context(org,'f4000000-0000-0000-0000-000000000001',null,null,'CAD',config,now()-interval '1 day',null,products);
  customer:=public.billing_get_customer_account(org,'f6000000-0000-0000-0000-000000000001');
- assert customer=public.billing_get_customer_account(org,'f6000000-0000-0000-0000-000000000001'),'stable customer';
+ perform public.billing_test_assert(customer=public.billing_get_customer_account(org,'f6000000-0000-0000-0000-000000000001'),'stable customer');
  cmd:=jsonb_build_object('context_id',ctx,'payer_customer_account_id',customer,'product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid());
  r:=public.add_billing_sale('fa000000-0000-0000-0000-000000000001',cmd);
  again:=public.add_billing_sale('fa000000-0000-0000-0000-000000000001',cmd);
- assert r=again,'idempotent response';
+ perform public.billing_test_assert(r=again,'idempotent response');
  account:=(r#>>'{account,folio_id}')::uuid; ch1:=(r->>'charge_id')::uuid;
- assert r#>>'{account,total}'='115.00','two taxes';
- assert jsonb_array_length(r#>'{account,charges,0,taxes}')=2,'tax detail';
- assert r#>>'{account,payer,company_name}'='Original company','payer snapshot';
- assert r#>>'{account,seller,tax_number_1}'='TEST-A','actual seller tax fields';
- assert r#>>'{account,state}'='open' and r->>'document_id' is null,'sale is not invoice';
+ perform public.billing_test_assert(r#>>'{account,total}'='115.00','two taxes');
+ perform public.billing_test_assert(jsonb_array_length(r#>'{account,charges,0,taxes}')=2,'tax detail');
+ perform public.billing_test_assert(r#>>'{account,payer,company_name}'='Original company','payer snapshot');
+ perform public.billing_test_assert(r#>>'{account,seller,tax_number_1}'='TEST-A','actual seller tax fields');
+ perform public.billing_test_assert(r#>>'{account,state}'='open' and r->>'document_id' is null,'sale is not invoice');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)','fa000000-0000-0000-0000-000000000001',cmd||'{"quantity":2}'),'BILLING_IDEMPOTENCY_CONFLICT');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),cmd||'{"currency":"USD"}'),'BILLING_UNEXPECTED_FIELD');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),cmd),'billing_charges_organization_id_source_type_source_id_key');
  cmd:=cmd||jsonb_build_object('product_id','f5000000-0000-0000-0000-000000000002','source_id',gen_random_uuid());
  r:=public.add_billing_sale(gen_random_uuid(),cmd); ch2:=(r->>'charge_id')::uuid;
- assert (r#>>'{account,folio_id}')::uuid=account,'same account';
- assert r#>>'{account,subtotal}'='140.00' and r#>>'{account,total}'='155.00','mixed taxable/exempt';
- assert r#>>'{account,version}'='2','version';
+ perform public.billing_test_assert((r#>>'{account,folio_id}')::uuid=account,'same account');
+ perform public.billing_test_assert(r#>>'{account,subtotal}'='140.00' and r#>>'{account,total}'='155.00','mixed taxable/exempt');
+ perform public.billing_test_assert(r#>>'{account,version}'='2','version');
  payment:=jsonb_build_object('folio_id',account,'version',2,'amount',50,'method','cash','received_at',now(),'confirmed',true,'allocations',jsonb_build_array(jsonb_build_object('charge_id',ch1,'amount',50)));
  r:=public.record_billing_payment('fb000000-0000-0000-0000-000000000001',payment);
- assert r=public.record_billing_payment('fb000000-0000-0000-0000-000000000001',payment),'payment retry';
- assert r#>>'{account,balance}'='105.00','partial balance';
- assert r#>>'{account,state}'='open','payment does not close';
+ perform public.billing_test_assert(r=public.record_billing_payment('fb000000-0000-0000-0000-000000000001',payment),'payment retry');
+ perform public.billing_test_assert(r#>>'{account,balance}'='105.00','partial balance');
+ perform public.billing_test_assert(r#>>'{account,state}'='open','payment does not close');
  receipt:=(r->>'document_id')::uuid;
- assert r#>>'{document,kind}'='receipt','receipt kind';
- assert r#>>'{document,snapshot,receipt_payment,amount}'='50.00','individual receipt amount';
- assert r#>>'{document,snapshot,account_number}'=r#>>'{account,account_number}','account ref on receipt';
- assert r#>>'{document,number}'<>r#>>'{account,account_number}','distinct numbering';
+ perform public.billing_test_assert(r#>>'{document,kind}'='receipt','receipt kind');
+ perform public.billing_test_assert(r#>>'{document,snapshot,receipt_payment,amount}'='50.00','individual receipt amount');
+ perform public.billing_test_assert(r#>>'{document,snapshot,account_number}'=r#>>'{account,account_number}','account ref on receipt');
+ perform public.billing_test_assert(r#>>'{document,number}'<>r#>>'{account,account_number}','distinct numbering');
  payment:=payment||'{"version":3,"method":"etransfer","reference":"TRANSFER-001","amount":105}';
  payment:=payment||jsonb_build_object('allocations',jsonb_build_array(jsonb_build_object('charge_id',ch1,'amount',65),jsonb_build_object('charge_id',ch2,'amount',40)));
  perform public.billing_test_error(format('select public.record_billing_payment(%L,%L::jsonb)',gen_random_uuid(),payment||'{"confirmed":false}'),'BILLING_PAYMENT_NOT_CONFIRMED_OR_INVALID');
  perform public.billing_test_error(format('select public.record_billing_payment(%L,%L::jsonb)',gen_random_uuid(),payment||'{"amount":106}'),'BILLING_PAYMENT_EXCEEDS_BALANCE');
  r:=public.record_billing_payment(gen_random_uuid(),payment);
- assert r#>>'{account,balance}'='0.00','settled';
- assert jsonb_array_length(r#>'{account,payments}')=2,'two received payments';
+ perform public.billing_test_assert(r#>>'{account,balance}'='0.00','settled');
+ perform public.billing_test_assert(jsonb_array_length(r#>'{account,payments}')=2,'two received payments');
  r:=public.get_billing_statement(gen_random_uuid(),account); statement:=(r->>'document_id')::uuid;
- assert r#>>'{document,kind}'='statement' and r#>>'{document,number}' is null,'provisional';
+ perform public.billing_test_assert(r#>>'{document,kind}'='statement' and r#>>'{document,number}' is null,'provisional');
  perform public.billing_test_error(format('select public.finalize_billing_folio(%L,%L,3)',gen_random_uuid(),account),'BILLING_STALE_VERSION');
  r:=public.finalize_billing_folio('fc000000-0000-0000-0000-000000000001',account,4,statement); finaldoc:=(r->>'document_id')::uuid;
- assert r#>>'{account,state}'='closed','manual close';
- assert r#>>'{document,kind}'='invoice' and r#>>'{document,number}' like 'TEST-INV-%','final invoice numbered';
- assert r=public.finalize_billing_folio('fc000000-0000-0000-0000-000000000001',account,4,statement),'final retry stable';
+ perform public.billing_test_assert(r#>>'{account,state}'='closed','manual close');
+ perform public.billing_test_assert(r#>>'{document,kind}'='invoice' and r#>>'{document,number}' like 'TEST-INV-%','final invoice numbered');
+ perform public.billing_test_assert(r=public.finalize_billing_folio('fc000000-0000-0000-0000-000000000001',account,4,statement),'final retry stable');
  again:=public.finalize_billing_folio(gen_random_uuid(),account,5);
- assert (again->>'document_id')::uuid=finaldoc,'different key cannot create second final';
+ perform public.billing_test_assert((again->>'document_id')::uuid=finaldoc,'different key cannot create second final');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),cmd||jsonb_build_object('source_id',gen_random_uuid())),'BILLING_FOLIO_CLOSED');
  perform public.billing_test_error(format('update public.billing_documents set snapshot=%L where id=%L','{}',finaldoc),'permission denied');
  perform public.billing_test_error(format('insert into public.billing_folios default values'),'permission denied');
@@ -109,11 +118,11 @@ do $$
 declare ids jsonb; d jsonb;
 begin
  select value into ids from public.billing_test_fixture where key='documents';
- assert public.get_billing_document((ids->>'invoice')::uuid)=ids->'snapshot','final snapshot immutable after contact change';
+ perform public.billing_test_assert(public.get_billing_document((ids->>'invoice')::uuid)=ids->'snapshot','final snapshot immutable after contact change');
  d:=public.get_billing_document((ids->>'statement')::uuid);
- assert d#>>'{snapshot,payer,company_name}'='Original company','old statement immutable';
+ perform public.billing_test_assert(d#>>'{snapshot,payer,company_name}'='Original company','old statement immutable');
  d:=public.get_billing_statement(gen_random_uuid(),(ids->>'account')::uuid);
- assert d#>>'{document,snapshot,payer,company_name}'='Changed company','new statement new snapshot';
+ perform public.billing_test_assert(d#>>'{document,snapshot,payer,company_name}'='Changed company','new statement new snapshot');
 end $$;
 -- Agent/client/other association cannot create sales or view another payer's finance.
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
@@ -122,8 +131,8 @@ declare ids jsonb; cfg jsonb;
 begin
  select value into ids from public.billing_test_fixture where key='documents';
  select value into cfg from public.billing_test_fixture where key='config';
- assert public.get_billing_document((ids->>'invoice')::uuid) is null,'no document IDOR';
- assert not exists(select 1 from public.billing_folios),'RLS hidden';
+ perform public.billing_test_assert(public.get_billing_document((ids->>'invoice')::uuid) is null,'no document IDOR');
+ perform public.billing_test_assert(not exists(select 1 from public.billing_folios),'RLS hidden');
  perform public.billing_test_error(format('select public.get_billing_statement(%L,%L)',gen_random_uuid(),ids->>'account'),'BILLING_FORBIDDEN');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),jsonb_build_object('context_id',cfg->>'context','payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid())),'BILLING_FORBIDDEN');
 end $$;
@@ -134,7 +143,7 @@ set role authenticated;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
 do $$ declare ids jsonb; begin
  select value into ids from public.billing_test_fixture where key='documents';
- assert public.get_billing_document((ids->>'invoice')::uuid) is not null,'payer can read own document';
+ perform public.billing_test_assert(public.get_billing_document((ids->>'invoice')::uuid) is not null,'payer can read own document');
  perform public.billing_test_error(format('select public.finalize_billing_folio(%L,%L,5)',gen_random_uuid(),ids->>'account'),'BILLING_FORBIDDEN');
 end $$;
 reset role;
@@ -148,34 +157,34 @@ begin
  select value into ids from public.billing_test_fixture where key='documents';
  cmd:=jsonb_build_object('context_id',cfg->>'event','payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid());
  r:=public.add_billing_sale(gen_random_uuid(),cmd);f:=(r#>>'{account,folio_id}')::uuid;ch:=(r->>'charge_id')::uuid;
- assert f<>(ids->>'account')::uuid,'event account distinct from non-event';
- assert r#>>'{account,currency}'='CAD','currency inherited';
+ perform public.billing_test_assert(f<>(ids->>'account')::uuid,'event account distinct from non-event');
+ perform public.billing_test_assert(r#>>'{account,currency}'='CAD','currency inherited');
  p:=jsonb_build_object('folio_id',f,'version',1,'amount',10,'method','etransfer','reference',' TRANSFER-001 ','received_at',now(),'confirmed',true,'allocations',jsonb_build_array(jsonb_build_object('charge_id',ch,'amount',10)));
  perform public.billing_test_error(format('select public.record_billing_payment(%L,%L::jsonb)',gen_random_uuid(),p),'billing_etransfer_reference_key');
  p:=p||'{"method":"cash","reference":null}';
  perform public.billing_test_error(format('select public.record_billing_payment(%L,%L::jsonb)',gen_random_uuid(),p||jsonb_build_object('allocations',jsonb_build_array(jsonb_build_object('charge_id',gen_random_uuid(),'amount',10)))),'BILLING_INVALID_ALLOCATION');
  perform public.billing_test_error(format('select public.record_billing_payment(%L,%L::jsonb)',gen_random_uuid(),p||'{"amount":11}'),'BILLING_ALLOCATION_TOTAL_MISMATCH');
  r:=public.record_billing_payment(gen_random_uuid(),p);
- assert r#>>'{account,balance}'='105.00','rejected payment attempts had no effects';
+ perform public.billing_test_assert(r#>>'{account,balance}'='105.00','rejected payment attempts had no effects');
  d:=public.get_billing_statement(gen_random_uuid(),f);
  d:=public.finalize_billing_folio(gen_random_uuid(),f,2,(d->>'document_id')::uuid);
- assert d#>>'{document,snapshot,balance}'='105.00','manual finalization with outstanding balance';
+ perform public.billing_test_assert(d#>>'{document,snapshot,balance}'='105.00','manual finalization with outstanding balance');
  snap:=d->'document';
  p:=p||jsonb_build_object('version',3,'amount',105,'allocations',jsonb_build_array(jsonb_build_object('charge_id',ch,'amount',105)));
  r:=public.record_billing_payment(gen_random_uuid(),p);
- assert r#>>'{account,balance}'='0.00' and r#>>'{account,state}'='closed','collection after closure';
- assert public.get_billing_document((d->>'document_id')::uuid)=snap,'later collection does not rewrite invoice';
+ perform public.billing_test_assert(r#>>'{account,balance}'='0.00' and r#>>'{account,state}'='closed','collection after closure');
+ perform public.billing_test_assert(public.get_billing_document((d->>'document_id')::uuid)=snap,'later collection does not rewrite invoice');
  expired:=public.billing_create_context('f3000000-0000-0000-0000-000000000001',null,(cfg->>'type')::uuid,'closed-activity','USD','{}',now()-interval '3 days',now()-interval '1 day',cfg->'products');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),cmd||jsonb_build_object('context_id',expired,'source_id',gen_random_uuid())),'BILLING_CONTEXT_NOT_OPEN');
- assert not exists(select 1 from public.billing_folios where billing_context_id=expired),'no orphan folio';
+ perform public.billing_test_assert(not exists(select 1 from public.billing_folios where billing_context_id=expired),'no orphan folio');
 end $$;
 reset role;
 -- All new encashments balance their allocations, exactly one logical receipt each.
 do $$ begin
- assert not exists(select 1 from public.billing_payments p where p.amount<>(select coalesce(sum(a.amount),0) from public.billing_payment_allocations a where a.payment_id=p.id)),'allocation invariant';
- assert not exists(select 1 from public.billing_payments p where (select count(*) from public.billing_receipts r where r.payment_id=p.id)<>1),'one receipt per payment';
- assert (select count(*) from public.billing_final_invoices)=2,'unique final per context/payer';
- assert not exists(select 1 from public.billing_documents d where not exists(select 1 from public.billing_outbox o where o.document_id=d.id)),'durable render requests';
+ perform public.billing_test_assert(not exists(select 1 from public.billing_payments p where p.amount<>(select coalesce(sum(a.amount),0) from public.billing_payment_allocations a where a.payment_id=p.id)),'allocation invariant');
+ perform public.billing_test_assert(not exists(select 1 from public.billing_payments p where (select count(*) from public.billing_receipts r where r.payment_id=p.id)<>1),'one receipt per payment');
+ perform public.billing_test_assert((select count(*) from public.billing_final_invoices)=2,'unique final per context/payer');
+ perform public.billing_test_assert(not exists(select 1 from public.billing_documents d where not exists(select 1 from public.billing_outbox o where o.document_id=d.id)),'durable render requests');
 end $$;
 
 -- Show-only secretary: allowed on this show, denied for the association's non-event scope.
@@ -185,7 +194,7 @@ set request.jwt.claim.sub='10000000-0000-0000-0000-000000000005';
 do $$ declare cfg jsonb; c uuid; begin
  select value into cfg from public.billing_test_fixture where key='config';
  c:=public.billing_get_customer_account('f3000000-0000-0000-0000-000000000001','f6000000-0000-0000-0000-000000000001',(cfg->>'event')::uuid);
- assert c=(cfg->>'customer')::uuid,'show secretary resolves stable payer';
+ perform public.billing_test_assert(c=(cfg->>'customer')::uuid,'show secretary resolves stable payer');
  perform public.billing_test_error(format('select public.billing_get_customer_account(%L,%L,%L)','f3000000-0000-0000-0000-000000000001','f6000000-0000-0000-0000-000000000001',cfg->>'context'),'BILLING_FORBIDDEN');
 end $$;
 reset role;
@@ -199,7 +208,7 @@ end $$;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000006';
 do $$ declare ids jsonb; begin
  select value into ids from public.billing_test_fixture where key='documents';
- assert public.get_billing_document((ids->>'invoice')::uuid) is null,'other association admin denied';
+ perform public.billing_test_assert(public.get_billing_document((ids->>'invoice')::uuid) is null,'other association admin denied');
  perform public.billing_test_error(format('select public.get_billing_statement(%L,%L)',gen_random_uuid(),ids->>'account'),'BILLING_FORBIDDEN');
 end $$;
 reset role;
@@ -208,9 +217,9 @@ set role authenticated;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
 do $$ declare cfg jsonb; ctx uuid; r jsonb; f uuid; begin
  select value into cfg from public.billing_test_fixture where key='config';
- ctx:=public.billing_create_context('f3000000-0000-0000-0000-000000000001',null,(cfg->>'type')::uuid,'zero-recap-usd','USD','{}',now()-interval '1 day',null,cfg->'products');
- r:=public.add_billing_sale(gen_random_uuid(),jsonb_build_object('context_id',ctx,'payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'unit_price',0,'source_id',gen_random_uuid()));
- assert r#>>'{account,currency}'='USD' and r#>>'{account,total}'='0.00','free operation opens numbered context account';
+ ctx:=public.billing_create_context('f3000000-0000-0000-0000-000000000001',null,(cfg->>'type')::uuid,'zero-recap-usd','USD','{}',now()-interval '1 day',null,jsonb_set(cfg->'products','{0,unit_price}','0'));
+ r:=public.add_billing_sale(gen_random_uuid(),jsonb_build_object('context_id',ctx,'payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid()));
+ perform public.billing_test_assert(r#>>'{account,currency}'='USD' and r#>>'{account,total}'='0.00','free operation opens numbered context account');
  f:=(r#>>'{account,folio_id}')::uuid;
  perform public.billing_test_error(format('select public.finalize_billing_folio(%L,%L,1)',gen_random_uuid(),f),'BILLING_RECAP_REQUIRED');
  r:=public.get_billing_statement(gen_random_uuid(),f);
@@ -224,9 +233,9 @@ do $$ declare ids jsonb; r jsonb; begin
  select value into ids from public.billing_test_fixture where key='recap';
  perform public.billing_test_error(format('select public.finalize_billing_folio(%L,%L,1,%L)',gen_random_uuid(),ids->>'folio',ids->>'document'),'BILLING_STALE_RECAP');
  r:=public.get_billing_statement(gen_random_uuid(),(ids->>'folio')::uuid);
- assert r#>'{document,snapshot,payer,company_name}'='null'::jsonb,'company optional';
+ perform public.billing_test_assert(r#>'{document,snapshot,payer,company_name}'='null'::jsonb,'company optional');
  r:=public.finalize_billing_folio(gen_random_uuid(),(ids->>'folio')::uuid,1,(r->>'document_id')::uuid);
- assert r#>>'{account,state}'='closed','fresh recap finalizes free account';
+ perform public.billing_test_assert(r#>>'{account,state}'='closed','fresh recap finalizes free account');
 end $$;
 reset role;
 
@@ -236,16 +245,16 @@ set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
 do $$ declare cfg jsonb; typ uuid; ctx uuid; r jsonb; begin
  select value into cfg from public.billing_test_fixture where key='config';
  typ:=public.billing_create_context_type('f3000000-0000-0000-0000-000000000001','shop',2,(cfg->'config')||'{"staff_roles":["admin"]}');
- ctx:=public.billing_create_context('f3000000-0000-0000-0000-000000000001',null,typ,'admin-only','CAD','{}',now()-interval '1 day',null,cfg->'products');
- r:=public.add_billing_sale(gen_random_uuid(),jsonb_build_object('context_id',ctx,'payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'unit_price',0,'source_id',gen_random_uuid()));
+ ctx:=public.billing_create_context('f3000000-0000-0000-0000-000000000001',null,typ,'admin-only','CAD','{}',now()-interval '1 day',null,jsonb_set(cfg->'products','{0,unit_price}','0'));
+ r:=public.add_billing_sale(gen_random_uuid(),jsonb_build_object('context_id',ctx,'payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid()));
  r:=public.get_billing_statement(gen_random_uuid(),(r#>>'{account,folio_id}')::uuid);
  insert into public.billing_test_fixture values('admin-only',r);
 end $$;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000003';
 do $$ declare r jsonb; begin
  select value into r from public.billing_test_fixture where key='admin-only';
- assert public.get_billing_document((r->>'document_id')::uuid) is null,'type restricts document read';
- assert public.find_billing_account('f3000000-0000-0000-0000-000000000001',r#>>'{account,account_number}') is null,'type restricts number lookup';
+ perform public.billing_test_assert(public.get_billing_document((r->>'document_id')::uuid) is null,'type restricts document read');
+ perform public.billing_test_assert(public.find_billing_account('f3000000-0000-0000-0000-000000000001',r#>>'{account,account_number}') is null,'type restricts number lookup');
  perform public.billing_test_error(format('select public.get_billing_statement(%L,%L)',gen_random_uuid(),r#>>'{account,folio_id}'),'BILLING_FORBIDDEN');
 end $$;
 reset role;
