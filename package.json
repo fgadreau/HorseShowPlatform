@@ -30,7 +30,8 @@
     "test:vet:local": "node scripts/vet/run-local.mjs test",
     "test:vet:browser": "node --test scripts/vet/omvq.browser.mjs",
     "test:vet:pdf": "node scripts/vet/pdf-layout.browser.mjs",
-    "test:vet:sql": "node scripts/vet/test-sql-local.mjs"
+    "test:vet:sql": "node scripts/vet/test-sql-local.mjs",
+    "test:billing:sql": "node scripts/billing/test-sql-local.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "149.0.0",
