@@ -102,3 +102,40 @@ Pour l'application complète branchée sur une pile Supabase locale isolée disp
 * 1D : qualification intégrée, matrice navigateur/métier élargie, contrôle des reprises fournisseur avec vraies clés test et validation du pilote fictif. Les paiements live et le premier déploiement réel restent soumis à une autre autorisation.
 
 Aucun push, PR, fusion, déploiement, migration distante, changement PREPROD/PROD, paiement réel ou modification des documents contractuels approuvés. SVG intacts et non suivis. Les artefacts de tests et captures ne sont pas ajoutés aux commits.
+
+## Correctif de reprise après revue — base `a73b6df7ffefc282dd9228fe984af7b5acf30ef4`
+
+Branche inchangée : `feat/billing-stripe-test-ui`. Correctif validé localement, puis autorisé au commit et au push pour revue indépendante.
+
+Le registre des commandes conserve la clé et le JSON original complet avant l'appel RPC. Le panneau FR/EN « Résoudre la commande précédente », disponible dans la liste Finance et dans le détail, rejoue ce JSON depuis le stockage après rechargement. Il ne recalcule ni version, ni affectations, ni date, ni montant. Une autre commande durable est refusée tant que la précédente reste incertaine. Les encaissements, ventes, fermetures et préparations de documents emploient ce mécanisme. Les anciens enregistrements du registre de commandes restent lisibles.
+
+Après un encaissement résolu, la saisie du montant et de la référence est vidée et le compte est relu, afin de pouvoir continuer normalement. Les erreurs réseau, pertes de réponse, conflits d'idempotence et retraits d'accès conservent la commande originale. Seuls les rejets explicites de validation listés dans le service libèrent le registre ; un refus d'accès nécessite de rétablir les droits ou une résolution administrative, jamais d'inventer une nouvelle clé.
+
+Le registre Stripe conserve une seule préparation par identité/compte, sans incorporer la version financière. Il permet une nouvelle clé après annulation confirmée, mais conserve la précédente pendant une opération incertaine. Voir le complément 1A.7.
+
+Commandes exécutées pour le correctif :
+
+```sh
+node scripts/billing/recovery.test.mjs
+node scripts/billing/stripe-service.test.mjs
+node scripts/billing/navigation.test.mjs
+node scripts/billing/finance-browser.mjs
+npm run build
+git diff --check
+```
+
+| Vérification | Résultat du correctif |
+| --- | --- |
+| Reprise, services avec stockage et RPC simulés | 4 tests réussis : rejet périmé puis correction, timeout/annulation/clé, encaissement perdu puis rejeu exact et commande suivante, conservation après retrait d'accès. |
+| Services Stripe simulés existants | 20 tests réussis. |
+| Routes | 15 tests réussis. |
+| Chromium réel, RPC et Stripe simulés | 20 scénarios réussis, dont les 18 antérieurs adaptés au bouton explicite et 2 nouveaux scénarios. Résultat machine `.tmp/billing-ui/results.json`, `complete:true`. |
+| Annulation puis paiement du même montant | Rechargement entre les deux, clés distinctes après annulation serveur, un seul paiement confirmé. |
+| Réponse d'encaissement perdue | Le serveur simulé enregistre paiement et reçu avant de couper la réponse. Après rechargement et changement de version/affectations, le rejeu vérifie le contenu exact ; aucun paiement ou reçu supplémentaire. Un nouvel encaissement fonctionne ensuite. |
+| TypeScript et build | Réussis ; avertissements existants concernant la taille des chunks et l'import du service vétérinaire. |
+| Whitespace | `git diff --check` réussi. |
+| PostgreSQL / Stripe effectif | Aucun nouveau test PostgreSQL ni appel réel Stripe dans ce correctif ; résultats historiques non requalifiés. |
+
+Le premier lancement Chromium a été empêché par l'interdiction sandbox d'écouter sur loopback (`EPERM`). Le rejeu autorisé utilise uniquement le serveur local et des mocks. Aucun environnement distant n'est utilisé. Les SVG restent intacts et non suivis ; les artefacts `.tmp` restent ignorés.
+
+Limites : persistance liée au navigateur et à son origine ; vider son stockage supprime la commande locale. Les commandes d'une identité sont résolues avant d'en soumettre d'autres ; une reprise dont les permissions ont disparu reste bloquée. La qualification intégrée Stripe réelle demeure incomplète, et les PDF/worker restent en 1C. Aucun changement aux migrations, aux documents contractuels approuvés ou aux writers legacy.
