@@ -86,7 +86,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   const platform=await stripe('/account');
   await rpc(admin,'billing_stripe_receive',{p_event:event.id,p_provider:event.data.object.id,p_type:event.type,p_platform:platform.id,p_live:event.livemode});
  },async drain(){
-  const {data,error}=await admin.from('billing_stripe_events').select('*').is('processed_at',null).order('received_at').order('id').limit(50);
+  const {data,error}=await admin.from('billing_stripe_events').select('*').is('processed_at',null).order('attempts').order('id').limit(50);
   if(error)throw Error('BILLING_SERVER_ERROR');
   for(const event of data){let code=null;try{await processEvent(event);}catch(e){code=e.message.startsWith('BILLING_')?e.message:'BILLING_PROVIDER_RETRY';}await rpc(admin,'billing_stripe_event_result',{p_event:event.id,p_error:code});}
  }};

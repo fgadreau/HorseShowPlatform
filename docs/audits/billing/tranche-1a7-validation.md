@@ -43,7 +43,7 @@ La confirmation privée valide mode test, plateforme, destination, montant, devi
 
 Une réponse externe perdue est récupérée avec `hsp-test-<attempt UUID>`. Après 23 heures sans identifiant lié, aucun nouveau POST de création n'est fait : recherche bornée des intents existants par date et référence de tentative, puis relecture et validation. Une recherche incomplète ou ambiguë renvoie `BILLING_RECONCILIATION_REQUIRED` et garde la réservation. Une annulation est demandée à Stripe, puis son état réel est enregistré ; le navigateur ne peut déclarer le paiement annulé ou reçu.
 
-Les événements authentifiés sont inscrits avant l'acquittement HTTP. Un drain local borné les reprend toutes les 15 secondes ; il ne s'agit pas du worker documentaire. Échec et événement sans liaison restent durables. Un événement répété n'ajoute aucune ligne, et le traitement relit l'intent courant pour éviter d'appliquer un ancien état. Les données Stripe techniques ne sont pas incluses dans les documents publics.
+Les événements authentifiés sont inscrits avant l'acquittement HTTP. Un drain local borné les reprend toutes les 15 secondes, en priorisant le plus petit nombre de tentatives puis l’identifiant pour qu’un lot d’événements non rattachés ne monopolise pas la file ; il ne s'agit pas du worker documentaire. Échec et événement sans liaison restent durables. Un événement répété n'ajoute aucune ligne, et le traitement relit l'intent courant pour éviter d'appliquer un ancien état. Les données Stripe techniques ne sont pas incluses dans les documents publics.
 
 ## Commandes et résultats
 
