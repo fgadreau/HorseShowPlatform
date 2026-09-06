@@ -33,6 +33,32 @@ create table public.billing_payer_recaps (
  actor_id uuid not null references public.user_profiles(id), financial_version bigint not null,
  control_token jsonb not null
 );
+-- Equality lookup for the current payer recap; document ordering remains on documents.
+create index billing_payer_recap_current on public.billing_payer_recaps(folio_id,actor_id,financial_version);
+
+create or replace function public.billing_snapshot(p_folio uuid) returns jsonb language sql stable set search_path='' as $$
+ select jsonb_build_object('folio_id',f.id,'account_number',f.public_number,'state',f.state,'currency',f.currency,
+ 'context',jsonb_build_object('id',c.id,'kind',c.kind,'show_id',c.show_id,'name_fr',c.config->>'name_fr','name_en',c.config->>'name_en','period',c.config->'period','financial_year',(select financial_year from public.billing_context_access where context_id=c.id),'year_basis',(select year_basis from public.billing_context_access where context_id=c.id)),
+ 'payer',jsonb_build_object('customer_account_id',a.id,'contact_id',p.id,'first_name',p.first_name,'middle_name',p.middle_name,'last_name',p.last_name,
+  'company_name',p.company_name,'address',p.address,'address_line2',p.address_line2,'city',p.city,'state',p.state,'zip_code',p.zip_code,'country',p.country,
+  'email',p.email,'phone',p.phone,'tax_identifiers',null),
+ 'seller',jsonb_build_object('organization_id',o.id,'name',o.name,'billing_name',o.billing_name,'address',o.address,
+  'address_line2',o.address_line2,'city',o.city,'state',o.state,'zip_code',o.zip_code,'country',o.country,
+  'email',o.billing_email,'phone',o.billing_phone,'tax_name_1',o.tax_name,'tax_number_1',o.tax_number,
+  'tax_name_2',o.secondary_tax_name,'tax_number_2',o.secondary_tax_number),
+ 'charges',coalesce((select jsonb_agg(jsonb_build_object('id',ch.id,'description',ch.description,'category',ch.category,'quantity',ch.quantity,'unit_price',ch.unit_price,'subtotal',ch.subtotal,'tax_amount',ch.tax_amount,'total',ch.total,'currency',ch.currency,'beneficiary_contact_id',ch.beneficiary_contact_id,'horse_id',ch.horse_id,'beneficiary',(select jsonb_build_object('contact_id',bc.id,'display_name',concat_ws(' ',nullif(btrim(bc.first_name),''),nullif(btrim(bc.middle_name),''),nullif(btrim(bc.last_name),''))) from public.contacts bc where bc.id=ch.beneficiary_contact_id),'horse',(select jsonb_build_object('id',h.id,'name',h.name) from public.horses h where h.id=ch.horse_id),'exemption_reason',ch.exemption_reason,'created_at',ch.created_at,'taxes',coalesce((select jsonb_agg(jsonb_build_object('name',t.name,'code',t.code,'jurisdiction',t.jurisdiction,'rate',t.rate,'base',t.base,'amount',t.amount) order by t.code) from public.billing_charge_taxes t where t.charge_id=ch.id),'[]')) order by ch.created_at,ch.id)
+ from public.billing_charges ch where ch.folio_id=f.id),'[]'),
+ 'payments',coalesce((select jsonb_agg(jsonb_build_object('id',pmt.id,'amount',pmt.amount,'currency',pmt.currency,'method',pmt.method,'reference',pmt.reference,'received_at',pmt.received_at,'allocations',coalesce((select jsonb_agg(jsonb_build_object('charge_id',al.charge_id,'amount',al.amount) order by al.charge_id) from public.billing_payment_allocations al where al.payment_id=pmt.id),'[]')) order by pmt.created_at,pmt.id) from public.billing_payments pmt where pmt.folio_id=f.id),'[]'),
+ 'subtotal',coalesce((select sum(ch.subtotal) from public.billing_charges ch where ch.folio_id=f.id),0),
+ 'tax_amount',coalesce((select sum(ch.tax_amount) from public.billing_charges ch where ch.folio_id=f.id),0),
+ 'total',coalesce((select sum(ch.total) from public.billing_charges ch where ch.folio_id=f.id),0),
+ 'received',coalesce((select sum(pm.amount) from public.billing_payments pm where pm.folio_id=f.id),0),
+ 'balance',coalesce((select sum(ch.total) from public.billing_charges ch where ch.folio_id=f.id),0)-coalesce((select sum(pm.amount) from public.billing_payments pm where pm.folio_id=f.id),0))
+ from public.billing_folios f join public.billing_contexts c on c.id=f.billing_context_id
+ join public.billing_customer_accounts a on a.id=f.payer_customer_account_id join public.contacts p on p.id=a.payer_contact_id
+ join public.organizations o on o.id=f.organization_id where f.id=p_folio;
+$$;
+
 create index billing_context_year on public.billing_context_access(financial_year,context_id);
 create index billing_accounts_context_state on public.billing_folios(organization_id,billing_context_id,state,created_at,id);
 create index billing_accounts_payer on public.billing_folios(payer_customer_account_id,created_at,id);
@@ -124,7 +150,13 @@ begin
  if not p_personal then perform public.billing_assert_staff(f.organization_id,c.show_id); end if;
  select * into f from public.billing_folios where id=p_folio for update;
  -- Freeze document coordinates and identity against concurrent edits during this command.
- perform 1 from public.contacts where id=(select payer_contact_id from public.billing_customer_accounts where id=f.payer_customer_account_id) for share;
+ -- Constant order: all payer/beneficiary contacts by UUID, then horses by UUID, then association.
+ perform 1 from public.contacts ct where ct.id in (
+  select payer_contact_id from public.billing_customer_accounts where id=f.payer_customer_account_id
+  union select beneficiary_contact_id from public.billing_charges where folio_id=f.id
+ ) order by ct.id for share;
+ perform 1 from public.horses h where h.id in (select horse_id from public.billing_charges where folio_id=f.id)
+ order by h.id for share;
  perform 1 from public.organizations where id=f.organization_id for share;
  if not(case when p_personal then public.billing6_personal_read(f.id) else public.billing6_staff(f.billing_context_id) end) then raise exception 'BILLING_FORBIDDEN' using errcode='42501'; end if;
  return f;

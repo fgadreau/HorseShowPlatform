@@ -12,8 +12,8 @@ export async function runCheckoutRaces({sql,session,check,container,db}) {
   return JSON.parse(sql(`${payer} select public.prepare_own_billing_recap('${randomUUID()}','${x.folio}');`));
  };
  const finalize=(x,r,key=randomUUID())=>`${payer} select public.finalize_own_billing_folio('${key}','${x.folio}',${r.version},'${r.document_id}');`;
- // Execute A and hold its transaction open. B must demonstrably wait on the same authority lock.
- async function orderedRace(a,b) {
+ // Execute A and hold its transaction open. Observe B waiting on the authority or row lock.
+ async function orderedRace(a,b,waitEvent='advisory') {
   const hold=spawn('docker',['exec','-i',container,'psql','-X','-U','supabase_admin','-d',db,'-v','ON_ERROR_STOP=1','-Atq']);
   let out='',err='';
   const done=new Promise((resolve,reject)=>{hold.on('error',reject);hold.on('close',code=>resolve(code));});
@@ -24,7 +24,7 @@ export async function runCheckoutRaces({sql,session,check,container,db}) {
   const other=session(`set application_name='checkout-race-waiter'; set statement_timeout='15s'; ${b}`);
   let blocked=false;
   for(let i=0;i<100;i++){
-   if(sql("select count(*) from pg_stat_activity where datname=current_database() and application_name='checkout-race-waiter' and wait_event='advisory';")==='1'){blocked=true;break;}
+   if(sql(`select count(*) from pg_stat_activity where datname=current_database() and application_name='checkout-race-waiter' and wait_event='${waitEvent}';`)==='1'){blocked=true;break;}
    await new Promise(r=>setTimeout(r,25));
   }
   hold.stdin.end(blocked?'commit;':'rollback;');
@@ -61,4 +61,28 @@ export async function runCheckoutRaces({sql,session,check,container,db}) {
  x=factory('race-capability');r=prepare(x);
  result=await orderedRace(`${admin} select public.billing_set_capabilities('${org}','${x.context}',true,true,false,true,2020);`,finalize(x,r));
  check('checkout capability withdrawal concurrent with close is enforced',()=>{assert.notEqual(result.code,0);assert(result.err.includes('BILLING_NOT_ADMISSIBLE'));});
+ // Row-edit sessions hold a real row lock before the financial command enters snapshot validation.
+ for(const entity of ['beneficiary','horse']) {
+  x=factory('race-name-'+entity);
+  sql(`${admin} select public.add_billing_sale('${randomUUID()}','${JSON.stringify({...x.command,source_id:randomUUID(),beneficiary_contact_id:'f6000000-0000-0000-0000-000000000012',horse_id:'f8000000-0000-0000-0000-000000000012'})}'::jsonb);`);
+  r=prepare(x);
+  const edit=entity==='beneficiary'
+   ? "update public.contacts set first_name='Concurrent beneficiary' where id='f6000000-0000-0000-0000-000000000012';"
+   : "update public.horses set name='Concurrent horse' where id='f8000000-0000-0000-0000-000000000012';";
+  result=await orderedRace(edit,finalize(x,r),'transactionid');
+  check(`checkout concurrent ${entity} rename invalidates recap`,()=>{
+   assert.notEqual(result.code,0);assert(result.err.includes('BILLING_STALE_RECAP'),result.err);
+   assert.equal(sql(`select count(*) from public.billing_final_invoices where folio_id='${x.folio}';`),'0');
+  });
+  r=JSON.parse(sql(`${payer} select public.prepare_own_billing_recap('${randomUUID()}','${x.folio}');`));
+  const laterEdit=entity==='beneficiary'
+   ? "update public.contacts set first_name='Later beneficiary' where id='f6000000-0000-0000-0000-000000000012';"
+   : "update public.horses set name='Later horse' where id='f8000000-0000-0000-0000-000000000012';";
+  result=await orderedRace(finalize(x,r),laterEdit,'transactionid');
+  check(`checkout ${entity} rename waits for finalization and preserves confirmed names`,()=>{
+   assert.equal(result.code,0,result.err);
+   assert.equal(sql(`select (d.snapshot->'charges'=r.snapshot->'charges')::text from public.billing_documents d join public.billing_documents r on r.id='${r.document_id}' where d.folio_id='${x.folio}' and d.kind='invoice';`),'true');
+  });
+ }
+
 }

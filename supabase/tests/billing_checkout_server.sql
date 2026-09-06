@@ -308,3 +308,61 @@ do $$ declare x jsonb; begin
  perform public.billing_test_error(format('select public.finalize_own_billing_folio(%L,%L,%s,%L)',gen_random_uuid(),x->>'folio',x#>>'{recap,version}',x#>>'{recap,document_id}'),'BILLING_NOT_ADMISSIBLE');
 end $$;
 reset role;
+
+-- Immutable rendering data: public names only, with structured context year.
+reset role;
+update public.contacts set first_name='Snapshot',middle_name='Public',last_name='Beneficiary',email='private-beneficiary@example.invalid',phone='PRIVATE PHONE',address='PRIVATE ADDRESS'
+ where id='f6000000-0000-0000-0000-000000000012';
+update public.horses set name='Snapshot Horse' where id='f8000000-0000-0000-0000-000000000012';
+set role authenticated;
+set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
+do $$ declare x jsonb; sale jsonb; receipt jsonb; begin
+ x:=public.billing_test_checkout_account('snapshot-render');
+ sale:=public.add_billing_sale(gen_random_uuid(),(x->'command')||jsonb_build_object('product_id','f5000000-0000-0000-0000-000000000002','source_id',gen_random_uuid(),'beneficiary_contact_id','f6000000-0000-0000-0000-000000000012','horse_id','f8000000-0000-0000-0000-000000000012'));
+ receipt:=public.record_billing_payment(gen_random_uuid(),jsonb_build_object('folio_id',x->>'folio','version',sale#>'{account,version}','amount',sale#>'{account,balance}','method','cash','received_at',now(),'confirmed',true,'allocations',jsonb_build_array(jsonb_build_object('charge_id',sale->>'charge_id','amount',sale#>'{account,balance}'))));
+ perform public.billing_test_assert(exists(select 1 from jsonb_array_elements(receipt#>'{document,snapshot,charges}') ch where ch#>>'{horse,name}'='Snapshot Horse' and ch#>>'{beneficiary,display_name}'='Snapshot Public Beneficiary'),'receipt freezes beneficiary and horse names');
+ perform public.billing_test_assert(receipt#>>'{document,snapshot,context,financial_year}'='2020' and receipt#>>'{document,snapshot,context,year_basis}'='service_year','receipt freezes year and basis');
+ perform public.billing_set_ready((x->>'folio')::uuid,true);
+ insert into public.billing_test_fixture values('snapshot-render',x);
+end $$;
+set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
+do $$ declare x jsonb; r jsonb; ch jsonb; begin
+ select value into x from public.billing_test_fixture where key='snapshot-render';
+ r:=public.prepare_own_billing_recap(gen_random_uuid(),(x->>'folio')::uuid);
+ select v into ch from jsonb_array_elements(r#>'{document,snapshot,charges}') v where v->>'horse_id' is not null;
+ perform public.billing_test_assert(ch#>>'{beneficiary,display_name}'='Snapshot Public Beneficiary','recap beneficiary public name');
+ perform public.billing_test_assert(ch#>>'{horse,name}'='Snapshot Horse','recap horse name');
+ perform public.billing_test_assert(r#>>'{document,snapshot,context,financial_year}'='2020' and r#>>'{document,snapshot,context,year_basis}'='service_year','recap year and basis');
+ perform public.billing_test_assert(ch->'beneficiary'=jsonb_build_object('contact_id','f6000000-0000-0000-0000-000000000012','display_name','Snapshot Public Beneficiary'),'beneficiary explicit allowlist without private coordinates');
+ perform public.billing_test_assert(position('PRIVATE' in public.get_billing_account_detail((x->>'folio')::uuid,true)::text)=0 and position('private-beneficiary' in r::text)=0,'personal detail and recap exclude beneficiary private coordinates');
+ insert into public.billing_test_fixture values('snapshot-recap',r);
+end $$;
+reset role;
+update public.contacts set first_name='Renamed' where id='f6000000-0000-0000-0000-000000000012';
+set role authenticated;
+set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
+do $$ declare x jsonb; r jsonb; begin
+ select value into x from public.billing_test_fixture where key='snapshot-render';
+ select value into r from public.billing_test_fixture where key='snapshot-recap';
+ perform public.billing_test_error(format('select public.finalize_own_billing_folio(%L,%L,%s,%L)',gen_random_uuid(),x->>'folio',r->>'version',r->>'document_id'),'BILLING_STALE_RECAP');
+ r:=public.prepare_own_billing_recap(gen_random_uuid(),(x->>'folio')::uuid);
+ update public.billing_test_fixture set value=r where key='snapshot-recap';
+end $$;
+reset role;
+update public.horses set name='Renamed Horse' where id='f8000000-0000-0000-0000-000000000012';
+set role authenticated;
+set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
+do $$ declare x jsonb; r jsonb; invoice jsonb; begin
+ select value into x from public.billing_test_fixture where key='snapshot-render';
+ select value into r from public.billing_test_fixture where key='snapshot-recap';
+ perform public.billing_test_error(format('select public.finalize_own_billing_folio(%L,%L,%s,%L)',gen_random_uuid(),x->>'folio',r->>'version',r->>'document_id'),'BILLING_STALE_RECAP');
+ r:=public.prepare_own_billing_recap(gen_random_uuid(),(x->>'folio')::uuid);
+ invoice:=public.finalize_own_billing_folio(gen_random_uuid(),(x->>'folio')::uuid,(r->>'version')::bigint,(r->>'document_id')::uuid);
+ perform public.billing_test_assert(invoice#>'{document,snapshot,charges}'=r#>'{document,snapshot,charges}','invoice names exactly match confirmed recap');
+ perform public.billing_test_assert(invoice#>'{document,snapshot,context}'=r#>'{document,snapshot,context}','invoice structured year matches confirmed recap');
+end $$;
+reset role;
+insert into public.billing_test_fixture select 'snapshot-documents',jsonb_agg(to_jsonb(d) order by d.id) from public.billing_documents d where folio_id=(select (value->>'folio')::uuid from public.billing_test_fixture where key='snapshot-render');
+update public.contacts set first_name='Changed after finalization' where id='f6000000-0000-0000-0000-000000000012';
+update public.horses set name='Changed after finalization' where id='f8000000-0000-0000-0000-000000000012';
+select public.billing_test_assert((select jsonb_agg(to_jsonb(d) order by d.id) from public.billing_documents d where folio_id=(select (value->>'folio')::uuid from public.billing_test_fixture where key='snapshot-render'))=(select value from public.billing_test_fixture where key='snapshot-documents'),'all produced documents immutable after source names change');

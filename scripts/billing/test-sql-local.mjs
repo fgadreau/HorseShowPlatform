@@ -130,6 +130,13 @@ try {
  sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
  console.log('FINAL SQL COUNTS',JSON.stringify(sqlCounts));
  report.push('SQL checkout acceptance assertions');
+ stage='recap lookup plan';
+ const recapProbe="select document_id from public.billing_payer_recaps where folio_id='f0000000-0000-0000-0000-000000000001' and actor_id='20000000-0000-0000-0000-000000000004' and financial_version=1";
+ const normalPlan=JSON.parse(sql('explain (analyze, buffers, format json) '+recapProbe));
+ const indexPlan=JSON.parse(sql('set enable_seqscan=off; explain (analyze, buffers, format json) '+recapProbe));
+ sql('reset enable_seqscan;');
+ writeFileSync(`.tmp/billing-tests/recap-plan-${fresh?'fresh':'clone'}.json`,JSON.stringify({normalPlan,indexPlan},null,2));
+ check('recap equality predicate supports targeted composite index',()=>assert(JSON.stringify(indexPlan).includes('billing_payer_recap_current')));
  stage='checkout concurrency';await runCheckoutRaces({sql,session,check,container,db});
  check('history unchanged after checkout tests',()=>assert.equal(sql(historySQL),historic));
  complete=true;
