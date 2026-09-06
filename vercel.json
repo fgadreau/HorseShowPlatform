@@ -1,11 +1,12 @@
 {
   "functions": {
-    "api/vet/[action].js": {
+    "api/vet.js": {
       "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
     }
   },
   "routes": [
+    { "src": "/api/vet/([a-z-]+)$", "dest": "/api/vet?action=$1" },
     { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
   ]

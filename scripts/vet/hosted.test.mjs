@@ -2,12 +2,17 @@ import test from 'node:test';import assert from 'node:assert/strict';import http
 import {createHostedHandler,hostedConfig,PREPROD_ORIGIN,PREPROD_REF} from '../../server/vet/hosted.mjs';
 import {outboxKey,encryptMessage,decryptMessage} from '../../server/vet/preprod-outbox.mjs';
 const env={VITE_DEPLOY_ENV:'staging',VITE_SUPABASE_PROJECT_REF:PREPROD_REF,VITE_SUPABASE_URL:`https://${PREPROD_REF}.supabase.co`,VERCEL_GIT_COMMIT_REF:'preprod',VITE_SUPABASE_PUBLISHABLE_KEY:'test-public',VET_SUPABASE_SERVICE_ROLE_KEY:'test-server',VET_WORKER_ENABLED:'true',VET_OMVQ_ENABLED:'true',VET_PREPROD_OUTBOX_KEY:Buffer.alloc(32,1).toString('base64')};
-async function request(action,{settings=env,method='POST',origin=PREPROD_ORIGIN,auth=true,admin=true}={}){
+async function request(action,{settings=env,method='POST',origin=PREPROD_ORIGIN,auth=true,admin=true,rewritten=false}={}){
  let launches=0;const browser={launch:async()=>{launches++;return{newContext:async()=>({route:async()=>{},newPage:async()=>({setContent:async()=>{},pdf:async()=>Buffer.from('%PDF-test')})}),close:async()=>{}};}};
  const handler=createHostedHandler(settings,{browser,clientFactory:()=>({auth:{getUser:async()=>({data:{user:auth?{}:null}})},rpc:async()=>({data:admin})})});
  const server=http.createServer(handler);await new Promise(r=>server.listen(0,'127.0.0.1',r));
- try{const r=await fetch(`http://127.0.0.1:${server.address().port}/api/vet/${action}`,{method,headers:{Origin:origin,Authorization:'Bearer test','Content-Type':'application/json'},...(method==='POST'?{body:'{}'}:{})});return{status:r.status,body:await r.json(),launches};}finally{await new Promise(r=>server.close(r));}
+ try{const r=await fetch(`http://127.0.0.1:${server.address().port}/api/vet${rewritten?'?action=':'/'}${action}`,{method,headers:{Origin:origin,Authorization:'Bearer test','Content-Type':'application/json'},...(method==='POST'?{body:'{}'}:{})});return{status:r.status,body:await r.json(),launches};}finally{await new Promise(r=>server.close(r));}
 }
+test('native Vercel function dispatches rewritten actions and rejects unknown endpoints',async()=>{
+ assert.equal((await request('health',{method:'GET',rewritten:true})).body.ready,true);
+ assert.equal((await request('browser-check',{rewritten:true})).body.pdf,true);
+ assert.equal((await request('authorization-test',{rewritten:true})).status,404);
+});
 test('hosted worker refuses production, other projects and non-preprod branches',async()=>{
  for(const change of [{VITE_DEPLOY_ENV:'production'},{VITE_SUPABASE_PROJECT_REF:'srzzituovoxkvvlaesxa'},{VERCEL_GIT_COMMIT_REF:'main'},{VITE_SUPABASE_URL:'http://127.0.0.1:54321'}])assert.equal((await request('health',{settings:{...env,...change},method:'GET'})).status,404);
 });

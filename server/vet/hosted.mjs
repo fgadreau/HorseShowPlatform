@@ -22,7 +22,8 @@ export function createHostedHandler(env=process.env,{browser=serverlessBrowser,c
  const c=hostedConfig(env);const coreMissing=c.missing.filter(n=>n!=='VET_PREPROD_OUTBOX_KEY');let handlers;
  return async(req,res)=>{
   const send=(status,data)=>{res.writeHead(status,{'Content-Type':'application/json','Cache-Control':'no-store','Referrer-Policy':'no-referrer'});res.end(JSON.stringify(data));};
-  const action=new URL(req.url,'https://invalid.local').pathname.split('/').pop();
+  const url=new URL(req.url,'https://invalid.local');
+  const action=url.pathname==='/api/vet'?url.searchParams.get('action'):url.pathname.split('/').pop();
   if(!c.allowed||!endpoints.has(action))return send(404,{error:'Service indisponible.'});
   if(action==='health'&&req.method==='GET')return send(200,{ready:!!c.enabled&&!coreMissing.length,mail:!!c.enabled&&!coreMissing.length&&!!c.encryptionKey,omvq:!!c.enabled&&!coreMissing.length&&c.omvq,mail_mode:'preprod_private',missing:c.missing,enabled:c.enabled});
   // Read-only diagnostic uses only the existing public key and an authenticated HSP admin.
