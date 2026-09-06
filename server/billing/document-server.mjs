@@ -14,7 +14,7 @@ export function startDocumentServer(env=process.env){
    if(!/^[a-f0-9-]{36}$/i.test(a.documentId)||typeof a.personal!=='boolean')throw Error('BILLING_INVALID_REQUEST');
    const user=createClient(url,key,{...options,global:{headers:{Authorization:req.headers.authorization??''}}});const {data,error}=await user.auth.getUser();if(error||!data.user)throw Error('BILLING_FORBIDDEN');
    const status=()=>documentRpc(user,'billing_pdf_status',{p_document:a.documentId,p_personal:a.personal});await status();
-   if(req.url==='/download'){const bytes=await downloadDocument({user,service,...a});res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="HSP-${a.documentId}-${a.locale}.pdf"`);res.end(bytes);return;}
+   if(req.url==='/download'){const bytes=await downloadDocument({user,service,documentId:a.documentId,locale:a.locale,personal:a.personal});res.setHeader('Content-Type','application/pdf');res.setHeader('Content-Disposition',`attachment; filename="HSP-${a.documentId}-${a.locale}.pdf"`);res.end(bytes);return;}
    if(req.url==='/retry')await worker.run(a.documentId);res.end(JSON.stringify(await status()));
   }catch(e){res.statusCode=400;res.end(JSON.stringify({error:/^BILLING_[A-Z_]+$/.test(e.message)?e.message:'BILLING_PDF_UNAVAILABLE'}));}
  });

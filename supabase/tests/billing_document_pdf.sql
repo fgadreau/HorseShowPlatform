@@ -17,7 +17,7 @@ do $$ declare x jsonb; r jsonb; p jsonb; st jsonb; inv jsonb; receipt jsonb; k u
  receipt:=public.record_billing_payment(gen_random_uuid(),jsonb_build_object('folio_id',f,'version',r#>'{account,version}','amount',40,'method','cash','received_at',now(),'confirmed',true,'allocations',jsonb_build_array(jsonb_build_object('charge_id',x->>'charge','amount',40))));
  st:=public.get_billing_statement(gen_random_uuid(),f);
  inv:=public.finalize_billing_folio(gen_random_uuid(),f,(st#>>'{account,version}')::bigint,(st->>'document_id')::uuid);
- insert into public.billing_test_fixture values('pdf',jsonb_build_object('folio',f,'document',inv->>'document_id','snapshot',inv#>'{document,snapshot}','statement',st->>'document_id','receipt',receipt->>'document_id','charge',x->>'charge'));
+ insert into public.billing_test_fixture values('pdf',jsonb_build_object('folio',f,'document',inv->>'document_id','snapshot',inv#>'{document,snapshot}','statement',st->>'document_id','receipt',receipt->>'document_id','receipt_snapshot',receipt#>'{document,snapshot}','statement_snapshot',st#>'{document,snapshot}','charge',x->>'charge'));
  perform public.billing_test_assert(public.billing_pdf_status((inv->>'document_id')::uuid,false)->>'state'='pending','real pending outbox status');
  perform public.billing_test_error(format('select public.billing_pdf_status(%L,true)',inv->>'document_id'),'BILLING_FORBIDDEN');
 end $$;
@@ -62,6 +62,8 @@ end $$;
 reset role;
 update public.contacts set company_name='Changed after immutable PDF snapshot' where id='f6000000-0000-0000-0000-000000000001';
 update public.horses set name='Changed after snapshot' where id='f8000000-0000-0000-0000-000000000012';
+select public.billing_test_assert((select d.snapshot=x.value->'statement_snapshot' from public.billing_test_fixture x join public.billing_documents d on d.id=(x.value->>'statement')::uuid where x.key='pdf'),'source edits never rewrite statement');
+select public.billing_test_assert((select d.snapshot=x.value->'receipt_snapshot' from public.billing_test_fixture x join public.billing_documents d on d.id=(x.value->>'receipt')::uuid where x.key='pdf'),'source edits never rewrite receipt');
 select public.billing_test_assert((select d.snapshot=x.value->'snapshot' from public.billing_test_fixture x join public.billing_documents d on d.id=(x.value->>'document')::uuid where x.key='pdf'),'source edits never rewrite invoice');
 set role authenticated;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000006';
