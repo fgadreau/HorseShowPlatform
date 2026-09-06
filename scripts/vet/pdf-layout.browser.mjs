@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
-import {chromium} from '@playwright/test';
+import {chromium as localBrowser} from '@playwright/test';
+import {serverlessBrowser} from '../../server/vet/serverless-browser.mjs';
+const chromium=process.env.VET_TEST_SERVERLESS==='true'?serverlessBrowser:localBrowser;
 import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 import {renderCertificatePdf} from '../../server/vet/certificate-delivery.mjs';
 const administration={product:'Vaccin équin de démonstration',manufacturer:'Fabricant de démonstration',diseases:['influenza','ehv_1','ehv_4'],lot:'LOT-DEMO-2026',administered_on:'2026-09-05',product_expires_on:'2027-09-05',valid_until:'2027-03-05',declared_duration:'6 mois'};

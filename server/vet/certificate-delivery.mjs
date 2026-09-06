@@ -63,7 +63,7 @@ export async function captureLocalEmail(recipient, certificate, pdf) {
  });
  if(!response.ok)throw Error('LOCAL_EMAIL_UNCERTAIN');
 }
-export function createCertificateHandler({userClient,serviceClient,chromium,origin,publicOrigin='http://127.0.0.1:5173',render=renderCertificatePdf,sendMail=captureLocalEmail}) {
+export function createCertificateHandler({userClient,serviceClient,chromium,origin,publicOrigin='http://127.0.0.1:5173',render=renderCertificatePdf,sendMail=captureLocalEmail,capturedStatus='local_captured'}) {
  let busy=false;
  return async(req,res)=>{
   res.setHeader('Cache-Control','no-store');
@@ -93,6 +93,7 @@ export function createCertificateHandler({userClient,serviceClient,chromium,orig
    const {data:intact,error:integrityError}=await serviceClient.rpc('vet_signature_intact',{p_id:c.id});
    if(integrityError || !intact)return send(409,{error:'Certificat non signé ou intégrité non confirmée. Préparez une nouvelle version.'});
    const pdf=await render(c,chromium,publicOrigin);
+   if(pdf.length>4*1024*1024)return send(413,{error:'PDF trop volumineux pour le transport hébergé.'});
    if(!email){res.writeHead(200,{'Content-Type':'application/pdf','Content-Disposition':`attachment; filename="${c.number}.pdf"`});res.end(pdf);return;}
    // Recheck access and state after rendering, before any send.
    const {data:current}=await client.from('vet_certificates').select('status').eq('id',c.id).single();
@@ -102,7 +103,7 @@ export function createCertificateHandler({userClient,serviceClient,chromium,orig
    if(profileError || !profile)return send(403,{error:'VET_ACCESS_DENIED'});
    const results=[];
    for(const recipient of recipients){
-    const {error:insertError}=await serviceClient.from('vet_certificate_deliveries').upsert({request_id:input.request_id,certificate_id:c.id,issuer_id:c.issuer_id,created_by:profile,recipient},{onConflict:'request_id,recipient',ignoreDuplicates:true});
+    const {error:insertError}=await serviceClient.from('vet_certificate_deliveries').upsert({request_id:input.request_id,certificate_id:c.id,issuer_id:c.issuer_id,created_by:profile,recipient,transport:capturedStatus==='preprod_captured'?'preprod_private':'mailpit_local'},{onConflict:'request_id,recipient',ignoreDuplicates:true});
     if(insertError)throw Error('DELIVERY_LOG_UNAVAILABLE');
     const query=()=>serviceClient.from('vet_certificate_deliveries').select('*').eq('request_id',input.request_id).eq('recipient',recipient).eq('created_by',profile).eq('certificate_id',c.id).single();
     const {data:attempt}=await query();if(!attempt)throw Error('DELIVERY_CONFLICT');
@@ -110,14 +111,14 @@ export function createCertificateHandler({userClient,serviceClient,chromium,orig
      const {data:claimed,error:claimError}=await serviceClient.from('vet_certificate_deliveries').update({status:'processing'}).eq('id',attempt.id).eq('status','queued').select('id');
      if(claimError)throw Error('DELIVERY_LOG_UNAVAILABLE');
      if(claimed?.length){
-      let status='local_captured';try{await sendMail(recipient,c,pdf);}catch{status='uncertain';}
+      let status=capturedStatus;try{await sendMail(recipient,c,pdf,{profile,deliveryId:attempt.id});}catch{status='uncertain';}
       const {error:logError}=await serviceClient.from('vet_certificate_deliveries').update({status,completed_at:new Date().toISOString()}).eq('id',attempt.id);
       if(logError)throw Error('DELIVERY_LOG_UNAVAILABLE');
      }
     }
     const {data:final}=await query();results.push({recipient,status:final?.status??'uncertain'});
    }
-   send(200,{local_only:true,results});
+   send(200,{local_only:capturedStatus==='local_captured',results});
   }catch(e){send(503,{error:e.message==='INVALID_RECIPIENTS'?'Indiquez au moins un courriel valide pour le propriétaire ou l’agent.':'Opération non confirmée. Vérifiez l’historique avant de réessayer.'});}
   finally{busy=false;}
  };

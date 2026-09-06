@@ -1,6 +1,6 @@
 import { randomBytes,createHash } from 'node:crypto';
 export const hashToken=token=>createHash('sha256').update(token).digest('hex');
-export function createAuthorizationHandler({userClient,serviceClient,origin,publicOrigin,localTestEnabled=false}) {
+export function createAuthorizationHandler({userClient,serviceClient,origin,publicOrigin,localTestEnabled=false,captureAuthorization}) {
  let inFlight=0;const attempts=new Map();
  return async(req,res)=>{
   res.setHeader('Cache-Control','no-store');res.setHeader('Referrer-Policy','no-referrer');
@@ -35,10 +35,11 @@ export function createAuthorizationHandler({userClient,serviceClient,origin,publ
     if(input.method==='personal_link'){
      const link=`${publicOrigin}/vet/authorize#token=${token}`;
      try{
+      if(captureAuthorization){await captureAuthorization({client,authorizationId:id,email:input.email,link});}else{
       const result=await fetch('http://127.0.0.1:54324/api/v1/send',{method:'POST',headers:{'Content-Type':'application/json'},signal:AbortSignal.timeout(15000),body:JSON.stringify({From:{Email:'certificats@hsp.example.test',Name:'HSP — pilote local'},To:[{Email:input.email}],Subject:'HSP : autorisation préalable de signature électronique',Text:`Veuillez lire et signer votre autorisation personnelle pour la clinique :\n${link}\nCe lien expire rapidement et ne peut être utilisé qu’une fois. Ne le transférez pas.\nEssai local : ce courriel est capturé dans Mailpit.`,Tags:['hsp-vet-authorization-local']})});
-      if(!result.ok)throw Error('mail');
+      if(!result.ok)throw Error('mail');}
      }catch{await client.rpc('vet_cancel_authorization',{p_id:id});return send(503,{error:'Le courriel local n’a pas été confirmé. Cette demande a été annulée ; vous pouvez en créer une nouvelle.'});}
-     return send(200,{id,local_only:true});
+     return send(200,{id,local_only:!captureAuthorization,preprod_captured:!!captureAuthorization});
     }
     return send(200,{id,token});
    }
