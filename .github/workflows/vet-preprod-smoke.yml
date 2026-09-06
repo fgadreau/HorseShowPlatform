@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: [preprod]
-    paths: ["src/features/vet/**", "src/services/vet*", "api/vet/**", "server/vet/**", "supabase/migrations/*vet*.sql", ".github/workflows/vet-preprod-smoke.yml"]
+    paths: ["src/features/vet/**", "src/services/vet*", "api/vet.js", "vercel.json", "server/vet/**", "supabase/migrations/*vet*.sql", ".github/workflows/vet-preprod-smoke.yml"]
 permissions:
   contents: read
 concurrency:
