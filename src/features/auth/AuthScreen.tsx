@@ -1,6 +1,7 @@
+import { Brand } from "../../components/Brand";
 import { useState } from "react";
 import type { FormEvent } from "react";
-import { ClipboardList, UserRound } from "lucide-react";
+import { UserRound } from "lucide-react";
 import type { Locale, Translation } from "../../lib/i18n";
 import { appEnv } from "../../lib/env";
 import { supabase } from "../../lib/supabase";
@@ -176,9 +177,7 @@ export function AuthScreen({
     <main className="auth-layout">
       <section className="auth-panel">
         <div className="brand-lockup">
-          <div className="brand-mark">
-            <ClipboardList size={26} />
-          </div>
+          <Brand symbol />
           <div>
             <p className="eyebrow">{t.shell.productName}</p>
             <h1>{mode === "signin" ? t.auth.signIn : t.auth.createAccount}</h1>

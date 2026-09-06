@@ -1,0 +1,96 @@
+[
+  {
+    "screen": "auth",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "navigation",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "form",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "public",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "show",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "vet",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "auth-en-focus",
+    "width": 1440,
+    "outline": "rgb(101, 60, 89) solid 2px"
+  },
+  {
+    "screen": "vet-editor",
+    "width": 1440,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "auth",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "navigation",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "form",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "public",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "show",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "vet",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  },
+  {
+    "screen": "auth-en-focus",
+    "width": 390,
+    "outline": "rgb(101, 60, 89) solid 2px"
+  },
+  {
+    "screen": "vet-editor",
+    "width": 390,
+    "overflow": false,
+    "errors": []
+  }
+]

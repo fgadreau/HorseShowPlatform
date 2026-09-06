@@ -1,5 +1,6 @@
+import { Brand } from "../../components/Brand";
 import { useEffect, useState } from "react";
-import { CalendarDays, ChevronDown, ClipboardList, LogIn, MapPin } from "lucide-react";
+import { CalendarDays, ChevronDown, LogIn, MapPin } from "lucide-react";
 import { formatDate } from "../../lib/display";
 import { fetchPublicShows, type PublicShowSummary } from "../../services/supabaseServices";
 
@@ -53,14 +54,9 @@ export function LandingPage({ onSignIn }: { onSignIn: () => void }) {
     <div className="landing-page">
       <header className="landing-header">
         <div className="landing-header-inner">
-          <div className="landing-brand">
-            <div className="landing-brand-mark">
-              <ClipboardList size={22} />
-            </div>
-            <span className="landing-brand-name">ShowPlatform</span>
-          </div>
+          <div className="landing-brand"><Brand /></div>
           <nav className="landing-header-actions" aria-label="Accès aux portails">
-          <a className="secondary-button landing-vet-btn" href="/vet">Portail vétérinaire</a>
+          <a className="ghost-button landing-vet-btn" href="/vet">Portail vétérinaire</a>
           <button className="primary-button landing-signin-btn" type="button" onClick={onSignIn}>
             <LogIn size={16} />
             Se connecter

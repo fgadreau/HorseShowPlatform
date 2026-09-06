@@ -1,0 +1,20 @@
+:root {
+  color-scheme: light;
+  --brand: #653C59;
+  --brand-hover: #543149;
+  --brand-active: #43273A;
+  --brand-soft: #F3EDF1;
+  --brand-border: #C7AFBF;
+  --brand-disabled: #9B8293;
+  --brand-shadow: rgba(101, 60, 89, 0.12);
+  --focus: #653C59;
+  --canvas: #F5F5F7;
+  --surface: #FFFFFF;
+  --surface-subtle: #F8F8FA;
+  --border: #DEE0E5;
+  --field-border: #90939F;
+  --text: #24232B;
+  --text-muted: #5E606E;
+  --border-color: var(--border);
+  --muted-color: var(--text-muted);
+}
