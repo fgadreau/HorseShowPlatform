@@ -1,3 +1,4 @@
+import {runCheckoutRaces} from './checkout-concurrency.mjs';
 import {execFileSync, spawn} from 'node:child_process';
 import {readFileSync, readdirSync, mkdirSync, writeFileSync, mkdtempSync, rmSync, existsSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -10,6 +11,9 @@ async function freePort(){const server=createServer();await new Promise(r=>serve
 
 // Deliberately fixed local container; no URL, DATABASE_URL or remote project credentials accepted.
 const fresh=process.argv.includes('--fresh');
+mkdirSync('.tmp/billing-tests',{recursive:true});
+const resultPath=fresh?'.tmp/billing-tests/rebuild-results.json':'.tmp/billing-tests/results.json';
+writeFileSync(resultPath,JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete:false,failure:{stage:'preflight',message:'Validation has not completed'}}));
 assert(process.argv.slice(2).every(a=>a==='--fresh'),'Only --fresh is accepted; remote connection arguments are forbidden');
 const container=fresh?`supabase_db_${project}`:'supabase_db_hsp-vet-local';
 if(process.env.DOCKER_HOST && !process.env.DOCKER_HOST.startsWith('unix://')) throw Error('Local Docker socket required');
@@ -50,7 +54,7 @@ try {
  }
  const historySQL=['invoices','invoice_line_items','payments','manual_sales','entries','stall_bookings','contact_organization_memberships'].map(t=>`select '${t}:'||md5(coalesce(string_agg(row_to_json(t)::text,'' order by id),'')) from public.${t} t;`).join('\n');
  const historic=sql(historySQL);
- stage='foundation migration';if(!fresh)sql(readFileSync(migration,'utf8'));
+ stage='foundation migration';if(!fresh){sql(readFileSync(migration,'utf8'));sql(readFileSync('supabase/migrations/20260906001000_billing_checkout_server.sql','utf8'));}
  check('migration preserves every historical financial/source row',()=>assert.equal(sql(historySQL),historic));
  stage='legacy regressions';
  for(const file of ['stall_booking_invoice.sql','incentive_nomination_programs.sql']){
@@ -58,6 +62,7 @@ try {
   check('existing legacy regression: '+file,()=>sql(script));
  }
  stage='acceptance';
+ sql(readFileSync('supabase/tests/billing_checkout_compat.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_foundation.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_review.sql','utf8'));
  sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
@@ -81,7 +86,7 @@ try {
  const ready=new Promise((resolve,reject)=>{hold.stdout.on('data',b=>{output+=b;if(output.includes('LOCKED'))resolve();});hold.on('error',reject);});
  hold.stderr.on('data',b=>errors+=b);
  const done=new Promise(resolve=>hold.on('close',code=>resolve(code)));
- hold.stdin.write(`begin; set statement_timeout='15s'; select public.billing_lock_scope('${ids.org}',null); select 'LOCKED';\n`);
+ hold.stdin.write(`begin; set statement_timeout='15s'; select public.billing6_lock('${ids.org}'); select public.billing_lock_scope('${ids.org}',null); select 'LOCKED';\n`);
  await ready;
  const b=session(`begin; set application_name='billing-secretary-b'; set statement_timeout='15s'; ${auth(ids.secretary)} select public.add_billing_sale('f1000000-0000-0000-0000-000000000002','${command('f2000000-0000-0000-0000-000000000002')}'::jsonb); commit;`);
  // Wait until B is actually blocked on A's advisory lock before releasing A.
@@ -120,6 +125,13 @@ try {
   assert.equal(sql(`select attempts from billing_outbox where document_id='${job}';`),'1');
  });
  check('historical financial/source rows still unchanged after acceptance/races',()=>assert.equal(sql(historySQL),historic));
+ stage='checkout acceptance';
+ sql(readFileSync('supabase/tests/billing_checkout_server.sql','utf8'));
+ sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
+ console.log('FINAL SQL COUNTS',JSON.stringify(sqlCounts));
+ report.push('SQL checkout acceptance assertions');
+ stage='checkout concurrency';await runCheckoutRaces({sql,session,check,container,db});
+ check('history unchanged after checkout tests',()=>assert.equal(sql(historySQL),historic));
  complete=true;
 } catch(error){
  failure={stage,message:String(error.stderr||error.message)};
@@ -133,10 +145,12 @@ try {
  }
  console.error('FAILED',stage,failure.message);process.exitCode=1;
 } finally {
+ try {
  if(created){
   if(fresh){execFileSync(cli,['stop','--project-id',project,'--no-backup','--workdir',workdir],{stdio:['ignore','pipe','pipe']});}
   else docker(['dropdb','-U','postgres','--if-exists',db]);
  }
  if(workdir)rmSync(workdir,{recursive:true,force:true});
- mkdirSync('.tmp/billing-tests',{recursive:true});writeFileSync(fresh?'.tmp/billing-tests/rebuild-results.json':'.tmp/billing-tests/results.json',JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete,replayed,sqlCounts,passed:report,failure},null,2));
+ } catch(error) {complete=false; failure={stage:'cleanup',message:error.message};process.exitCode=1;}
+ writeFileSync(resultPath,JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete,replayed,sqlCounts,passed:report,failure},null,2));
 }
