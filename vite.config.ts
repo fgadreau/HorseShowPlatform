@@ -73,6 +73,11 @@ export default defineConfig(({ mode }) => {
           ws: true,
           rewrite: (path: string) => path.replace(/^\/__local-supabase/, ""),
         },
+        "/__local-billing-documents": {
+          target: "http://127.0.0.1:54332",
+          rewrite: (path: string) => path.replace(/^\/__local-billing-documents/, ""),
+          configure: proxy => {proxy.on("proxyReq",(proxyReq,req)=>{if(req.headers.origin && new URL(req.headers.origin).host===req.headers.host)proxyReq.setHeader("Origin","http://127.0.0.1:5173");});},
+        },
         "/__local-billing": {
           target: "http://127.0.0.1:54331",
           rewrite: (path: string) => path.replace(/^\/__local-billing/, ""),
