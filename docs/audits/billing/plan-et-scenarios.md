@@ -1,7 +1,7 @@
 # Modèle révisé et livraison — D1 à D5 validées
 
 6 septembre 2026. Base : `origin/preprod` à `6ca720b`.
-Branche dédiée : `feat/billing-folio-foundation`.
+Branche dédiée : `docs/billing-model-review`.
 Ce document remplace les propositions initiales de l'audit. Il constitue la
 présentation demandée **avant les migrations**; ce n'est pas une description de
 fonctionnalités déjà implémentées. Voir le [contrat de tranche](premiere-tranche.md)

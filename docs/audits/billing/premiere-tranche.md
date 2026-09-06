@@ -1,7 +1,7 @@
 # Première tranche — contrat avant implémentation
 
 Statut : préparation pour revue, aucune migration créée/appliquée à ce stade.
-Base : `preprod` `6ca720b`, branche `feat/billing-folio-foundation`.
+Base : `preprod` `6ca720b`, branche `docs/billing-model-review`.
 Le [modèle révisé](plan-et-scenarios.md) fait foi pour D1–D5 et la terminologie.
 
 ## Parcours livré ensemble
