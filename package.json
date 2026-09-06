@@ -23,13 +23,21 @@
     "test:capacity": "node scripts/run-showscore-capacity.mjs",
     "test:capacity:aggregate": "node scripts/aggregate-showscore-capacity.mjs",
     "test:capacity:config": "node --test scripts/capacity/*.test.mjs",
-    "test:broadcast": "node scripts/verify-showscore-public-broadcast.mjs"
+    "test:broadcast": "node scripts/verify-showscore-public-broadcast.mjs",
+    "vet:worker": "node server/vet/local-server.mjs",
+    "test:vet": "node --test scripts/vet/*.test.mjs",
+    "vet:local": "node scripts/vet/run-local.mjs",
+    "test:vet:local": "node scripts/vet/run-local.mjs test",
+    "test:vet:browser": "node --test scripts/vet/omvq.browser.mjs",
+    "test:vet:pdf": "node scripts/vet/pdf-layout.browser.mjs",
+    "test:vet:sql": "node scripts/vet/test-sql-local.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.2",
     "jsqr": "^1.4.0",
     "lucide-react": "^1.17.0",
     "pdfjs-dist": "^5.6.205",
+    "qrcode": "^1.5.4",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },

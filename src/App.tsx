@@ -95,7 +95,16 @@ function matchPublicShowSlug() {
   return match ? match[1] : null;
 }
 
+const VetApp = lazy(() => import("./features/vet/VetApp").then(m => ({ default: m.VetApp })));
+
 export default function App() {
+  if (window.location.pathname === "/vet" || window.location.pathname.startsWith("/vet/") || window.location.hostname.startsWith("vet.")) {
+    return <Suspense fallback={<LoadingScreen />}><VetApp /></Suspense>;
+  }
+  return <HspApp />;
+}
+
+function HspApp() {
   const publicShowSlug = matchPublicShowSlug();
 
   if (publicShowSlug) {

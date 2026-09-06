@@ -51,12 +51,41 @@ function validateOnlineEnvironment(env: Record<string, string>) {
 }
 
 export default defineConfig(({ mode }) => {
-  validateOnlineEnvironment(loadEnv(mode, ".", ""));
+  const env = { ...loadEnv(mode, ".", ""), ...process.env };
+  validateOnlineEnvironment(env as Record<string, string>);
+  const localProxy = env.VITE_DEPLOY_ENV === "local" && env.VITE_VET_LOCAL_PROXY === "true";
+  if (localProxy && !/^http:\/\/(127\.0\.0\.1|localhost):54321\/?$/.test(env.VITE_SUPABASE_URL ?? "")) {
+    throw new Error("The pilot development proxy requires Supabase local on port 54321.");
+  }
 
   return {
     plugins: [react()],
     server: {
       port: 5173,
+      strictPort: true,
+      allowedHosts: localProxy && env.CODESPACE_NAME && env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
+        ? [`${env.CODESPACE_NAME}-5173.${env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`]
+        : [],
+      proxy: localProxy ? {
+        "/__local-supabase": {
+          target: "http://127.0.0.1:54321",
+          changeOrigin: true,
+          ws: true,
+          rewrite: (path: string) => path.replace(/^\/__local-supabase/, ""),
+        },
+        "/__local-vet": {
+          target: "http://127.0.0.1:54330",
+          rewrite: (path: string) => path.replace(/^\/__local-vet/, ""),
+          configure: (proxy) => {
+            proxy.on("proxyReq", (proxyReq, req) => {
+              // Preserve origin checks: only translate same-origin browser requests.
+              if (req.headers.origin && new URL(req.headers.origin).host === req.headers.host) {
+                proxyReq.setHeader("Origin", "http://127.0.0.1:5173");
+              }
+            });
+          },
+        },
+      } : undefined,
     },
   };
 });
