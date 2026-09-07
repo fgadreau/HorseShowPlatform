@@ -13,3 +13,12 @@ export async function assertPDFRows(bytes,model){
   return {pages:pdf.numPages,rows:model.blocks.reduce((n,b)=>n+b.rows.length,0)};
  }finally{await pdf.destroy();}
 }
+// For hierarchical blocks, verify that the identifying heading accompanies each
+// row on its printed page, and that later pages explicitly say "continued".
+export async function assertPDFGroupHeaders(bytes,model){
+ const pdf=await getDocument({data:new Uint8Array(bytes),useSystemFonts:true}).promise;
+ try{const pages=[];for(let i=1;i<=pdf.numPages;i++)pages.push(normalize((await(await pdf.getPage(i)).getTextContent()).items.map(x=>x.str).join(' ')));
+ let checked=0,continued=0;for(const b of model.blocks.filter(b=>b.bib)){let first;
+  for(const row of b.rows){const value=normalize(row.join(' ')),label=normalize(b.label),index=pages.findIndex(text=>text.includes(value)&&text.includes(label));assert(index>=0,'PDF row without its bib/block heading: '+row[0]);first??=index;if(index>first){assert(pages[index].includes(label+normalize(' — '+model.continued)),'Missing continuation heading');continued++;}checked++;}
+ }return {headingRows:checked,continuedRows:continued};}finally{await pdf.destroy();}
+}

@@ -1,0 +1,146 @@
+{
+  "complete": true,
+  "realLocalRPC": true,
+  "realStorageHTTP": true,
+  "manualPaymentsSimulated": true,
+  "newStripePayments": 0,
+  "denied": 4,
+  "files": [
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 53
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 5
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "f07663f4-34ba-4320-8d77-aabdb4c478a5",
+      "number": "DEMO-RCPT-000022",
+      "locale": "fr",
+      "path": "main-receipt-DEMO-RCPT-000022-fr.pdf",
+      "sha256": "21154fa560f82bbbc482cd537d3e85913b5c48520f79ac4360cd084aba0ade8a"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 53
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 4
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "f07663f4-34ba-4320-8d77-aabdb4c478a5",
+      "number": "DEMO-RCPT-000022",
+      "locale": "en",
+      "path": "main-receipt-DEMO-RCPT-000022-en.pdf",
+      "sha256": "3587513f3f5850a7faa134ad54639951228682f77133278d9a085a9504efd2f6"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 48
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "9a972a6e-f41c-4387-bd9f-b58e921ece7d",
+      "number": null,
+      "locale": "fr",
+      "path": "main-statement-9a972a6e-f41c-4387-bd9f-b58e921ece7d-fr.pdf",
+      "sha256": "442ddb7788a5855d85f4bb5cc3303807371ec865804b50013fdca8b7d8f24293"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 48
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "9a972a6e-f41c-4387-bd9f-b58e921ece7d",
+      "number": null,
+      "locale": "en",
+      "path": "main-statement-9a972a6e-f41c-4387-bd9f-b58e921ece7d-en.pdf",
+      "sha256": "f16e5c33dfda14ff0c7094b861a563b933fb7d8011c3948164719c7034ecd7de"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 49
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "37572a1f-b1f1-4336-9b8b-b360b800525c",
+      "number": "DEMO-INV-000009",
+      "locale": "fr",
+      "path": "main-invoice-DEMO-INV-000009-fr.pdf",
+      "sha256": "35fc42cb4561d4715d9ed20204dd175e265978b553bae5c0cd8dd776cdbba615"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 49
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "37572a1f-b1f1-4336-9b8b-b360b800525c",
+      "number": "DEMO-INV-000009",
+      "locale": "en",
+      "path": "main-invoice-DEMO-INV-000009-en.pdf",
+      "sha256": "f816d16e70dd0ac92bdbda7934451a493a8161beea0f8bf03108d3066cba5061"
+    },
+    {
+      "coverage": {
+        "pages": 6,
+        "rows": 79
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "1a33ef87-735d-4dad-a6f4-e10cb62f4bf3",
+      "number": "DEMO-RCPT-000023",
+      "locale": "fr",
+      "path": "main-receipt-DEMO-RCPT-000023-fr.pdf",
+      "sha256": "13770229de6aedd335c071bcc0ca660c46a4c67172fd7e0250a3a3d9f07b1f26"
+    },
+    {
+      "coverage": {
+        "pages": 6,
+        "rows": 79
+      },
+      "headings": {
+        "headingRows": 30,
+        "continuedRows": 9
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "1a33ef87-735d-4dad-a6f4-e10cb62f4bf3",
+      "number": "DEMO-RCPT-000023",
+      "locale": "en",
+      "path": "main-receipt-DEMO-RCPT-000023-en.pdf",
+      "sha256": "e1f0d458dcfedf7a4e40c5a06f67cf15665ae82c40efeadab01e1b349cb89a14"
+    }
+  ]
+}

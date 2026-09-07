@@ -1,0 +1,8 @@
+{
+  "complete": true,
+  "persistentProcessesAlive": true,
+  "listenerAndPaymentWorkerSecretMatch": true,
+  "listenerCLISecretConfirmed": true,
+  "stripeTestMode": true,
+  "secretsDisplayed": false
+}

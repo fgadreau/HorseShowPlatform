@@ -1,4 +1,5 @@
 // Real PostgreSQL disposable clone. No remote URLs, no persistent financial mutations.
+import {entryReviewFixture} from './entry-review-fixture.mjs';
 import {execFile,execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import assert from 'node:assert/strict';
@@ -20,9 +21,10 @@ mkdirSync('.tmp/hsp-direct',{recursive:true});
 let result={complete:false,realPostgres:true};
 try{
  docker(['createdb','-U','postgres',db]);created=true;
- sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
+ if(process.env.BILLING_REVIEW_BASELINE==='1')docker(['pg_restore','-U','supabase_admin','--dbname',db,'--exit-on-error'],{input:readFileSync('.tmp/review-v4/before-render-v4.dump'),stdio:['pipe','pipe','pipe']});
+ else sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
  const historical=sql("select coalesce(jsonb_agg(to_jsonb(d) order by id),'[]')::text from billing_documents d");
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql','20260907000500_billing_document_render_v3.sql']){
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql','20260907000500_billing_document_render_v3.sql','20260907000600_billing_entry_identity_v4.sql']){
   const version=file.split('_')[0];
   if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
  }
@@ -30,10 +32,33 @@ try{
  check(sql("select count(*) from billing_hsp_policies h join billing_contexts c on c.id=h.context_id where c.organization_id<>'fb300000-0000-0000-0000-000000000001'")==='0');
  execFileSync(process.execPath,['scripts/billing/hsp-fixture-local.mjs'],{env:{...process.env,HSP_FIXTURE_DB:db},stdio:['ignore','pipe','pipe']});
  const f=JSON.parse(readFileSync('.tmp/hsp-direct/sql-fixture.json'));
+ // Presentation identity checks in a real isolated PostgreSQL transaction.
+ const refs=entryReviewFixture(sql,f,{show:f.show});
+ const entryCustomer=sql(auth+`select billing_get_customer_account('${f.org}','${refs.riders[0]}');`);
+ const es={context_id:f.context,payer_customer_account_id:entryCustomer,product_id:f.products[0].id,quantity:1,source_id:randomUUID(),horse_id:f.horses[0]};
+ const eq=call('prepare_billing_operation_quote',quote(JSON.stringify(es))),ec={...es,quote_id:eq.quote_id},er=randomUUID();
+ const args=`'${er}',${quote(JSON.stringify(ec))},'${refs.classes[0]}','${refs.assignments[0]}','Matin / Morning','entry'`;
+ const invalid=`select add_documented_billing_entry_sale('${randomUUID()}',${quote(JSON.stringify(ec))},'${refs.classes[0]}','${refs.assignments[1]}','Matin','entry')`;
+ reject(invalid,'BILLING_ENTRY_REFERENCE_INVALID');
+ const outside=JSON.parse(readFileSync('.tmp/hsp-direct/fixture.json'));
+ reject(`select add_documented_billing_entry_sale('${randomUUID()}',${quote(JSON.stringify({...ec,context_id:outside.context,payer_customer_account_id:outside.customer}))},'${refs.classes[0]}','${refs.assignments[0]}','Matin','entry')`,'BILLING_ENTRY_REFERENCE_INVALID');
+ reject(`select add_documented_billing_entry_sale('${randomUUID()}',${quote(JSON.stringify({...ec,payer_customer_account_id:outside.customer}))},'${refs.classes[0]}','${refs.assignments[0]}','Matin','entry')`,'BILLING_ENTRY_REFERENCE_INVALID');
+ const linked=call('add_documented_billing_entry_sale',args);
+ check(linked.charge_id!=null);
+ check(JSON.stringify(linked)===JSON.stringify(call('add_documented_billing_entry_sale',args)));
+ reject(`select add_documented_billing_entry_sale(${args.replace("'Matin / Morning'","'Other occurrence'")})`,'BILLING_IDEMPOTENCY_CONFLICT');
+ const frozenIdentity=sql(`select identity::text from billing_charge_entry_identity where request_id='${er}'`);
+ const snapBefore=sql(`select billing_snapshot('${linked.account.folio_id}')->'charges'`);
+ sql(`update organization_back_numbers set number=1941 where id='${refs.assignments[0]}';update classes set name='Renamed after sale' where id='${refs.classes[0]}'`);
+ check(sql(`select identity::text from billing_charge_entry_identity where request_id='${er}'`)===frozenIdentity);
+ check(sql(`select billing_snapshot('${linked.account.folio_id}')->'charges'`)===snapBefore);
+ check(JSON.stringify(call('add_documented_billing_entry_sale',args))===JSON.stringify(linked));
+ // A separate payer keeps the financial regression starting balance unchanged.
+ const listing=JSON.parse(sql("set statement_timeout='3s';set role authenticated;set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';select list_my_billing_accounts(null,'{}',25,0);"));check(listing.items.length>0);
  const sale={context_id:f.context,payer_customer_account_id:f.customer,product_id:f.products[4].id,quantity:1,source_id:randomUUID()};
  const q=call('prepare_billing_operation_quote',quote(JSON.stringify(sale)));
  check(q.lines.length===2&&Number(q.total)===131.25);
- check(sql(`select count(*) from billing_folios where billing_context_id='${f.context}'`)==='0');
+ check(sql(`select count(*) from billing_folios where billing_context_id='${f.context}' and payer_customer_account_id='${f.customer}'`)==='0');
  reject(`select add_billing_sale('${randomUUID()}',${quote(JSON.stringify(sale))});`,'BILLING_QUOTE_REQUIRED');
  const command={...sale,quote_id:q.quote_id},id=randomUUID();
  const r=call('add_billing_sale',`'${id}',${quote(JSON.stringify(command))}`),folio=r.account.folio_id;
@@ -47,14 +72,14 @@ try{
  call('add_billing_sale',`'${randomUUID()}',${quote(JSON.stringify({...next,quote_id:q2.quote_id}))}`);
  check(sql(`select count(*) from billing_charges where folio_id='${folio}' and source_type='hsp_service'`)==='1');
  reject(`select add_billing_sale('${randomUUID()}',${quote(JSON.stringify({...next,quote_id:q2.quote_id}))});`,'BILLING_STALE_QUOTE');
- const report=call('get_billing_hsp_remittances',`'${f.context}'`);check(Number(report.rows[0].collected)===0&&report.settlement_supported===false);
+ const report=call('get_billing_hsp_remittances',`'${f.context}'`);check(Number(report.rows.find(r=>r.folio_id===folio).collected)===0&&report.settlement_supported===false);
  reject(`select billing_hsp_adopt('${f.context}','${f.products[7].id}','{}','fake');`,'permission denied');
  // Provider objects below are simulated; all financial transactions run in real PostgreSQL.
  sql(`set role service_role;select billing_stripe_configure_direct('${f.org}','acct_testplatform','acct_testdirect');`);
  const payer="set role authenticated;set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';";
  const begin=(amount)=>JSON.parse(sql(payer+`select begin_billing_stripe_attempt('${randomUUID()}','${folio}',${amount})`)).attempt_id;
  const first=begin(100);
- check(Number(call('get_billing_hsp_remittances',`'${f.context}'`).rows[0].reserved)===5.25);
+ check(Number(call('get_billing_hsp_remittances',`'${f.context}'`).rows.find(r=>r.folio_id===folio).reserved)===5.25);
  check(sql(`select charge_mode||':'||application_fee_amount from billing_stripe_attempts where id='${first}'`)==='direct:5.25');
  const pi={id:'pi_hspfirst',object:'payment_intent',livemode:false,status:'succeeded',currency:'cad',amount:10000,amount_received:10000,capture_method:'automatic',hsp_verified_account:'acct_testdirect',application_fee_amount:525};
  const observe=(id,obj)=>JSON.parse(sql(`set role service_role;select billing_stripe_observe('${id}','acct_testplatform',${quote(JSON.stringify(obj))})`));
@@ -65,11 +90,11 @@ try{
  sql(`set role service_role;select billing_hsp_confirm_fee('${first}',${quote(JSON.stringify(fee))});select billing_hsp_confirm_fee('${first}',${quote(JSON.stringify(fee))});`);
  check(sql(`select count(*) from billing_hsp_recoveries where folio_id='${folio}'`)==='1');
  observe(second,{...pi,id:'pi_hspsecond',amount:15725,amount_received:15725,application_fee_amount:0});
- const after=call('get_billing_hsp_remittances',`'${f.context}'`);check(Number(after.rows[0].collected)===5.25&&Number(after.rows[0].remaining)===0);
+ const after=call('get_billing_hsp_remittances',`'${f.context}'`);check(Number(after.rows.find(r=>r.folio_id===folio).collected)===5.25&&Number(after.rows.find(r=>r.folio_id===folio).remaining)===0);
  const statement=call('get_billing_statement',`'${randomUUID()}','${folio}'`);
  check(statement.document.snapshot.suppliers.hsp.tax_number_1==='DEMO-HSP-TAX');
  const invoice=call('finalize_billing_folio',`'${randomUUID()}','${folio}',${statement.account.version},'${statement.document_id}'`);
- check(invoice.document.snapshot.render_version===3);
+ check(invoice.document.snapshot.render_version===4);
  check(invoice.document.snapshot.payments.length===2&&invoice.document.snapshot.payments.every(p=>p.receipt_number));
  for(const p of invoice.document.snapshot.payments)check(sql(`select number from billing_documents where payment_id='${p.id}' and kind='receipt'`)===p.receipt_number);
  check(invoice.document.kind==='invoice'&&invoice.document.snapshot.charges.some(c=>c.supplier==='hsp'));

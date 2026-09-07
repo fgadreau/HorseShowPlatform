@@ -1,0 +1,127 @@
+{
+  "complete": true,
+  "syntheticSnapshots": true,
+  "realChromium": true,
+  "cases": [
+    {
+      "locale": "fr",
+      "kind": "invoice",
+      "long": false,
+      "continuations": 1,
+      "pages": 3,
+      "rows": 29,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "fr",
+      "kind": "invoice",
+      "long": true,
+      "continuations": 3,
+      "pages": 5,
+      "rows": 70,
+      "headingRows": 53,
+      "continuedRows": 35
+    },
+    {
+      "locale": "fr",
+      "kind": "statement",
+      "long": false,
+      "continuations": 2,
+      "pages": 3,
+      "rows": 28,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "fr",
+      "kind": "statement",
+      "long": true,
+      "continuations": 3,
+      "pages": 5,
+      "rows": 69,
+      "headingRows": 53,
+      "continuedRows": 35
+    },
+    {
+      "locale": "fr",
+      "kind": "receipt",
+      "long": false,
+      "continuations": 1,
+      "pages": 3,
+      "rows": 30,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "fr",
+      "kind": "receipt",
+      "long": true,
+      "continuations": 1,
+      "pages": 5,
+      "rows": 71,
+      "headingRows": 53,
+      "continuedRows": 17
+    },
+    {
+      "locale": "en",
+      "kind": "invoice",
+      "long": false,
+      "continuations": 1,
+      "pages": 3,
+      "rows": 29,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "en",
+      "kind": "invoice",
+      "long": true,
+      "continuations": 3,
+      "pages": 5,
+      "rows": 70,
+      "headingRows": 53,
+      "continuedRows": 35
+    },
+    {
+      "locale": "en",
+      "kind": "statement",
+      "long": false,
+      "continuations": 2,
+      "pages": 3,
+      "rows": 28,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "en",
+      "kind": "statement",
+      "long": true,
+      "continuations": 3,
+      "pages": 5,
+      "rows": 69,
+      "headingRows": 53,
+      "continuedRows": 35
+    },
+    {
+      "locale": "en",
+      "kind": "receipt",
+      "long": false,
+      "continuations": 1,
+      "pages": 3,
+      "rows": 30,
+      "headingRows": 13,
+      "continuedRows": 0
+    },
+    {
+      "locale": "en",
+      "kind": "receipt",
+      "long": true,
+      "continuations": 1,
+      "pages": 5,
+      "rows": 71,
+      "headingRows": 53,
+      "continuedRows": 17
+    }
+  ]
+}

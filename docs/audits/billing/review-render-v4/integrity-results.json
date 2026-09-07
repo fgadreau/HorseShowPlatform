@@ -1,0 +1,54 @@
+{
+  "complete": true,
+  "realLocalRPC": true,
+  "accountNumber": "DEMO-ACC-000015",
+  "folio": "c427fb80-8867-430d-aa7a-d6e4e7342097",
+  "invoice": "DEMO-INV-000009",
+  "groups": [
+    {
+      "number": 941,
+      "label": "Dossard 941 — Great Holly Whiz — DEMO — Morgan Cavalier DEMO",
+      "blocks": 4,
+      "entry": 1675,
+      "judge": 180,
+      "total": 1855
+    },
+    {
+      "number": 942,
+      "label": "Dossard 942 — Demo Silver Star — Camille Cavalier DEMO",
+      "blocks": 2,
+      "entry": 300,
+      "judge": 20,
+      "total": 320
+    },
+    {
+      "number": null,
+      "label": "Dossard non attribué — Demo Silver Star",
+      "blocks": 1,
+      "entry": 75,
+      "judge": 0,
+      "total": 75
+    }
+  ],
+  "registrationSubtotal": 2250,
+  "otherSections": {
+    "reservations": 120,
+    "other": 25,
+    "hsp": 5
+  },
+  "subtotal": 2400,
+  "taxes": 120,
+  "total": 2520,
+  "payments": [
+    200,
+    2320
+  ],
+  "balance": 0,
+  "invoiceFrozenBalance": 2320,
+  "listCount": 23,
+  "listMilliseconds": 1027,
+  "charges": 33,
+  "registrationCharges": 30,
+  "finalInvoices": 1,
+  "realStripePayments": 0
+}

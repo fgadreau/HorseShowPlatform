@@ -1,0 +1,7 @@
+{
+  "complete": true,
+  "realPostgres": true,
+  "providerObjects": "simulated",
+  "assertions": 49,
+  "expectedRejections": 9
+}

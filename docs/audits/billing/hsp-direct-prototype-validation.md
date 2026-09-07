@@ -163,3 +163,7 @@ Voir le [rapport mobile et documents du 7 septembre 2026](review-20260907/README
 ### Corrections après revue indépendante de 6009098
 
 Le [rapport du rendu 3](review-render-v3/README.md) remplace la qualification de pagination antérieure : toutes les lignes sont désormais vérifiées dans les PDF finaux, avec reproduction du défaut de stalle des anciens reçus. Il documente aussi l’encaissement autorisé après fermeture, les nouveaux exemples et la facture conservée à l’identique après règlement.
+
+### Présentation dossard → bloc → classes après revue de 92a23585
+
+Le [rapport du rendu 4](review-render-v4/README.md) documente les références métier figées, les totaux par classe/bloc/dossard, les nouveaux exemples FR/EN et les captures ordinateur/mobile. Les versions historiques restent inchangées. Le rapport distingue les tests synthétiques, la migration sur clone PostgreSQL et les parcours réellement exécutés sur la pile fictive persistante, y compris le chargement de Mes comptes et l’encaissement après fermeture.
