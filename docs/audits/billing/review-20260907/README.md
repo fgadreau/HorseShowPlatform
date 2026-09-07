@@ -1,5 +1,7 @@
 # Revue mobile et documents — 7 septembre 2026
 
+> **Correction issue de la revue indépendante :** les reçus `DEMO-RCPT-000015` FR/EN ci-dessous perdent une ligne de stalle à la coupure de page. Les 204 contrôles de cette première revue ne vérifiaient pas toutes les lignes. Ces PDF historiques restent conservés sans écrasement. Consulter le [rapport du rendu 3 et les nouveaux exemples](../review-render-v3/README.md) pour la correction et les contrôles exhaustifs.
+
 Corrections de présentation livrées sur `feat/billing-hsp-direct-prototype`, à partir de `4c836abf5c6a9083f3676285c487678469008d8b`. Worktree persistant : `/workspaces/HorseShowPlatform/.worktrees/billing-hsp-direct`.
 
 ## Exemples pour revue

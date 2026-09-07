@@ -22,7 +22,7 @@ try{
  docker(['createdb','-U','postgres',db]);created=true;
  sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
  const historical=sql("select coalesce(jsonb_agg(to_jsonb(d) order by id),'[]')::text from billing_documents d");
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql']){
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql','20260907000500_billing_document_render_v3.sql']){
   const version=file.split('_')[0];
   if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
  }
@@ -69,7 +69,7 @@ try{
  const statement=call('get_billing_statement',`'${randomUUID()}','${folio}'`);
  check(statement.document.snapshot.suppliers.hsp.tax_number_1==='DEMO-HSP-TAX');
  const invoice=call('finalize_billing_folio',`'${randomUUID()}','${folio}',${statement.account.version},'${statement.document_id}'`);
- check(invoice.document.snapshot.render_version===2);
+ check(invoice.document.snapshot.render_version===3);
  check(invoice.document.snapshot.payments.length===2&&invoice.document.snapshot.payments.every(p=>p.receipt_number));
  for(const p of invoice.document.snapshot.payments)check(sql(`select number from billing_documents where payment_id='${p.id}' and kind='receipt'`)===p.receipt_number);
  check(invoice.document.kind==='invoice'&&invoice.document.snapshot.charges.some(c=>c.supplier==='hsp'));
@@ -98,9 +98,16 @@ try{
  check(sql(`select count(*) from billing_folios where payer_customer_account_id='${customer3}'`)==='0');
  const mr=call('add_billing_sale',`'${randomUUID()}',${quote(JSON.stringify({...manualSale,quote_id:mq.quote_id}))}`),mf=mr.account.folio_id;
  const allocations=mr.account.charges.map(c=>({charge_id:c.id,amount:c.total}));
- const paymentId=randomUUID(),payment={folio_id:mf,version:mr.account.version,received_at:new Date().toISOString(),confirmed:true,amount:131.25,method:'cash',reference:'DEMO manual',allocations};
+ const unpaidRecap=call('get_billing_statement',`'${randomUUID()}','${mf}'`);
+ const unpaidInvoice=call('finalize_billing_folio',`'${randomUUID()}','${mf}',${unpaidRecap.account.version},'${unpaidRecap.document_id}'`);
+ const frozenInvoice=JSON.stringify(unpaidInvoice.document);
+ const closedDetail=call('billing_ui_detail',`'${mf}',false`);
+ check(closedDetail.state==='closed'&&closedDetail.actions.payment&&Number(closedDetail.stripe.available)===131.25);
+ const paymentId=randomUUID(),payment={folio_id:mf,version:unpaidInvoice.account.version,received_at:new Date().toISOString(),confirmed:true,amount:131.25,method:'cash',reference:'DEMO manual',allocations};
  const paidManual=call('record_billing_payment',`'${paymentId}',${quote(JSON.stringify(payment))}`);
  check(JSON.stringify(paidManual)===JSON.stringify(call('record_billing_payment',`'${paymentId}',${quote(JSON.stringify(payment))}`)));
+ check(JSON.stringify(call('billing_ui_detail',`'${mf}',false`).documents.find(d=>d.kind==='invoice'))===frozenInvoice);
+ check(Number(call('billing_ui_detail',`'${mf}',false`).stripe.available)===0);
  const ms=call('get_billing_statement',`'${randomUUID()}','${mf}'`);
  const mi=call('finalize_billing_folio',`'${randomUUID()}','${mf}',${ms.account.version},'${ms.document_id}'`);
  check(Number(mi.account.balance)===0&&mi.account.charges.length===2);

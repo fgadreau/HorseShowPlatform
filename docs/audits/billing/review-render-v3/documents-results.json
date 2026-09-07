@@ -1,0 +1,140 @@
+{
+  "complete": true,
+  "realLocalRPC": true,
+  "realStorageHTTP": true,
+  "manualPaymentsSimulated": true,
+  "newStripePayments": 0,
+  "denied": 5,
+  "files": [
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 26
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "370e11ec-2d19-42fb-9f76-300e41eba39b",
+      "number": "DEMO-RCPT-000019",
+      "locale": "fr",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000019-fr.pdf",
+      "sha256": "d91cbd5017b216ca3bfdb4b67876f2b8b67de5ec433fcc947686d1af83a820bd"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 26
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "370e11ec-2d19-42fb-9f76-300e41eba39b",
+      "number": "DEMO-RCPT-000019",
+      "locale": "en",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000019-en.pdf",
+      "sha256": "a8880216369b9373a8cf979ad3087c23d01c78fe8dbf1cd889f2522e1325d1f8"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 21
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "3affe861-b00c-46c3-95af-735bd0ecb908",
+      "number": null,
+      "locale": "fr",
+      "path": ".tmp/review-v3/pdf/main-statement-3affe861-b00c-46c3-95af-735bd0ecb908-fr.pdf",
+      "sha256": "7cd24cc7d3fb9dcb21d59149c88eb3edcf4de3122ce76831a344571f2464ba89"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 21
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "3affe861-b00c-46c3-95af-735bd0ecb908",
+      "number": null,
+      "locale": "en",
+      "path": ".tmp/review-v3/pdf/main-statement-3affe861-b00c-46c3-95af-735bd0ecb908-en.pdf",
+      "sha256": "6044a07c27387ed5f67a2533a1cb4887a4008a49b9b67c7817bc9ed45443d845"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 22
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "6db4a1f2-627b-4ba8-9264-53426155eea8",
+      "number": "DEMO-INV-000008",
+      "locale": "fr",
+      "path": ".tmp/review-v3/pdf/main-invoice-DEMO-INV-000008-fr.pdf",
+      "sha256": "1bf22f0d1856235793e42e0f0e2123943e1e5d29ed058fdfcfa97e1597cdaf39"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 22
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "6db4a1f2-627b-4ba8-9264-53426155eea8",
+      "number": "DEMO-INV-000008",
+      "locale": "en",
+      "path": ".tmp/review-v3/pdf/main-invoice-DEMO-INV-000008-en.pdf",
+      "sha256": "96411e90aa81fa7cbae38b044c2893529faf2e2087933e4f306aac5f52534eb8"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 24
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "6e54f156-09b0-46a7-98b1-8f53cf6a906c",
+      "number": "DEMO-RCPT-000020",
+      "locale": "fr",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000020-fr.pdf",
+      "sha256": "e0db26b1c275f2466fff0230d8aec31defd40764368ed377d03ef9d316a744bb"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 24
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "6e54f156-09b0-46a7-98b1-8f53cf6a906c",
+      "number": "DEMO-RCPT-000020",
+      "locale": "en",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000020-en.pdf",
+      "sha256": "3c8c06c635ca8944ec84fbc5bbca995202cb57dd9b77d7570e8aeed87dc435cb"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 26
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "82dd7571-cc69-48be-b030-3b4e3fffe6d6",
+      "number": "DEMO-RCPT-000021",
+      "locale": "fr",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000021-fr.pdf",
+      "sha256": "8a9423ef470a3ccf67a13e0e8a373a4ee6472f0c3c1bcc24bd13da4c3f9dba25"
+    },
+    {
+      "coverage": {
+        "pages": 2,
+        "rows": 26
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "82dd7571-cc69-48be-b030-3b4e3fffe6d6",
+      "number": "DEMO-RCPT-000021",
+      "locale": "en",
+      "path": ".tmp/review-v3/pdf/main-receipt-DEMO-RCPT-000021-en.pdf",
+      "sha256": "913f0984467b341017d53e40d7cfe004506fe2d4138a93f42bf0b9f2ee066ca0"
+    }
+  ]
+}

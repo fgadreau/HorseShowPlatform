@@ -1,0 +1,95 @@
+{
+  "complete": true,
+  "realChromium": true,
+  "syntheticVariants": true,
+  "historicalFailures": [
+    "fr: historical stall row absent",
+    "en: historical stall row absent"
+  ],
+  "cases": [
+    {
+      "locale": "fr",
+      "extra": 0,
+      "pages": 2,
+      "rows": 26
+    },
+    {
+      "locale": "fr",
+      "extra": 1,
+      "pages": 2,
+      "rows": 27
+    },
+    {
+      "locale": "fr",
+      "extra": 5,
+      "pages": 3,
+      "rows": 31
+    },
+    {
+      "locale": "fr",
+      "extra": 17,
+      "pages": 3,
+      "rows": 43
+    },
+    {
+      "locale": "fr",
+      "extra": 45,
+      "pages": 4,
+      "rows": 71
+    },
+    {
+      "locale": "fr",
+      "kind": "statement",
+      "pages": 2,
+      "rows": 26
+    },
+    {
+      "locale": "fr",
+      "kind": "invoice",
+      "pages": 4,
+      "rows": 66
+    },
+    {
+      "locale": "en",
+      "extra": 0,
+      "pages": 2,
+      "rows": 26
+    },
+    {
+      "locale": "en",
+      "extra": 1,
+      "pages": 2,
+      "rows": 27
+    },
+    {
+      "locale": "en",
+      "extra": 5,
+      "pages": 3,
+      "rows": 31
+    },
+    {
+      "locale": "en",
+      "extra": 17,
+      "pages": 3,
+      "rows": 43
+    },
+    {
+      "locale": "en",
+      "extra": 45,
+      "pages": 4,
+      "rows": 71
+    },
+    {
+      "locale": "en",
+      "kind": "statement",
+      "pages": 2,
+      "rows": 26
+    },
+    {
+      "locale": "en",
+      "kind": "invoice",
+      "pages": 4,
+      "rows": 66
+    }
+  ]
+}

@@ -159,3 +159,7 @@ Aucune fusion, aucun déploiement, aucune migration distante, aucune modificatio
 ## Reprise après arrêt de Codespaces — corrections de revue
 
 Voir le [rapport mobile et documents du 7 septembre 2026](review-20260907/README.md), avec exemples PDF FR/EN et captures versionnés. Le rendu 2 est réservé aux nouveaux documents ; les pièces historiques restent conservées. Le rapport distingue les tests simulés, les vérifications réellement exécutées sur la pile fictive, la lecture Stripe sandbox des paiements existants et les incidents de qualification.
+
+### Corrections après revue indépendante de 6009098
+
+Le [rapport du rendu 3](review-render-v3/README.md) remplace la qualification de pagination antérieure : toutes les lignes sont désormais vérifiées dans les PDF finaux, avec reproduction du défaut de stalle des anciens reçus. Il documente aussi l’encaissement autorisé après fermeture, les nouveaux exemples et la facture conservée à l’identique après règlement.

@@ -1,0 +1,456 @@
+{
+  "id": "fd46f848-3320-4244-b4dc-e75aca40af19",
+  "kind": "receipt",
+  "number": "DEMO-RCPT-000015",
+  "currency": "CAD",
+  "folio_id": "070dabed-c1be-4f5e-8ef4-b12bc7482945",
+  "snapshot": {
+    "payer": {
+      "city": null,
+      "email": null,
+      "phone": null,
+      "state": null,
+      "address": "123 rue Exemple — données fictives",
+      "country": null,
+      "zip_code": null,
+      "last_name": "Démonstration",
+      "contact_id": "fb600000-0000-0000-0000-000000000001",
+      "first_name": "Alex",
+      "middle_name": null,
+      "company_name": "Entreprise entièrement fictive",
+      "address_line2": null,
+      "tax_identifiers": null,
+      "customer_account_id": "7e066133-0d07-4764-abe2-e102acf974a3"
+    },
+    "state": "open",
+    "total": 498.75,
+    "seller": {
+      "city": null,
+      "name": "HSP DÉMONSTRATION — sans valeur comptable ou fiscale",
+      "email": null,
+      "phone": null,
+      "state": null,
+      "address": null,
+      "country": null,
+      "zip_code": null,
+      "tax_name_1": null,
+      "tax_name_2": null,
+      "billing_name": null,
+      "tax_number_1": null,
+      "tax_number_2": null,
+      "address_line2": null,
+      "organization_id": "fb300000-0000-0000-0000-000000000001"
+    },
+    "balance": 298.75,
+    "charges": [
+      {
+        "id": "beedfb4a-5fb8-4100-b3bc-f49651e6bd7e",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.529521+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "12",
+          "class_id": "Open L4",
+          "fee_kind": "entry",
+          "block_label": "Bloc 12 — DEMO",
+          "class_label": "Open L4",
+          "occurrence_id": "DEMO-SESSION-A"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "30f88671-673d-469c-8b5d-b79e28c59b49",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 5,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 0.25,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 5.25,
+        "category": "other",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 5,
+        "supplier": "hsp",
+        "created_at": "2026-09-07T21:08:58.531724+00:00",
+        "tax_amount": 0.25,
+        "unit_price": 5,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Frais de service HSP",
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "68711583-f117-4245-a637-b811ca3f9b80",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 75,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 3.75,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 78.75,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 75,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.623451+00:00",
+        "tax_amount": 3.75,
+        "unit_price": 75,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L2",
+        "presentation": {
+          "section": "entry",
+          "block_id": "12",
+          "class_id": "Open L2",
+          "fee_kind": "entry",
+          "block_label": "Bloc 12 — DEMO",
+          "class_label": "Open L2",
+          "occurrence_id": "DEMO-SESSION-A"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "523b5935-5381-4bc9-a2ac-1566ac5f455d",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.685797+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "12",
+          "class_id": "Open L4",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc 12 — DEMO",
+          "class_label": "Open L4",
+          "occurrence_id": "DEMO-SESSION-A"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ba360b61-89a7-4e6c-b492-3f942053bfdd",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.760091+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "13",
+          "class_id": "Open L4",
+          "fee_kind": "entry",
+          "block_label": "Bloc 13 — DEMO",
+          "class_label": "Open L4",
+          "occurrence_id": "DEMO-SESSION-A"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "d6a63e4f-3a12-49fa-bdf7-8ecf92c1fe8a",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 30,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1.5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 31.5,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 30,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.820704+00:00",
+        "tax_amount": 1.5,
+        "unit_price": 30,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs du bloc",
+        "presentation": {
+          "section": "entry",
+          "block_id": "13",
+          "fee_kind": "judge_block",
+          "block_label": "Bloc 13 — DEMO",
+          "occurrence_id": "DEMO-SESSION-A"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "6fa39fcd-6fc9-4106-9657-6a2b828862b7",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 120,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 6,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 126,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 120,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.877735+00:00",
+        "tax_amount": 6,
+        "unit_price": 120,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Stalle simulée",
+        "presentation": {
+          "period": "7–9 septembre / September 2026",
+          "section": "reservation",
+          "duration": "3 nuits / nights",
+          "reservation_id": "REVIEW-STALL"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ad73cc32-9bfc-4df3-9bd2-877d56f348a9",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 25,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1.25,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 26.25,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 25,
+        "supplier": "association",
+        "created_at": "2026-09-07T21:08:58.929304+00:00",
+        "tax_amount": 1.25,
+        "unit_price": 25,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Casquette fictive",
+        "presentation": {
+          "section": "other"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      }
+    ],
+    "context": {
+      "id": "dd8ccb6e-1a12-44ee-9171-4212d1679ec5",
+      "kind": "event",
+      "period": null,
+      "name_en": "Fictitious show — render 2 review · main",
+      "name_fr": "Concours fictif — revue rendu 2 · main",
+      "show_id": "259d9196-7c36-4654-b921-2a44b5e8e56f",
+      "year_basis": "show_start",
+      "financial_year": 2026
+    },
+    "mandate": "DEMO mandate — unvalidated tax prototype",
+    "currency": "CAD",
+    "folio_id": "070dabed-c1be-4f5e-8ef4-b12bc7482945",
+    "payments": [
+      {
+        "id": "7fe0f10d-eb3d-48e9-a394-38554ef83b62",
+        "amount": 200,
+        "method": "etransfer",
+        "currency": "CAD",
+        "reference": "DEMO revue 259d9196-7c36-4654-b921-2a44b5e8e56f 0",
+        "allocations": [
+          {
+            "amount": 5.25,
+            "charge_id": "30f88671-673d-469c-8b5d-b79e28c59b49"
+          },
+          {
+            "amount": 11,
+            "charge_id": "523b5935-5381-4bc9-a2ac-1566ac5f455d"
+          },
+          {
+            "amount": 78.75,
+            "charge_id": "68711583-f117-4245-a637-b811ca3f9b80"
+          },
+          {
+            "amount": 105,
+            "charge_id": "beedfb4a-5fb8-4100-b3bc-f49651e6bd7e"
+          }
+        ],
+        "received_at": "2026-09-07T21:10:10.03+00:00",
+        "receipt_number": "DEMO-RCPT-000015"
+      }
+    ],
+    "received": 200,
+    "subtotal": 475,
+    "issued_at": "2026-09-07T21:10:10.09843+00:00",
+    "suppliers": {
+      "hsp": {
+        "demo": true,
+        "name": "HSP DEMO",
+        "address": "2 rue Fictive",
+        "tax_number_1": "DEMO-HSP-TAX"
+      },
+      "association": {
+        "demo": true,
+        "name": "Association DEMO",
+        "address": "1 rue Fictive",
+        "tax_number_1": "DEMO-ASSO-TAX"
+      }
+    },
+    "payment_id": "7fe0f10d-eb3d-48e9-a394-38554ef83b62",
+    "tax_amount": 23.75,
+    "account_number": "DEMO-ACC-000012",
+    "render_version": 2,
+    "receipt_payment": {
+      "id": "7fe0f10d-eb3d-48e9-a394-38554ef83b62",
+      "amount": 200,
+      "method": "etransfer",
+      "currency": "CAD",
+      "reference": "DEMO revue 259d9196-7c36-4654-b921-2a44b5e8e56f 0",
+      "allocations": [
+        {
+          "amount": 5.25,
+          "charge_id": "30f88671-673d-469c-8b5d-b79e28c59b49"
+        },
+        {
+          "amount": 11,
+          "charge_id": "523b5935-5381-4bc9-a2ac-1566ac5f455d"
+        },
+        {
+          "amount": 78.75,
+          "charge_id": "68711583-f117-4245-a637-b811ca3f9b80"
+        },
+        {
+          "amount": 105,
+          "charge_id": "beedfb4a-5fb8-4100-b3bc-f49651e6bd7e"
+        }
+      ],
+      "received_at": "2026-09-07T21:10:10.03+00:00",
+      "receipt_number": "DEMO-RCPT-000015"
+    }
+  },
+  "created_at": "2026-09-07T21:10:10.098506+00:00",
+  "payment_id": "7fe0f10d-eb3d-48e9-a394-38554ef83b62",
+  "organization_id": "fb300000-0000-0000-0000-000000000001"
+}
