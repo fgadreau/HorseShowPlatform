@@ -45,3 +45,37 @@ Tests exécutés : `node --test scripts/billing/onboarding.test.mjs` (2 tests r�
 Écran Stripe réellement observé : « Get started with Stripe », compte de test, demande d’adresse courriel, possibilité affichée de réutiliser le courriel d’un utilisateur Stripe existant. Aucun `/no_access/`. Test arrêté avant saisie de courriel, création/authentification d’identité Stripe, ou acceptation. Le propriétaire doit continuer personnellement avec un courriel contrôlé et effectuer la vérification/connexion demandée par Stripe. Le lien est attaché au compte existant, pas un nouvel appel de création Connect. L’activation finale reste à constater par lecture serveur après ce parcours.
 
 Références : [Stripe — onboarding hébergé](https://docs.stripe.com/connect/hosted-onboarding), [onboarding des comptes Standard](https://docs.stripe.com/connect/standard-accounts). Captures locales ignorées : `.tmp/hsp-direct/onboarding-hsp.png`, `.tmp/hsp-direct/onboarding-stripe.png`. Aucun secret publié ; aucun paiement ni migration dans ce lot.
+
+## Reprise intégrée après onboarding — 7 septembre 2026
+
+État réellement relu : `charges_enabled=true`, capacité `card_payments=active`, `transfers=active`, courriel présent. Les versements restent désactivés avec une exigence de vérification d’identité (`proof_of_liveness`). Aucune identité, acceptation ou responsabilité modifiée par HSP. Les essais ci-dessous sont des paiements de sandbox, sans argent réel ; ils ne qualifient pas les versements bancaires.
+
+### Préparation effectivement appliquée
+
+`node scripts/billing/hsp-prepare-local.mjs` : identité Docker Unix et projet `hsp-vet-local` vérifiés, utilisateurs exclusivement `@example.test`, marqueurs fictifs présents, socle documentaire 1C présent. Sauvegarde locale ignorée créée avant application des seules migrations `20260907000100` et `20260907000200`. Empreintes des tables historiques métier et des comptes, frais, paiements et documents financiers inchangées. Aucun reset.
+
+`node scripts/billing/hsp-fixture-local.mjs` : nouvelle association fictive uniquement ; rattachement au compte sandbox existant, sans création ni reconfiguration Connect. Les clones de test utilisent désormais des UUID et un fichier de résultats séparés des fixtures persistantes.
+
+Les seuls anciens processus locaux paiement, documents et listener ont été remplacés par cette version. Base et interfaces existantes conservées. Listener plateforme **et Connect**, comparaison effective de son secret de signature : `WEBHOOK_SECRET_MATCH_CONFIRMED`. Les valeurs restent dans les configurations locales ignorées.
+
+### Parcours principal réellement exécuté
+
+Compte `34a3095d-c747-420b-8fc7-decd650089b7`, `DEMO-ACC-000001` : sept ventes structurées fictives (classes, juges, deux chevaux/blocs, stalle simulée, casquette), plus l’unique frais HSP. Devis préparés puis commandes confirmées via RPC autorisées : 498,75 CAD. Aucun raccordement métier réel.
+
+- Navigateur réel, Payment Element dans le compte connecté : paiement de 200 CAD, puis vérification serveur. Un encaissement et un reçu ; compte ouvert.
+- Ajout de 10 CAD HT fictifs depuis l’interface secrétaire, avec confirmation du devis : total 509,25 CAD ; toujours un seul frais HSP.
+- Second paiement réel **Stripe sandbox** de 309,25 CAD via Payment Element. Crédit brut cumulé au participant : 509,25 CAD.
+- Lecture réelle des deux PaymentIntents, charges, application fee et transactions de solde dans leur compte connecté : application fee de 5,25 CAD sur le premier, zéro sur le second. Frais Stripe observés sur le solde de l’association : 7,70 CAD et 11,74 CAD dans ce sandbox ; ces observations ne constituent pas une tarification commerciale validée.
+- Interface secrétaire : attestation accordée. Interface Mes comptes : récapitulatif confirmé, finalisation autonome réussie. Compte fermé, solde zéro, deux encaissements, deux reçus, **une seule facture `DEMO-INV-000001`**.
+- Worker réel, téléversement réel dans le bucket Supabase Storage privé : deux relevés (dont le récapitulatif), deux reçus et une facture, chacun FR/EN. Dix téléchargements HTTP PDF réussis. Dix refus de téléchargement par d’autres identités/périmètres et dix refus d’accès direct au bucket.
+
+Commandes (variables chargées depuis le fichier local ignoré existant, jamais publié) : `hsp-integrated.mjs charges`, `hsp-browser.mjs pay 200`, `hsp-browser.mjs admin-extra`, `hsp-browser.mjs pay 309.25`, `hsp-provider-check.mjs`, `hsp-browser.mjs admin-ready`, `hsp-browser.mjs finalize`, `hsp-integrated.mjs check`, `hsp-documents-local.mjs`, dans `scripts/billing/`, avec Node. Captures et PDF dans `.tmp/hsp-direct/`, exclus de Git et de Vite.
+
+### Contrôles ciblés réellement exécutés
+
+- `node scripts/billing/hsp-server-test.mjs` : **31 assertions, 5 rejets attendus**, clone local jetable supprimé ; objets fournisseur simulés. Inclut deux sessions PostgreSQL concurrentes sur deux premiers devis : une vente accepte, l’autre exige un devis actualisé sans nouveau frais HSP ; poursuite réussie. Inclut devis abandonné sans compte, réservation seule payée comptant, réponse rejouée sans doublon, fermeture à zéro et somme HSP encaissée restant à reverser de 5,25 CAD.
+- `node scripts/billing/hsp-pdf-test.mjs` : six PDF synthétiques FR/EN à deux fournisseurs, **84 assertions**, Chromium réel ; relevés/reçus sur deux pages, factures longues sur quatre pages. Aucun transport Storage dans ce test distinct.
+- `node --test scripts/billing/stripe-service.test.mjs` : fichier de tests réussi, fournisseur simulé, deux scénarios supplémentaires direct charges. Le runner rapporte un fichier de test, pas un nouveau décompte d’assertions SQL. Une suspension des nouveaux paiements ne bloque plus la lecture d’un PaymentIntent déjà associé et l’enregistrement de sa preuve de confirmation ; création nouvelle toujours refusée si paiements suspendus.
+- `npm run build` : réussi, avertissement de taille de chunks ; `node --check` et `git diff --check` réussis.
+
+**Qualification encore partielle.** Le parcours nominal prouve désormais Stripe test et Storage réels pour cette version. Les cas intégrés directs de refus/3DS/annulation/reprises, l’inspection visuelle finale, les règles de répartition des très petits encaissements et la revalidation complète des régressions restent à compléter. Aucun résultat ancien destination charges n’est compté comme preuve d’un nouveau scénario direct. Aucun reversement hors Stripe automatisé, remboursement commercial, abonnement, migration distante ou déploiement.

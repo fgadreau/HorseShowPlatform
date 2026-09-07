@@ -28,3 +28,35 @@ test('event failure remains retryable; replay fetches current provider state',as
  const stripe=async path=>{if(path==='/account')return {id:'acct_platform'};if(path.startsWith('/accounts'))return {id:'acct_connected',type:'express',charges_enabled:true};if(fail)throw Error('BILLING_PROVIDER_RETRY');return {id:'pi_mock',status:'succeeded'};};
  const service=createPaymentService({admin,stripe,config});await service.drain();assert.equal(calls.at(-1).args.p_error,'BILLING_PROVIDER_RETRY');fail=false;await service.drain();assert.equal(calls.at(-1).args.p_error,null);assert(calls.some(c=>c.n==='billing_stripe_observe'));
 });
+
+test('direct charge: frozen account, application fee and gross credit survive disabled new payments',async()=>{
+ const calls=[],a={id:'direct',charge_mode:'direct',application_fee_amount:5.25,platform_account:'acct_platform',connected_account:'acct_direct',provider_id:'pi_direct',amount:100,currency:'CAD',created_at:new Date().toISOString()};
+ const admin={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:'succeeded',receipt_id:'receipt'}:{}};}};
+ const stripe=async(path,params,key,account)=>{
+  calls.push({path,account});
+  if(path==='/account')return {id:'acct_platform'};
+  if(path==='/accounts/acct_direct')return {id:'acct_direct',charges_enabled:false,controller:{fees:{payer:'account'},losses:{payments:'stripe'}}};
+  if(path==='/payment_intents/pi_direct'){assert.equal(account,'acct_direct');return {id:'pi_direct',status:'succeeded',latest_charge:'ch_direct',amount:10000,amount_received:10000};}
+  if(path==='/charges/ch_direct'){assert.equal(account,'acct_direct');return {id:'ch_direct',payment_intent:'pi_direct',livemode:false,application_fee:'fee_direct',amount_refunded:0};}
+  if(path==='/application_fees/fee_direct'){assert.equal(account,undefined);return {id:'fee_direct',charge:'ch_direct'};}
+  throw Error('Unexpected provider call');
+ };
+ const r=await createPaymentService({admin,stripe,config}).sync(a.id);
+ assert.equal(r.state,'succeeded');assert.equal(r.client_secret,undefined);
+ assert.equal(calls.find(x=>x.n==='billing_stripe_observe').args.p_object.amount_received,10000);
+ assert.equal(calls.find(x=>x.n==='billing_stripe_observe').args.p_object.hsp_verified_account,'acct_direct');
+ assert.equal(calls.filter(x=>x.n==='billing_hsp_confirm_fee').length,1);
+});
+
+test('direct PaymentIntent creates in connected scope, no destination transfer, stable provider key',async()=>{
+ const a={id:'new_direct',charge_mode:'direct',application_fee_amount:5.25,platform_account:'acct_platform',connected_account:'acct_direct',amount:100,currency:'CAD',created_at:new Date().toISOString()};let posts=0;
+ const admin={rpc:async(n,args)=>({data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:args.p_object.status}:{}})};
+ const stripe=async(path,params,key,account)=>{
+  if(path==='/account')return {id:'acct_platform'};
+  if(path==='/accounts/acct_direct')return {id:'acct_direct',charges_enabled:true,controller:{fees:{payer:'account'},losses:{payments:'stripe'}}};
+  assert.equal(path,'/payment_intents');assert.equal(account,'acct_direct');assert.equal(key,'hsp-test-new_direct');
+  assert.equal(params.application_fee_amount,'525');assert.equal(params.amount,'10000');assert.equal(params['transfer_data[destination]'],undefined);posts++;
+  return {id:'pi_new',status:'requires_payment_method',client_secret:'test_placeholder'};
+ };
+ const service=createPaymentService({admin,stripe,config});await service.sync(a.id);await service.sync(a.id);assert.equal(posts,2);
+});

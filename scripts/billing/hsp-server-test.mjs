@@ -1,8 +1,9 @@
 // Real PostgreSQL disposable clone. No remote URLs, no persistent financial mutations.
-import {execFileSync} from 'node:child_process';
+import {execFile,execFileSync} from 'node:child_process';
 import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import assert from 'node:assert/strict';
 import {randomUUID} from 'node:crypto';
+import {promisify} from 'node:util';
 assert.equal(process.argv.length,2);
 assert(!process.env.DOCKER_HOST||process.env.DOCKER_HOST.startsWith('unix://'));
 assert(execFileSync('docker',['context','inspect','--format','{{.Endpoints.docker.Host}}'],{encoding:'utf8'}).trim().startsWith('unix://'));
@@ -20,10 +21,13 @@ let result={complete:false,realPostgres:true};
 try{
  docker(['createdb','-U','postgres',db]);created=true;
  sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql'])sql(readFileSync('supabase/migrations/'+file,'utf8'));
- check(sql('select count(*) from billing_hsp_policies')==='0');
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql']){
+  const version=file.split('_')[0];
+  if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
+ }
+ check(sql("select count(*) from billing_hsp_policies h join billing_contexts c on c.id=h.context_id where c.organization_id<>'fb300000-0000-0000-0000-000000000001'")==='0');
  execFileSync(process.execPath,['scripts/billing/hsp-fixture-local.mjs'],{env:{...process.env,HSP_FIXTURE_DB:db},stdio:['ignore','pipe','pipe']});
- const f=JSON.parse(readFileSync('.tmp/hsp-direct/fixture.json'));
+ const f=JSON.parse(readFileSync('.tmp/hsp-direct/sql-fixture.json'));
  const sale={context_id:f.context,payer_customer_account_id:f.customer,product_id:f.products[4].id,quantity:1,source_id:randomUUID()};
  const q=call('prepare_billing_operation_quote',quote(JSON.stringify(sale)));
  check(q.lines.length===2&&Number(q.total)===131.25);
@@ -67,6 +71,35 @@ try{
  check(sql(`select count(*) from billing_provider_anomalies where folio_id='${folio}'`)==='1');
  check(sql(`select state from billing_folios where id='${folio}'`)==='closed');
  check(sql(`select count(*) from billing_documents where folio_id='${folio}' and kind='invoice'`)==='1');
+ // Two real independent PostgreSQL sessions race on the first billable operation.
+ const newCustomer=tail=>{
+  const contact=`fc600000-0000-0000-0000-00000000000${tail}`;
+  sql(`insert into contacts(id,type,first_name,last_name) values('${contact}','owner','Concurrent','DEMO ${tail}');insert into directory_contacts(organization_discipline_id,contact_id) values('fc700000-0000-0000-0000-000000000001','${contact}');`);
+  return sql(auth+`select billing_get_customer_account('${f.org}','${contact}')`);
+ };
+ const customer2=newCustomer(2),raceSale={...sale,payer_customer_account_id:customer2},raceCommands=[];
+ for(let i=0;i<2;i++){const cmd={...raceSale,source_id:randomUUID()};const q=call('prepare_billing_operation_quote',quote(JSON.stringify(cmd)));raceCommands.push({...cmd,quote_id:q.quote_id});}
+ const concurrent=cmd=>promisify(execFile)('docker',['exec','-i',container,'psql','-X','-U','supabase_admin','-d',db,'-Atq','-v','ON_ERROR_STOP=1','-c',auth+`select add_billing_sale('${randomUUID()}',${quote(JSON.stringify(cmd))})`]);
+ const race=await Promise.allSettled(raceCommands.map(concurrent));
+ check(race.filter(x=>x.status==='fulfilled').length===1);check(race.filter(x=>x.status==='rejected'&&String(x.reason.stderr).includes('BILLING_STALE_QUOTE')).length===1);rejections++;
+ const lost=race.findIndex(x=>x.status==='rejected'),retrySale={...raceCommands[lost]};delete retrySale.quote_id;
+ const fresh=call('prepare_billing_operation_quote',quote(JSON.stringify(retrySale)));check(fresh.lines.length===1);
+ const retryResult=call('add_billing_sale',`'${randomUUID()}',${quote(JSON.stringify({...retrySale,quote_id:fresh.quote_id}))}`);
+ check(retryResult.account.charges.filter(x=>x.supplier==='hsp').length===1);check(retryResult.account.charges.length===3);
+ // An abandoned preview does not create an account or an HSP assessment.
+ const customer3=newCustomer(3),manualSale={...sale,payer_customer_account_id:customer3,source_id:randomUUID()};
+ const mq=call('prepare_billing_operation_quote',quote(JSON.stringify(manualSale)));
+ check(sql(`select count(*) from billing_folios where payer_customer_account_id='${customer3}'`)==='0');
+ const mr=call('add_billing_sale',`'${randomUUID()}',${quote(JSON.stringify({...manualSale,quote_id:mq.quote_id}))}`),mf=mr.account.folio_id;
+ const allocations=mr.account.charges.map(c=>({charge_id:c.id,amount:c.total}));
+ const paymentId=randomUUID(),payment={folio_id:mf,version:mr.account.version,received_at:new Date().toISOString(),confirmed:true,amount:131.25,method:'cash',reference:'DEMO manual',allocations};
+ const paidManual=call('record_billing_payment',`'${paymentId}',${quote(JSON.stringify(payment))}`);
+ check(JSON.stringify(paidManual)===JSON.stringify(call('record_billing_payment',`'${paymentId}',${quote(JSON.stringify(payment))}`)));
+ const ms=call('get_billing_statement',`'${randomUUID()}','${mf}'`);
+ const mi=call('finalize_billing_folio',`'${randomUUID()}','${mf}',${ms.account.version},'${ms.document_id}'`);
+ check(Number(mi.account.balance)===0&&mi.account.charges.length===2);
+ const manualReport=call('get_billing_hsp_remittances',`'${f.context}'`).rows.find(x=>x.folio_id===mf);
+ check(Number(manualReport.collected)===5.25&&Number(manualReport.remitted)===0&&Number(manualReport.remaining)===5.25);
  result={complete:true,realPostgres:true,providerObjects:"simulated",assertions:count,expectedRejections:rejections};
  console.log(JSON.stringify(result));
 }catch(e){result={...result,assertions:count,expectedRejections:rejections,error:String(e.stderr??e.message)};console.error(result.error);process.exitCode=1;}

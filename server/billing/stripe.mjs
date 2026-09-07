@@ -31,11 +31,12 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   const platform=await stripe('/account');
   if(platform.id!==a.platform_account)throw Error('BILLING_PROVIDER_ACCOUNT');
   const connected=await stripe(`/accounts/${a.connected_account}`);
-  if(connected.id!==a.connected_account||(a.charge_mode==='direct'?(connected.controller?.fees?.payer!=='account'||connected.controller?.losses?.payments!=='stripe') : connected.type!=='express')||!connected.charges_enabled)throw Error('BILLING_PROVIDER_ACCOUNT');
+  if(connected.id!==a.connected_account||(a.charge_mode==='direct'?(connected.controller?.fees?.payer!=='account'||connected.controller?.losses?.payments!=='stripe') : connected.type!=='express') )throw Error('BILLING_PROVIDER_ACCOUNT');
+  return connected;
  }
  async function sync(id,{cancel=false}={}) {
   const a=await attempt(id);
-  await checkAccount(a);
+  const connected=await checkAccount(a);
   const scoped=(path,params,key)=>stripe(path,params,key,a.charge_mode==='direct'?a.connected_account:undefined);
   let intent;
   if(a.provider_id) intent=await scoped(`/payment_intents/${a.provider_id}`);
@@ -55,6 +56,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
     }
     if(!intent)throw Error('BILLING_RECONCILIATION_REQUIRED');
    }
+   if(!intent&&!connected.charges_enabled)throw Error('BILLING_PROVIDER_ACCOUNT');
    if(!intent)intent=await scoped('/payment_intents',{amount:String(Math.round(Number(a.amount)*100)),currency:a.currency.toLowerCase(),capture_method:'automatic','payment_method_types[]':'card',...(a.charge_mode==='direct'?{application_fee_amount:String(Math.round(Number(a.application_fee_amount)*100))}:{'transfer_data[destination]':a.connected_account}),'metadata[hsp_attempt_id]':a.id,description:'HSP — DEMO / FICTITIOUS'},`hsp-test-${a.id}`);
   }
   if(cancel&&!['succeeded','canceled'].includes(intent.status)) {

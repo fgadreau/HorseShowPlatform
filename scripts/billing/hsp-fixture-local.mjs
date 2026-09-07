@@ -4,19 +4,20 @@ assert(!process.env.DOCKER_HOST||process.env.DOCKER_HOST.startsWith('unix://'));
 const db=process.env.HSP_FIXTURE_DB??'postgres';assert(db==='postgres'||/^hsp_direct_test_[0-9]+$/.test(db));mkdirSync('.tmp/hsp-direct',{recursive:true});
 const sql=q=>execFileSync('docker',['exec','-i','supabase_db_hsp-vet-local','psql','-X','-U','supabase_admin','-d',db,'-Atq','-v','ON_ERROR_STOP=1'],{input:q,encoding:'utf8',stdio:['pipe','pipe','pipe']}).trim();
 assert.equal(sql("select count(*) from auth.users where email not like '%@example.test'"),'0');
-const org='fb300000-0000-0000-0000-000000000001',show='fb400000-0000-0000-0000-000000000001',contact='fb600000-0000-0000-0000-000000000001',discipline='fb700000-0000-0000-0000-000000000001';
-const products=[['Inscription fictive Open L4',100],['Inscription fictive Open L2',75],['Juges fictifs par classe',20],['Juges fictifs du bloc',30],['Stalle simulée',120],['Casquette fictive',25],['Frais supplémentaire fictif',10],['Frais de service HSP',5]].map(([name,price],i)=>({id:`fb500000-0000-0000-0000-00000000000${i+1}`,name,price}));
-const horses=['fb800000-0000-0000-0000-000000000001','fb800000-0000-0000-0000-000000000002'];
+const fixtureId=s=>db==='postgres'?s:s.replace(/^fb/,'fc');
+const [org,show,contact,discipline]=['fb300000-0000-0000-0000-000000000001','fb400000-0000-0000-0000-000000000001','fb600000-0000-0000-0000-000000000001','fb700000-0000-0000-0000-000000000001'].map(fixtureId);
+const products=[['Inscription fictive Open L4',100],['Inscription fictive Open L2',75],['Juges fictifs par classe',20],['Juges fictifs du bloc',30],['Stalle simulée',120],['Casquette fictive',25],['Frais supplémentaire fictif',10],['Frais de service HSP',5]].map(([name,price],i)=>({id:fixtureId(`fb500000-0000-0000-0000-00000000000${i+1}`),name,price}));
+const horses=['fb800000-0000-0000-0000-000000000001','fb800000-0000-0000-0000-000000000002'].map(fixtureId);
 const q=s=>"'"+String(s).replaceAll("'","''")+"'";
 sql(`begin;
-insert into public.organizations(id,name,slug,currency) values('${org}','HSP DÉMONSTRATION — sans valeur comptable ou fiscale','hsp-direct-fictif','CAD') on conflict(id) do nothing;
+insert into public.organizations(id,name,slug,currency) values('${org}','HSP DÉMONSTRATION — sans valeur comptable ou fiscale','hsp-direct-fictif-${db==="postgres"?"persistent":"clone"}','CAD') on conflict(id) do nothing;
 insert into public.organization_members(organization_id,user_id,role) values('${org}','20000000-0000-0000-0000-000000000002','admin'),('${org}','20000000-0000-0000-0000-000000000003','secretary') on conflict do nothing;
 insert into public.contacts(id,type,first_name,last_name,company_name,address,linked_user_id) values('${contact}','owner','Alex','Démonstration','Entreprise entièrement fictive','123 rue Exemple — données fictives','20000000-0000-0000-0000-000000000004') on conflict(id) do nothing;
 insert into public.organization_disciplines(id,organization_id,discipline_id) select '${discipline}','${org}',id from public.disciplines order by id limit 1 on conflict do nothing;
 insert into public.directory_contacts(organization_discipline_id,contact_id) values('${discipline}','${contact}') on conflict do nothing;
 ${horses.map((h,i)=>`insert into public.horses(id,name,primary_owner_contact_id) values('${h}','${i?'Demo Silver Star':'Great Holly Whiz — DEMO'}','${contact}') on conflict(id) do nothing;`).join('\n')}
 ${horses.map(h=>`insert into public.directory_horses(organization_discipline_id,horse_id) values('${discipline}','${h}') on conflict do nothing;`).join('\n')}
-insert into public.shows(id,organization_id,name,slug,start_date,end_date,default_currency) values('${show}','${org}','Concours fictif direct — HSP','hsp-direct-integre','2026-09-07','2026-09-09','CAD') on conflict(id) do nothing;
+insert into public.shows(id,organization_id,name,slug,start_date,end_date,default_currency) values('${show}','${org}','Concours fictif direct — HSP','hsp-direct-integre-${db==="postgres"?"persistent":"clone"}','2026-09-07','2026-09-09','CAD') on conflict(id) do nothing;
 ${products.map(p=>`insert into public.organization_products(id,organization_id,name,category,default_price,tax_applicable) values('${p.id}','${org}',${q(p.name)},'merch',${p.price},false) on conflict(id) do nothing;`).join('\n')}
 commit;`);
 const config={name_fr:'Compte du concours — DÉMONSTRATION',name_en:'Show account — DEMONSTRATION',account_prefix:'DEMO-ACC',receipt_prefix:'DEMO-RCPT',invoice_prefix:'DEMO-INV',closing_policy:'manual',payment_policy:'received_only',activation_policy:'allocated_received',categories:['merch'],staff_roles:['admin','secretary']};
@@ -27,7 +28,7 @@ if(!context){context=sql(`set role authenticated;set request.jwt.claim.sub='1000
 const suppliers={association:{name:'Association DEMO',address:'1 rue Fictive',tax_number_1:'DEMO-ASSO-TAX',demo:true},hsp:{name:'HSP DEMO',address:'2 rue Fictive',tax_number_1:'DEMO-HSP-TAX',demo:true}};
 if(sql(`select count(*) from billing_hsp_policies where context_id='${context}'`)==='0')sql(`set role service_role;select public.billing_hsp_adopt('${context}','${products.at(-1).id}',${q(JSON.stringify(suppliers))},'DEMO mandate — unvalidated tax prototype');`);
 const customer=sql(`set role authenticated;set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';select public.billing_get_customer_account('${org}','${contact}');`);
-writeFileSync('.tmp/hsp-direct/fixture.json',JSON.stringify({org,show,context,customer,contact,horses,products},null,2));
+writeFileSync(db==='postgres'?'.tmp/hsp-direct/fixture.json':'.tmp/hsp-direct/sql-fixture.json',JSON.stringify({org,show,context,customer,contact,horses,products},null,2));
 const password=readFileSync('supabase/seed.sql','utf8').match(/crypt\('([^']+)'/)[1];
 const users=JSON.parse(sql("select json_agg(json_build_object('id',id,'email',email)) from auth.users"));
 writeFileSync('.tmp/hsp-direct/access.local.json',JSON.stringify({password,users},null,2),{mode:0o600});
