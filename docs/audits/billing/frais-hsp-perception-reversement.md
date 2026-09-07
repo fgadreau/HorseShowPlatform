@@ -1,11 +1,13 @@
 # Frais de service HSP — annonce, perception et reversement
 
 7 septembre 2026. Complément documentaire au contrat approuvé, avant implémentation.
-Branche : `feat/billing-pilot-integrated`. Base de lecture : `ae96a7dbbe09c3973bd76fcef89fa47b7df1ba47`.
+Branche : `feat/billing-pilot-integrated`. Base de lecture de cette révision : `4d927d8e2bcc274eb38bddb4698b81acc88d5126`.
 
 **Décision produit acquise : 5,00 CAD avant taxes par Compte du concours payeur, dès la première opération facturable confirmée, y compris une stalle.** Ce document précise cette décision et distingue les recommandations de perception, les choix fiscaux et les annulations qui restent à approuver. Aucun code, migration, paiement, fixture ou document financier n’est modifié par ce lot.
 
-Les contrats [D1–D5](plan-et-scenarios.md), [première tranche](premiere-tranche.md), [tests](tests-acceptation.md) et [navigation](tranche-1a5-navigation-ux.md) restent les références générales. Aucun document dédié à la perception/reversement des frais HSP n’a été trouvé dans la base inspectée ; ce complément rassemble la proposition sans réécrire les contrats ni le [rapport du pilote déjà exécuté](pilote-integre-validation.md).
+Les contrats [D1–D5](plan-et-scenarios.md), [première tranche](premiere-tranche.md), [tests](tests-acceptation.md) et [navigation](tranche-1a5-navigation-ux.md) restent les références générales. Ce complément rassemble la proposition sans réécrire les contrats ni le [rapport du pilote déjà exécuté](pilote-integre-validation.md).
+
+**Révision direct charges — à approuver.** HSP est exploité par une seule personne : aucune récupération ou refacturation séparée des frais de traitement des participants auprès des associations ne doit être nécessaire. La recommandation destination charges du complément précédent est remplacée par celle du §6. Les opérations déjà qualifiées restent inchangées.
 
 ## 1. Invariants validés
 
@@ -83,9 +85,9 @@ Noms proposés, à ajuster aux conventions lors de l’implémentation autorisé
 | Nature système de charge | Index unique partiel sur `folio_id` pour la nature HSP, ou mécanisme équivalent imposé dans tous les writers ; aucune saisie, suppression ou modification directe de cette nature par le navigateur |
 | Devis préparatoire | Identifiant opaque, acteur, payeur, empreinte des lignes/politique, versions, expiration et confirmation ; pas de numéro de compte créé pour un devis abandonné |
 | `billing_hsp_receivables` | Une créance par assessment, débiteur association, principal HT, taxes de la relation HSP/association, devise et justificatifs figés ; distincte du solde du participant |
-| Réservations de recouvrement | Créance + tentative Stripe ou lot de règlement manuel, montant, état ; au plus une réservation non résolue pour cette créance, aucun dépassement du reste à percevoir |
-| Événements de règlement | Journal append-only : réservation, confirmation, annulation sûre, paiement direct reçu, correction/restitution autorisée. Unicité environnement + plateforme + référence fournisseur ; allocation aux créances unique par règlement |
-| Coûts Stripe de l’association | Référence unique de balance transaction, montant/devise réels, éventuels ajustements, état « à déterminer » tant que Stripe ne les fournit pas ; distincts des 5 CAD et du compte participant |
+| Réservations de recouvrement | Créance + tentative Stripe ou lot de règlement association (automatique ou exceptionnellement manuel), montant, état ; au plus une réservation non résolue pour cette créance, aucun dépassement du reste à percevoir |
+| Événements de règlement | Journal append-only : réservation, confirmation, annulation sûre, paiement direct reçu, correction/restitution autorisée. Unicité environnement + plateforme + compte propriétaire de l’objet + référence fournisseur ; allocation aux créances unique par règlement |
+| Preuves fournisseur des direct charges | Mode de charge, environnement, plateforme et compte connecté figés ; références PaymentIntent/charge/application fee/balance transaction ; coûts réellement débités par Stripe au compte connecté, sans créance de refacturation HSP pour ces coûts |
 
 Toutes les relations sont contrôlées par des clés étrangères et contrôles de portée, pas par l’UUID fourni seul. RLS, privilèges explicites, `search_path` fixé, écritures directes révoquées. Le personnel de l’association consulte ses seuls relevés de règlement ; le payeur ne reçoit ni ces écritures internes ni les coûts/provider metadata. Conserver seulement la ligne HSP publique et sa fiscalité dans ses instantanés.
 
@@ -99,11 +101,32 @@ Trois montants distincts :
 - **Créance HSP sur l’association** : base commerciale proposée de 5,00 CAD HT, plus sa fiscalité propre éventuelle. Sa définition dépend du modèle fournisseur/revendeur ou mandataire (§7).
 - **Frais Stripe** : coût du traitement assumé économiquement par l’association, jamais un nouveau frais au participant et jamais retranché de son paiement crédité.
 
-### Proposition recommandée : recouvrement intégral une seule fois
+### Choix recommandé : direct charges, Stripe prélève les frais à l’association
 
-Conserver destination charges / Connect Express. Sous réserve du modèle fiscal validé, figer un `application_fee_amount` correspondant au montant de la créance HSP encore entièrement due, **sur la première tentative Stripe admissible d’un montant suffisant**. Les autres paiements de ce compte portent explicitement une part HSP de zéro. Ne pas laisser une règle Dashboard de tarification ajouter des frais par paiement à la place de ce contrat.
+**Proposition pour approbation : nouveau compte connecté avec Dashboard complet, collecte des frais et responsabilité des soldes négatifs du compte connecté confiées à Stripe.** L’association dispose ainsi de ses paiements et des outils Stripe de gestion des litiges ; HSP conserve la gestion opérationnelle du concours. Cette préférence réduit la charge de soutien d’un exploitant seul ; elle n’est pas une obligation de conserver le type Express du pilote.
 
-La documentation Stripe décrit le retour de l’application fee vers la plateforme, son plafond au montant du paiement et le débit des frais de traitement à la plateforme. L’application fee ne suffit donc pas, à elle seule, à faire supporter ces coûts à l’association. [Stripe — destination charges](https://docs.stripe.com/connect/destination-charges?platform=web&ui=elements).
+| Configuration à distinguer | Conclusion pour HSP |
+| --- | --- |
+| Destination charge actuelle, même avec `fees.payer=account` | Frais de cette charge prélevés sur la plateforme ; ne satisfait pas la contrainte. À préserver uniquement pour les opérations déjà qualifiées |
+| Direct charge + v1 `controller.fees.payer=account` | Stripe prélève ses frais au compte connecté ; application fee HSP séparée ; modèle proposé |
+| Direct charge + `fees.payer=application` | Plateforme facturée ; ne pas adopter pour ce besoin |
+| Ancien `type=express`, donc `application_express` | Traitement standard débité au compte connecté, mais autres services et tarification IC+ peuvent être facturés à HSP ; Stripe déconseille les direct charges avec ce réglage legacy. Ce n’est pas l’équivalent de `account` |
+
+Le payeur des frais ne se modifie pas après création. La configuration `account` n’entraîne pas de frais Connect pour ces comptes selon la documentation, mais n’exonère pas les activités propres de la plateforme. [Stripe — responsabilité des frais](https://docs.stripe.com/connect/direct-charges-fee-payer-behavior).
+
+Configuration v1 recommandée à la **création d’un nouveau compte fictif** : `controller.fees.payer=account`, `controller.losses.payments=stripe`, `controller.requirement_collection=stripe`, `controller.stripe_dashboard.type=full`. Elle correspond au comportement Standard ; contrôler les propriétés retournées plutôt que le seul champ `type`. Ne pas envoyer `type=express` en espérant obtenir ces valeurs. [Stripe — propriétés controller et configurations compatibles](https://docs.stripe.com/connect/migrate-to-controller-properties).
+
+Équivalent Accounts v2 : configuration Merchant, `defaults.responsibilities.fees_collector=stripe`, `losses_collector=stripe`, `dashboard=full`, capacité de paiement carte demandée puis active. Ces responsabilités sont fixées avec Merchant et non modifiables ensuite. v2 interdit notamment `losses_collector=application` avec `fees_collector=stripe`. Ce modèle de compte n’impose pas de remplacer l’API PaymentIntents v1. [Stripe — configuration Accounts v2](https://docs.stripe.com/connect/accounts-v2/connected-account-configuration).
+
+Le dépôt utilise Accounts v1 ; proposer d’abord les propriétés explicites v1 pour limiter le changement, sous réserve de leur disponibilité dans ce sandbox. Si son onboarding exige v2, adapter uniquement la création/lecture de configuration, sans mélanger les paramètres des deux API. **Aucun nouveau compte n’est créé dans ce lot.** À la qualification : vérifier rattachement réel à la plateforme test, pays Canada et devise CAD retenus, propriétés, capacités, `charges_enabled` et exigences de versement ; pas seulement le nom public du compte.
+
+Un **nouveau** compte à Dashboard Express demeure une alternative à examiner, avec ses responsabilités explicitement choisies et validées dans l’API retenue ; ne pas déclarer cette combinaison universellement interdite, ni la supposer acceptée dans ce sandbox. Le Dashboard complet est préféré pour laisser l’association gérer davantage ses opérations. Stripe recommande de confier à Stripe la responsabilité des pertes des comptes utilisant direct charges ; ses recommandations distinguent aussi les outils Radar disponibles selon le Dashboard. [Stripe — configurations recommandées](https://docs.stripe.com/connect/integration-recommendations).
+
+Le compte Express fictif actuel demeure un témoin du parcours destination charges. Ses propriétés controller n’ont pas été relues auprès de l’API dans ce lot documentaire : aucune reconfiguration possible n’est affirmée. L’ancien `type=express` observé dans le code ne constitue pas une vérification actuelle de ses responsabilités. Créer ultérieurement une nouvelle association/contextes fictifs et un nouveau compte connecté compatible ; ne déplacer ni PaymentIntents, reçus, fonds, secrets, documents ou tentatives existants.
+
+### Récupération des 5 CAD : intégrale une seule fois
+
+Sous réserve du modèle fiscal validé, figer `application_fee_amount` au montant de la créance HSP encore entièrement due, sur la première tentative Stripe du même compte dont le montant suffit. Les paiements suivants ont une part HSP de zéro (paramètre absent si nécessaire dans l’API). Une règle automatique Dashboard par transaction ne doit pas ajouter une deuxième commission. La limite fournisseur de l’application fee est le montant du paiement ; montant et devise restent déterminés par le serveur. [Stripe — contrat PaymentIntent](https://docs.stripe.com/api/payment_intents/create).
 
 Algorithme proposé :
 
@@ -121,17 +144,51 @@ Pour une réservation payée intégralement à 162,75 CAD, le frais client est p
 
 L’encaissement manuel confirmé paie le compte client, **pas automatiquement HSP**. La créance envers HSP reste visible pour l’association : créée, éventuellement non encore encaissée auprès du client, réservée pour récupération, réglée ou à rapprocher. Le fait que le client soit à zéro n’implique pas que l’association ait reversé les sommes. Cette dette interne ne bloque pas à elle seule la finalisation d’un compte client admissible : seule une incertitude touchant son paiement, son solde ou ses conditions de fermeture doit intervenir dans son checkout.
 
-Recommandation : créance constatée lors de l’engagement facturable ; règlement périodique de l’association à HSP, avec échéance à définir. Un relevé de règlement regroupe les comptes concernés, principal, taxes propres à cette relation, retenues Stripe déjà prouvées, règlements directs, corrections et reste dû. Il ne crée pas une seconde facture pour le participant. La pièce commerciale HSP → association, si retenue, a un autre débiteur et ne duplique pas la facture du concours.
+### Règlement automatisable des encaissements comptant/Interac
 
-Pour un règlement manuel à HSP : référence bancaire et réception réellement confirmée, auteur habilité côté HSP, allocation durable aux créances. La secrétaire peut déclarer/proposer une référence, mais pas marquer unilatéralement « HSP payé ». Une référence ambiguë reste à rapprocher ; un règlement annoncé réserve les créances explicitement prises en charge pour empêcher une retenue Stripe simultanée. Les soldes bancaires externes ne sont pas une transaction SQL : un double transfert externe éventuel devient un excédent de règlement à rapprocher, jamais un nouveau débit du participant.
+Proposition : une **facture mensuelle HSP → association à paiement automatique**, regroupant exclusivement les créances HSP exigibles encore non réglées et non réservées. Aucun frais de traitement Stripe des participants à refacturer. Le débiteur est l’association ; cette facture commerciale ne crée aucune deuxième facture dans le compte du participant.
 
-Si le client paie d’abord comptant puis par Stripe, la créance non réglée peut être récupérée sur ce paiement Stripe **du même compte**, selon l’accord de compensation avec l’association. Si l’association l’a déjà réglée, aucune application fee HSP. Ne pas prélever silencieusement sur un autre compte client pour compenser une dette de l’association.
+À l’adhésion de l’association au nouveau modèle, recueillir son consentement et un moyen de paiement pour les services HSP, avec calendrier, avis, taxes, politique de reprise et autorisation hors session. Recommandation initiale : carte de l’association enregistrée via Stripe, puis facture à `collection_method=charge_automatically`. Un Customer de plateforme séparé du compte connecté convient à v1 ; aucune sauvegarde de carte obligatoire pour le participant. Un prélèvement bancaire canadien peut être évalué ensuite avec son mandat et ses délais propres, sans promettre les mêmes retries que les cartes. Stripe Invoicing propose reprises et notifications automatiques pour les factures. [Stripe — recouvrement automatique](https://docs.stripe.com/invoicing/automatic-collection).
 
-### Coûts Stripe assumés par l’association
+Le lot mensuel réserve atomiquement chaque créance avant l’appel externe ; identifiant de lot, détail et clé fournisseur sont durables. Une application fee concurrente ne peut réserver la même créance. Réponse perdue : retrouver la facture/le paiement original, sans recréer de facture ni débiter à nouveau. Un impayé ou une authentification requise conserve la facture et sa réservation avec une action destinée à l’association ; seules les exceptions non résolues remontent à HSP. La réservation ne peut être libérée qu’après résolution certaine ou annulation contrôlée de l’obligation fournisseur. Une confirmation fournisseur rapproche exactement les créances, sans déclarer payé un participant supplémentaire.
 
-Proposition compatible avec l’architecture actuelle : relever les frais effectifs de chaque balance transaction et les porter sur un relevé de coûts association → HSP, séparé de la récupération unique des 5 CAD. Règlement périodique ou compensation contractuellement autorisée ultérieurement ; aucun tarif estimé n’est présenté comme un coût fournisseur définitif. Les coûts inconnus restent « à déterminer », pas zéro.
+Cas mixtes : avant constitution du lot, un paiement Stripe du **même compte** peut récupérer la créance encore libre ; après réservation mensuelle ou règlement confirmé, application fee zéro. Pas de compensation silencieuse avec le paiement d’un autre client. Aucun débit présumé du solde Connect, ni retrait sur un compte bancaire sans mandat. Si l’association ne fournit pas de moyen valide, proposer de bloquer les nouvelles adoptions après notification, sans rendre l’historique illisible ni recréer des frais chez ses clients. Échéance, délai de grâce et date d’exigibilité restent à approuver.
 
-Exemple abstrait : participant crédité 162,75 ; application fee HSP 5,25 ; transfert net à l’association 157,50 ; coût Stripe réel S initialement débité à la plateforme et dû séparément par l’association. Le participant reste crédité de 162,75. Ne pas promettre un transfert net de 157,50 − S automatiquement : cette retenue supplémentaire n’est pas implémentée ni choisie. Les frais des deuxième et suivants paiements restent à la charge de l’association, sans nouveau frais HSP au payeur.
+Le virement manuel à HSP demeure une exception, avec preuve de réception et allocation par un rôle HSP autorisé, jamais une déclaration unilatérale de la secrétaire. Cette exception ne doit pas devenir le fonctionnement mensuel normal. L’automatisation diminue l’administration, sans garantir qu’aucun impayé ne nécessitera d’intervention.
+
+### Montants nets et responsabilités restantes
+
+Exemple DEMO avec fiscalités client et HSP/association explicitement toutes deux à 5 % : participant paie **162,75 CAD**, compte du participant dans HSP crédité de **162,75**, application fee **5,25**, association reçoit un net **157,50 − S**, où S représente les frais Stripe effectifs débités par Stripe à cette association. Deuxième paiement : application fee zéro et ses propres frais Stripe restent à l’association. Aucun calcul estimatif de S n’entre dans la facture du participant.
+
+| Coût ou responsabilité | Proposition / limite |
+| --- | --- |
+| Traitement des paiements directs des participants | Stripe débite l’association ; HSP n’avance ni ne refacture ces frais. Vérifier les balance transactions réelles lors de la qualification |
+| Services Stripe propres à HSP | Facturation/traitement de la facture mensuelle HSP, options payantes ou services consommés sur la plateforme restent des coûts HSP. Proposer de les absorber dans sa rémunération, sans nouvelle surcharge ; chiffrage de marge à faire avant usage réel |
+| Connect et options | Vérifier le contrat et la tarification applicables au Canada/sandbox puis au live ; ne pas assimiler tous les produits Stripe à un service gratuit. Aucun tarif live chiffré n’est fixé dans ce document. [Stripe — tarification Connect Canada](https://stripe.com/en-ca/connect/pricing) |
+| Litiges, remboursements, pertes | L’association gère ses ventes et preuves ; HSP doit recevoir les événements et maintenir ses comptes cohérents. `losses=stripe` ne décharge pas HSP de son propre solde négatif ni de ses obligations contractuelles, fiscales ou de sécurité |
+| Tableau Stripe complet | L’association peut rembourser hors HSP ou déconnecter son compte. Détecter ces opérations, bloquer les nouvelles tentatives si déconnexion et conserver les anomalies durables ; ne pas prétendre qu’un historique HSP immuable empêche un remboursement fournisseur |
+| Anciennes destination charges | Leurs responsabilités restent celles du modèle d’origine. Aucune conversion automatique des anciennes opérations n’est proposée |
+
+### Adaptations indispensables avant un nouveau pilote direct charges
+
+L’audit en lecture seule confirme les points suivants dans `server/billing/stripe.mjs`, `src/features/finance/PaymentElement.tsx` et `supabase/migrations/20260906001100_billing_stripe_test.sql`. Cette migration approuvée ne sera pas modifiée : toute évolution sera additive.
+
+| Couche | Existant observé | Adaptation proposée, non implémentée |
+| --- | --- | --- |
+| Configuration | `checkAccount` exige `type === express` et `charges_enabled` | Configuration versionnée par contexte/nouvelle tentative : mode de charge, plateforme, compte propriétaire, responsabilité des frais/pertes vérifiées ; ancien mode conservé pour reprise |
+| PaymentIntents | Requêtes plateforme, `transfer_data[destination]`, version API `2024-06-20` | Création directe avec clé secrète plateforme et en-tête serveur `Stripe-Account` du compte adopté ; supprimer `transfer_data` dans ce seul mode. Conserver capture automatique et un PI distinct par paiement partiel. Ne changer aucune version API implicitement |
+| Elements | `Stripe(publishable_key, {locale})` | Ajouter `stripeAccount` validé serveur avec la clé publique plateforme et le client secret correspondant ; même instance pour confirmation, 3DS et reprise. Remonter le composant lors du changement de compte ; aucun choix libre du compte Stripe par le navigateur |
+| Confirmation SQL | Vérifie `transfer_data.destination` | Vérifier une preuve privée issue d’une lecture fournisseur dans la portée exacte, environnement test, montant brut, devise, capture, application fee attendue et rattachement durable. Un champ `account` fourni par le client n’est pas une preuve |
+| Reprises | GET/liste/cancel des PI sur la plateforme ; clé durable existante | Toutes les opérations sur PI directs utilisent le compte propriétaire figé, y compris recherche après réponse perdue. Conserver contenu, mode, montant HSP et portée originaux ; pas de nouvelle clé sur timeout. Nouvelle clé seulement après annulation certaine |
+| Webhooks | Signature brute vérifiée ; tout `event.account` refusé ; recherche par `provider_id` seul | Canal Connect signé, contrôle de `event.account` contre le rattachement attendu ; dédoublonnage environnement/plateforme/compte/événement et rapprochement dans cette portée. Ne pas simplement supprimer le refus actuel. Événements inconnus conservés sans encaissement |
+| Commission HSP | Aucune application fee actuelle | Réserver la créance ; confirmer sa perception avec ApplicationFee/charge fournisseur. Si sa preuve arrive après le paiement, conserver la réservation et créditer néanmoins le participant au brut ; ne jamais récupérer deux fois |
+| Documents et fermeture | Reçus/outbox et facture immuables, blocage fournisseur | Préserver ces contrats ; paiement en traitement bloque les deux fermetures. Les métadonnées Connect et preuves de règlement restent privées |
+
+La documentation montre l’initialisation Elements avec le même compte connecté que le PaymentIntent et la collecte d’application fees. Leur objet peut être créé de façon asynchrone. [Stripe — direct charges avec Elements](https://docs.stripe.com/connect/direct-charges?platform=web&ui=elements).
+
+Prévoir deux portées de réception explicites : événements des comptes connectés pour les PI directs et événements de plateforme pour application fees et anciennes destination charges. Le listener de test doit inclure `--forward-connect-to` pour Connect et conserver `--forward-to` pour la plateforme. Vérifier les secrets de signature de chaque destination active sans les publier, et refuser `livemode=true` dans chaque chemin. Chaque traitement relit l’objet dans sa portée ; l’ordre des événements n’est pas une preuve de règlement. [Stripe — webhooks Connect et listener local](https://docs.stripe.com/connect/webhooks).
+
+Une déconnexion ou perte d’accès fournisseur n’autorise ni un second PI sur un autre compte, ni la libération d’une réservation incertaine. La confirmation déjà engagée reste à résoudre, même si l’activation HSP est retirée. Le webhook signé seul ne doit pas pouvoir rattacher une transaction étrangère via des métadonnées ressemblantes. Les nouvelles tables/indices doivent porter la portée fournisseur complète et garder l’ordre commun de verrouillage ; aucune nouvelle opération réseau dans une transaction SQL.
 
 ## 7. Fiscalité : configurations distinctes, aucune règle inventée
 
@@ -144,7 +201,7 @@ Le profil de la stalle ne détermine pas celui des frais HSP. Chaque profil prod
 
 L’ARC distingue les responsabilités fiscales selon l’existence et la nature d’une relation mandant/mandataire ; le choix ne découle pas automatiquement du transport du paiement. [ARC — règles pour les agents](https://www.canada.ca/en/revenue-agency/services/tax/businesses/topics/gst-hst-businesses/charge-collect-special-cases.html).
 
-La proposition de fixture peut simuler explicitement la première option, mais ne valide aucun traitement TPS/TVH/TVQ réel. À décider avant usage réel : fournisseur, inscriptions fiscales, lieu de fourniture, fiscalité du service HSP, des frais refacturés Stripe et des corrections, ainsi que les pièces HSP/association nécessaires. Une application fee Stripe est une circulation de fonds ; elle ne remplace ni un calcul fiscal ni une pièce justificative.
+La proposition de fixture peut simuler explicitement la première option, mais ne valide aucun traitement TPS/TVH/TVQ réel. À décider avant usage réel : fournisseur, inscriptions fiscales, lieu de fourniture, fiscalité du service HSP, des corrections et du règlement automatisé HSP, ainsi que les pièces HSP/association nécessaires. Une application fee Stripe est une circulation de fonds ; elle ne remplace ni un calcul fiscal ni une pièce justificative.
 
 ## 8. Annulations et remboursements : règles à décider
 
@@ -160,7 +217,9 @@ La proposition de fixture peut simuler explicitement la première option, mais n
 | Application fee déjà récupérée | Décider la restitution HSP/association et le remboursement client séparément ; journal de contre-écritures et preuves fournisseur, pas de remise à zéro permettant un nouveau prélèvement aveugle |
 | Litige/rétrofacturation ou remboursement ambigu | Mise en rapprochement et gel du recouvrement concerné ; politique de coûts et de dette à décider, sans double prélèvement |
 
-Stripe ne rembourse pas automatiquement l’application fee avec le remboursement client. Les options de restitution/transfert peuvent produire un prorata qui ne correspond pas à un frais fixe conservé ou intégralement remboursé. Ne pas activer systématiquement `refund_application_fee`/`reverse_transfer` sans un plan métier précis. [Stripe — remboursements des application fees](https://docs.stripe.com/connect/destination-charges?platform=web&ui=embedded-form).
+Pour les nouvelles direct charges, demander le remboursement dans la portée du compte connecté ; son solde est concerné, pas un transfert destination à inverser. L’application fee n’est pas restituée automatiquement. `refund_application_fee=true` produit un prorata lors d’un remboursement partiel, potentiellement incompatible avec les 5 CAD fixes : recommander une décision explicite et, si nécessaire, une restitution séparée de l’application fee. **Ne pas utiliser `reverse_transfer` dans ce chemin direct.** [Stripe — remboursement des direct charges](https://docs.stripe.com/connect/direct-charges?platform=web&ui=elements).
+
+Les remboursements effectués dans le Dashboard de l’association doivent aussi être détectés. Journaliser séparément remboursement participant, taxes corrigées et restitution HSP ; conserver la clé du frais initial et ne pas le remettre automatiquement « à percevoir ». Si le solde fournisseur est insuffisant ou le remboursement incertain, suivre son état sans affirmer que le client est remboursé. Coûts Stripe conservés ou nouveaux coûts de litige : vérifier les règles et montants fournisseur, pas de refacturation automatique par HSP. Le remboursement de la facture mensuelle HSP appartient à une autre relation et à un autre paiement.
 
 Les taxes d’une note de crédit doivent découler des lignes initiales réellement corrigées ; aucune ventilation historique inventée. Les remboursements et crédits restent hors de l’implémentation actuelle tant que ces règles ne sont pas approuvées.
 
@@ -185,18 +244,25 @@ Tous ces scénarios sont **à exécuter**, pas des résultats acquis. Nouvelles 
 | HSP13 | Anciennes fixtures, compte ouvert existant, facture existante, hors concours, USD | Aucun ajout ni conversion ; instantanés et hachages des documents existants inchangés ; aucune régression des anciens writers non adoptés |
 | HSP14 | Montant HSP falsifié, opt-out navigateur, autre payeur/association | Refus serveur ; pas de suppression/déplacement de ligne système ni d’accès au journal de règlement HSP |
 | HSP15 | Relevés/reçus/PDF, retry worker et fermeture concurrente | Aucun frais lié aux documents ; mêmes montants figés, une facture finale ; dette association → HSP ne devient pas un solde dû du participant |
-| HSP16 | Coûts Stripe distincts et indisponibles temporairement | Paiement client crédité au brut ; coût fournisseur en attente puis réel, idempotent ; aucun deuxième frais de 5 CAD |
+| HSP16 | Coûts Stripe directement débités à l’association | Balance transaction du compte connecté : brut = net + frais Stripe + part HSP ; crédit participant au brut ; coût inconnu non assimilé à zéro ; aucune créance HSP de refacturation des frais Stripe |
+| HSP17 | Nouveau compte et propriétés fournisseur | Configuration réellement retournée conforme ; compte non rattaché, `application`, live ou capability inactive refusés ; compte Express qualifié antérieur inchangé |
+| HSP18 | PI/Elements/3DS et deux associations fictives | Même compte propriétaire à chaque étape ; compte, secret client ou PI échangés refusés ; montant falsifié refusé ; deux paiements, une application fee totale attendue |
+| HSP19 | Webhooks Connect/plateforme retardés, inversés, répétés | Signature et portée exactes ; objet étranger non encaissé ; application fee tardive ne provoque aucune seconde perception ; ancien webhook destination continue son traitement |
+| HSP20 | Annulation puis même montant / réponse perdue après création | Nouvelle clé seulement après annulation certaine ; reprise originale dans le même compte Stripe ; un seul encaissement et reçu ; aucune création sur la plateforme par défaut |
+| HSP21 | Lot mensuel automatique contre paiement Stripe concurrent | Une réservation de créance, une perception ; facture association distincte ; timeout/retry et webhook répété sans deuxième facture ni prélèvement ; carte refusée/3DS déclenchent action association sans débit client |
+| HSP22 | Remboursement direct partiel/total, y compris Dashboard | État fournisseur réconcilié ; application fee traitée selon politique approuvée, sans prorata aveugle ni nouveau frais ; facture initiale inchangée ; aucun `reverse_transfer` |
+| HSP23 | Déconnexion, droits retirés et paiement incertain | Nouvelles commandes refusées, historique lisible ; ancienne tentative non remplacée ; résolution/blocage durable sans fermeture prématurée |
 
 Couverture future : SQL pour atomicité/unicité/permissions ; véritables sessions concurrentes ; services pour réservations de recouvrement et preuves Stripe ; navigateur FR/EN ordinateur/mobile pour annonce, confirmation et reprises ; Stripe sandbox réel et Storage privé pour la qualification intégrée. Les cas HSP08/HSP09 doivent distinguer paiement reçu, application fee constatée et disponibilité des fonds ; aucune simulation n’est présentée comme une perception réelle.
 
 ## 10. Découpage proposé et décisions avant implémentation
 
-1. Approuver la présente proposition et le modèle fiscal fictif explicite ; conserver les décisions commerciales encore ouvertes comme telles.
+1. Approuver le passage aux direct charges avec Dashboard complet et responsabilités proposées, le règlement mensuel automatique et le modèle fiscal fictif explicite ; conserver les décisions commerciales encore ouvertes comme telles.
 2. Extension additive de politique, devis/confirmation, ligne système unique et créance ; writers communs et tests SQL/concurrence. Aucune adoption de compte existant ni modification de migration antérieure.
 3. Adapter récapitulatifs participant/secrétaire et affectations du premier paiement, sans raccordement aux réservations réelles. Les PDF lisent seulement les nouvelles lignes figées.
-4. Ajouter réservation/récupération Stripe de la créance, rapprochement et suivi des règlements directs/coûts Stripe ; tester sans secrets live ni nouveau flux financier du participant.
+4. Créer de nouveaux comptes connectés fictifs compatibles après autorisation d’implémentation ; adapter PI/Elements/webhooks/reprises par mode versionné, ajouter récupération unique et règlement mensuel automatique. Tester toutes les nouvelles portées et l’absence de refacturation des frais Stripe ; ne toucher aucun objet qualifié antérieur.
 5. Qualifier les nouvelles fixtures et leurs documents. Conserver le pilote précédent intact comme témoin. Le raccordement aux réservations réelles, les remboursements et l’usage réel restent des lots autorisés séparément.
 
-Décisions encore ouvertes : modèle fournisseur/mandataire et fiscalité des deux relations ; exigibilité et échéance de la créance HSP ; compensation après paiement manuel ; récupération intégrale différée pour petits paiements ou alternative fractionnée ; preuve d’annonce dans le parcours secrétaire ; opérations à 0,00 ; conditions d’annulation/remboursement et coûts de litige. **Le montant client de 5,00 CAD HT, son déclenchement à la première opération facturable et son unicité ne sont pas remis en discussion.**
+Décisions encore ouvertes : approbation de direct charges avec Dashboard complet et responsabilités Stripe, ou étude d’une nouvelle configuration Express ; API de création v1/v2 selon disponibilité ; cadence mensuelle et consentement au paiement automatique de l’association ; absorption par HSP du coût de ses propres encaissements B2B ; modèle fournisseur/mandataire et fiscalité des deux relations ; exigibilité et échéance de la créance HSP ; compensation après paiement manuel ; récupération intégrale différée pour petits paiements ou alternative fractionnée ; preuve d’annonce dans le parcours secrétaire ; opérations à 0,00 ; conditions d’annulation/remboursement et coûts de litige. **Le montant client de 5,00 CAD HT, son déclenchement à la première opération facturable et son unicité ne sont pas remis en discussion.**
 
-Contrôles de ce lot documentaire : références au code et à la documentation officielle vérifiées en lecture seule ; aucun taux fiscal réel sélectionné ; scénarios chiffrés recalculés ; diff limité à ce complément ; `git diff --check`. Aucun test exécutable, migration, paiement ou nouvelle fixture lancé dans ce lot.
+Contrôles de ce lot documentaire : références au code et à la documentation officielle vérifiées en lecture seule ; aucun taux fiscal réel sélectionné ; scénarios chiffrés recalculés ; diff limité à ce complément ; `git diff --check`. Aucun test exécutable, migration, paiement, appel authentifié Stripe ou nouvelle fixture lancé dans ce lot. Les 23 scénarios sont des critères futurs, pas une qualification directe acquise ; les résultats destination charges du pilote restent valides uniquement pour leur version. Sources officielles Stripe consultées le 7 septembre 2026 ; aucune configuration ni clé modifiée.
