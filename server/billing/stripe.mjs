@@ -31,7 +31,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   const platform=await stripe('/account');
   if(platform.id!==a.platform_account)throw Error('BILLING_PROVIDER_ACCOUNT');
   const connected=await stripe(`/accounts/${a.connected_account}`);
-  if(connected.id!==a.connected_account||(a.charge_mode==='direct'?(connected.controller?.fees?.payer!=='account'||connected.controller?.losses?.payments!=='stripe') : connected.type!=='express') )throw Error('BILLING_PROVIDER_ACCOUNT');
+  if(connected.id!==a.connected_account||(a.charge_mode==='direct'?(connected.controller?.fees?.payer!=='account'||connected.controller?.losses?.payments!=='stripe') : connected.type!=='express'))throw Error('BILLING_PROVIDER_ACCOUNT');
   return connected;
  }
  async function sync(id,{cancel=false}={}) {
@@ -72,6 +72,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
     if(!charge.application_fee)throw Error('BILLING_PROVIDER_RETRY');
     const fee=await stripe(`/application_fees/${typeof charge.application_fee==='string'?charge.application_fee:charge.application_fee.id}`);
     if(fee.charge!==charge.id)throw Error('BILLING_PROVIDER_ACCOUNT');
+    if(fee.refunded||Number(fee.amount_refunded)>0)await rpc(admin,'billing_provider_flag',{p_attempt:a.id,p_reference:fee.id,p_reason:'fee_mismatch'});
     await rpc(admin,'billing_hsp_confirm_fee',{p_attempt:a.id,p_fee:fee});
    }
   }
@@ -98,8 +99,15 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   return result;
  },async receive(raw,signature){
   const event=verifyEvent(raw,signature,config.webhook,Date.now(),true);
-  if(!event.type?.startsWith('payment_intent.')&&!['charge.refunded','charge.dispute.created','charge.dispute.updated'].includes(event.type))return;
+  if(!event.type?.startsWith('payment_intent.')&&!['charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded'].includes(event.type))return;
   const platform=await stripe('/account');
+  if(event.type.startsWith('application_fee.')){
+   if(event.account)throw Error('BILLING_PROVIDER_ACCOUNT');
+   const fee=await stripe(`/application_fees/${event.data.object.id}`);
+   const charge=await stripe(`/charges/${fee.charge}`,undefined,undefined,fee.account);
+   if(fee.livemode!==false||charge.livemode!==false||charge.application_fee!==fee.id)throw Error('BILLING_PROVIDER_ACCOUNT');
+   await rpc(admin,'billing_stripe_receive_direct',{p_event:event.id,p_provider:charge.payment_intent,p_type:event.type,p_platform:platform.id,p_connected:fee.account,p_live:event.livemode});return;
+  }
   if(event.account){
    let provider=event.data.object.id;
    if(event.type.startsWith('charge.')){

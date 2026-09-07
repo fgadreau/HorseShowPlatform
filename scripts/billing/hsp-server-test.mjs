@@ -21,7 +21,7 @@ let result={complete:false,realPostgres:true};
 try{
  docker(['createdb','-U','postgres',db]);created=true;
  sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql']){
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql']){
   const version=file.split('_')[0];
   if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
  }
@@ -52,6 +52,7 @@ try{
  const payer="set role authenticated;set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';";
  const begin=(amount)=>JSON.parse(sql(payer+`select begin_billing_stripe_attempt('${randomUUID()}','${folio}',${amount})`)).attempt_id;
  const first=begin(100);
+ check(Number(call('get_billing_hsp_remittances',`'${f.context}'`).rows[0].reserved)===5.25);
  check(sql(`select charge_mode||':'||application_fee_amount from billing_stripe_attempts where id='${first}'`)==='direct:5.25');
  const pi={id:'pi_hspfirst',object:'payment_intent',livemode:false,status:'succeeded',currency:'cad',amount:10000,amount_received:10000,capture_method:'automatic',hsp_verified_account:'acct_testdirect',application_fee_amount:525};
  const observe=(id,obj)=>JSON.parse(sql(`set role service_role;select billing_stripe_observe('${id}','acct_testplatform',${quote(JSON.stringify(obj))})`));
@@ -99,7 +100,15 @@ try{
  const mi=call('finalize_billing_folio',`'${randomUUID()}','${mf}',${ms.account.version},'${ms.document_id}'`);
  check(Number(mi.account.balance)===0&&mi.account.charges.length===2);
  const manualReport=call('get_billing_hsp_remittances',`'${f.context}'`).rows.find(x=>x.folio_id===mf);
+ check(Number(manualReport.collected_subtotal)===5&&Number(manualReport.collected_tax_amount)===.25&&Number(manualReport.reserved)===0);
  check(Number(manualReport.collected)===5.25&&Number(manualReport.remitted)===0&&Number(manualReport.remaining)===5.25);
+ const customer4=newCustomer(4),partialSale={...sale,payer_customer_account_id:customer4,source_id:randomUUID()};
+ const pq=call('prepare_billing_operation_quote',quote(JSON.stringify(partialSale)));
+ const pr=call('add_billing_sale',`'${randomUUID()}',${quote(JSON.stringify({...partialSale,quote_id:pq.quote_id}))}`);
+ const hsp=pr.account.charges.find(c=>c.supplier==='hsp');
+ call('record_billing_payment',`'${randomUUID()}',${quote(JSON.stringify({folio_id:pr.account.folio_id,version:pr.account.version,amount:2,method:'cash',confirmed:true,received_at:new Date().toISOString(),reference:'DEMO partial HSP allocation only',allocations:[{charge_id:hsp.id,amount:2}]}))}`);
+ const partial=call('get_billing_hsp_remittances',`'${f.context}'`).rows.find(r=>r.folio_id===pr.account.folio_id);
+ check(Number(partial.collected)===2&&Number(partial.remaining)===2);check(partial.collected_subtotal===null&&partial.collected_tax_amount===null&&partial.allocation_status==='partial_tax_allocation_unapproved');
  result={complete:true,realPostgres:true,providerObjects:"simulated",assertions:count,expectedRejections:rejections};
  console.log(JSON.stringify(result));
 }catch(e){result={...result,assertions:count,expectedRejections:rejections,error:String(e.stderr??e.message)};console.error(result.error);process.exitCode=1;}

@@ -56,11 +56,17 @@ try {
  }
  const historySQL=['invoices','invoice_line_items','payments','manual_sales','entries','stall_bookings','contact_organization_memberships'].map(t=>`select '${t}:'||md5(coalesce(string_agg(row_to_json(t)::text,'' order by id),'')) from public.${t} t;`).join('\n');
  const historic=sql(historySQL);
+ // Remember pre-existing opt-ins; cloning a qualified pilot is not an empty install.
+ sql(`create table public.billing_test_capability_baseline(scope text,id uuid,payload jsonb);
+ do $$ begin if ${fresh ? 'false' : "to_regclass('public.billing_pilot_organizations') is not null"} then
+ insert into public.billing_test_capability_baseline select 'organization',organization_id,to_jsonb(p) from public.billing_pilot_organizations p;
+ insert into public.billing_test_capability_baseline select 'context',context_id,to_jsonb(c) from public.billing_context_access c;
+ end if;end $$;`);
  stage='foundation migration';if(!fresh){
   const markers={'20260906000900':'billing_folios','20260906001000':'billing_payer_recaps','20260906001100':'billing_stripe_attempts','20260906001200':null,'20260906001300':'billing_pdf_artifacts','20260907000100':'billing_hsp_policies','20260907000200':'billing_hsp_recoveries'};
   for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')&&f>='20260906000900').sort()){
    const version=file.split('_')[0],table=markers[version];
-   const applied=table?sql(`select to_regclass('public.${table}') is not null`)==='t':version==='20260906001200'&&sql("select to_regprocedure('public.billing_ui_detail(uuid,boolean)') is not null")==='t';
+   const applied=sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='1'||(table?sql(`select to_regclass('public.${table}') is not null`)==='t':version==='20260906001200'&&sql("select to_regprocedure('public.billing_ui_detail(uuid,boolean)') is not null")==='t');
    if(!applied)sql(readFileSync('supabase/migrations/'+file,'utf8'));
   }
  }

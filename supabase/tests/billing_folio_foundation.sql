@@ -132,7 +132,7 @@ begin
  select value into ids from public.billing_test_fixture where key='documents';
  select value into cfg from public.billing_test_fixture where key='config';
  perform public.billing_test_assert(public.get_billing_document((ids->>'invoice')::uuid) is null,'no document IDOR');
- perform public.billing_test_assert(not exists(select 1 from public.billing_folios),'RLS hidden');
+ perform public.billing_test_assert(not exists(select 1 from public.billing_folios where organization_id='f3000000-0000-0000-0000-000000000001'),'RLS hidden for the unauthorized fixture association');
  perform public.billing_test_error(format('select public.get_billing_statement(%L,%L)',gen_random_uuid(),ids->>'account'),'BILLING_FORBIDDEN');
  perform public.billing_test_error(format('select public.add_billing_sale(%L,%L::jsonb)',gen_random_uuid(),jsonb_build_object('context_id',cfg->>'context','payer_customer_account_id',cfg->>'customer','product_id','f5000000-0000-0000-0000-000000000001','quantity',1,'source_id',gen_random_uuid())),'BILLING_FORBIDDEN');
 end $$;
@@ -183,7 +183,7 @@ reset role;
 do $$ begin
  perform public.billing_test_assert(not exists(select 1 from public.billing_payments p where p.amount<>(select coalesce(sum(a.amount),0) from public.billing_payment_allocations a where a.payment_id=p.id)),'allocation invariant');
  perform public.billing_test_assert(not exists(select 1 from public.billing_payments p where (select count(*) from public.billing_receipts r where r.payment_id=p.id)<>1),'one receipt per payment');
- perform public.billing_test_assert((select count(*) from public.billing_final_invoices)=2,'unique final per context/payer');
+ perform public.billing_test_assert((select count(*) from public.billing_final_invoices i join public.billing_folios f on f.id=i.folio_id where f.organization_id='f3000000-0000-0000-0000-000000000001')=2,'unique final per context/payer');
  perform public.billing_test_assert(not exists(select 1 from public.billing_documents d where not exists(select 1 from public.billing_outbox o where o.document_id=d.id)),'durable render requests');
 end $$;
 

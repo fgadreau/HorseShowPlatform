@@ -16,7 +16,7 @@ mkdirSync(dir,{recursive:true});const backup=dir+'/before-billing-migrations.dum
 if(!existsSync(backup))writeFileSync(backup,execFileSync('docker',['exec',container,'pg_dump','-U','postgres','-Fc','postgres'],{maxBuffer:100*1024*1024}),{flag:'wx',mode:0o600});
 assert.equal(sql("select count(*) from supabase_migrations.schema_migrations where version='20260906001300'"),'1','Approved PDF foundation required');
 const before=fingerprint(),applied=[];
-for(const name of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql']){
+for(const name of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql']){
  const version=name.split('_')[0];if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='1')continue;
  const migration=readFileSync('supabase/migrations/'+name,'utf8').replace(/^(begin|commit);\s*$/gmi,'');
  sql(`begin;\n${migration}\ninsert into supabase_migrations.schema_migrations(version,name) values('${version}','${name.slice(15,-4)}'); notify pgrst,'reload schema'; commit;`);applied.push(version);
