@@ -56,7 +56,14 @@ try {
  }
  const historySQL=['invoices','invoice_line_items','payments','manual_sales','entries','stall_bookings','contact_organization_memberships'].map(t=>`select '${t}:'||md5(coalesce(string_agg(row_to_json(t)::text,'' order by id),'')) from public.${t} t;`).join('\n');
  const historic=sql(historySQL);
- stage='foundation migration';if(!fresh){sql(readFileSync(migration,'utf8'));sql(readFileSync('supabase/migrations/20260906001000_billing_checkout_server.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001100_billing_stripe_test.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001200_billing_ui_contracts.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001300_billing_document_pdf.sql','utf8'));}
+ stage='foundation migration';if(!fresh){
+  const markers={'20260906000900':'billing_folios','20260906001000':'billing_payer_recaps','20260906001100':'billing_stripe_attempts','20260906001200':null,'20260906001300':'billing_pdf_artifacts','20260907000100':'billing_hsp_policies','20260907000200':'billing_hsp_recoveries'};
+  for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')&&f>='20260906000900').sort()){
+   const version=file.split('_')[0],table=markers[version];
+   const applied=table?sql(`select to_regclass('public.${table}') is not null`)==='t':version==='20260906001200'&&sql("select to_regprocedure('public.billing_ui_detail(uuid,boolean)') is not null")==='t';
+   if(!applied)sql(readFileSync('supabase/migrations/'+file,'utf8'));
+  }
+ }
  check('migration preserves every historical financial/source row',()=>assert.equal(sql(historySQL),historic));
  stage='legacy regressions';
  for(const file of ['stall_booking_invoice.sql','incentive_nomination_programs.sql']){

@@ -8,10 +8,10 @@ export function documentModel(d,locale){
  if(!['fr','en'].includes(locale)||!['statement','receipt','invoice'].includes(d.kind))throw Error('BILLING_PDF_INVALID');
  const s=d.snapshot,fr=locale==='fr',money=c=>new Intl.NumberFormat(fr?'fr-CA':'en-CA',{style:'currency',currency:s.currency}).format(c/100),blocks=[];
  const tr=(a,b)=>fr?a:b, taxes=new Map();
- for(const c of s.charges){if(c.presentation&&!['entry','reservation','other'].includes(c.presentation.section))throw Error('BILLING_PDF_INVALID_GROUP');if(cents(c.subtotal)+cents(c.tax_amount)!==cents(c.total)||sum(c.taxes,'amount')!==cents(c.tax_amount))throw Error('BILLING_PDF_TOTAL_MISMATCH');for(const t of c.taxes){const k=JSON.stringify([t.code,t.name,t.rate,t.jurisdiction]);taxes.set(k,(taxes.get(k)??0)+cents(t.amount));}}
+ for(const c of s.charges){if(c.presentation&&!['entry','reservation','other'].includes(c.presentation.section))throw Error('BILLING_PDF_INVALID_GROUP');if(cents(c.subtotal)+cents(c.tax_amount)!==cents(c.total)||sum(c.taxes,'amount')!==cents(c.tax_amount))throw Error('BILLING_PDF_TOTAL_MISMATCH');for(const t of c.taxes){const k=JSON.stringify([t.code,t.name,t.rate,t.jurisdiction,c.supplier??null]);taxes.set(k,(taxes.get(k)??0)+cents(t.amount));}}
  if(sum(s.charges,'subtotal')!==cents(s.subtotal)||sum(s.charges,'tax_amount')!==cents(s.tax_amount)||sum(s.charges,'total')!==cents(s.total)||sum(s.payments,'amount')!==cents(s.received)||cents(s.total)-cents(s.received)!==cents(s.balance))throw Error('BILLING_PDF_TOTAL_MISMATCH');
  const taxText=c=>c.taxes.map(t=>`${t.name} (${t.rate}%) ${money(cents(t.amount))}`).join(' · ')||(c.exemption_reason?tr('Exemption : ','Exemption: ')+c.exemption_reason:'');
- const description=c=>[c.description,c.beneficiary?.display_name,c.horse?.name,taxText(c)].filter(Boolean).join(' — ');
+ const description=c=>[s.suppliers?.[c.supplier]?.name,c.supplier==='hsp'?tr('Frais de service HSP','HSP service fee'):c.description,c.beneficiary?.display_name,c.horse?.name,taxText(c)].filter(Boolean).join(' — ');
  const groups=new Map();
  for(const c of s.charges.filter(c=>c.presentation?.section==='entry')){const p=c.presentation;if(!c.horse?.id||!p.block_id||!p.occurrence_id)throw Error('BILLING_PDF_INVALID_GROUP');const k=JSON.stringify([c.horse.id,p.block_id,p.occurrence_id]);if(!groups.has(k))groups.set(k,[]);groups.get(k).push(c);}
  let entryTotal=0;
@@ -26,14 +26,22 @@ export function documentModel(d,locale){
  }
  if(groups.size)blocks.push({label:tr('Sous-total inscriptions','Entries subtotal'),columns:['',tr('Avant taxes','Before taxes')],rows:[[tr('Inscriptions','Entries'),money(entryTotal)]]});
  for(const section of ['reservation','other']){
-  const cs=s.charges.filter(c=>(c.presentation?.section??'other')===section);if(!cs.length)continue;
+  const cs=s.charges.filter(c=>(c.presentation?.section??'other')===section&&c.supplier!=='hsp');if(!cs.length)continue;
   blocks.push({label:section==='reservation'?tr('Réservations','Reservations'):tr('Autres achats et services','Other purchases and services'),columns:[tr('Désignation / période','Description / period'),tr('Quantité','Quantity'),tr('Prix unitaire','Unit price'),tr('Avant taxes','Before taxes')],rows:[...cs.map(c=>[[description(c),c.presentation?.period,c.presentation?.duration].filter(Boolean).join(' · '),String(c.quantity),money(cents(c.unit_price)),money(cents(c.subtotal))]),[tr('Sous-total de section','Section subtotal'),'','',money(sum(cs,'subtotal'))]]});
+ }
+ if(s.suppliers){
+  if(!s.suppliers.association||!s.suppliers.hsp||s.charges.some(c=>!s.suppliers[c.supplier]))throw Error('BILLING_PDF_INVALID_SUPPLIER');
+  for(const b of blocks)b.label=s.suppliers.association.name+' — '+b.label;
+  const hsp=s.charges.filter(c=>c.supplier==='hsp');
+  if(hsp.length!==1||cents(hsp[0].subtotal)!==500)throw Error('BILLING_PDF_INVALID_HSP_FEE');
+  blocks.push({label:s.suppliers.hsp.name+' — '+tr('Service HSP','HSP service'),columns:[tr('Fournisseur / désignation','Supplier / description'),tr('Avant taxes','Before taxes'),tr('Taxes','Taxes'),tr('Total','Total')],rows:hsp.map(c=>[description(c)+' — '+s.suppliers.hsp.address+' — '+s.suppliers.hsp.tax_number_1+' '+(s.suppliers.hsp.tax_number_2??'')+' — '+tr('Facturé et encaissé par l’association comme mandataire','Billed and collected by the association as agent'),money(cents(c.subtotal)),money(cents(c.tax_amount)),money(cents(c.total))])});
+  blocks.push({label:tr('Totaux par fournisseur','Totals by supplier'),columns:[tr('Fournisseur','Supplier'),tr('Avant taxes','Before taxes'),'Taxes','Total'],rows:Object.entries(s.suppliers).map(([key,v])=>{const cs=s.charges.filter(c=>c.supplier===key);return [v.name,money(sum(cs,'subtotal')),money(sum(cs,'tax_amount')),money(sum(cs,'total'))];})});
  }
  if(d.kind==='receipt'){
   const p=s.receipt_payment??s.payments.find(p=>p.id===d.payment_id);if(!p||sum(p.allocations,'amount')!==cents(p.amount))throw Error('BILLING_PDF_INVALID_RECEIPT');
   blocks.unshift({receipt:true,label:tr('Paiement concerné et affectations','Payment received and allocations'),columns:[tr('Désignation','Description'),tr('Montant','Amount')],rows:[[`${p.method==='cash'?tr('Comptant','Cash'):p.method==='etransfer'?'Interac':p.method==='stripe_test'?'Stripe TEST':p.method} · ${new Date(p.received_at).toLocaleString(fr?'fr-CA':'en-CA',{timeZone:'UTC'})} UTC · ${p.reference??''}`,money(cents(p.amount))],...p.allocations.map(a=>{const c=s.charges.find(c=>c.id===a.charge_id);if(!c)throw Error('BILLING_PDF_INVALID_RECEIPT');return [[description(c),c.presentation?.block_label,c.presentation?.occurrence_id].filter(Boolean).join(' · '),money(cents(a.amount))];})]});
  }
- blocks.push({label:tr('Récapitulatif général','Account summary'),columns:[tr('Situation à la date du document','Position at document date'),s.currency],rows:[[tr('Frais avant taxes','Charges before taxes'),money(cents(s.subtotal))],...[...taxes].map(([k,v])=>{const [,name,rate,jurisdiction]=JSON.parse(k);return [`${name} (${rate}%) · ${jurisdiction}`,money(v)];}),[tr('Total des taxes','Total taxes'),money(cents(s.tax_amount))],[tr('Total du compte','Account total'),money(cents(s.total))],[tr('Paiements reçus à cette date','Payments received at this date'),money(cents(s.received))],[tr('Solde à cette date','Balance at this date'),money(cents(s.balance))]]});
+ blocks.push({label:tr('Récapitulatif général','Account summary'),columns:[tr('Situation à la date du document','Position at document date'),s.currency],rows:[[tr('Frais avant taxes','Charges before taxes'),money(cents(s.subtotal))],...[...taxes].map(([k,v])=>{const [,name,rate,jurisdiction,supplier]=JSON.parse(k);return [`${s.suppliers?.[supplier]?.name??''} ${name} (${rate}%) · ${jurisdiction}`,money(v)];}),[tr('Total des taxes','Total taxes'),money(cents(s.tax_amount))],[tr('Total du compte','Account total'),money(cents(s.total))],[tr('Paiements reçus à cette date','Payments received at this date'),money(cents(s.received))],[tr('Solde à cette date','Balance at this date'),money(cents(s.balance))]]});
  return {blocks,groups:groups.size,title:d.kind==='invoice'?tr('Facture finale','Final invoice'):d.kind==='receipt'?tr('Reçu de paiement','Payment receipt'):tr('Relevé du compte','Account statement'),continued:tr('suite','continued')};
 }
 export async function renderDocument(d,locale,{browser:provided}={}){
@@ -50,7 +58,7 @@ export async function renderDocument(d,locale,{browser:provided}={}){
    newPage(true);
    for(const b of blocks){newTable(b,false);b.rows.forEach((values,i)=>{let row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight){row.remove();if(!tb.rows.length)table.remove();newPage();newTable(b,i>0);row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight)throw Error('BILLING_PDF_ROW_TOO_LARGE');}});}
    pages.forEach((p,i)=>{const f=p.querySelector('footer');const a=document.createElement('span');a.textContent=account;const b=document.createElement('span');b.textContent=`${i+1} / ${pages.length}`;f.append(a,b);});
-  },{header,identity:`<div class="identity"><div>${identity(s.seller)}</div><div>${identity(s.payer)}</div></div>`,blocks:model.blocks,continued:model.continued,account:s.account_number});
+  },{header,identity:`<div class="identity"><div>${identity(s.suppliers?.association??s.seller)}</div><div>${identity(s.payer)}</div></div>`,blocks:model.blocks,continued:model.continued,account:s.account_number});
   return await page.pdf({preferCSSPageSize:true,printBackground:true});
  }finally{await page?.close();if(!provided)await browser.close();}
 }
