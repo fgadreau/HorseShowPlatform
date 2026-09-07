@@ -1,0 +1,31 @@
+{
+  "realLocalUI": true,
+  "mockedResponses": false,
+  "captures": [
+    ".tmp/review-20260907/existing-account-fr-1440.png",
+    ".tmp/review-20260907/existing-account-fr-390.png",
+    ".tmp/review-20260907/existing-account-fr-320.png",
+    ".tmp/review-20260907/accounts-loaded-fr-1440.png",
+    ".tmp/review-20260907/accounts-loaded-fr-390.png",
+    ".tmp/review-20260907/existing-account-en-1440.png",
+    ".tmp/review-20260907/existing-account-en-390.png",
+    ".tmp/review-20260907/existing-account-en-320.png",
+    ".tmp/review-20260907/accounts-loaded-en-1440.png",
+    ".tmp/review-20260907/accounts-loaded-en-390.png"
+  ],
+  "checks": [
+    "Full amounts fit at 1440",
+    "Full amounts fit at 390",
+    "Full amounts fit at 320",
+    "Full amounts fit at 1440",
+    "Full amounts fit at 390",
+    "FR: closed state, no payment form or technical codes; account list loaded",
+    "Full amounts fit at 1440",
+    "Full amounts fit at 390",
+    "Full amounts fit at 320",
+    "Full amounts fit at 1440",
+    "Full amounts fit at 390",
+    "EN: closed state, no payment form or technical codes; account list loaded"
+  ],
+  "complete": true
+}

@@ -7,7 +7,7 @@ export function startDocumentServer(env=process.env){
  const key=env.BILLING_PDF_SUPABASE_ANON_KEY,secret=env.BILLING_PDF_SUPABASE_SERVICE_ROLE_KEY;if(!key||!secret)throw Error('BILLING_LOCAL_KEYS_REQUIRED');
  const options={auth:{persistSession:false,autoRefreshToken:false}},service=createClient(url,secret,options),worker=createDocumentWorker({service});
  const server=http.createServer(async(req,res)=>{
-  res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type','application/json');res.setHeader('X-Content-Type-Options','nosniff');
+  res.setHeader('Cache-Control','no-store');res.setHeader('X-HSP-Document-Render','1,2');res.setHeader('Content-Type','application/json');res.setHeader('X-Content-Type-Options','nosniff');
   try{
    if(req.method!=='POST'||!['/status','/retry','/download'].includes(req.url)||req.headers.origin!==origin)throw Error('BILLING_FORBIDDEN');
    const chunks=[];let size=0;for await(const c of req){size+=c.length;if(size>4096)throw Error('BILLING_INVALID_REQUEST');chunks.push(c);}const a=JSON.parse(Buffer.concat(chunks).toString());

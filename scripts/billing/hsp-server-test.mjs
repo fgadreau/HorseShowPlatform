@@ -21,10 +21,12 @@ let result={complete:false,realPostgres:true};
 try{
  docker(['createdb','-U','postgres',db]);created=true;
  sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql']){
+ const historical=sql("select coalesce(jsonb_agg(to_jsonb(d) order by id),'[]')::text from billing_documents d");
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql']){
   const version=file.split('_')[0];
   if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
  }
+ check(sql("select coalesce(jsonb_agg(to_jsonb(d) order by id),'[]')::text from billing_documents d")===historical);
  check(sql("select count(*) from billing_hsp_policies h join billing_contexts c on c.id=h.context_id where c.organization_id<>'fb300000-0000-0000-0000-000000000001'")==='0');
  execFileSync(process.execPath,['scripts/billing/hsp-fixture-local.mjs'],{env:{...process.env,HSP_FIXTURE_DB:db},stdio:['ignore','pipe','pipe']});
  const f=JSON.parse(readFileSync('.tmp/hsp-direct/sql-fixture.json'));
@@ -67,6 +69,9 @@ try{
  const statement=call('get_billing_statement',`'${randomUUID()}','${folio}'`);
  check(statement.document.snapshot.suppliers.hsp.tax_number_1==='DEMO-HSP-TAX');
  const invoice=call('finalize_billing_folio',`'${randomUUID()}','${folio}',${statement.account.version},'${statement.document_id}'`);
+ check(invoice.document.snapshot.render_version===2);
+ check(invoice.document.snapshot.payments.length===2&&invoice.document.snapshot.payments.every(p=>p.receipt_number));
+ for(const p of invoice.document.snapshot.payments)check(sql(`select number from billing_documents where payment_id='${p.id}' and kind='receipt'`)===p.receipt_number);
  check(invoice.document.kind==='invoice'&&invoice.document.snapshot.charges.some(c=>c.supplier==='hsp'));
  sql(`set role service_role;select billing_provider_flag('${first}','ch_external','external_refund');`);
  check(sql(`select count(*) from billing_provider_anomalies where folio_id='${folio}'`)==='1');

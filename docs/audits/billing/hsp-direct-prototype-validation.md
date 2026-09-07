@@ -155,3 +155,7 @@ PDF pour revue : `.tmp/hsp-direct/review/hsp-direct-pdf-fr-en.zip` (dix PDF : re
 - Réservations et inscriptions demeurent des ventes structurées fictives ; aucun raccordement aux sources opérationnelles réelles, historique ou taux fiscaux réels.
 
 Aucune fusion, aucun déploiement, aucune migration distante, aucune modification PREPROD/PROD et aucun paiement réel. Les trois SVG locaux ont leurs empreintes initiales inchangées ; configurations et artefacts exclus des commits.
+
+## Reprise après arrêt de Codespaces — corrections de revue
+
+Voir le [rapport mobile et documents du 7 septembre 2026](review-20260907/README.md), avec exemples PDF FR/EN et captures versionnés. Le rendu 2 est réservé aux nouveaux documents ; les pièces historiques restent conservées. Le rapport distingue les tests simulés, les vérifications réellement exécutées sur la pile fictive, la lecture Stripe sandbox des paiements existants et les incidents de qualification.
