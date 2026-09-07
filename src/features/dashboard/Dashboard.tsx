@@ -1111,7 +1111,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {!showRouteUnavailable && (effectiveView === "billing" || effectiveView === "show-accounts") ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={effectiveView==='show-accounts'?(financeRoute()?.show??activeShowId):''} personal={false} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
+        {!showRouteUnavailable && context && (effectiveView === "billing" || effectiveView === "show-accounts") ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={effectiveView==='show-accounts'?(financeRoute()?.show??activeShowId):''} personal={false} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
             locale={locale}
             contacts={selectedOrganizationContacts}
             currency={selectedOrganization?.currency ?? "CAD"}
@@ -1274,7 +1274,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {!showRouteUnavailable && effectiveView === "my-invoices" ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={''} personal={true} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
+        {!showRouteUnavailable && context && effectiveView === "my-invoices" ? <FinanceView key={effectiveView+context.profile.id} org={selectedOrganization?.id??''} show={''} personal={true} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
             locale={locale}
             contacts={selectedOrganizationPersonalContacts}
             currency={selectedOrganization?.currency ?? "CAD"}

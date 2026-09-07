@@ -1,20 +1,23 @@
-import {serverlessBrowser} from '../../server/vet/serverless-browser.mjs';import {readFileSync,writeFileSync} from 'node:fs';
-const state=JSON.parse(readFileSync('.tmp/billing-pilot/integrated.json')),access=JSON.parse(readFileSync('.tmp/billing-pilot/access.local.json'));const stage=process.argv[2],amount=process.argv[3]??'200';
-const browser=await serverlessBrowser.launch();const page=await browser.newPage({viewport:{width:1365,height:1000}});page.setDefaultTimeout(30000);
+import executable from '@sparticuz/chromium';import {chromium} from 'playwright-core';import {readFileSync,writeFileSync} from 'node:fs';
+const state=JSON.parse(readFileSync('.tmp/billing-pilot/integrated.json')),access=JSON.parse(readFileSync('.tmp/billing-pilot/access.local.json'));const stage=process.argv[2],amount=process.argv[3]??'200';const caseName=process.argv[4];if(caseName)state.folio=JSON.parse(readFileSync('.tmp/billing-pilot/cases.json')).cases[caseName].folio;const fixture=JSON.parse(readFileSync('.tmp/billing-pilot/fixture.json'));const admin=stage.startsWith('admin-');
+const browser=await chromium.launch({executablePath:await executable.executablePath(),headless:true,args:executable.args.filter(a=>!['--single-process','--disable-web-security','--disable-site-isolation-trials'].includes(a)&&!a.startsWith('--disable-features='))});const page=await browser.newPage({viewport:{width:1365,height:1000}});page.setDefaultTimeout(30000);page.on('pageerror',e=>console.log('PAGE_ERROR',e.message));page.on('requestfailed',r=>{if(new URL(r.url()).hostname.endsWith('stripe.com'))console.log('STRIPE_NETWORK_FAILED',new URL(r.url()).pathname,r.failure()?.errorText);});page.on('request',r=>{if(r.url().includes('/__local-billing/'))console.log('PAYMENT_REQUEST',JSON.stringify({path:new URL(r.url()).pathname,hasBearer:(r.headers().authorization??'').length>40,origin:r.headers().origin,action:r.postDataJSON()?.action}));});page.on('response',async r=>{if(r.url().includes('/__local-billing/')){console.log('PAYMENT_HTTP',r.status());if(r.status()>=400){const b=await r.json();console.log('PAYMENT_CODE',/^BILLING_[A-Z_]+$/.test(b.error)?b.error:'unclassified');}}});
 try{
- await page.goto('http://localhost:5173/me/accounts');const email=access.users.find(x=>x.id.endsWith('004')).email;
+ await page.goto('http://localhost:5173/me/accounts');const email=access.users.find(x=>x.id.endsWith(admin?'003':'004')).email;
  await page.evaluate(async({email,password})=>{const {requireSupabase}=await import('/src/lib/supabase.ts');const r=await requireSupabase().auth.signInWithPassword({email,password});if(r.error)throw Error('LOGIN_FAILED');},{email,password:access.password});
- await page.goto('http://localhost:5173/me/accounts/'+state.folio);await page.getByRole('heading').filter({hasText:'DEMO-ACC'}).waitFor();
- if(stage==='inspect'||stage==='pay'){
-  await page.getByLabel('Montant partiel ou solde').fill(amount);await page.getByRole('button',{name:'Payer mon compte — TEST',exact:true}).click();
-  await page.waitForTimeout(5000);
+ await page.goto('http://localhost:5173'+(admin?'/associations/'+fixture.org+'/finance/accounts/':'/me/accounts/')+state.folio);await page.getByRole('heading').filter({hasText:'DEMO-ACC'}).waitFor();await page.getByRole('button',{name:'FR',exact:true}).click();
+ if(stage==='admin-extra'){
+ const existing=await page.getByRole('cell',{name:/Frais supplémentaire fictif/}).count();if(!existing){await page.getByLabel('Produit — prix du contexte').selectOption(fixture.products[6].id);await page.getByRole('button',{name:'Ajouter le frais',exact:true}).click();await page.getByRole('cell',{name:/Frais supplémentaire fictif/}).waitFor();}await page.screenshot({path:'.tmp/billing-pilot/admin-extra.png',fullPage:true});console.log('Extra sale visible in actual secretary UI');
+ }else if(stage==='admin-ready'){await page.getByRole('button',{name:'Attester : tous les frais attendus sont ajoutés',exact:true}).click();await page.getByRole('button',{name:'Retirer l’attestation',exact:true}).waitFor();await page.screenshot({path:'.tmp/billing-pilot/admin-ready.png',fullPage:true});console.log('Readiness granted through actual secretary UI');
+ }else if(stage==='inspect'||stage==='pay'){
+  const resume=page.getByRole('button',{name:'Reprendre / vérifier le paiement',exact:true});if(await resume.count())await resume.click();else{await page.getByLabel('Montant partiel ou solde').fill(amount);await page.getByRole('button',{name:'Payer mon compte — TEST',exact:true}).click();}
+  await page.frameLocator('iframe[src*="elements-inner-payment"]').locator('input[name="number"]').waitFor({timeout:60000});
   for(const frame of page.frames()){const inputs=await frame.locator('input').evaluateAll(xs=>xs.map(x=>({name:x.name,placeholder:x.placeholder,aria:x.getAttribute('aria-label')})));if(inputs.length)console.log(JSON.stringify(inputs));}
-  await page.screenshot({path:'.tmp/billing-pilot/payment-element.png',fullPage:true});
+  if(stage==='inspect')await page.screenshot({path:'.tmp/billing-pilot/payment-element.png',fullPage:true});
   if(stage==='pay'){
    const frame=page.frames().find(f=>f.url().includes('elements-inner-payment'));if(!frame)throw Error('Payment Element frame absent');
    await frame.locator('input[name="number"]').fill('4242424242424242');await frame.locator('input[name="expiry"]').fill('1230');await frame.locator('input[name="cvc"]').fill('123');
-   const postal=frame.locator('input[name="postalCode"]');if(await postal.count())await postal.fill('H2X 1Y4');
-   await page.getByRole('button',{name:'Confirmer le paiement test',exact:true}).click();await page.waitForTimeout(7000);await page.screenshot({path:'.tmp/billing-pilot/payment-confirmed-'+amount+'.png',fullPage:true});
+   await frame.locator('select[name="country"]').selectOption('CA');const postal=frame.locator('input[name="postalCode"]');if(await postal.count())await postal.fill('H2X 1Y4');
+   const response=page.waitForResponse(r=>r.url().includes('/__local-billing/payment')&&r.request().postDataJSON()?.action==='resume',{timeout:90000});await page.getByRole('button',{name:'Confirmer le paiement test',exact:true}).click();console.log('CONFIRM_CLICKED',await page.getByRole('button',{name:/Confirmer le paiement test|Vérification serveur/}).textContent());try{await response;}catch(e){await page.screenshot({path:'.tmp/billing-pilot/payment-wait.png',fullPage:true});console.log('PAYMENT_WAIT_FRAMES',JSON.stringify(page.frames().map(f=>{try{return new URL(f.url()).hostname;}catch{return 'local';}})));throw e;}await page.waitForTimeout(2000);await page.screenshot({path:'.tmp/billing-pilot/payment-confirmed-'+amount+'.png',fullPage:true});
    console.log('Payment submitted through real browser Payment Element; server outcome must be checked separately');
   }
  }else if(stage==='finalize'){
