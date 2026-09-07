@@ -167,3 +167,7 @@ Le [rapport du rendu 3](review-render-v3/README.md) remplace la qualification de
 ### Présentation dossard → bloc → classes après revue de 92a23585
 
 Le [rapport du rendu 4](review-render-v4/README.md) documente les références métier figées, les totaux par classe/bloc/dossard, les nouveaux exemples FR/EN et les captures ordinateur/mobile. Les versions historiques restent inchangées. Le rapport distingue les tests synthétiques, la migration sur clone PostgreSQL et les parcours réellement exécutés sur la pile fictive persistante, y compris le chargement de Mes comptes et l’encaissement après fermeture.
+
+### Lisibilité des totaux et pagination après revue de 0bc83395
+
+Le [rapport du rendu 5](review-render-v5/README.md) présente les fins de blocs/dossards gardées ensemble, les libellés explicites et la hiérarchie visuelle commune aux PDF et écrans. Il contient les nouvelles pièces FR/EN, les captures ciblées et la régression exacte du sous-total isolé de la facture du rendu 4, avec contrôle de multiplicité des lignes et conservation des 46 PDF antérieurs.

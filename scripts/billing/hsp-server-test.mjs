@@ -24,7 +24,7 @@ try{
  if(process.env.BILLING_REVIEW_BASELINE==='1')docker(['pg_restore','-U','supabase_admin','--dbname',db,'--exit-on-error'],{input:readFileSync('.tmp/review-v4/before-render-v4.dump'),stdio:['pipe','pipe','pipe']});
  else sql(docker(['pg_dump','-U','postgres','--format=plain','postgres']));
  const historical=sql("select coalesce(jsonb_agg(to_jsonb(d) order by id),'[]')::text from billing_documents d");
- for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql','20260907000500_billing_document_render_v3.sql','20260907000600_billing_entry_identity_v4.sql']){
+ for(const file of ['20260907000100_billing_hsp_prototype.sql','20260907000200_billing_hsp_direct.sql','20260907000300_billing_hsp_reporting.sql','20260907000400_billing_document_render_v2.sql','20260907000500_billing_document_render_v3.sql','20260907000600_billing_entry_identity_v4.sql','20260907000700_billing_document_render_v5.sql']){
   const version=file.split('_')[0];
   if(sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='0')sql(readFileSync('supabase/migrations/'+file,'utf8'));
  }
@@ -94,7 +94,7 @@ try{
  const statement=call('get_billing_statement',`'${randomUUID()}','${folio}'`);
  check(statement.document.snapshot.suppliers.hsp.tax_number_1==='DEMO-HSP-TAX');
  const invoice=call('finalize_billing_folio',`'${randomUUID()}','${folio}',${statement.account.version},'${statement.document_id}'`);
- check(invoice.document.snapshot.render_version===4);
+ check(invoice.document.snapshot.render_version===5);
  check(invoice.document.snapshot.payments.length===2&&invoice.document.snapshot.payments.every(p=>p.receipt_number));
  for(const p of invoice.document.snapshot.payments)check(sql(`select number from billing_documents where payment_id='${p.id}' and kind='receipt'`)===p.receipt_number);
  check(invoice.document.kind==='invoice'&&invoice.document.snapshot.charges.some(c=>c.supplier==='hsp'));

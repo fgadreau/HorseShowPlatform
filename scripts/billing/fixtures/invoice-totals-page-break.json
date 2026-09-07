@@ -1,0 +1,2100 @@
+{
+  "id": "37572a1f-b1f1-4336-9b8b-b360b800525c",
+  "kind": "invoice",
+  "number": "DEMO-INV-000009",
+  "currency": "CAD",
+  "folio_id": "c427fb80-8867-430d-aa7a-d6e4e7342097",
+  "snapshot": {
+    "payer": {
+      "city": null,
+      "email": null,
+      "phone": null,
+      "state": null,
+      "address": "123 rue Exemple — données fictives",
+      "country": null,
+      "zip_code": null,
+      "last_name": "Démonstration",
+      "contact_id": "fb600000-0000-0000-0000-000000000001",
+      "first_name": "Alex",
+      "middle_name": null,
+      "company_name": "Entreprise entièrement fictive",
+      "address_line2": null,
+      "tax_identifiers": null,
+      "customer_account_id": "7e066133-0d07-4764-abe2-e102acf974a3"
+    },
+    "state": "closed",
+    "total": 2520,
+    "seller": {
+      "city": null,
+      "name": "HSP DÉMONSTRATION — sans valeur comptable ou fiscale",
+      "email": null,
+      "phone": null,
+      "state": null,
+      "address": null,
+      "country": null,
+      "zip_code": null,
+      "tax_name_1": null,
+      "tax_name_2": null,
+      "billing_name": null,
+      "tax_number_1": null,
+      "tax_number_2": null,
+      "address_line2": null,
+      "organization_id": "fb300000-0000-0000-0000-000000000001"
+    },
+    "balance": 2320,
+    "charges": [
+      {
+        "id": "e721ce00-a64b-4773-9be8-1134a9a5cca9",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.273923+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 01",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "entry_id": "b942d6f0-fab5-41b5-bd8a-4e4137878ae2",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "db189462-ce28-4912-9e16-b35c61f8e0e6",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 5,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 0.25,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 5.25,
+        "category": "other",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 5,
+        "supplier": "hsp",
+        "created_at": "2026-09-07T22:17:55.276593+00:00",
+        "tax_amount": 0.25,
+        "unit_price": 5,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Frais de service HSP",
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "efd7cc2b-a39e-4d96-b9da-748b1753387b",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.402468+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 01",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "entry_id": "5fc163c4-05b9-4812-b3e1-321d54008d5e",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "faa68741-f6a2-4ce0-84b9-8885000819c5",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.514872+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "13cd2853-5124-4f5e-91af-bb1e1185c932",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 02",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "13cd2853-5124-4f5e-91af-bb1e1185c932",
+          "entry_id": "958123de-1e52-4b1c-8319-db68dd29967c",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "dd2e0402-1b07-499d-9ad3-5335ab4c321c",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.649037+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "e9b1274f-d9f6-4a75-8c08-f63f38b24c16",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 03",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "e9b1274f-d9f6-4a75-8c08-f63f38b24c16",
+          "entry_id": "1377487c-06f8-4e22-b905-0ccc33dce336",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "75f5c056-7031-4a0b-a05f-eb4679e3012b",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.809093+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c268910a-86a7-45ea-97c5-58afaee6341b",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 04",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c268910a-86a7-45ea-97c5-58afaee6341b",
+          "entry_id": "1c1bcaa8-1ab4-489a-9a40-0a144bb148de",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "461105bb-f3e8-4f8b-b00f-9ee74b356ca1",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:55.896831+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c268910a-86a7-45ea-97c5-58afaee6341b",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 04",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c268910a-86a7-45ea-97c5-58afaee6341b",
+          "entry_id": "20ef0446-0f6c-4ec5-9ce8-766ba38b1b29",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "5ef4bc1e-267f-412d-bfdd-6d25153cdcb1",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.006619+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "439dc3e7-d895-40e6-ac4c-0bcf53bb8c9b",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 05",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "439dc3e7-d895-40e6-ac4c-0bcf53bb8c9b",
+          "entry_id": "7f1a8028-40d1-45cd-be0e-1d811f15d2d8",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ca22a987-b4ea-45bd-87cb-d299734dd551",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.086045+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c967f3d9-ea66-4d3a-b062-547248616e4f",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 06",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c967f3d9-ea66-4d3a-b062-547248616e4f",
+          "entry_id": "2172888a-9d09-494c-a468-f35dae5686ab",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ef351433-4e93-4a58-baae-3e786fe2fdd2",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.166837+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "2d6c6707-a5bb-4490-ac2a-979ea9268d25",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 07",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "2d6c6707-a5bb-4490-ac2a-979ea9268d25",
+          "entry_id": "3f9e00b7-d0d5-4425-b89c-eb6ab6dd0975",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "70b8dec0-8318-4bec-9d40-df724fe85da4",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.245486+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "2d6c6707-a5bb-4490-ac2a-979ea9268d25",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 07",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "2d6c6707-a5bb-4490-ac2a-979ea9268d25",
+          "entry_id": "f7bf8b85-b0e3-4180-bd18-b2d7461ce746",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "0e2e56cf-3d8e-45e3-8ef4-15c69a2d7093",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.320989+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "f986d281-c66a-4814-891b-f35502b0472d",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 08",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "f986d281-c66a-4814-891b-f35502b0472d",
+          "entry_id": "dc7d00b4-edb5-421e-b24d-7eec88c99169",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "2a37ef69-db7f-4ec4-8521-2349dc16c33e",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.403463+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "fbe27f5d-3d71-43c2-b426-dd913acf9e71",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 09",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "fbe27f5d-3d71-43c2-b426-dd913acf9e71",
+          "entry_id": "3d6e2243-2c2b-4e4d-99c2-3ba160448c4e",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "d790b2ef-b4a7-4229-9d15-e731ea2f128b",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.487729+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "14051431-1421-4693-be6a-1aeb3f2a0d32",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 10",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "14051431-1421-4693-be6a-1aeb3f2a0d32",
+          "entry_id": "b98942e5-7bbe-4889-b7d5-aa871d6da5b3",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "d00ae7b4-8308-4db8-8998-332a52f56d99",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.567398+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "14051431-1421-4693-be6a-1aeb3f2a0d32",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 10",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "14051431-1421-4693-be6a-1aeb3f2a0d32",
+          "entry_id": "852c2554-5dee-4334-baab-a5aeaed36ca8",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "119d8511-e140-45de-8af8-1892973972cd",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.650892+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c3c7ef87-89e2-4c2b-8080-b5637c1b4630",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 11",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "c3c7ef87-89e2-4c2b-8080-b5637c1b4630",
+          "entry_id": "2924e2b3-08c5-4175-b815-cc15c903acf3",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "7f54c6e3-99e9-407c-a54e-118ec6ed4792",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.751721+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "bcb158b5-3e86-4577-ac63-44dd7c2d2925",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 12",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "bcb158b5-3e86-4577-ac63-44dd7c2d2925",
+          "entry_id": "80aaf022-2337-4505-a7e8-654925902ae7",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "4a91690e-e0c9-4455-bd74-a297de625f5e",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.837061+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 13",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "entry_id": "c0f68d16-5b83-496e-87f0-937d5b8406c5",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "dee6dc93-fe12-4495-bf19-086ea288fea9",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:56.942102+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 13",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "entry_id": "340e9b98-b81d-4a2b-8e4b-61377413cd58",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "8e5e112f-7b39-45d5-8805-0c07923bf06c",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.031649+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "6d38d6ec-d874-4c65-a9fe-27746fb009e5",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 14",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "6d38d6ec-d874-4c65-a9fe-27746fb009e5",
+          "entry_id": "39b542ea-b3ba-4e79-8ae1-13d10777c19f",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "4438455b-42b3-43c2-8d28-21c7756368dd",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.128329+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "c604d249-92a9-403f-8aa9-bb00c70f7f3f",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO B",
+          "class_label": "Classe DEMO 15",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "c604d249-92a9-403f-8aa9-bb00c70f7f3f",
+          "entry_id": "8e6341a2-f299-4a8b-a93e-a4b44635b992",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "06adddbb-8366-4cbe-9c67-3f4921fa5e82",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.218673+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO B",
+          "class_label": "Classe DEMO 16",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "entry_id": "0ff9c436-c981-47fe-8b8e-4d1b703ed453",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ad549804-9b51-4a88-8f31-9578b7cce669",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.308575+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO B",
+          "class_label": "Classe DEMO 16",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "entry_id": "2b6317fe-6f74-4333-a9a1-2d71eba7a75a",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "488d923a-241d-4ac9-8c66-9fb3fe30f0e1",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 30,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1.5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 31.5,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 30,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.458483+00:00",
+        "tax_amount": 1.5,
+        "unit_price": 30,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs du bloc",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "fee_kind": "judge_block",
+          "block_label": "Bloc DEMO A",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "entry_id": "35b1c2b6-4584-4a71-8ce8-a89796f7a114",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "ff2ed12f-7a64-4ecb-9a28-21e78a771347",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 75,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 3.75,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 78.75,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 75,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.600522+00:00",
+        "tax_amount": 3.75,
+        "unit_price": 75,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L2",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 13",
+          "occurrence_id": "Après-midi / Afternoon"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "entry_id": "8c180d1b-8f7d-4000-9a69-63fd095dc168",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Après-midi / Afternoon",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "f23437ef-ecd7-4ffc-b821-c7675b1920e2",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000001",
+          "name": "Great Holly Whiz — DEMO"
+        },
+        "taxes": [
+          {
+            "base": 30,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1.5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 31.5,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000001",
+        "quantity": 1,
+        "subtotal": 30,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.707694+00:00",
+        "tax_amount": 1.5,
+        "unit_price": 30,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs du bloc",
+        "presentation": {
+          "section": "entry",
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "fee_kind": "judge_block",
+          "block_label": "Bloc DEMO A",
+          "occurrence_id": "Après-midi / Afternoon"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000001",
+            "name": "Great Holly Whiz — DEMO"
+          },
+          "rider": {
+            "id": "88405f86-d8d8-4fe9-923d-d93d8d691110",
+            "name": "Morgan Cavalier DEMO"
+          },
+          "number": 941,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "86770806-c572-4ea1-8358-68bf165d5008",
+          "class_id": "e233c390-b5e7-4c6c-9edc-28c7973182e8",
+          "entry_id": "709937fc-7f7b-42a6-be1e-8fc6f16edefe",
+          "assignment_id": "babf1ada-f080-4ada-9586-a8475ef409ba",
+          "occurrence_id": "Après-midi / Afternoon",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "8a6aebe5-fb77-4f24-bf07-60199e166a04",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.817271+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 01",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000002",
+            "name": "Demo Silver Star"
+          },
+          "rider": {
+            "id": "fb898ae7-224e-425e-8919-8c3684c1c7b7",
+            "name": "Camille Cavalier DEMO"
+          },
+          "number": 942,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "entry_id": "889625e1-69be-4c32-b920-6d04f7dbc573",
+          "assignment_id": "22d7e0f6-2b30-4a92-85d8-5a13a20a8996",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "822986b3-dff1-4ec4-b7d3-1f19a5d25303",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:57.949756+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "13cd2853-5124-4f5e-91af-bb1e1185c932",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 02",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000002",
+            "name": "Demo Silver Star"
+          },
+          "rider": {
+            "id": "fb898ae7-224e-425e-8919-8c3684c1c7b7",
+            "name": "Camille Cavalier DEMO"
+          },
+          "number": 942,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "13cd2853-5124-4f5e-91af-bb1e1185c932",
+          "entry_id": "66999b6a-33aa-4a73-9de0-b4d2bf658cec",
+          "assignment_id": "22d7e0f6-2b30-4a92-85d8-5a13a20a8996",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "cde72ca7-15e4-4096-9240-20907985c251",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 100,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 5,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 105,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 100,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:58.062378+00:00",
+        "tax_amount": 5,
+        "unit_price": 100,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L4",
+        "presentation": {
+          "section": "entry",
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "c604d249-92a9-403f-8aa9-bb00c70f7f3f",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO B",
+          "class_label": "Classe DEMO 15",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000002",
+            "name": "Demo Silver Star"
+          },
+          "rider": {
+            "id": "fb898ae7-224e-425e-8919-8c3684c1c7b7",
+            "name": "Camille Cavalier DEMO"
+          },
+          "number": 942,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "c604d249-92a9-403f-8aa9-bb00c70f7f3f",
+          "entry_id": "c0203b3f-5a30-4d9d-869c-e262c68e0ffd",
+          "assignment_id": "22d7e0f6-2b30-4a92-85d8-5a13a20a8996",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "faabae8e-22b1-4e14-a566-6be67bc3299d",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 20,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 21,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 20,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:58.255645+00:00",
+        "tax_amount": 1,
+        "unit_price": 20,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Juges fictifs par classe",
+        "presentation": {
+          "section": "entry",
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "fee_kind": "judge_class",
+          "block_label": "Bloc DEMO A",
+          "class_label": "Classe DEMO 01",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000002",
+            "name": "Demo Silver Star"
+          },
+          "rider": {
+            "id": "fb898ae7-224e-425e-8919-8c3684c1c7b7",
+            "name": "Camille Cavalier DEMO"
+          },
+          "number": 942,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "061ca84d-35f0-4fca-a57c-2e050b7c61dc",
+          "class_id": "a1048fcb-f3d8-4ddc-9dc3-43c3dd34d97c",
+          "entry_id": "6350fdda-2f21-4b59-a995-0c5a0c7b2990",
+          "assignment_id": "22d7e0f6-2b30-4a92-85d8-5a13a20a8996",
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "38934b08-d389-4c17-af8a-f7ae2d4b70da",
+        "horse": {
+          "id": "fb800000-0000-0000-0000-000000000002",
+          "name": "Demo Silver Star"
+        },
+        "taxes": [
+          {
+            "base": 75,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 3.75,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 78.75,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": "fb800000-0000-0000-0000-000000000002",
+        "quantity": 1,
+        "subtotal": 75,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:58.391888+00:00",
+        "tax_amount": 3.75,
+        "unit_price": 75,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Inscription fictive Open L2",
+        "presentation": {
+          "section": "entry",
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "fee_kind": "entry",
+          "block_label": "Bloc DEMO B",
+          "class_label": "Classe DEMO 16",
+          "occurrence_id": "Matin / Morning"
+        },
+        "entry_identity": {
+          "horse": {
+            "id": "fb800000-0000-0000-0000-000000000002",
+            "name": "Demo Silver Star"
+          },
+          "rider": null,
+          "number": null,
+          "policy": "horse_rider_team",
+          "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+          "version": 1,
+          "block_id": "14bcf3e4-bd7c-47d3-a09d-7badc0277bd6",
+          "class_id": "5dad51c0-cc7c-481c-8cdb-c03396898c25",
+          "entry_id": "dc1de0ec-bb0e-4467-91c0-bad60ea37597",
+          "assignment_id": null,
+          "occurrence_id": "Matin / Morning",
+          "organization_id": "fb300000-0000-0000-0000-000000000001"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "fe2f139b-9534-4f94-8d5c-d0c0b3f45c49",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 120,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 6,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 126,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 120,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:58.510818+00:00",
+        "tax_amount": 6,
+        "unit_price": 120,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Stalle simulée",
+        "presentation": {
+          "period": "7–9 septembre / September 2026",
+          "section": "reservation",
+          "duration": "3 nuits / nights",
+          "reservation_id": "V4-STALL"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      },
+      {
+        "id": "882bee40-fcbc-4a01-a0e1-6754713145ac",
+        "horse": null,
+        "taxes": [
+          {
+            "base": 25,
+            "code": "DEMO",
+            "name": "Taxe fictive 5 %",
+            "rate": 5,
+            "amount": 1.25,
+            "jurisdiction": "DEMO ONLY"
+          }
+        ],
+        "total": 26.25,
+        "category": "merch",
+        "currency": "CAD",
+        "horse_id": null,
+        "quantity": 1,
+        "subtotal": 25,
+        "supplier": "association",
+        "created_at": "2026-09-07T22:17:58.65126+00:00",
+        "tax_amount": 1.25,
+        "unit_price": 25,
+        "beneficiary": {
+          "contact_id": "fb600000-0000-0000-0000-000000000001",
+          "display_name": "Alex Démonstration"
+        },
+        "description": "Casquette fictive",
+        "presentation": {
+          "section": "other"
+        },
+        "exemption_reason": null,
+        "beneficiary_contact_id": "fb600000-0000-0000-0000-000000000001"
+      }
+    ],
+    "context": {
+      "id": "d4a49e87-2327-44ed-82af-e34a7f2a4fe1",
+      "kind": "event",
+      "period": null,
+      "name_en": "Fictitious show — render 4 review · main",
+      "name_fr": "Concours fictif — revue rendu 4 · main",
+      "show_id": "4ef762dc-5f9a-4a91-a790-b821f6d03a41",
+      "year_basis": "show_start",
+      "financial_year": 2026
+    },
+    "mandate": "DEMO mandate — unvalidated tax prototype",
+    "currency": "CAD",
+    "folio_id": "c427fb80-8867-430d-aa7a-d6e4e7342097",
+    "payments": [
+      {
+        "id": "efbf33d0-3dbb-415e-93c5-7d1ca967ed0f",
+        "amount": 200,
+        "method": "etransfer",
+        "currency": "CAD",
+        "reference": "DEMO revue 4ef762dc-5f9a-4a91-a790-b821f6d03a41 0",
+        "allocations": [
+          {
+            "amount": 5.25,
+            "charge_id": "db189462-ce28-4912-9e16-b35c61f8e0e6"
+          },
+          {
+            "amount": 105,
+            "charge_id": "e721ce00-a64b-4773-9be8-1134a9a5cca9"
+          },
+          {
+            "amount": 21,
+            "charge_id": "efd7cc2b-a39e-4d96-b9da-748b1753387b"
+          },
+          {
+            "amount": 68.75,
+            "charge_id": "faa68741-f6a2-4ce0-84b9-8885000819c5"
+          }
+        ],
+        "received_at": "2026-09-07T22:17:59.353+00:00",
+        "receipt_number": "DEMO-RCPT-000022"
+      }
+    ],
+    "received": 200,
+    "subtotal": 2400,
+    "issued_at": "2026-09-07T22:22:12.007961+00:00",
+    "suppliers": {
+      "hsp": {
+        "demo": true,
+        "name": "HSP DEMO",
+        "address": "2 rue Fictive",
+        "tax_number_1": "DEMO-HSP-TAX"
+      },
+      "association": {
+        "demo": true,
+        "name": "Association DEMO",
+        "address": "1 rue Fictive",
+        "tax_number_1": "DEMO-ASSO-TAX"
+      }
+    },
+    "payment_id": null,
+    "tax_amount": 120,
+    "account_number": "DEMO-ACC-000015",
+    "render_version": 4,
+    "presentation_version": 4
+  },
+  "created_at": "2026-09-07T22:22:12.008181+00:00",
+  "payment_id": null,
+  "organization_id": "fb300000-0000-0000-0000-000000000001"
+}

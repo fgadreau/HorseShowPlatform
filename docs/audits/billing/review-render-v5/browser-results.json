@@ -1,0 +1,41 @@
+{
+  "realBrowser": true,
+  "realLocalRPC": true,
+  "mockedResponses": false,
+  "manualPaymentsSimulated": true,
+  "captures": [
+    "account-open-fr-1440.png",
+    "account-open-fr-390.png",
+    "account-open-en-1440.png",
+    "account-open-en-390.png",
+    "closing-recap-fr-390.png",
+    "closing-recap-fr-1440.png",
+    "closed-payable-staff-1440.png",
+    "my-accounts-fr-1440.png",
+    "my-accounts-fr-390.png",
+    "my-accounts-en-1440.png",
+    "my-accounts-en-390.png",
+    "account-closed-fr-1440.png",
+    "account-closed-fr-390.png",
+    "account-closed-en-1440.png",
+    "account-closed-en-390.png",
+    "invoice-fr-1440.png",
+    "invoice-fr-390.png",
+    "invoice-en-1440.png",
+    "invoice-en-390.png",
+    "statement-fr-1440.png",
+    "statement-fr-390.png",
+    "statement-en-1440.png",
+    "statement-en-390.png",
+    "receipt-fr-1440.png",
+    "receipt-fr-390.png",
+    "receipt-en-1440.png",
+    "receipt-en-390.png"
+  ],
+  "checks": [
+    "Authorized secretary collects closed account; zero balance hides form; final invoice unchanged",
+    "My accounts actually loaded",
+    "FR/EN desktop/mobile account and documents: no horizontal overflow or clipped amount cells"
+  ],
+  "complete": true
+}

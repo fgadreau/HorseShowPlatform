@@ -1,0 +1,178 @@
+{
+  "complete": true,
+  "realLocalRPC": true,
+  "realStorageHTTP": true,
+  "manualPaymentsSimulated": true,
+  "newStripePayments": 0,
+  "denied": 4,
+  "files": [
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 53
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 7
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "3b499047-a880-4d3e-9dd5-9bbeec68a72d",
+      "number": "DEMO-RCPT-000024",
+      "locale": "fr",
+      "path": "main-receipt-DEMO-RCPT-000024-fr.pdf",
+      "sha256": "d2d4e1690c2add8f10a6ff04ea4a86cb5382e91f24097bb43a227752f547e5eb"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 53
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 6
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "3b499047-a880-4d3e-9dd5-9bbeec68a72d",
+      "number": "DEMO-RCPT-000024",
+      "locale": "en",
+      "path": "main-receipt-DEMO-RCPT-000024-en.pdf",
+      "sha256": "ab7562e5b456a8503ed738ee4286fe53139ce780e72625c1bcf918eb6270813f"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 48
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "9f526103-dc03-4bcb-bced-40c7d6e1c967",
+      "number": null,
+      "locale": "fr",
+      "path": "main-statement-9f526103-dc03-4bcb-bced-40c7d6e1c967-fr.pdf",
+      "sha256": "e6857f5782c2878cbdd7143eb822dad36b00af85bb1bcc7165c673aed01a04f6"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 48
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "statement",
+      "id": "9f526103-dc03-4bcb-bced-40c7d6e1c967",
+      "number": null,
+      "locale": "en",
+      "path": "main-statement-9f526103-dc03-4bcb-bced-40c7d6e1c967-en.pdf",
+      "sha256": "a1befdf516e389358d4fd8614e6651a655f99618f7d73ea937a8232e96c5ea85"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 49
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "f0b53098-9a3d-497a-80c0-6306da672bfa",
+      "number": "DEMO-INV-000010",
+      "locale": "fr",
+      "path": "main-invoice-DEMO-INV-000010-fr.pdf",
+      "sha256": "748aaaab6b61c2a1927e1a5e1aaa291584c0f665b3feb09e10f0510e3f6d55e7"
+    },
+    {
+      "coverage": {
+        "pages": 4,
+        "rows": 49
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "invoice",
+      "id": "f0b53098-9a3d-497a-80c0-6306da672bfa",
+      "number": "DEMO-INV-000010",
+      "locale": "en",
+      "path": "main-invoice-DEMO-INV-000010-en.pdf",
+      "sha256": "9b37429a6fe1465a7077bc01afb17a592e17f66683904168439f912151dc8c5c"
+    },
+    {
+      "coverage": {
+        "pages": 6,
+        "rows": 79
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 0
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "b0c286c7-113f-4e59-9e3e-68d6284ff320",
+      "number": "DEMO-RCPT-000025",
+      "locale": "fr",
+      "path": "main-receipt-DEMO-RCPT-000025-fr.pdf",
+      "sha256": "45f54dc4f4514d42a7eb00f2edb348433874b55cc893bf24efaf71d73da99ab4"
+    },
+    {
+      "coverage": {
+        "pages": 5,
+        "rows": 79
+      },
+      "kept": {
+        "keptBlockTails": 7,
+        "keptBibTails": 3
+      },
+      "headings": {
+        "headingRows": 33,
+        "continuedRows": 9
+      },
+      "name": "main",
+      "kind": "receipt",
+      "id": "b0c286c7-113f-4e59-9e3e-68d6284ff320",
+      "number": "DEMO-RCPT-000025",
+      "locale": "en",
+      "path": "main-receipt-DEMO-RCPT-000025-en.pdf",
+      "sha256": "627cdd5da2f6b3afbefae880d65da53e65c67fb315521e920a95d86337168fe4"
+    }
+  ]
+}

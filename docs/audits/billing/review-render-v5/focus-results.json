@@ -1,0 +1,17 @@
+{
+  "complete": true,
+  "realBrowser": true,
+  "mockedResponses": false,
+  "captures": [
+    "focus-account-fr-1440.png",
+    "focus-account-fr-390.png",
+    "focus-account-en-1440.png",
+    "focus-account-en-390.png",
+    "focus-invoice-fr-1440.png",
+    "focus-invoice-fr-390.png",
+    "focus-invoice-en-1440.png",
+    "focus-invoice-en-390.png"
+  ],
+  "downloads": 8,
+  "styleChecks": 8
+}
