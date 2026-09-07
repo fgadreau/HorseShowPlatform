@@ -63,6 +63,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      // Persistent pilot state includes credentials, backups and private PDFs.
+      // Git ignore rules do not prevent Vite from serving those files over HTTP.
+      fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/.tmp/**"] },
       allowedHosts: localProxy && env.CODESPACE_NAME && env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
         ? [`${env.CODESPACE_NAME}-5173.${env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`]
         : [],
