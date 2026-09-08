@@ -2,6 +2,8 @@
 
 Statut : audit documentaire uniquement. **La branche n'est pas encore déployable telle quelle pour les services de facturation PREPROD.** Le site est accessible ; les endpoints de paiement et de documents ainsi que les workers restent conçus pour la pile locale.
 
+Complément de la même soirée : [faisabilité Vercel + Supabase, limites, coûts et essais requis](preprod-vercel-supabase-feasibility-2026-09-08.md). Ce complément ajoute des lectures HTTP anonymes : PREPROD redirige vers l'authentification Vercel ; l'accès confirmé par le propriétaire ne vaut pas accès machine. Le périmètre des vérifications ci-dessous décrit la première séance d'audit.
+
 ## Références de reprise
 
 - Worktree persistant : `/workspaces/HorseShowPlatform/.worktrees/billing-hsp-direct`.
