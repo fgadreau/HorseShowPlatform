@@ -1,4 +1,5 @@
 import {pdfIntegration} from './pdf-integration.mjs';
+import {hostedIntegration} from './hosted-integration.mjs';
 import {stripeRaces} from './stripe-concurrency.mjs';
 import {runCheckoutRaces} from './checkout-concurrency.mjs';
 import {execFileSync, spawn} from 'node:child_process';
@@ -29,7 +30,7 @@ function check(name,fn){fn();report.push(name);console.log('PASS',name);}
 const migration='supabase/migrations/20260906000900_billing_folio_foundation.sql';
 try {
  if(fresh){
-  workdir=mkdtempSync('/tmp/hsp-billing-rebuild-');
+  workdir=mkdtempSync('.tmp/billing-tests/rebuild-');
   execFileSync(cli,['init','--workdir',workdir],{stdio:['ignore','pipe','pipe']});
   let config=readFileSync(workdir+'/supabase/config.toml','utf8');
   config=config.replace(/^project_id = .*$/m,`project_id = "${project}"`)
@@ -163,6 +164,9 @@ try {
  sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
  console.log('FINAL PDF SQL COUNTS',JSON.stringify(sqlCounts));report.push('PDF SQL acceptance assertions');
  stage='PDF integration';await pdfIntegration({sql,session,check});
+ stage='hosted pilot operations';sql(readFileSync('supabase/tests/billing_hosted_pilot.sql','utf8'));
+ report.push('hosted inbox replay, lane exclusion, crash lease recovery, stale-owner fencing and service-only grants');
+ stage='hosted HTTP / SQL integration';await hostedIntegration({sql,session,check});
  complete=true;
 } catch(error){
  failure={stage,message:String(error.stderr||error.message)};

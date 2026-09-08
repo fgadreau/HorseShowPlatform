@@ -40,6 +40,8 @@ jobs:
       - run: npm run test:governing
       - run: npm run test:eligibility
       - run: npm run test:vet
+      - name: Billing local contracts and PDF regressions (no remote credentials)
+        run: node --test scripts/billing/*.test.mjs
       - run: VET_TEST_SERVERLESS=true npm run test:vet:pdf
       - name: Verify immutable production migration chain
         if: github.event_name == 'pull_request' && github.base_ref == 'main'

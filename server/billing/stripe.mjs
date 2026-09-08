@@ -99,6 +99,10 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   return result;
  },async receive(raw,signature){
   const event=verifyEvent(raw,signature,config.webhook,Date.now(),true);
+  return this.receiveEvent(event);
+ },async receiveEvent(event){
+  // Internal server entry for an already authenticated, durable sandbox inbox.
+  if(event.livemode!==false||event.data?.object?.livemode!==false)throw Error('BILLING_TEST_ONLY');
   if(!event.type?.startsWith('payment_intent.')&&!['charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded'].includes(event.type))return;
   const platform=await stripe('/account');
   if(event.type.startsWith('application_fee.')){

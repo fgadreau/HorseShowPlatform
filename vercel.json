@@ -3,11 +3,39 @@
     "api/vet.js": {
       "maxDuration": 60,
       "includeFiles": "node_modules/@sparticuz/chromium/bin/**"
+    },
+    "api/billing.js": {
+      "maxDuration": 240
+    },
+    "api/billing-documents.js": {
+      "maxDuration": 240,
+      "includeFiles": "{node_modules/@sparticuz/chromium/bin/**,public/branding/hsp-logo-aubergine.svg}"
     }
   },
   "routes": [
-    { "src": "/api/vet/([a-z-]+)$", "dest": "/api/vet?action=$1" },
-    { "handle": "filesystem" },
-    { "src": "/.*", "dest": "/index.html" }
-  ]
+    {
+      "src": "/api/billing/([a-z-]+)$",
+      "dest": "/api/billing?action=$1"
+    },
+    {
+      "src": "/api/billing-documents/([a-z-]+)$",
+      "dest": "/api/billing-documents?action=$1"
+    },
+    {
+      "src": "/api/vet/([a-z-]+)$",
+      "dest": "/api/vet?action=$1"
+    },
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "/.*",
+      "dest": "/index.html"
+    }
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "feat/billing-preprod-hosted-pilot": false
+    }
+  }
 }
