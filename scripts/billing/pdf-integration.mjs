@@ -1,3 +1,4 @@
+import {inspectProof} from './document-proof-inspection.mjs';
 // Real PostgreSQL sessions and Chromium, private filesystem adapter (NOT Storage HTTP qualification).
 import assert from 'node:assert/strict';
 import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
@@ -23,4 +24,15 @@ export async function pdfIntegration({sql,session,check}){
  check('PDF actual payer downloads hash-verified bytes through private filesystem adapter',()=>assert(bytes.subarray(0,4).equals(Buffer.from('%PDF'))));
  const denied={rpc:rpcFor("set role authenticated; set request.jwt.claim.sub='10000000-0000-0000-0000-000000000003';")};
  await assert.rejects(downloadDocument({user:denied,service,documentId:doc,locale:'fr'}),/BILLING_FORBIDDEN/);check('PDF actual non-payer denied before storage read',()=>{});
+ // Publish fresh documents from persisted sale/payment/finalization flows through the real worker.
+ const proofs=JSON.parse(sql("select jsonb_agg(jsonb_build_object('name',name,'document',public.billing_document_payload(document_id)) order by name) from public.billing_document_proof_cases"));
+ const proofDir='docs/billing-demo-20260909/integrated';mkdirSync(proofDir,{recursive:true});const proofResults=[];
+ writeFileSync(proofDir+'/snapshots.json',JSON.stringify(proofs,null,2));
+ for(const {name,document} of proofs){
+  const before=JSON.stringify(document.snapshot),result=await a.run(document.id);check('persisted DEMO worker '+name,()=>assert.equal(result.state,'completed'));
+  for(const locale of ['fr','en']){const bytes=await downloadDocument({user,service,documentId:document.id,locale});proofResults.push(await inspectProof({bytes,document,locale,path:`${proofDir}/${name}-${locale}.pdf`,origin:'persisted PostgreSQL + worker + authorized download'}));}
+  check('published snapshot unchanged '+name,()=>assert.equal(JSON.stringify(JSON.parse(sql(`select snapshot from public.billing_documents where id='${document.id}'`))),before));
+ }
+ writeFileSync(proofDir+'/results.json',JSON.stringify({complete:true,documents:proofResults},null,2));
+
 }

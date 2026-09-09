@@ -1,3 +1,5 @@
+import {renderConsolidated} from './consolidated-render.mjs';
+import {consolidatedModel} from './consolidated-model.mjs';
 import {readFileSync} from 'node:fs';
 import {serverlessBrowser} from '../vet/serverless-browser.mjs';
 const logo=readFileSync(new URL('../../public/branding/hsp-logo-aubergine.svg',import.meta.url),'utf8').replace(/<\?xml[^>]*>/g,'');
@@ -8,6 +10,7 @@ export function documentModel(d,locale){
  if(!['fr','en'].includes(locale)||!['statement','receipt','invoice'].includes(d.kind))throw Error('BILLING_PDF_INVALID');
  const s=d.snapshot,fr=locale==='fr',money=c=>new Intl.NumberFormat(fr?'fr-CA':'en-CA',{style:'currency',currency:s.currency}).format(c/100),blocks=[];
  const tr=(a,b)=>fr?a:b, taxes=new Map();
+ const method=m=>({cash:tr('Comptant','Cash'),etransfer:'Interac',cheque:tr('Chèque','Cheque'),other:tr('Autre','Other'),stripe_test:'Stripe TEST',stripe_checkout:'Stripe Checkout',stripe_terminal:'Stripe Terminal'})[m]??m;
  for(const c of s.charges){if(c.presentation&&!['entry','reservation','other'].includes(c.presentation.section))throw Error('BILLING_PDF_INVALID_GROUP');if(cents(c.subtotal)+cents(c.tax_amount)!==cents(c.total)||sum(c.taxes,'amount')!==cents(c.tax_amount))throw Error('BILLING_PDF_TOTAL_MISMATCH');for(const t of c.taxes){const k=JSON.stringify([t.code,t.name,t.rate,t.jurisdiction]);taxes.set(k,(taxes.get(k)??0)+cents(t.amount));}}
  if(sum(s.charges,'subtotal')!==cents(s.subtotal)||sum(s.charges,'tax_amount')!==cents(s.tax_amount)||sum(s.charges,'total')!==cents(s.total)||sum(s.payments,'amount')!==cents(s.received)||cents(s.total)-cents(s.received)!==cents(s.balance))throw Error('BILLING_PDF_TOTAL_MISMATCH');
  const taxText=c=>c.taxes.map(t=>`${t.name} (${t.rate}%) ${money(cents(t.amount))}`).join(' · ')||(c.exemption_reason?tr('Exemption : ','Exemption: ')+c.exemption_reason:'');
@@ -34,9 +37,11 @@ export function documentModel(d,locale){
   blocks.unshift({receipt:true,label:tr('Paiement concerné et affectations','Payment received and allocations'),columns:[tr('Désignation','Description'),tr('Montant','Amount')],rows:[[`${p.method==='cash'?tr('Comptant','Cash'):p.method==='etransfer'?'Interac':p.method==='stripe_test'?'Stripe TEST':p.method} · ${new Date(p.received_at).toLocaleString(fr?'fr-CA':'en-CA',{timeZone:'UTC'})} UTC · ${p.reference??''}`,money(cents(p.amount))],...p.allocations.map(a=>{const c=s.charges.find(c=>c.id===a.charge_id);if(!c)throw Error('BILLING_PDF_INVALID_RECEIPT');return [[description(c),c.presentation?.block_label,c.presentation?.occurrence_id].filter(Boolean).join(' · '),money(cents(a.amount))];})]});
  }
  blocks.push({label:tr('Récapitulatif général','Account summary'),columns:[tr('Situation à la date du document','Position at document date'),s.currency],rows:[[tr('Frais avant taxes','Charges before taxes'),money(cents(s.subtotal))],...[...taxes].map(([k,v])=>{const [,name,rate,jurisdiction]=JSON.parse(k);return [`${name} (${rate}%) · ${jurisdiction}`,money(v)];}),[tr('Total des taxes','Total taxes'),money(cents(s.tax_amount))],[tr('Total du compte','Account total'),money(cents(s.total))],[tr('Paiements reçus à cette date','Payments received at this date'),money(cents(s.received))],[tr('Solde à cette date','Balance at this date'),money(cents(s.balance))]]});
- return {blocks,groups:groups.size,title:d.kind==='invoice'?tr('Facture finale','Final invoice'):d.kind==='receipt'?tr('Reçu de paiement','Payment receipt'):tr('Relevé du compte','Account statement'),continued:tr('suite','continued')};
+ if(s.supplier_invoices)return consolidatedModel(d,locale);
+ return {blocks,groups:groups.size,title:d.kind==='invoice'?(s.supplier_invoices?tr('Facture finale consolidée','Consolidated final invoice'):tr('Facture finale','Final invoice')):d.kind==='receipt'?tr('Reçu de paiement','Payment receipt'):tr('Relevé du compte','Account statement'),continued:tr('suite','continued')};
 }
 export async function renderDocument(d,locale,{browser:provided}={}){
+ if(d.snapshot.supplier_invoices)return renderConsolidated(d,locale,documentModel(d,locale),{browser:provided});
  const model=documentModel(d,locale),s=d.snapshot,fr=locale==='fr',browser=provided??await serverlessBrowser.launch();let page;
  try{
   page=await browser.newPage({javaScriptEnabled:false});await page.route('**/*',r=>r.abort());
@@ -48,7 +53,7 @@ export async function renderDocument(d,locale,{browser:provided}={}){
    function newPage(first=false){const p=document.createElement('section');p.className='page';p.innerHTML=header+'<div class="body"></div><footer></footer>';document.body.append(p);body=p.querySelector('.body');if(first)body.innerHTML=identity;pages.push(p);}
    function newTable(block,continuation){table=document.createElement('table');const cg=document.createElement('colgroup');block.columns.forEach((_,i)=>{const c=document.createElement('col');c.style.width=(i===0?55:45/(block.columns.length-1))+'%';cg.append(c);});table.append(cg);const head=table.createTHead();let row=head.insertRow();row.className='group';let th=document.createElement('th');th.colSpan=block.columns.length;th.textContent=block.label+(continuation?' — '+continued:'');row.append(th);row=head.insertRow();block.columns.forEach(v=>{const th=document.createElement('th');th.textContent=v;row.append(th);});tb=table.createTBody();body.append(table);}
    newPage(true);
-   for(const b of blocks){newTable(b,false);b.rows.forEach((values,i)=>{let row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight){row.remove();if(!tb.rows.length)table.remove();newPage();newTable(b,i>0);row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight)throw Error('BILLING_PDF_ROW_TOO_LARGE');}});}
+   for(const b of blocks){if(b.breakBefore)newPage();newTable(b,false);b.rows.forEach((values,i)=>{let row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight){row.remove();if(!tb.rows.length)table.remove();newPage();newTable(b,i>0);row=tb.insertRow();if(b.receipt?i===0:i===b.rows.length-1)row.className="total";values.forEach(v=>row.insertCell().textContent=v);if(body.scrollHeight>body.clientHeight)throw Error('BILLING_PDF_ROW_TOO_LARGE');}});}
    pages.forEach((p,i)=>{const f=p.querySelector('footer');const a=document.createElement('span');a.textContent=account;const b=document.createElement('span');b.textContent=`${i+1} / ${pages.length}`;f.append(a,b);});
   },{header,identity:`<div class="identity"><div>${identity(s.seller)}</div><div>${identity(s.payer)}</div></div>`,blocks:model.blocks,continued:model.continued,account:s.account_number});
   return await page.pdf({preferCSSPageSize:true,printBackground:true});

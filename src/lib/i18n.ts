@@ -1,3 +1,4 @@
+import billingDocumentTranslations from './billingDocumentTranslations.json';
 export type Locale = "fr" | "en";
 
 export function getInitialLocale(): Locale {
@@ -16,6 +17,7 @@ export function saveLocale(locale: Locale) {
 
 export const translations = {
   fr: {
+    billingDocument: billingDocumentTranslations.fr,
     auth: {
       accountType: "Type de compte",
       accountTypes: {
@@ -72,6 +74,7 @@ export const translations = {
     },
   },
   en: {
+    billingDocument: billingDocumentTranslations.en,
     auth: {
       accountType: "Account type",
       accountTypes: {

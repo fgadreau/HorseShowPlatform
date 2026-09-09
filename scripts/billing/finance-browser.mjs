@@ -22,6 +22,7 @@ try{
  case 'billing_ui_detail':data={...snapshot(),documents,checkout:{ready,version,can_prepare:ready&&balance()===0&&!closed&&!pending,reasons:closed?['CLOSED']:!ready?['FEES_EXPECTED']:balance()?['BALANCE_DUE']:['RECAP_REQUIRED']},stripe:{can_pay:!closed,reserved:pending?.amount??0,available:balance()-(pending?.amount??0),attempt:pending},actions:args.p_personal?{}:{sale:!closed,payment:true,attest:!closed,finalize:!closed}};break;
  case 'list_horse_health_compliance':data=[];break;
  case 'billing_navigation_scope':data={staff:true};break;
+ case 'get_billing_hsp_fee_settings':data={platform_admin:false,settings:[{scope:'platform',amount:5}]};break;
  case 'get_billing_finance_overview':data={groups:[],has_data:false};break;
  case 'list_billing_contexts':data={total:1,items:[{id:'context-demo',show_id:'show-demo',name_fr:'Concours fictif',name_en:'Fictitious show'}]};break;
  case 'billing_ui_catalog':data={enabled:true,context_id:'context-demo',currency:'CAD',products:[{id:'product-demo',name:'Stalle simulée',price:50}]};break;
@@ -50,7 +51,7 @@ try{
  if(['succeeded','canceled'].includes(result.state))pending=null;
  }await route.fulfill({contentType:'application/json',body:JSON.stringify(result)});});
 
- async function go(path){await page.goto('http://127.0.0.1:5317'+path);await page.getByRole('heading').first().waitFor();}
+ async function go(path){await page.goto('http://127.0.0.1:5317'+path);try{await page.getByRole('heading').first().waitFor();}catch(e){writeFileSync('.tmp/billing-ui/failure.json',JSON.stringify({path,errors,body:await page.locator('body').innerText()},null,2));throw e;}}
  async function sale(){await page.getByLabel('Produit — prix du contexte').selectOption('product-demo');await page.getByRole('button',{name:'Ajouter le frais',exact:true}).click();await page.waitForTimeout(150);}
  async function pay(amount){await page.getByLabel('Montant partiel ou solde').fill(String(amount));await page.getByRole('button',{name:'Payer mon compte — TEST',exact:true}).click();await page.getByLabel('Carte Stripe TEST (mock)').waitFor();const confirmed=page.waitForResponse(r=>r.url().includes('/__local-billing/payment')&&r.request().postDataJSON().action==='resume');await page.getByRole('button',{name:'Confirmer le paiement test',exact:true}).click();await confirmed;await page.waitForTimeout(150);}
  await go('/associations/org-demo/finance/accounts/folio-demo');await sale();assert.equal(charges.length,2);passed.push('secretary adds simulated stall to common account');

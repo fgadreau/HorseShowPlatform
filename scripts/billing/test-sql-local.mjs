@@ -56,7 +56,7 @@ try {
  }
  const historySQL=['invoices','invoice_line_items','payments','manual_sales','entries','stall_bookings','contact_organization_memberships'].map(t=>`select '${t}:'||md5(coalesce(string_agg(row_to_json(t)::text,'' order by id),'')) from public.${t} t;`).join('\n');
  const historic=sql(historySQL);
- stage='foundation migration';if(!fresh){sql(readFileSync(migration,'utf8'));sql(readFileSync('supabase/migrations/20260906001000_billing_checkout_server.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001100_billing_stripe_test.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001200_billing_ui_contracts.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001300_billing_document_pdf.sql','utf8'));}
+ stage='foundation migration';if(!fresh){sql(readFileSync(migration,'utf8'));sql(readFileSync('supabase/migrations/20260906001000_billing_checkout_server.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001100_billing_stripe_test.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001200_billing_ui_contracts.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001300_billing_document_pdf.sql','utf8'));sql(readFileSync('supabase/migrations/20260909000100_billing_consolidated_suppliers.sql','utf8'));sql(readFileSync('supabase/migrations/20260909000200_billing_document_locale.sql','utf8'));}
  check('migration preserves every historical financial/source row',()=>assert.equal(sql(historySQL),historic));
  stage='legacy regressions';
  for(const file of ['stall_booking_invoice.sql','incentive_nomination_programs.sql']){
@@ -149,6 +149,8 @@ try {
  stage='PDF SQL';sql(readFileSync('supabase/tests/billing_document_pdf.sql','utf8'));
  sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
  console.log('FINAL PDF SQL COUNTS',JSON.stringify(sqlCounts));report.push('PDF SQL acceptance assertions');
+ stage='consolidated suppliers';sql(readFileSync('supabase/tests/billing_consolidated_suppliers.sql','utf8'));report.push('Consolidated suppliers SQL acceptance');sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));console.log('FINAL CONSOLIDATED SQL COUNTS',JSON.stringify(sqlCounts));
+ stage='document locale';sql(readFileSync('supabase/tests/billing_document_locale.sql','utf8'));sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));report.push('Persisted bilingual document flows and immutable presentation');
  stage='PDF integration';await pdfIntegration({sql,session,check});
  complete=true;
 } catch(error){
