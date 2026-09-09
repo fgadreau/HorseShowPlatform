@@ -9,5 +9,10 @@
     { "src": "/api/vet/([a-z-]+)$", "dest": "/api/vet?action=$1" },
     { "handle": "filesystem" },
     { "src": "/.*", "dest": "/index.html" }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": {
+      "feat/billing-pilot-integrated": false
+    }
+  }
 }
