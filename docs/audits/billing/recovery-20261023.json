@@ -127,15 +127,53 @@
     "remote_stripe_calls": false,
     "remote_storage_http_qualified": false
   },
-  "remote_changes_performed": [],
-  "deployment_status": "not deployed; not pushed; no remote migration applied",
+  "remote_changes_performed": [
+    {
+      "date": "2026-10-23",
+      "project_ref": "qaguotdproxamgudnnsd",
+      "action": "Apply the 16 reviewed migrations after explicit user approval",
+      "latest_migration": "20261023000100",
+      "verification": {
+        "authenticated_can_adopt_direct": false,
+        "authenticated_can_run_worker": false,
+        "billing_accounts": 0,
+        "billing_contexts": 0,
+        "billing_documents": 0,
+        "billing_migrations": 16,
+        "billing_payments": 0,
+        "billing_tables": 43,
+        "billing_tables_without_rls": [],
+        "contacts": 48,
+        "entries": 50,
+        "horses": 45,
+        "invoices": 0,
+        "latest_migration": "20261023000100",
+        "payments": 0,
+        "pdf_bucket": {
+          "file_size_limit": 20971520,
+          "id": "billing-pdfs",
+          "mime_types": [
+            "application/pdf"
+          ],
+          "public": false
+        },
+        "pilot_organizations": 0,
+        "service_can_run_worker": true,
+        "storage_objects": 1
+      },
+      "backup_directory": ".tmp/preprod-backup-20261023",
+      "backup_export_counts_verified": true,
+      "backup_restore_rehearsal_performed": false
+    }
+  ],
+  "deployment_status": "PREPROD schema migrated and checked; application branch not pushed or deployed; billing pilot not activated; PROD untouched",
   "remaining": [
-    "Connect or authenticate Supabase PREPROD and Vercel for read-only inventory and deployment preparation",
+    "Authenticate Vercel for read-only project/environment inventory",
     "Confirm Fluid Compute and commercial-plan eligibility before hosted use",
-    "Back up PREPROD database and Storage separately before migrations",
-    "Review dry-run and prepare a new fictitious pilot context",
-    "Configure PREPROD server variables, sandbox webhook destinations, private Storage, Vault and Cron",
-    "Qualify payments, replay, document downloads and recovery with Codespace closed"
+    "Prepare a new fictitious pilot context and sandbox account configuration",
+    "Configure PREPROD server variables, sandbox webhook destinations, Vault and Cron",
+    "Deploy the reviewed application to PREPROD",
+    "Qualify payments, replay, private Storage HTTP downloads and recovery with Codespace closed"
   ],
   "official_references": [
     "https://vercel.com/docs/functions/limitations",
