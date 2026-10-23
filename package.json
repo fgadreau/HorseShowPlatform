@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:reports": "tsc -p tsconfig.reports-test.json && cp scripts/draw-test-package.json .tmp/reports-tests/package.json && node .tmp/reports-tests/scripts/nrha-reports-test.js",
+    "test:reports:browser": "npm run test:reports && node scripts/nrha-reports.browser.mjs",
     "dev": "vite --host 0.0.0.0",
     "build": "tsc -b && vite build",
     "preview": "vite preview --host 0.0.0.0",

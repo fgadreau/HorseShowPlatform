@@ -1,4 +1,5 @@
 import {FinanceView} from '../finance/FinanceView';
+import { ReportsView } from "../reports/ReportsView";
 import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
 import {billingRpc} from '../../services/billingFolio';
 import { Brand } from "../../components/Brand";
@@ -680,6 +681,7 @@ export function Dashboard({
   const handleViewChange = (view: ViewKey) => {
     setIsMobileMenuOpen(false);
     if(view==='billing')navigateBilling(`/associations/${selectedOrganization?.id}/finance`);
+    else if(view==='reports')navigateBilling(`/associations/${selectedOrganization?.id}/reports`);
     else if(view==='my-invoices')navigateBilling('/me/accounts');
     else if(Object.values(showSections).includes(view)&&activeShowId)navigateBilling(`/associations/${selectedOrganization?.id}/shows/${activeShowId}/${Object.keys(showSections).find(k=>showSections[k]===view)}`);
     else {window.history.pushState({},'', '/');onViewChange(view);}
@@ -1087,6 +1089,18 @@ export function Dashboard({
           ) : (
             <UpgradePrompt feature="ShowScore Live Scoring" requiredPlan="professional" />
           )
+        ) : null}
+
+        {!showRouteUnavailable && effectiveView === "reports" && selectedOrganization && (canManageAssociation || isPlatformAdmin) ? (
+          <ReportsView key={selectedOrganization.id} locale={locale} data={{
+            organization: selectedOrganization, shows: selectedOrganizationShows,
+            slates: selectedOrganizationSlates, blocks: selectedOrganizationBlocks,
+            classes: selectedOrganizationClasses, entries: selectedOrganizationEntries,
+            entryResults: selectedOrganizationEntryResults, contacts: selectedOrganizationContacts,
+            horses: selectedOrganizationHorses, contactExternalIdentifiers, horseExternalIdentifiers,
+            externalCredentialIssuers, payoutCalculations: selectedOrganizationPayoutCalculations,
+            payoutAwards, payoutSchedules, payoutScheduleBrackets,
+          }} />
         ) : null}
 
         {!showRouteUnavailable && effectiveView === "results" ? (

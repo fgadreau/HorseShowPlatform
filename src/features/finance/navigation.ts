@@ -4,6 +4,7 @@ export function financeRoute(path=window.location.pathname){
  const p=path.split('/').filter(Boolean);
  if(p[0]==='me'&&p[1]==='accounts')return {view:'my-invoices' as ViewKey,org:'',show:'',folio:p[2]??''};
  if(p[0]==='associations'&&p[1]){
+  if(p[2]==='reports')return {view:'reports' as ViewKey,org:p[1],show:'',folio:''};
   if(p[2]==='finance')return {view:'billing' as ViewKey,org:p[1],show:'',folio:p[3]==='accounts'?p[4]??'':''};
   if(p[2]==='shows')return {view:showSections[p[4]??'overview']??'shows',org:p[1],show:p[3]??'',folio:''};
  }

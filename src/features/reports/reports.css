@@ -1,0 +1,7 @@
+.reports-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
+.reports-fields label { display: flex; flex-direction: column; gap: 8px; }
+.reports-fields small { color: var(--muted, #666); }
+.reports-preview { overflow-x: auto; margin-bottom: 20px; }
+.reports-preview table { width: 100%; border-collapse: collapse; }
+.reports-preview th, .reports-preview td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+.reports-preview caption { text-align: left; padding: 10px 0; }

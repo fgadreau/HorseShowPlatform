@@ -195,13 +195,30 @@
       ],
       "billing_enabled": false,
       "deployment_performed": false
+    },
+    {
+      "date": "2026-10-23",
+      "provider": "Vercel",
+      "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+      "action": "Create three protected sandbox Stripe variables",
+      "target": [
+        "preview"
+      ],
+      "git_branch": "preprod",
+      "variables": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "BILLING_STRIPE_CONNECTED_ACCOUNT"
+      ],
+      "production_env_metadata_unchanged": true,
+      "billing_enabled": false,
+      "deployment_performed": false
     }
   ],
   "deployment_status": "PREPROD schema migrated and checked; application branch not pushed or deployed; billing pilot not activated; PROD untouched",
   "remaining": [
-    "Provide the existing Stripe sandbox keys through the local masked-input helper",
     "Confirm commercial-plan eligibility before hosted use",
-    "Prepare a new fictitious pilot context and verify the existing connected sandbox account",
+    "Configure billing on the user-created PREPROD contest; connected sandbox account verified",
     "Configure sandbox webhook destinations, Vault and Cron",
     "Deploy the reviewed application to PREPROD",
     "Qualify payments, replay, private Storage HTTP downloads and recovery with Codespace closed"
@@ -220,6 +237,24 @@
     "preprod_target": "preview",
     "fluid_compute": true,
     "node_version": "24.x",
-    "production_env_metadata_unchanged": true
+    "production_env_metadata_unchanged": true,
+    "existing_automation_bypass_verified": true
+  },
+  "stripe_sandbox_verification": {
+    "platform_account": "acct_1U3ySLRrKNJAsFE9",
+    "connected_account": "acct_1UCs8m2NaiSJaBMx",
+    "mode": "test",
+    "charges_enabled": true,
+    "payouts_enabled": false,
+    "existing_webhook_endpoints": 0,
+    "payment_created": false,
+    "credentials_stored_in_git": false
+  },
+  "pilot_setup": {
+    "created_by": "user through application",
+    "participants": "invited volunteers using their own data",
+    "stripe_mode": "test",
+    "automated_fixture_creation": "cancelled per user preference",
+    "performance_simulation": "details to confirm before generating results"
   }
 }

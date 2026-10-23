@@ -13,6 +13,7 @@ export type ViewKey =
   | "stalls"
   | "scoring"
   | "results"
+  | "reports"
   | "billing"
   | "show-accounts"
   | "programs"
