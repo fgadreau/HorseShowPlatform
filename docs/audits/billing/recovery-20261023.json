@@ -125,7 +125,18 @@
     "signed_webhooks": "synthetic; real local PostgreSQL",
     "pdf": "real Chromium; private filesystem Storage adapter",
     "remote_stripe_calls": false,
-    "remote_storage_http_qualified": false
+    "remote_storage_http_qualified": false,
+    "vercel_preview_packaging": {
+      "status": "passed",
+      "functions": [
+        "api/billing",
+        "api/billing-documents",
+        "api/vet"
+      ],
+      "billing_max_duration_seconds": 240,
+      "public_env_source": "Known PREPROD settings and verified anon key substituted locally; existing sensitive frontend variables are returned empty by CLI pull",
+      "server_secret_static_asset_scan": "passed"
+    }
   },
   "remote_changes_performed": [
     {
@@ -164,14 +175,34 @@
       "backup_directory": ".tmp/preprod-backup-20261023",
       "backup_export_counts_verified": true,
       "backup_restore_rehearsal_performed": false
+    },
+    {
+      "date": "2026-10-23",
+      "provider": "Vercel",
+      "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+      "action": "Create six protected billing variables",
+      "target": [
+        "preview"
+      ],
+      "git_branch": "preprod",
+      "variables": [
+        "BILLING_HOSTED_ENABLED",
+        "BILLING_SUPABASE_URL",
+        "BILLING_WEB_ORIGIN",
+        "BILLING_SUPABASE_ANON_KEY",
+        "BILLING_SUPABASE_SERVICE_ROLE_KEY",
+        "BILLING_WORKER_SECRET"
+      ],
+      "billing_enabled": false,
+      "deployment_performed": false
     }
   ],
   "deployment_status": "PREPROD schema migrated and checked; application branch not pushed or deployed; billing pilot not activated; PROD untouched",
   "remaining": [
-    "Authenticate Vercel for read-only project/environment inventory",
-    "Confirm Fluid Compute and commercial-plan eligibility before hosted use",
-    "Prepare a new fictitious pilot context and sandbox account configuration",
-    "Configure PREPROD server variables, sandbox webhook destinations, Vault and Cron",
+    "Provide the existing Stripe sandbox keys through the local masked-input helper",
+    "Confirm commercial-plan eligibility before hosted use",
+    "Prepare a new fictitious pilot context and verify the existing connected sandbox account",
+    "Configure sandbox webhook destinations, Vault and Cron",
     "Deploy the reviewed application to PREPROD",
     "Qualify payments, replay, private Storage HTTP downloads and recovery with Codespace closed"
   ],
@@ -179,5 +210,16 @@
     "https://vercel.com/docs/functions/limitations",
     "https://vercel.com/docs/cron-jobs/usage-and-pricing",
     "https://vercel.com/docs/plans/hobby"
-  ]
+  ],
+  "vercel_inventory": {
+    "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+    "project_name": "horse-show-platform",
+    "production_branch": "main",
+    "preprod_domain": "preprod.horseshowplatform.com",
+    "preprod_branch": "preprod",
+    "preprod_target": "preview",
+    "fluid_compute": true,
+    "node_version": "24.x",
+    "production_env_metadata_unchanged": true
+  }
 }
