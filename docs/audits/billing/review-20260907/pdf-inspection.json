@@ -1,0 +1,187 @@
+{
+  "complete": true,
+  "actualDownloadedPDFs": true,
+  "checks": 204,
+  "files": [
+    {
+      "name": "main",
+      "kind": "receipt",
+      "id": "fd46f848-3320-4244-b4dc-e75aca40af19",
+      "number": "DEMO-RCPT-000015",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/main-receipt-DEMO-RCPT-000015-fr.pdf",
+      "sha256": "339326475bc1616c93e8f81a2cc9328d943f8f24f32e1cc3acab7307c35ca15a",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "receipt",
+      "id": "fd46f848-3320-4244-b4dc-e75aca40af19",
+      "number": "DEMO-RCPT-000015",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/main-receipt-DEMO-RCPT-000015-en.pdf",
+      "sha256": "d7f4a33c74230c47e2ed0d37bd3c736067cba6361bb357a445057d31a4b576ad",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "receipt",
+      "id": "f3a544a4-6796-4584-ad4e-304f89d02bcb",
+      "number": "DEMO-RCPT-000016",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/main-receipt-DEMO-RCPT-000016-fr.pdf",
+      "sha256": "02d9f2c8c1bc33fbc93052dc3db8fc61dd19ec4aa6ab97f35fbe0e1d0960f2ab",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "receipt",
+      "id": "f3a544a4-6796-4584-ad4e-304f89d02bcb",
+      "number": "DEMO-RCPT-000016",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/main-receipt-DEMO-RCPT-000016-en.pdf",
+      "sha256": "54b67650a31369fe77d83758adc5672e932d617671fba50ea2f2ce1c2fe61053",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "statement",
+      "id": "a78fb8d3-eded-46bf-adcc-4d94dd2ec3ba",
+      "number": null,
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/main-statement-a78fb8d3-eded-46bf-adcc-4d94dd2ec3ba-fr.pdf",
+      "sha256": "23bbbb994501f955861725b05656afcff84e20d644e0c04fdef6bed57639888e",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "statement",
+      "id": "a78fb8d3-eded-46bf-adcc-4d94dd2ec3ba",
+      "number": null,
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/main-statement-a78fb8d3-eded-46bf-adcc-4d94dd2ec3ba-en.pdf",
+      "sha256": "2613f24fea66d015da00d8c9227dc02199c747ded17703dcea50838b93d436be",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "invoice",
+      "id": "0e789b19-a2df-484e-bf77-05699aa00a8e",
+      "number": "DEMO-INV-000006",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/main-invoice-DEMO-INV-000006-fr.pdf",
+      "sha256": "94771dfcba0b2c364855e97179dc8f9ff40058310439aa439592150ab8439bc2",
+      "pages": 2
+    },
+    {
+      "name": "main",
+      "kind": "invoice",
+      "id": "0e789b19-a2df-484e-bf77-05699aa00a8e",
+      "number": "DEMO-INV-000006",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/main-invoice-DEMO-INV-000006-en.pdf",
+      "sha256": "d86fd7f62bbfccdcad582e621c8a61384d0743bd543e29b880ff497f699f2c7d",
+      "pages": 2
+    },
+    {
+      "name": "staff-race",
+      "kind": "receipt",
+      "id": "1f6d3207-e80b-48ae-a49e-743c6c6299dd",
+      "number": "DEMO-RCPT-000017",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/staff-race-receipt-DEMO-RCPT-000017-fr.pdf",
+      "sha256": "63edc5bceb95a8358e463e18371f7354957f9162f9a5d284f2ab92e4e96590ae",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "receipt",
+      "id": "1f6d3207-e80b-48ae-a49e-743c6c6299dd",
+      "number": "DEMO-RCPT-000017",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/staff-race-receipt-DEMO-RCPT-000017-en.pdf",
+      "sha256": "8e88ca6f43917ef45118e69cfb0cb8f05c3c3a0c5a612675f49f9e63c4d62fba",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "receipt",
+      "id": "99e55583-e54f-4ee9-8723-c05bc3dd72f6",
+      "number": "DEMO-RCPT-000018",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/staff-race-receipt-DEMO-RCPT-000018-fr.pdf",
+      "sha256": "e6df68ca178a7262556ec6ecd073abb31cfc7bcd12b7fcb17f6d040733f2ade8",
+      "pages": 2
+    },
+    {
+      "name": "staff-race",
+      "kind": "receipt",
+      "id": "99e55583-e54f-4ee9-8723-c05bc3dd72f6",
+      "number": "DEMO-RCPT-000018",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/staff-race-receipt-DEMO-RCPT-000018-en.pdf",
+      "sha256": "e474a7da07ddb4bdff8af519f6f5f74b70f3408760bea5d3cd65a2eebde6b7f5",
+      "pages": 2
+    },
+    {
+      "name": "staff-race",
+      "kind": "statement",
+      "id": "252be737-b829-4898-8301-f81a3737d3c9",
+      "number": null,
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/staff-race-statement-252be737-b829-4898-8301-f81a3737d3c9-fr.pdf",
+      "sha256": "cbf7611ea62ad04f6ec44ff3b8f38c63f88364c87ce98ead9034d3205a17f996",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "statement",
+      "id": "252be737-b829-4898-8301-f81a3737d3c9",
+      "number": null,
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/staff-race-statement-252be737-b829-4898-8301-f81a3737d3c9-en.pdf",
+      "sha256": "78965565d99ea169c71ee85b3d794e5e3753392d76c1368cca36d580d7bb4222",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "statement",
+      "id": "23aacc21-d778-4ee5-ac66-ba0279e10c12",
+      "number": null,
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/staff-race-statement-23aacc21-d778-4ee5-ac66-ba0279e10c12-fr.pdf",
+      "sha256": "3d10790d45635596e3ecdf15f4d6ec95c4f213f8bc0371feccf6635979f025bc",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "statement",
+      "id": "23aacc21-d778-4ee5-ac66-ba0279e10c12",
+      "number": null,
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/staff-race-statement-23aacc21-d778-4ee5-ac66-ba0279e10c12-en.pdf",
+      "sha256": "cc3d82589698108dff4c64fe33f6d43423e57f59da06d8cfb1603318e56aa0a1",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "invoice",
+      "id": "26009c3a-d925-4e1b-a171-0d00c3ae5a1f",
+      "number": "DEMO-INV-000007",
+      "locale": "fr",
+      "path": ".tmp/review-20260907/pdf/staff-race-invoice-DEMO-INV-000007-fr.pdf",
+      "sha256": "0192c6d8bc6ea6b6bf12ff615d414b958b29686b132eb7c53cbf17ad1017f6b3",
+      "pages": 1
+    },
+    {
+      "name": "staff-race",
+      "kind": "invoice",
+      "id": "26009c3a-d925-4e1b-a171-0d00c3ae5a1f",
+      "number": "DEMO-INV-000007",
+      "locale": "en",
+      "path": ".tmp/review-20260907/pdf/staff-race-invoice-DEMO-INV-000007-en.pdf",
+      "sha256": "c093de317b7cce914280e834f470cb58b8ab9af4ad33ebbd83b823f3d671d828",
+      "pages": 1
+    }
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "complete": true,
+  "realLocalRPC": true,
+  "realBrowser": true,
+  "mockedResponses": false,
+  "manualPaymentsSimulated": true,
+  "checks": [
+    "Closed account with debt: server-authorized staff form visible; payer form absent",
+    "Two real browser manual receipts after closure: partial balance stays payable, zero hides form",
+    "One final invoice: snapshot and FR/EN PDF bytes unchanged before/after payments",
+    "Three payments total, one HSP fee, no new invoice"
+  ],
+  "captures": [
+    ".tmp/review-v3/closed-balance-due-1440.png",
+    ".tmp/review-v3/closed-balance-due-390.png",
+    ".tmp/review-v3/closed-partial-payment-390.png",
+    ".tmp/review-v3/closed-zero-balance-390.png"
+  ],
+  "invoice": "DEMO-INV-000008",
+  "invoicePDFHashes": {
+    "fr": "1bf22f0d1856235793e42e0f0e2123943e1e5d29ed058fdfcfa97e1597cdaf39",
+    "en": "96411e90aa81fa7cbae38b044c2893529faf2e2087933e4f306aac5f52534eb8"
+  }
+}

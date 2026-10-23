@@ -1,0 +1,11 @@
+{
+  "complete": true,
+  "historicalPDFsByteIdentical": 10,
+  "svgAndConfigurationHashesUnchanged": true,
+  "allFourServicesRunning": true,
+  "listenerSecretMatch": true,
+  "workerSupportsRenderVersions": [
+    1,
+    2
+  ]
+}

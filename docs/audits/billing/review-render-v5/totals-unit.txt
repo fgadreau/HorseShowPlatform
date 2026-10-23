@@ -1,0 +1,10 @@
+✔ Version 5 preserves all detail/money cells and source identities; only labels and total placement change (44.561447ms)
+✔ Historical version 4 continues to use its original totals and separate bib total tables (33.529612ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 660.151591

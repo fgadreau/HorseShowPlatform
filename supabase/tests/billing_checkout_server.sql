@@ -106,7 +106,7 @@ do $$ declare x jsonb; begin
  select value into x from public.billing_test_fixture where key='checkout';
  perform public.billing_test_assert((select count(*) from public.billing_documents where folio_id=(x->>'folio')::uuid and kind='invoice')=1,'exactly one invoice');
  perform public.billing_test_assert((select count(*) from public.billing_outbox where document_id=(select (value->>'document_id')::uuid from public.billing_test_fixture where key='checkout-final'))=1,'one final outbox item');
- perform public.billing_test_assert((select count(*) from public.billing_pilot_organizations where organization_id<>'f3000000-0000-0000-0000-000000000001')=0,'no other association enabled');
+ perform public.billing_test_assert((select count(*) from public.billing_pilot_organizations where organization_id<>'f3000000-0000-0000-0000-000000000001' and organization_id not in(select id from public.billing_test_capability_baseline where scope='organization'))=0,'no other association enabled');
 end $$;
 -- Reusable test factory; runs with the caller's real admin identity.
 create function public.billing_test_checkout_account(p_code text,p_price numeric default 0,p_year integer default 2020) returns jsonb language plpgsql as $$

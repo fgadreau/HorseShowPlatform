@@ -1,6 +1,7 @@
 -- Test-only opt-in for the original 1A fixtures. Never installed in application DBs.
 do $$ begin
- if exists(select 1 from public.billing_pilot_organizations) or exists(select 1 from public.billing_context_access) then raise exception 'Migration activated existing data'; end if;
+ if exists((select 'organization'::text,organization_id,to_jsonb(p) from public.billing_pilot_organizations p union all select 'context',context_id,to_jsonb(c) from public.billing_context_access c) except select scope,id,payload from public.billing_test_capability_baseline)
+ or exists(select scope,id,payload from public.billing_test_capability_baseline except (select 'organization'::text,organization_id,to_jsonb(p) from public.billing_pilot_organizations p union all select 'context',context_id,to_jsonb(c) from public.billing_context_access c)) then raise exception 'Migration changed existing capability opt-ins'; end if;
 end $$;
 create function public.billing_test_enable_context() returns trigger language plpgsql security definer set search_path='' as $$
 begin

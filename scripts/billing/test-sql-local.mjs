@@ -1,4 +1,5 @@
 import {pdfIntegration} from './pdf-integration.mjs';
+import {hostedIntegration} from './hosted-integration.mjs';
 import {stripeRaces} from './stripe-concurrency.mjs';
 import {runCheckoutRaces} from './checkout-concurrency.mjs';
 import {execFileSync, spawn} from 'node:child_process';
@@ -13,6 +14,10 @@ async function freePort(){const server=createServer();await new Promise(r=>serve
 
 // Deliberately fixed local container; no URL, DATABASE_URL or remote project credentials accepted.
 const fresh=process.argv.includes('--fresh');
+const keepFailedDatabase=fresh && process.env.BILLING_TEST_KEEP_ON_FAILURE==='1';
+// Only a caller-provisioned, dedicated local test network may be selected.
+const testNetwork=process.env.BILLING_TEST_DOCKER_NETWORK;
+if(testNetwork && (!fresh || !/^hsp-billing-test-[a-z0-9-]+$/.test(testNetwork)))throw Error('Dedicated fresh-test Docker network required');
 mkdirSync('.tmp/billing-tests',{recursive:true});
 const resultPath=fresh?'.tmp/billing-tests/rebuild-results.json':'.tmp/billing-tests/results.json';
 writeFileSync(resultPath,JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete:false,failure:{stage:'preflight',message:'Validation has not completed'}}));
@@ -29,7 +34,7 @@ function check(name,fn){fn();report.push(name);console.log('PASS',name);}
 const migration='supabase/migrations/20260906000900_billing_folio_foundation.sql';
 try {
  if(fresh){
-  workdir=mkdtempSync('/tmp/hsp-billing-rebuild-');
+  workdir=mkdtempSync('.tmp/billing-tests/rebuild-');
   execFileSync(cli,['init','--workdir',workdir],{stdio:['ignore','pipe','pipe']});
   let config=readFileSync(workdir+'/supabase/config.toml','utf8');
   config=config.replace(/^project_id = .*$/m,`project_id = "${project}"`)
@@ -41,7 +46,7 @@ try {
   assert.equal(execFileSync('docker',['ps','-aq','--filter',`name=^/${container}$`],{encoding:'utf8'}).trim(),'','Disposable container name must be unused');
   assert(!execFileSync('docker',['volume','ls','--format','{{.Name}}'],{encoding:'utf8'}).split('\n').some(n=>n.endsWith('_'+project)),'Disposable volumes must be new');
   created=true;
-  execFileSync(cli,['db','start','--workdir',workdir],{stdio:['ignore','pipe','pipe'],timeout:120000});
+  execFileSync(cli,['db','start','--workdir',workdir,...(testNetwork?['--network-id',testNetwork]:[])],{stdio:['ignore','pipe','pipe'],timeout:120000});
   assert.equal(sql("select (to_regclass('public.user_profiles') is null and to_regclass('auth.users') is not null and to_regclass('storage.objects') is not null)::text;"),'true','Fresh official bootstrap must have auth/storage, no application tables');
   for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort()){
    stage='migration:'+file;
@@ -56,7 +61,20 @@ try {
  }
  const historySQL=['invoices','invoice_line_items','payments','manual_sales','entries','stall_bookings','contact_organization_memberships'].map(t=>`select '${t}:'||md5(coalesce(string_agg(row_to_json(t)::text,'' order by id),'')) from public.${t} t;`).join('\n');
  const historic=sql(historySQL);
- stage='foundation migration';if(!fresh){sql(readFileSync(migration,'utf8'));sql(readFileSync('supabase/migrations/20260906001000_billing_checkout_server.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001100_billing_stripe_test.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001200_billing_ui_contracts.sql','utf8'));sql(readFileSync('supabase/migrations/20260906001300_billing_document_pdf.sql','utf8'));sql(readFileSync('supabase/migrations/20260909000100_billing_consolidated_suppliers.sql','utf8'));sql(readFileSync('supabase/migrations/20260909000200_billing_document_locale.sql','utf8'));}
+ // Remember pre-existing opt-ins; cloning a qualified pilot is not an empty install.
+ sql(`create table public.billing_test_capability_baseline(scope text,id uuid,payload jsonb);
+ do $$ begin if ${fresh ? 'false' : "to_regclass('public.billing_pilot_organizations') is not null"} then
+ insert into public.billing_test_capability_baseline select 'organization',organization_id,to_jsonb(p) from public.billing_pilot_organizations p;
+ insert into public.billing_test_capability_baseline select 'context',context_id,to_jsonb(c) from public.billing_context_access c;
+ end if;end $$;`);
+ stage='foundation migration';if(!fresh){
+  const markers={'20260906000900':'billing_folios','20260906001000':'billing_payer_recaps','20260906001100':'billing_stripe_attempts','20260906001200':null,'20260906001300':'billing_pdf_artifacts','20260907000100':'billing_hsp_policies','20260907000200':'billing_hsp_recoveries'};
+  for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')&&f>='20260906000900').sort()){
+   const version=file.split('_')[0],table=markers[version];
+   const applied=sql(`select count(*) from supabase_migrations.schema_migrations where version='${version}'`)==='1'||(table?sql(`select to_regclass('public.${table}') is not null`)==='t':version==='20260906001200'&&sql("select to_regprocedure('public.billing_ui_detail(uuid,boolean)') is not null")==='t');
+   if(!applied)sql(readFileSync('supabase/migrations/'+file,'utf8'));
+  }
+ }
  check('migration preserves every historical financial/source row',()=>assert.equal(sql(historySQL),historic));
  stage='legacy regressions';
  for(const file of ['stall_booking_invoice.sql','incentive_nomination_programs.sql']){
@@ -151,7 +169,12 @@ try {
  console.log('FINAL PDF SQL COUNTS',JSON.stringify(sqlCounts));report.push('PDF SQL acceptance assertions');
  stage='consolidated suppliers';sql(readFileSync('supabase/tests/billing_consolidated_suppliers.sql','utf8'));report.push('Consolidated suppliers SQL acceptance');sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));console.log('FINAL CONSOLIDATED SQL COUNTS',JSON.stringify(sqlCounts));
  stage='document locale';sql(readFileSync('supabase/tests/billing_document_locale.sql','utf8'));sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));report.push('Persisted bilingual document flows and immutable presentation');
+ stage='configurable direct fee compatibility';sql(readFileSync('supabase/tests/billing_configurable_direct_fees.sql','utf8'));
+ report.push('Direct quoted sales, frozen configurable/zero fees, stale quote rejection, retry and Stripe commission compatibility');
  stage='PDF integration';await pdfIntegration({sql,session,check});
+ stage='hosted pilot operations';sql(readFileSync('supabase/tests/billing_hosted_pilot.sql','utf8'));
+ report.push('hosted inbox replay, lane exclusion, crash lease recovery, stale-owner fencing and service-only grants');
+ stage='hosted HTTP / SQL integration';await hostedIntegration({sql,session,check});
  complete=true;
 } catch(error){
  failure={stage,message:String(error.stderr||error.message)};
@@ -166,11 +189,11 @@ try {
  console.error('FAILED',stage,failure.message);process.exitCode=1;
 } finally {
  try {
- if(created){
+ if(created && (complete || !keepFailedDatabase)){
   if(fresh){execFileSync(cli,['stop','--project-id',project,'--no-backup','--workdir',workdir],{stdio:['ignore','pipe','pipe']});}
   else docker(['dropdb','-U','postgres','--if-exists',db]);
  }
- if(workdir)rmSync(workdir,{recursive:true,force:true});
+ if(workdir && (complete || !keepFailedDatabase))rmSync(workdir,{recursive:true,force:true});
  } catch(error) {complete=false; failure={stage:'cleanup',message:error.message};process.exitCode=1;}
- writeFileSync(resultPath,JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete,replayed,sqlCounts,passed:report,failure},null,2));
+ writeFileSync(resultPath,JSON.stringify({localOnly:true,mode:fresh?'fresh':'clone',complete,replayed,sqlCounts,passed:report,failure,...(!complete&&keepFailedDatabase?{diagnostic:{container,workdir}}:{})},null,2));
 }

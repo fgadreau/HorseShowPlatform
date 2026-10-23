@@ -1,0 +1,31 @@
+
+> horseshowplatform@0.1.0 build
+> tsc -b && vite build
+
+vite v8.0.14 building client environment for production...
+
+transforming...✓ 1903 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                          0.54 kB │ gzip:   0.33 kB
+dist/assets/pdf.worker-xSiVJ7U_.mjs  2,186.23 kB
+dist/assets/VetApp-C8utGGIt.css          2.93 kB │ gzip:   0.95 kB
+dist/assets/Dashboard-BcOT_FyM.css       4.65 kB │ gzip:   1.40 kB
+dist/assets/index-DnzvV6Vr.css          87.85 kB │ gzip:  15.47 kB
+dist/assets/pdf.worker-DYsRRrim.js       0.06 kB │ gzip:   0.08 kB
+dist/assets/vetServices-B5THFKfF.js      0.06 kB │ gzip:   0.07 kB
+dist/assets/gvlPdf-6TPJDfpF.js           1.39 kB │ gzip:   0.80 kB
+dist/assets/VetApp-BjXSUMSS.js          46.75 kB │ gzip:  14.16 kB
+dist/assets/jsQR-DyQCOc5E.js           129.98 kB │ gzip:  47.49 kB
+dist/assets/pdf-Db8NCdLW.js            405.09 kB │ gzip: 120.77 kB
+dist/assets/index-DhTRVPlz.js          623.40 kB │ gzip: 169.39 kB
+dist/assets/Dashboard-DxFTjE0j.js      678.23 kB │ gzip: 161.77 kB
+
+[INEFFECTIVE_DYNAMIC_IMPORT] src/services/vetServices.ts is dynamically imported by src/features/vet/VetApp.tsx but also statically imported by src/features/vet/HorsePicker.tsx, src/features/vet/VetApp.tsx, src/features/vet/VetSignature.tsx, src/features/vet/VetTestOutbox.tsx, src/features/vet/useVetServices.ts, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.22s
