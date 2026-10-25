@@ -1,3 +1,4 @@
+import {MembershipBillingSetup} from "./MembershipBillingSetup";
 import { useEffect, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { ChevronDown, ChevronRight } from "lucide-react";
@@ -98,7 +99,7 @@ function membershipTypeFormState(type?: OrganizationMembershipType | null): Memb
     description: type?.description ?? "",
     seasonYear: String(seasonYear),
     price: type ? String(type.price ?? 0) : "",
-    taxApplicable: type?.tax_applicable ?? true,
+    taxApplicable: type?.tax_applicable ?? false,
     validFrom: type?.valid_from ?? seasonStartDate(seasonYear),
     validUntil: type?.valid_until ?? seasonEndDate(seasonYear),
     isActive: type?.is_active ?? true,
@@ -640,7 +641,7 @@ function SettingsView({
           <label className="requirement-row">
             <input checked={productForm.taxApplicable} disabled={!organization || Boolean(productBusyId)} type="checkbox" onChange={(event) => handleProductFieldChange("taxApplicable", event.target.checked)} />
             <span>
-              <strong>{uiText(locale, "Taxable", "Taxable")}</strong>
+              <strong>{uiText(locale, "Taxes applicables (prix avant taxes)", "Apply taxes (price before tax)")}</strong>
               {uiText(locale, "Appliquer les taxes lorsque ce produit est vendu.", "Apply taxes when this product is sold.")}
             </span>
           </label>
@@ -742,7 +743,7 @@ function SettingsView({
           <label className="requirement-row">
             <input checked={membershipTypeForm.taxApplicable} disabled={!organization || Boolean(membershipBusyId)} type="checkbox" onChange={(event) => handleMembershipTypeFieldChange("taxApplicable", event.target.checked)} />
             <span>
-              <strong>{uiText(locale, "Taxable", "Taxable")}</strong>
+              <strong>{uiText(locale, "Taxes applicables (prix avant taxes)", "Apply taxes (price before tax)")}</strong>
               {uiText(locale, "Appliquer les taxes de l'association lorsque cette carte sera facturée.", "Apply the association taxes when this membership is invoiced.")}
             </span>
           </label>
@@ -768,6 +769,10 @@ function SettingsView({
             ) : null}
           </div>
         </form>
+      </SettingsSection>
+
+      <SettingsSection {...sectionToggleLabels} title={uiText(locale, "Facturation des cartes", "Membership billing")}>
+        <MembershipBillingSetup organization={organization} types={membershipTypes} locale={locale}/>
       </SettingsSection>
 
       <SettingsSection

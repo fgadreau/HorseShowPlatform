@@ -1,0 +1,33 @@
+{
+  "scope": "PREPROD membership billing only; basket integration deferred by user",
+  "migration": "20261025000200_membership_billing",
+  "default_tax_applicable": false,
+  "activation": "full received payment allocated to membership charge; free memberships immediate",
+  "legacy_reconciliation": "explicit staff confirmation, same total, single-line unpaid draft only, original amounts preserved, explicit payer",
+  "validation": {
+    "fresh_migrations": 160,
+    "sql_counts": {
+      "assertions": 265,
+      "expected_rejections": 100
+    },
+    "checks": 60,
+    "complete": true,
+    "browser": "FR/EN mobile; explicit tax rates, purchase cancellation, payer selection, reconciliation"
+  },
+  "backup": {
+    "schema.sql": {
+      "bytes": 1109345,
+      "sha256": "d747f229db10a93715df10fd524d81f2ccaa5e6af4af5f9cee473a1fda369650"
+    },
+    "data.sql": {
+      "bytes": 20809338,
+      "sha256": "db734ffe97b703177bd1fb9acc4072960d88346b94dcb94df37b857a4539fd06"
+    }
+  },
+  "limits": [
+    "No automatic Stripe debit",
+    "Hosted Stripe checkout remains disabled",
+    "Existing membership has not been reconciled automatically",
+    "No restore rehearsal performed"
+  ]
+}

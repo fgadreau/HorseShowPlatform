@@ -1,3 +1,4 @@
+import {membershipBillingError,confirmMembershipPurchase} from "./membershipBilling";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
@@ -44,6 +45,7 @@ function MyContactsView({
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
 }) {
+  const [membershipError, setMembershipError] = useState("");
   const [creatingContact, setCreatingContact] = useState(false);
   const [editingContact, setEditingContact] = useState<Contact | null>(null);
   const [membershipContact, setMembershipContact] = useState<Contact | null>(null);
@@ -88,17 +90,22 @@ function MyContactsView({
 
     setBuyingMembershipTypeId(membershipType.id);
 
+    setMembershipError("");
     try {
+      const total = await confirmMembershipPurchase(membershipType.id, locale);
+      if (total === null) return;
       await onCreateContactOrganizationMembership({
+        expected_total: total,
         organization_id: membershipType.organization_id,
         contact_id: membershipContact.id,
         membership_type_id: membershipType.id,
         show_id: null,
-        payer_contact_id: membershipContact.id,
-        status: "active",
+        payer_contact_id: contacts.find((contact) => contact.linked_user_id === profileId)?.id ?? membershipContact.id,
         sold_by_user_id: profileId,
       });
       setMembershipContact(null);
+    } catch (error) {
+      setMembershipError(membershipBillingError(error, locale));
     } finally {
       setBuyingMembershipTypeId("");
     }
@@ -119,6 +126,7 @@ function MyContactsView({
 
   return (
     <div className="content-grid">
+      {membershipError ? <p role="alert">{membershipError}</p> : null}
       <ViewIntro
         eyebrow={uiText(locale, "Mon espace", "My space")}
         title={uiText(locale, "Mes cavaliers et contacts", "My riders and contacts")}
@@ -185,6 +193,7 @@ function MyContactsView({
 
       {membershipContact ? (
         <ModalDialog description={contactLabel(membershipContact)} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Acheter une carte de membre", "Buy a membership")} onClose={() => setMembershipContact(null)}>
+          {membershipError ? <p role="alert">{membershipError}</p> : null}
           {(() => {
             const availableOrganizations = membershipOrganizations();
             const normalizedSearch = membershipAssociationSearch.trim().toLowerCase();
@@ -306,6 +315,7 @@ function MyContactsView({
                         <strong>
                           {membershipType ? `${membershipType.code ?? membershipType.name} ${membership.season_year}` : membership.season_year}
                         </strong>
+                        <span>{membership.status === "draft" ? uiText(locale, "En attente de paiement", "Awaiting payment") : membership.status === "active" ? uiText(locale, "Active", "Active") : membership.status}</span>
                         <span>{formatDate(membership.valid_until)}</span>
                       </span>
                     );
