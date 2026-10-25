@@ -7,7 +7,7 @@ create table public.membership_billing_config (
  created_by uuid not null references public.user_profiles(id), created_at timestamptz not null default clock_timestamp()
 );
 alter table public.membership_billing_config enable row level security;
-revoke all on public.membership_billing_config from public,anon,authenticated;
+revoke all on public.membership_billing_config from public,anon,authenticated,service_role;
 -- Domain adapter: only this private function may bypass the obsolete invoice writer.
 alter function public.billing_legacy_guard() rename to billing_membership_legacy_guard_base;
 create function public.billing_legacy_guard() returns trigger language plpgsql security definer set search_path='' as $$
@@ -180,7 +180,7 @@ begin
 end $$;
 create trigger membership_payment_allocation after insert on public.billing_payment_allocations for each row execute function public.membership_activate_on_allocation();
 
-revoke all on function public.billing_membership_legacy_guard_base(),public.membership_legacy_invoice_sync(),public.membership_billing_charge(uuid,uuid,uuid,uuid,numeric),public.membership_invoice_reconciliation_guard(),public.membership_activate_on_allocation(),public.membership_billing_configure(uuid,jsonb),public.membership_billing_quote(uuid),public.purchase_billed_membership(uuid,uuid,uuid,numeric),public.membership_billing_reconcile(uuid,numeric,uuid) from public,anon,authenticated;
+revoke all on function public.billing_legacy_guard(),public.billing_membership_legacy_guard_base(),public.membership_legacy_invoice_sync(),public.membership_billing_charge(uuid,uuid,uuid,uuid,numeric),public.membership_invoice_reconciliation_guard(),public.membership_activate_on_allocation(),public.membership_billing_configure(uuid,jsonb),public.membership_billing_quote(uuid),public.purchase_billed_membership(uuid,uuid,uuid,numeric),public.membership_billing_reconcile(uuid,numeric,uuid) from public,anon,authenticated;
 grant execute on function public.membership_billing_configure(uuid,jsonb),public.membership_billing_quote(uuid),public.purchase_billed_membership(uuid,uuid,uuid,numeric),public.membership_billing_reconcile(uuid,numeric,uuid) to authenticated;
 create function public.membership_billing_admin(p_org uuid) returns jsonb language plpgsql stable security definer set search_path='' as $$
 declare a jsonb;
