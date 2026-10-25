@@ -141,6 +141,8 @@ export function HorseDocumentIdentityPanel({
     setValidations(rows);
   }
 
+  const documentRevision = horseDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
+
   useEffect(() => {
     let cancelled = false;
     void listHorseDocumentValidations(horse.id)
@@ -153,7 +155,7 @@ export function HorseDocumentIdentityPanel({
     return () => {
       cancelled = true;
     };
-  }, [horse.id]);
+  }, [horse.id, documentRevision]);
 
   function beginIdentification(document: HorseDocument) {
     setSelectedDocumentId(document.id);

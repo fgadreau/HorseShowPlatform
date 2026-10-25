@@ -1,0 +1,67 @@
+{
+  "scope": "PREPROD only; production deployment explicitly excluded by user",
+  "date": "2026-10-25",
+  "provider": {
+    "transport": "read-only GET https://www.gvlcertcheck.ai/api/check/{certificate-code}",
+    "confirmedBy": "Actual authorized Great Holly Whiz certificate and publicly served GVL verifier",
+    "formalApiContract": "Not provided; observed transport may change",
+    "supportedQrHosts": [
+      "gvlcertcheck.ai",
+      "www.gvlcertcheck.ai",
+      "user.globalvetlink.com/gvl2/check"
+    ]
+  },
+  "verification": {
+    "realReference": {
+      "horse": "Great Holly Whiz",
+      "pdfQrDetected": true,
+      "edgeHttpStatus": 200,
+      "certificateStatus": "verified",
+      "warnings": [],
+      "horseModified": false
+    },
+    "unitTests": 8,
+    "browser": "FR/EN mobile: PDF/image QR, multiple QR, last-page lookup, horse creation and edit, retained PDF, versioned identity, duplicate prevention; external requests blocked",
+    "sql": [
+      {
+        "file": "supabase/migrations/20261025000300_coggins_gvl_pending_review.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance_presentation.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_document_identity_validations.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/verified_horse_identity_locks.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/entry_reservation_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/coggins_gvl_verification.sql",
+        "pass": true
+      }
+    ],
+    "fullFreshRebuild": "Did not complete: Docker/Supabase bootstrap failed before application migrations. Targeted SQL suites ran successfully in pre-existing local disposable seeded database, without network access."
+  },
+  "migration": "20261025000300_coggins_gvl_pending_review.sql",
+  "securityNotes": [
+    "Provider calls are certificate reads only; no NRHA requests, entries or results were sent.",
+    "Verification records use the existing authenticated document and identity RPC permissions; this change does not introduce signed server-only verification receipts."
+  ],
+  "release": {
+    "edgeFunction": "deployed PREPROD",
+    "migration": "applied PREPROD",
+    "frontend": "pending pull request and deployment"
+  }
+}

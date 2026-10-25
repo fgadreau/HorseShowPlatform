@@ -1,3 +1,4 @@
+import {prepareHorseDocumentValidation,horseDocumentValidationRpcPayload} from "../lib/horseDocumentIdentity";
 import type { User } from "@supabase/supabase-js";
 import { buildEligibilityFingerprint, eligibilityExpiresAt } from "../lib/eligibilityEngine";
 import { requireSupabase } from "../lib/supabase";
@@ -3303,6 +3304,9 @@ export async function verifyGvlCogginsDocument(input: {
 }) {
   const client = requireSupabase();
   const sourceUrl = input.source_url.trim();
+  const {data: storedHorse,error: horseError} = await client.from("horses").select("*").eq("id",input.horse_id).single<Horse>();
+  if(horseError || !storedHorse) throw horseError ?? new Error("Cheval introuvable. / Horse not found.");
+  const currentHorse = storedHorse;
 
   if (!sourceUrl) {
     throw new Error("Ajoute un lien GVL avant de lancer la validation.");
@@ -3311,9 +3315,9 @@ export async function verifyGvlCogginsDocument(input: {
   const { data: verification, error: invokeError } = await client.functions.invoke<GvlCogginsVerification>("verify-gvl-coggins", {
     body: {
       url: sourceUrl,
-      horseName: input.horse_name,
-      horseDateOfBirth: input.horse_date_of_birth ?? null,
-      horseBirthYear: input.horse_birth_year ?? null,
+      horseName: storedHorse.name,
+      horseDateOfBirth: storedHorse.date_of_birth ?? null,
+      horseBirthYear: storedHorse.birth_year ?? null,
     },
   });
 
@@ -3368,6 +3372,32 @@ export async function verifyGvlCogginsDocument(input: {
     throw new Error(verification.error);
   }
 
+  async function saveIdentity(document: HorseHealthDocument): Promise<HorseHealthDocument> {
+    const prepared = prepareHorseDocumentValidation({
+      document: {...document, horse_external_id: null},
+      horse: currentHorse,
+      extracted: {horse_name: verification!.horse_name, date_of_birth: verification!.horse_date_of_birth},
+      source: "external_api",
+      warnings: verification!.warnings ?? [],
+      source_payload: {provider: "GlobalVetLink", source_url: verification!.source_url, verified_at: verification!.verified_at},
+    });
+    // Reading a QR is not evidence of a negative, signed test. Keep those states separate.
+    if (verification!.status !== "verified" && prepared.status === "verified") prepared.status = "identified";
+    try {
+      await createHorseDocumentValidation(document.id, horseDocumentValidationRpcPayload(prepared));
+      if(document.status === "verified" && prepared.status !== "verified") {
+        const {data,error}=await client.from("horse_documents").update({status:"pending_review",warnings:[...(verification!.warnings??[]),"IDENTITY_REVIEW_REQUIRED"]}).eq("id",document.id).select("*").single<HorseHealthDocument>();
+        if(error)throw error;
+        return data;
+      }
+      return document;
+    } catch {
+      const {data,error} = await client.from("horse_documents").update({status: document.status === "rejected" ? "rejected" : "pending_review", warnings: [...(verification!.warnings ?? []), "IDENTITY_RECORDING_FAILED"], review_notes: "La concordance du cheval doit être vérifiée. / Horse identity requires review."}).eq("id",document.id).select("*").single<HorseHealthDocument>();
+      if(error) throw error;
+      return data;
+    }
+  }
+
   const documentType: HorseHealthDocument["document_type"] = "coggins_eia";
   const status: HorseHealthDocument["status"] = verification.status === "verified" ? "verified" : verification.status === "rejected" ? "rejected" : "pending_review";
   const sourceUrlFromGvl = verification.source_url ?? sourceUrl;
@@ -3412,15 +3442,15 @@ export async function verifyGvlCogginsDocument(input: {
       throw error;
     }
 
-    if (data.status !== "verified" && input.document_file) {
-      return attachHorseHealthDocumentFile(data.id, {
+    if (input.document_file && !data.document_url) {
+      return saveIdentity(await attachHorseHealthDocumentFile(data.id, {
         organization_id: input.organization_id,
         horse_id: input.horse_id,
         file: input.document_file,
-      });
+      }));
     }
 
-    return data;
+    return saveIdentity(data);
   }
 
   const { data, error } = await client
@@ -3440,15 +3470,15 @@ export async function verifyGvlCogginsDocument(input: {
     throw error;
   }
 
-  if (data.status !== "verified" && input.document_file) {
-    return attachHorseHealthDocumentFile(data.id, {
+  if (input.document_file && !data.document_url) {
+    return saveIdentity(await attachHorseHealthDocumentFile(data.id, {
       organization_id: input.organization_id,
       horse_id: input.horse_id,
       file: input.document_file,
-    });
+    }));
   }
 
-  return data;
+  return saveIdentity(data);
 }
 
 async function createPendingGvlCogginsDocument(input: {
@@ -3479,7 +3509,7 @@ async function createPendingGvlCogginsDocument(input: {
     horse_id: input.horse_id,
     document_type: "coggins_eia",
     status: "pending_review",
-    verification_source: "upload",
+    verification_source: "gvl_qr",
     source_url: input.source_url,
     document_url: documentUrl,
     original_file_name: existing?.original_file_name ?? (input.document_file.name || null),

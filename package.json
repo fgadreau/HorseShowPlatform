@@ -37,7 +37,9 @@
     "test:billing:rebuild": "node scripts/billing/test-sql-local.mjs --fresh",
     "test:warmups": "tsc -p tsconfig.warmup-test.json && cp scripts/draw-test-package.json .tmp/warmup-tests/compiled/package.json && node .tmp/warmup-tests/compiled/scripts/warmup-schedule-test.js",
     "test:warmups:browser": "node scripts/warmup.browser.mjs",
-    "test:memberships:browser": "node scripts/membership-billing.browser.mjs"
+    "test:memberships:browser": "node scripts/membership-billing.browser.mjs",
+    "test:coggins": "node scripts/coggins/verification.test.mjs",
+    "test:coggins:browser": "node scripts/coggins.browser.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "149.0.0",

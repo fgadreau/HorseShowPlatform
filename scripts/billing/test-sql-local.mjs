@@ -46,7 +46,7 @@ try {
   assert.equal(execFileSync('docker',['ps','-aq','--filter',`name=^/${container}$`],{encoding:'utf8'}).trim(),'','Disposable container name must be unused');
   assert(!execFileSync('docker',['volume','ls','--format','{{.Name}}'],{encoding:'utf8'}).split('\n').some(n=>n.endsWith('_'+project)),'Disposable volumes must be new');
   created=true;
-  execFileSync(cli,['db','start','--workdir',workdir,...(testNetwork?['--network-id',testNetwork]:[])],{stdio:['ignore','pipe','pipe'],timeout:120000});
+  execFileSync(cli,['db','start','--workdir',workdir,...(testNetwork?['--network-id',testNetwork]:[])],{stdio:['ignore','pipe','pipe'],timeout:300000});
   assert.equal(sql("select (to_regclass('public.user_profiles') is null and to_regclass('auth.users') is not null and to_regclass('storage.objects') is not null)::text;"),'true','Fresh official bootstrap must have auth/storage, no application tables');
   for(const file of readdirSync('supabase/migrations').filter(f=>f.endsWith('.sql')).sort()){
    stage='migration:'+file;
@@ -81,6 +81,8 @@ try {
   const script=readFileSync('supabase/tests/'+file,'utf8').replace('\\ir ../seed.sql',()=>readFileSync('supabase/seed.sql','utf8'));
   check('existing legacy regression: '+file,()=>sql(script));
  }
+ stage='health compliance regressions';
+ for(const file of ['horse_health_compliance.sql','horse_health_compliance_presentation.sql','horse_document_identity_validations.sql','verified_horse_identity_locks.sql','entry_reservation_health_compliance.sql','coggins_gvl_verification.sql']){check('health regression: '+file,()=>sql(readFileSync('supabase/tests/'+file,'utf8')));}
  stage='acceptance';
  sql(readFileSync('supabase/tests/billing_checkout_compat.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_foundation.sql','utf8'));
