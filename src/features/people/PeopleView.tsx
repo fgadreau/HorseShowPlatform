@@ -1,3 +1,4 @@
+import {membershipBillingError,confirmMembershipPurchase} from "./membershipBilling";
 import { useState } from "react";
 import { Plus, Search } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
@@ -92,6 +93,7 @@ function PeopleView({
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
   onRefresh: () => Promise<void> | void;
 }) {
+  const [membershipError, setMembershipError] = useState("");
   const [creatingContact, setCreatingContact] = useState(false);
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [contactCreationDirectoryIds, setContactCreationDirectoryIds] = useState<Set<string>>(new Set());
@@ -227,16 +229,21 @@ function PeopleView({
 
     setSellingMembershipContactId(contact.id);
 
+    setMembershipError("");
     try {
+      const total = await confirmMembershipPurchase(membershipTypeId, locale);
+      if (total === null) return;
       await onCreateContactOrganizationMembership({
+        expected_total: total,
         organization_id: organization.id,
         contact_id: contact.id,
         membership_type_id: membershipTypeId,
         show_id: null,
         payer_contact_id: contact.id,
-        status: "active",
         sold_by_user_id: createdByUserId,
       });
+    } catch (error) {
+      setMembershipError(membershipBillingError(error, locale));
     } finally {
       setSellingMembershipContactId("");
     }
@@ -268,6 +275,7 @@ function PeopleView({
 
   return (
     <div className="content-grid">
+      {membershipError ? <p role="alert">{membershipError}</p> : null}
       <ViewIntro
         eyebrow={uiText(locale, "Répertoire", "Directory")}
         title={uiText(locale, "Répertoire", "Directory")}

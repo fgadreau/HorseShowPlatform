@@ -1607,6 +1607,7 @@ export type OrganizationMembershipTypeUpdateInput = Partial<
 >;
 
 export type ContactOrganizationMembershipInput = {
+  expected_total: number;
   organization_id: string;
   contact_id: string;
   membership_type_id: string;

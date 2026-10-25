@@ -2241,7 +2241,7 @@ function normalizeOrganizationMembershipTypeInput(
     description: input.description?.trim() || null,
     season_year: Number(input.season_year),
     price: Math.max(0, Number(input.price) || 0),
-    tax_applicable: input.tax_applicable ?? true,
+    tax_applicable: input.tax_applicable ?? false,
     valid_from: input.valid_from,
     valid_until: input.valid_until,
     is_active: input.is_active ?? true,
@@ -2322,35 +2322,14 @@ export async function createContactOrganizationMembership(
   input: ContactOrganizationMembershipInput,
 ) {
   const client = requireSupabase();
-  const normalizedInput = normalizeContactOrganizationMembershipInput(input);
-
-  await ensureContactOrganizationLink({
-    organization_id: normalizedInput.organization_id,
-    contact_id: normalizedInput.contact_id,
-    source: "claimed_account",
-    created_by_user_id: normalizedInput.sold_by_user_id,
+  const { data, error } = await client.rpc("purchase_billed_membership", {
+    p_type: input.membership_type_id,
+    p_contact: input.contact_id,
+    p_payer: input.payer_contact_id ?? input.contact_id,
+    p_total: input.expected_total,
   });
-
-  if (normalizedInput.payer_contact_id && normalizedInput.payer_contact_id !== normalizedInput.contact_id) {
-    await ensureContactOrganizationLink({
-      organization_id: normalizedInput.organization_id,
-      contact_id: normalizedInput.payer_contact_id,
-      source: "claimed_account",
-      created_by_user_id: normalizedInput.sold_by_user_id,
-    });
-  }
-
-  const { data, error } = await client
-    .from("contact_organization_memberships")
-    .insert(normalizedInput)
-    .select("*")
-    .single<ContactOrganizationMembership>();
-
-  if (error) {
-    throw error;
-  }
-
-  return data;
+  if (error) throw error;
+  return data as ContactOrganizationMembership;
 }
 
 function normalizeProductCode(value: string | null | undefined) {
