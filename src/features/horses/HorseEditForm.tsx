@@ -509,8 +509,10 @@ function HorseEditForm({
     });
   }
 
-  async function handleVerifyGvlCoggins() {
-    if (!organization || (!gvlCogginsUrl.trim() && !cogginsPdfFile)) {
+  async function handleVerifyGvlCoggins(selectedFile?: File) {
+    const file = selectedFile ?? cogginsPdfFile;
+    if(file && file.size>20*1024*1024){setCogginsPdfFile(null);setHealthMessage({tone:"error",message:uiText(locale,"Le document dépasse 20 Mo.","The document exceeds 20 MB.")});return;}
+    if (!organization || (!gvlCogginsUrl.trim() && !file)) {
       return;
     }
 
@@ -518,7 +520,7 @@ function HorseEditForm({
     setHealthMessage(null);
 
     try {
-      const sourceUrl = await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl);
+      const sourceUrl = await resolveGvlCogginsUrl(file, gvlCogginsUrl);
 
       if (!sourceUrl) {
         return;
@@ -528,27 +530,27 @@ function HorseEditForm({
         organization_id: organization.id,
         horse_id: horse.id,
         source_url: sourceUrl,
-        document_file: cogginsPdfFile,
+        document_file: file,
         horse_name: name.trim() || horse.name,
         horse_date_of_birth: dateOfBirth || horse.date_of_birth,
         horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
         created_by_user_id: createdByUserId,
       });
-      setHealthMessage(horseHealthResultMessage(document));
+      setHealthMessage(horseHealthResultMessage(document, locale));
       setGvlCogginsUrl("");
       setCogginsPdfFile(null);
     } catch (error) {
-      if (organization && cogginsPdfFile) {
+      if (organization && file) {
         const document = await onCreateHorseHealthDocument({
           organization_id: organization.id,
           horse_id: horse.id,
           document_type: "coggins_eia",
-          file: cogginsPdfFile,
+          file: file,
           source_url: normalizeGvlUrl(gvlCogginsUrl) ?? (gvlCogginsUrl.trim() || null),
           created_by_user_id: createdByUserId,
           review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
         });
-        setHealthMessage(horseHealthResultMessage(document));
+        setHealthMessage(horseHealthResultMessage(document, locale));
         setGvlCogginsUrl("");
         setCogginsPdfFile(null);
       } else {
@@ -580,7 +582,7 @@ function HorseEditForm({
         horse_birth_year: birthYearFromDateValue(dateOfBirth) ?? horse.birth_year,
         created_by_user_id: createdByUserId,
       });
-      setHealthMessage(horseHealthResultMessage(document));
+      setHealthMessage(horseHealthResultMessage(document, locale));
     } catch (error) {
       setHealthMessage({
         tone: "error",
@@ -608,7 +610,7 @@ function HorseEditForm({
         test_or_administered_on: vaccineAdministeredOn || null,
         created_by_user_id: createdByUserId,
       });
-      setHealthMessage(horseHealthResultMessage(document));
+      setHealthMessage(horseHealthResultMessage(document, locale));
       setVaccineCertificateFile(null);
       setVaccineAdministeredOn("");
     } finally {
@@ -984,18 +986,14 @@ function HorseEditForm({
           )}
           <div className="health-document-actions">
             <label>
-              PDF Coggins GVL
-              <input accept="application/pdf" type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
-              {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
+              {uiText(locale,"Coggins — PDF ou photo","Coggins — PDF or photo")}
+              <input accept="application/pdf,image/jpeg,image/png,image/webp" disabled={healthBusy||!organization} type="file" onChange={(event)=>{const file=event.target.files?.[0]??null;setCogginsPdfFile(file);if(file)void handleVerifyGvlCoggins(file);event.target.value="";}} />
             </label>
-            <label>
-              {uiText(locale, "Lien GVL en secours", "Fallback GVL link")}
-              <input placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
-            </label>
-            <button className="primary-button" disabled={healthBusy || !organization || (!gvlCogginsUrl.trim() && !cogginsPdfFile)} type="button" onClick={handleVerifyGvlCoggins}>
-              <CheckCircle2 size={18} />
-              {healthBusy ? uiText(locale, "Validation...", "Validating...") : uiText(locale, "Valider GVL", "Validate GVL")}
-            </button>
+            <p role="status">{healthBusy?uiText(locale,"Lecture du QR et vérification GVL…","Reading QR and verifying with GVL…"):uiText(locale,"Dépose le document : le QR est lu et le certificat vérifié automatiquement, sans copier de lien.","Upload the document: the QR is read and the certificate verified automatically; no link to copy.")}</p>
+            <details><summary>{uiText(locale,"J’ai seulement un lien ou un code GVL","I only have a GVL link or code")}</summary>
+              <label>{uiText(locale,"Lien ou code GVL","GVL link or code")}<input disabled={healthBusy} value={gvlCogginsUrl} onChange={(event)=>setGvlCogginsUrl(event.target.value)} /></label>
+              <button className="primary-button" disabled={healthBusy||!organization||!gvlCogginsUrl.trim()} type="button" onClick={()=>void handleVerifyGvlCoggins()}>{uiText(locale,"Vérifier le certificat","Verify certificate")}</button>
+            </details>
           </div>
           <InlineHealthMessage value={healthMessage} />
           <div className="inline-form-header">

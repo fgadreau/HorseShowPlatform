@@ -78,6 +78,8 @@ function HorseForm({
   const [gvlCogginsUrl, setGvlCogginsUrl] = useState("");
   const [cogginsPdfFile, setCogginsPdfFile] = useState<File | null>(null);
   const [preparedGvlUrl, setPreparedGvlUrl] = useState("");
+  const [cogginsReadBusy, setCogginsReadBusy] = useState(false);
+  const [cogginsReadError, setCogginsReadError] = useState("");
   const [vaccineCertificateFile, setVaccineCertificateFile] = useState<File | null>(null);
   const [vaccineAdministeredOn, setVaccineAdministeredOn] = useState("");
   const [externalReferenceNumbers, setExternalReferenceNumbers] = useState<Record<string, string>>({});
@@ -163,6 +165,8 @@ function HorseForm({
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+
+    if (cogginsReadBusy) return;
 
     if (creationMode === "import") {
       await handleCreateImportedHorse();
@@ -488,6 +492,7 @@ function HorseForm({
 
     if (preparedGvlUrl || cogginsPdfFile || gvlCogginsUrl.trim()) {
       try {
+        if (cogginsReadError && cogginsPdfFile && !preparedGvlUrl) throw new Error(cogginsReadError);
         const sourceUrl = preparedGvlUrl || (await resolveGvlCogginsUrl(cogginsPdfFile, gvlCogginsUrl));
 
         if (sourceUrl) {
@@ -501,7 +506,7 @@ function HorseForm({
             horse_birth_year: birthYearFromDateValue(horseDateOfBirth ?? ""),
             created_by_user_id: createdByUserId,
           });
-          setHealthMessage(horseHealthResultMessage(document));
+          setHealthMessage(horseHealthResultMessage(document, locale));
         }
       } catch (error) {
         if (cogginsPdfFile) {
@@ -514,7 +519,7 @@ function HorseForm({
             created_by_user_id: createdByUserId,
             review_notes: `Validation GVL impossible: ${errorMessage(error)}`,
           });
-          setHealthMessage(horseHealthResultMessage(document));
+          setHealthMessage(horseHealthResultMessage(document, locale));
         } else {
           setHealthMessage({
             tone: "error",
@@ -744,6 +749,20 @@ function HorseForm({
     });
   }
 
+  async function handleSelectCoggins(file: File | null) {
+    setCogginsPdfFile(file);setPreparedGvlUrl("");setCogginsReadError("");setHealthMessage(null);
+    if(!file)return;
+    if(file.size>20*1024*1024){setCogginsPdfFile(null);setHealthMessage({tone:"error",message:uiText(locale,"Le document dépasse 20 Mo.","The document exceeds 20 MB.")});return;}
+    setCogginsReadBusy(true);
+    try {
+      const url=await resolveGvlCogginsUrl(file, "");setPreparedGvlUrl(url ?? "");
+      setHealthMessage({tone:"info",message:uiText(locale,"QR GVL détecté. Le certificat sera vérifié automatiquement à la création du cheval.","GVL QR detected. The certificate will be verified automatically when the horse is created.")});
+    } catch(error) {
+      setCogginsReadError(errorMessage(error));
+      setHealthMessage({tone:"info",message:uiText(locale,"La lecture automatique n’a pas abouti. Le document sera conservé pour révision à la création du cheval, sans copier de lien.","Automatic reading was unsuccessful. The document will be saved for review when the horse is created; no link needs to be copied.")});
+    } finally {setCogginsReadBusy(false);}
+  }
+
   async function handlePrepareCogginsUrl() {
     setHealthMessage(null);
     setBusy(true);
@@ -777,7 +796,7 @@ function HorseForm({
   }
 
   function renderInitialHealthDocumentFields(disabled = !organization) {
-    const controlsDisabled = disabled || !organization;
+    const controlsDisabled = disabled || !organization || cogginsReadBusy;
 
     return (
       <div className="external-membership-fields health-document-fields">
@@ -786,21 +805,16 @@ function HorseForm({
           <span>{uiText(locale, "Ajoute le Coggins GVL et le certificat de vaccin pendant la création du cheval.", "Add the GVL Coggins and vaccine certificate while creating the horse.")}</span>
         </div>
         <label>
-          PDF Coggins GVL
-          <input accept="application/pdf" disabled={controlsDisabled} type="file" onChange={(event) => setCogginsPdfFile(event.target.files?.[0] ?? null)} />
+          {uiText(locale,"Coggins — PDF ou photo","Coggins — PDF or photo")}
+          <input accept="application/pdf,image/jpeg,image/png,image/webp" disabled={controlsDisabled} type="file" onChange={(event) => void handleSelectCoggins(event.target.files?.[0] ?? null)} />
           {cogginsPdfFile ? <span className="muted-line">{cogginsPdfFile.name}</span> : null}
         </label>
-        <label>
-          {uiText(locale, "Lien GVL en secours", "Backup GVL link")}
-          <input disabled={controlsDisabled} placeholder="https://gvlcertcheck.ai/check/..." type="url" value={gvlCogginsUrl} onChange={(event) => setGvlCogginsUrl(event.target.value)} />
-        </label>
-        <div className="row-actions">
-          <button className="primary-button" disabled={controlsDisabled || busy || (!cogginsPdfFile && !gvlCogginsUrl.trim())} type="button" onClick={handlePrepareCogginsUrl}>
-            <CheckCircle2 size={18} />
-            {uiText(locale, "Valider le lien GVL", "Validate GVL link")}
-          </button>
-          {preparedGvlUrl ? <span className="muted-line">{uiText(locale, "Lien détecté", "Detected link")}: {preparedGvlUrl}</span> : null}
-        </div>
+        <p role="status">{cogginsReadBusy ? uiText(locale,"Lecture du QR en cours…","Reading QR…") : uiText(locale,"Dépose le document : l’application lit son QR et consulte GVL automatiquement. Aucun lien à copier ni à ouvrir.","Upload the document: the app reads its QR and checks GVL automatically. No link to copy or open.")}</p>
+        <details>
+          <summary>{uiText(locale,"J’ai seulement un lien ou un code GVL","I only have a GVL link or code")}</summary>
+          <label>{uiText(locale,"Lien ou code GVL","GVL link or code")}<input disabled={controlsDisabled} value={gvlCogginsUrl} onChange={(event)=>{setGvlCogginsUrl(event.target.value);setPreparedGvlUrl("");}} /></label>
+          <button className="ghost-button" disabled={controlsDisabled||busy||!gvlCogginsUrl.trim()} type="button" onClick={handlePrepareCogginsUrl}>{uiText(locale,"Utiliser ce code","Use this code")}</button>
+        </details>
         <InlineHealthMessage value={healthMessage} />
         <div className="health-document-actions">
           <label>
@@ -1230,7 +1244,7 @@ function HorseForm({
             onUseExisting={handleUseExistingHorse}
           />
         ) : (
-          <button className="primary-button" disabled={busy || !canCreateHorse} type="submit">
+          <button className="primary-button" disabled={busy || cogginsReadBusy || !canCreateHorse} type="submit">
             <Plus size={18} />
             {creationMode === "import" ? uiText(locale, "Créer le cheval importé", "Create imported horse") : uiText(locale, "Créer le cheval", "Create horse")}
           </button>

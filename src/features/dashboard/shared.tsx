@@ -138,32 +138,13 @@ export type InlineHealthMessage = {
   message: string;
 };
 
-export function horseHealthResultMessage(document: HorseHealthDocument): InlineHealthMessage {
-  if (document.status === "verified") {
-    return {
-      tone: "success",
-      message: "Coggins GVL vérifié. Le PDF n'a pas été conservé parce que le lien GVL suffit.",
-    };
-  }
-
-  if (document.status === "approved") {
-    return {
-      tone: "success",
-      message: "Document santé approuvé.",
-    };
-  }
-
-  if (document.document_url) {
-    return {
-      tone: "info",
-      message: "Coggins en révision manuelle. Le PDF a été conservé dans les documents santé.",
-    };
-  }
-
-  return {
-    tone: "info",
-    message: "Coggins en révision manuelle.",
-  };
+export function horseHealthResultMessage(document: HorseHealthDocument, locale: Locale = "fr"): InlineHealthMessage {
+  if (document.status === "verified") return {tone:"success",message:uiText(locale,"Coggins vérifié automatiquement auprès de GVL.","Coggins automatically verified with GVL.")};
+  if (document.status === "approved") return {tone:"success",message:uiText(locale,"Document santé approuvé.","Health document approved.")};
+  const reasons:Record<string,[string,string]>={HORSE_NAME_MISMATCH:["nom du cheval différent","horse name differs"],HORSE_DOB_MISMATCH:["date de naissance différente","birth date differs"],HORSE_BIRTH_YEAR_MISMATCH:["année de naissance différente","birth year differs"],HORSE_IDENTITY_INCOMPLETE:["identité du cheval à compléter","horse identity needs completion"],MISSING_SAMPLE_DATE:["date de prélèvement manquante","sample date missing"],FUTURE_SAMPLE_DATE:["date de prélèvement future","sample date is in the future"],NOT_SIGNED:["certificat non signé","unsigned certificate"],VOIDED:["certificat annulé","voided certificate"],NOT_NEGATIVE:["résultat négatif non confirmé","negative result not confirmed"],NOT_EIA_DOCUMENT:["ce document n’est pas un Coggins","this is not a Coggins certificate"],IDENTITY_RECORDING_FAILED:["concordance du cheval à vérifier","horse identity requires review"],IDENTITY_REVIEW_REQUIRED:["concordance du cheval à vérifier","horse identity requires review"]};
+  const detail=(document.warnings??[]).map(code=>reasons[code]?.[locale==='fr'?0:1]).filter(Boolean).join(', ');
+  const message=document.status==='rejected'?uiText(locale,"Coggins non validé.","Coggins not validated."):uiText(locale,"Document conservé pour révision. Aucun lien à copier.","Document saved for review. No link to copy.");
+  return {tone:document.status==='rejected'?"error":"info",message:detail?`${message} ${detail}.`:message};
 }
 
 export type HorseStatusTone = "success" | "warning" | "error" | "neutral";
@@ -315,12 +296,15 @@ export function birthYearFromDateValue(value: string | null | undefined) {
 
 export async function resolveGvlCogginsUrl(pdfFile: File | null, fallbackUrl: string) {
   if (pdfFile) {
-    const { extractGvlUrlFromPdf } = await import("../../lib/gvlPdf");
-    return extractGvlUrlFromPdf(pdfFile);
+    const { extractGvlUrlFromFile } = await import("../../lib/gvlPdf");
+    return extractGvlUrlFromFile(pdfFile);
   }
 
   const cleanUrl = fallbackUrl.trim();
-  return cleanUrl ? normalizeGvlUrl(cleanUrl) ?? cleanUrl : null;
+  if (!cleanUrl) return null;
+  const normalized = normalizeGvlUrl(cleanUrl);
+  if (!normalized) throw new Error("Lien ou code GVL invalide. / Invalid GVL link or code.");
+  return normalized;
 }
 
 export function InlineHealthMessage({ value }: { value: InlineHealthMessage | null }) {
