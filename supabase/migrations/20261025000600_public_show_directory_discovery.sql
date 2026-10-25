@@ -9,6 +9,6 @@ create policy "Participants discover active public show directories"
     and exists (
       select 1 from public.shows s
       where s.organization_id = organization_disciplines.organization_id
-        and s.is_public
+        and (s.is_public or public.showscore_public_show_exists(s.id))
     )
   );

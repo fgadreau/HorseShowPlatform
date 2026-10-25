@@ -23,7 +23,7 @@ begin
     where id = p_directory_id and is_active for share;
   if not found or not (
     public.is_org_member(directory_record.organization_id)
-    or exists (select 1 from public.shows s where s.organization_id = directory_record.organization_id and s.is_public)
+    or exists (select 1 from public.shows s where s.organization_id = directory_record.organization_id and (s.is_public or public.showscore_public_show_exists(s.id)))
   ) then
     raise exception 'Directory is inactive or unavailable' using errcode = '42501';
   end if;
