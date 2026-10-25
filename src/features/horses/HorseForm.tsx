@@ -64,7 +64,7 @@ function HorseForm({
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onCreated?: (horse: Horse) => void;
 }) {
-  const [creationMode, setCreationMode] = useState<HorseCreationMode>("manual");
+  const [creationMode, setCreationMode] = useState<HorseCreationMode>("import");
   const [name, setName] = useState("");
   const [ownerContactId, setOwnerContactId] = useState("");
   const [agentContactId, setAgentContactId] = useState<string | null>(null);
@@ -826,14 +826,22 @@ function HorseForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <div className="segmented-control compact-segmented">
-          <button className={creationMode === "manual" ? "active" : ""} type="button" onClick={() => setCreationMode("manual")}>
+        <div className="segmented-control compact-segmented" role="group" aria-label={uiText(locale, "Méthode de création", "Creation method")}>
+          <button className={creationMode === "import" ? "active" : ""} type="button" aria-pressed={creationMode === "import"} onClick={() => setCreationMode("import")}>
+            {uiText(locale, "Importer NRHA", "Import NRHA")}
+          </button>
+          <button className={creationMode === "manual" ? "active" : ""} type="button" aria-pressed={creationMode === "manual"} onClick={() => setCreationMode("manual")}>
             {uiText(locale, "Création manuelle", "Manual creation")}
           </button>
-          <button className={creationMode === "import" ? "active" : ""} type="button" onClick={() => setCreationMode("import")}>
-            {uiText(locale, "Importer", "Import")}
-          </button>
         </div>
+        {creationMode === "import" ? (
+          <div className="stack">
+            <p>{uiText(locale, "Utilise la fiche NRHA pour reprendre les données officielles. Sans numéro NRHA, tu peux créer la fiche manuellement.", "Use the NRHA record to import official data. Without an NRHA number, you can create the record manually.")}</p>
+            <button className="secondary" type="button" onClick={() => setCreationMode("manual")}>
+              {uiText(locale, "Pas de numéro NRHA ? Créer manuellement", "No NRHA number? Create manually")}
+            </button>
+          </div>
+        ) : null}
 
         {creationMode === "manual" ? (
           <>

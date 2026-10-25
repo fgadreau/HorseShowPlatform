@@ -1,0 +1,73 @@
+{
+  "date": "2026-10-25",
+  "pull_request": "https://github.com/fgadreau/HorseShowPlatform/pull/61",
+  "source_commit": "4a8f83e62f8d7832aa7e70eb41635f0ef6b5cdc0",
+  "release_commit": "2ab57531034b8ae853851f887a87fca4e142ec60",
+  "deployment_id": "dpl_AKBB8yRfKcRZS3CJiBi5NoKgu97o",
+  "domain": "https://preprod.horseshowplatform.com",
+  "ready": true,
+  "production_unchanged": true,
+  "migration": {
+    "file": "supabase/migrations/20261025000100_paid_warmup_registration_lottery.sql",
+    "sha256": "f2086205f4a4348d704df5d80d956ff96eaf7ad88cf9ac333d62df9b5cd4ca2f"
+  },
+  "preprod": {
+    "anonymous_can_request": false,
+    "authenticated_can_edit_validation": false,
+    "authenticated_can_request": true,
+    "latest_migration": "20261025000100",
+    "legacy_warmups": 2,
+    "remote_requests": 0,
+    "warmups": 2
+  },
+  "existing_source_and_financial_fingerprints_unchanged": true,
+  "backup": {
+    "path": ".tmp/preprod-backup-20261025",
+    "schema_and_data_exported": true,
+    "restore_rehearsal": false
+  },
+  "validation": {
+    "fresh_migrations_replayed": 159,
+    "existing_sql_assertions": 265,
+    "existing_expected_rejections": 100,
+    "warmup_cases": "Local PostgreSQL with and without HSP fees; ownership, real role grants, capacity, waiting list, order, approval, repeated approval, replacement and no automatic refunds",
+    "timing_and_csv_checks": 11,
+    "submission_tests": 8,
+    "browser": "Synthetic form, bilingual showbill, jackpot-only column, provisional CSV and printable PDF timing",
+    "remote_browser": {
+      "deployment": "dpl_AKBB8yRfKcRZS3CJiBi5NoKgu97o",
+      "origin": "https://preprod.horseshowplatform.com",
+      "errors": [],
+      "pageLoaded": true,
+      "preprodSupabase": true,
+      "reportsCodePresent": true,
+      "warmupsPresent": true,
+      "bilingualShowbill": true,
+      "title": "Horse Show Platform",
+      "loginControlVisible": true,
+      "billingStatus": 503,
+      "billingResponse": {
+        "error": "BILLING_HOSTED_DISABLED"
+      },
+      "vetStatus": 200,
+      "vetResponse": {
+        "ready": true,
+        "mail": true,
+        "omvq": true,
+        "mail_mode": "preprod_private",
+        "missing": [],
+        "enabled": true
+      }
+    },
+    "github_application_checks": "success"
+  },
+  "export_formats": [
+    "printable PDF",
+    "UTF8 CSV compatible with Google Sheets"
+  ],
+  "remaining": [
+    "Configure billing context/products for the user-created contest before paid warmup billing approval",
+    "Complete previously outstanding hosted Stripe/webhook/PDF activation and qualification"
+  ],
+  "legacy_queues": "Kept in prior workflow; empty queues can opt in via edit form; populated legacy queues are protected against silent conversion"
+}
