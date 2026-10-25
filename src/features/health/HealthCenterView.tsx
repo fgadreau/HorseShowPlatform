@@ -100,7 +100,7 @@ function HealthCenterView({
   function reviewableDocumentIds(result: HorseHealthComplianceOverview) {
     return [...new Set(
       Object.values(result.requirements)
-        .filter((requirement) => requirement.document_id && (requirement.status === "review_pending" || requirement.status === "review_rejected"))
+        .filter((requirement) => requirement.document_type !== "coggins_eia" && requirement.document_id && (requirement.status === "review_pending" || requirement.status === "review_rejected"))
         .map((requirement) => requirement.document_id as string),
     )];
   }
@@ -149,6 +149,12 @@ function HealthCenterView({
       {canManageHealthDocuments && organization ? <VaccinationReviewQueue
         key={organization.id} locale={locale} organizationId={organization.id}
         horses={horses} documents={horseHealthDocuments} reviews={documentReviews} onReviewed={onRefresh}
+        contacts={contacts} identifiers={horseExternalIdentifiers} issuers={externalCredentialIssuers}
+      /> : null}
+      {canManageHealthDocuments && organization ? <VaccinationReviewQueue
+        key={`${organization.id}:coggins`} kind="coggins" locale={locale} organizationId={organization.id}
+        horses={horses} documents={horseHealthDocuments} reviews={documentReviews} onReviewed={onRefresh}
+        contacts={contacts} identifiers={horseExternalIdentifiers} issuers={externalCredentialIssuers}
       /> : null}
 
       {currentEditingHorse ? (
