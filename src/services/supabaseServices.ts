@@ -1773,6 +1773,12 @@ export async function deleteSlate(id: string) {
   }
 }
 
+export async function joinPublicDirectory(directoryId: string) {
+  const { data, error } = await requireSupabase().rpc("join_public_directory", { p_directory_id: directoryId });
+  if (error) throw error;
+  return data as string;
+}
+
 export async function linkContactToDirectory(input: {
   organization_discipline_id: string;
   contact_id: string;
@@ -2469,20 +2475,32 @@ export async function cancelManualSale(id: string) {
 export async function createHorse(input: HorseInput) {
   const client = requireSupabase();
   const birthYear = input.birth_year ?? birthYearFromDate(input.date_of_birth ?? null);
-  await ensureContactOrganizationLink({
-    organization_id: input.organization_id,
-    contact_id: input.primary_owner_contact_id,
-    source: "horse",
-    created_by_user_id: input.created_by_user_id,
-  });
-
-  if (input.agent_contact_id && input.agent_contact_id !== input.primary_owner_contact_id) {
+  const directoryIds = input.organization_discipline_ids === undefined
+    ? [await findDefaultOrganizationDisciplineId(input.organization_id)]
+    : [...new Set(input.organization_discipline_ids)];
+  if (!directoryIds.length) throw new Error("Choisis au moins un répertoire pour le cheval.");
+  const { data: validDirectories, error: directoryError } = await client.from("organization_disciplines")
+    .select("id").eq("organization_id", input.organization_id).eq("is_active", true).in("id", directoryIds);
+  if (directoryError) throw directoryError;
+  if (validDirectories?.length !== directoryIds.length) throw new Error("Un répertoire choisi est inactif, inaccessible ou appartient à une autre association.");
+  for (const directoryId of directoryIds) {
     await ensureContactOrganizationLink({
       organization_id: input.organization_id,
-      contact_id: input.agent_contact_id,
+      organization_discipline_id: directoryId,
+      contact_id: input.primary_owner_contact_id,
       source: "horse",
       created_by_user_id: input.created_by_user_id,
     });
+
+    if (input.agent_contact_id && input.agent_contact_id !== input.primary_owner_contact_id) {
+      await ensureContactOrganizationLink({
+        organization_id: input.organization_id,
+        organization_discipline_id: directoryId,
+        contact_id: input.agent_contact_id,
+        source: "horse",
+        created_by_user_id: input.created_by_user_id,
+      });
+    }
   }
 
   const { data: horse, error: horseError } = await client
@@ -2535,12 +2553,15 @@ export async function createHorse(input: HorseInput) {
     });
   }
 
-  await ensureHorseOrganizationLink({
-    organization_id: input.organization_id,
-    horse_id: horse.id,
-    source: "created_here",
-    created_by_user_id: input.created_by_user_id,
-  });
+  for (const directoryId of directoryIds) {
+    await ensureHorseOrganizationLink({
+      organization_id: input.organization_id,
+      organization_discipline_id: directoryId,
+      horse_id: horse.id,
+      source: "created_here",
+      created_by_user_id: input.created_by_user_id,
+    });
+  }
 
   await syncHorseExternalIdentifiers(horse.id, input.external_memberships);
 
@@ -5830,12 +5851,13 @@ export async function ensureContactRoles(input: {
 
 async function ensureContactOrganizationLink(input: {
   organization_id: string;
+  organization_discipline_id?: string;
   contact_id: string;
   source: ContactOrganizationLink["source"];
   created_by_user_id?: string | null;
 }) {
   const client = requireSupabase();
-  const organizationDisciplineId = await findDefaultOrganizationDisciplineId(input.organization_id);
+  const organizationDisciplineId = input.organization_discipline_id ?? await findDefaultOrganizationDisciplineId(input.organization_id);
   const { error } = await client.from("directory_contacts").upsert(
     {
       organization_discipline_id: organizationDisciplineId,
@@ -5853,12 +5875,13 @@ async function ensureContactOrganizationLink(input: {
 
 async function ensureHorseOrganizationLink(input: {
   organization_id: string;
+  organization_discipline_id?: string;
   horse_id: string;
   source: HorseOrganizationLink["source"];
   created_by_user_id?: string | null;
 }) {
   const client = requireSupabase();
-  const organizationDisciplineId = await findDefaultOrganizationDisciplineId(input.organization_id);
+  const organizationDisciplineId = input.organization_discipline_id ?? await findDefaultOrganizationDisciplineId(input.organization_id);
   const { error } = await client.from("directory_horses").upsert(
     {
       organization_discipline_id: organizationDisciplineId,
@@ -5969,7 +5992,7 @@ async function findDefaultOrganizationDisciplineId(organizationId: string) {
   }
 
   if (!data) {
-    throw new Error("Cette association n'a aucun répertoire de discipline actif.");
+    throw new Error("Aucun répertoire de discipline actif n’est accessible pour cette association. Choisis l’association souhaitée dans le sélecteur Association ou contacte son personnel pour vérifier l’accès au répertoire.");
   }
 
   return data.id;

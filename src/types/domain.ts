@@ -1664,6 +1664,7 @@ export type ExternalHorseIdentifierInput = {
 
 export type HorseInput = {
   organization_id: string;
+  organization_discipline_ids?: string[];
   name: string;
   primary_owner_contact_id: string;
   agent_contact_id?: string | null;
