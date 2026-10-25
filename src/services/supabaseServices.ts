@@ -6945,6 +6945,9 @@ function birthYearFromDate(value: string | null | undefined) {
 
 function showScorePaidWarmupRow(input: ShowScorePaidWarmupInput) {
   return cleanPayload({
+    registration_enabled: input.registration_enabled,
+    entry_fee: input.entry_fee,
+    capacity: input.capacity,
     id: input.id || crypto.randomUUID(),
     organization_id: input.organization_id,
     show_id: input.show_id,
@@ -6969,6 +6972,9 @@ function showScorePaidWarmupPatch(input: ShowScorePaidWarmupUpdateInput) {
   const scheduleStartMode = input.schedule_start_mode === undefined ? undefined : normalizeScheduleStartMode(input.schedule_start_mode);
 
   return cleanPayload({
+    registration_enabled: input.registration_enabled,
+    entry_fee: input.entry_fee,
+    capacity: input.capacity,
     show_day_id: input.show_day_id,
     name: input.name == null ? input.name : input.name.trim() || "Paid warm up",
     arena: nullableTrim(input.arena),

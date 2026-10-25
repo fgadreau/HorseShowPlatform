@@ -1,0 +1,5 @@
+{
+ "extends":"./tsconfig.payout-test.json",
+ "compilerOptions":{"outDir":".tmp/warmup-tests/compiled"},
+ "include":["scripts/warmup-schedule-test.ts","src/lib/paidWarmupSchedule.ts"]
+}

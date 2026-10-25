@@ -1225,6 +1225,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "my-entries" ? (
           <MyEntriesView
+            warmupHorses={personalHorses}
             locale={locale}
             blocks={selectedShowBlocks}
             contacts={selectedOrganizationPersonalContacts}

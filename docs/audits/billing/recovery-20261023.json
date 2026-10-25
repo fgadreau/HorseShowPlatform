@@ -215,12 +215,11 @@
       "deployment_performed": false
     }
   ],
-  "deployment_status": "PREPROD schema migrated and checked; application branch not pushed or deployed; billing pilot not activated; PROD untouched",
+  "deployment_status": "PREPROD application deployed through PR 60; billing remains disabled pending user-created contest configuration; production deployment unchanged",
   "remaining": [
     "Confirm commercial-plan eligibility before hosted use",
     "Configure billing on the user-created PREPROD contest; connected sandbox account verified",
     "Configure sandbox webhook destinations, Vault and Cron",
-    "Deploy the reviewed application to PREPROD",
     "Qualify payments, replay, private Storage HTTP downloads and recovery with Codespace closed"
   ],
   "official_references": [
@@ -256,5 +255,29 @@
     "stripe_mode": "test",
     "automated_fixture_creation": "cancelled per user preference",
     "performance_simulation": "details to confirm before generating results"
+  },
+  "last_updated": "2026-10-25",
+  "preprod_release": {
+    "pull_request": "https://github.com/fgadreau/HorseShowPlatform/pull/60",
+    "commit": "6b1a809397fe0256984c8ca1de69233f4d7b9411",
+    "deployment_id": "dpl_9ouY1XnthktRp3EutnD7etAVyxmJ",
+    "domain": "https://preprod.horseshowplatform.com",
+    "state": "READY",
+    "source": "git",
+    "browser_checks": {
+      "guest_access": true,
+      "preprod_supabase": true,
+      "nrha_report_bundle": true,
+      "javascript_errors": 0,
+      "billing_error": "BILLING_HOSTED_DISABLED",
+      "veterinary_ready": true
+    },
+    "github_checks": {
+      "application": "success",
+      "veterinary": "success",
+      "e2e_robot": "failed: test still targets the former primary-navigation scoring item; adapt to show navigation"
+    },
+    "production_deployment_unchanged": true,
+    "guest_share_link": "Created for PREPROD; URL stored privately, never committed"
   }
 }
