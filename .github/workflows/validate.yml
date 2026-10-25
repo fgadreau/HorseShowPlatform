@@ -38,6 +38,7 @@ jobs:
       - run: npm run test:payout
       - run: npm run test:reports
       - run: npm run test:warmups
+      - run: npm run test:horses:browser
       - run: npm run test:coggins
       - run: npm run test:identity
       - run: npm run test:governing
