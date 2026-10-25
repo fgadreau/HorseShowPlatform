@@ -44,6 +44,15 @@ do $$ declare row jsonb;begin
   raise exception 'TEST: forged price accepted';
  exception when others then if sqlerrm<>'RESERVATION_PRICE_CHANGED' then raise;end if;end;
 end $$;
+-- Fail after the first insert, rather than during quote validation.
+do $$ declare row jsonb;available integer;begin
+ select available_quantity into available from public.stall_options where id=current_setting('test.option')::uuid;
+ row:=jsonb_build_object('organization_id',current_setting('test.org'),'show_id',current_setting('test.show'),'stall_option_id',current_setting('test.option'),'created_by_user_id',public.current_profile_id(),'booker_contact_id',current_setting('test.payer'),'payer_contact_id',current_setting('test.payer'),'quantity',1,'unit_price',9.5);
+ begin
+  perform public.create_stall_booking_batch(jsonb_build_array(row,row||jsonb_build_object('quantity',available+1)));
+  raise exception 'TEST: excessive stock accepted';
+ exception when check_violation then if sqlerrm not like 'Not enough availability%' then raise;end if;end;
+end $$;
 reset role;
 do $$ begin
  if (select count(*) from public.reservation_billing_links)<>1 or (public.billing_snapshot(current_setting('test.folio')::uuid)->>'total')::numeric<>32.77 then raise exception 'TEST: batch rollback failed';end if;

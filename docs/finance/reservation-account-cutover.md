@@ -1,22 +1,26 @@
-# Reservation account cutover — implementation in progress
+# Reservation and entry account cutover
 
-Reservation debt policy: only a **different closed account with a positive balance** in the same association blocks a new reservation. Event and non-event accounts participate. Open accounts, zero/credit balances, and historical invoices do not block. The database enforces the rule for all payers; the UI preview exposes only readable accounts.
+## Behavior
 
-The adapter is opt-in per show through `configure_reservation_billing`. Configuration requires authorized administration, enabled association capabilities, an explicit billing config and explicit tax rules. No migration automatically enables an association or imports old invoices. Old invoice amounts and payments are preserved. The `product_id` field on historical stall options is preserved; internal billing products are generated independently for reservations.
+Only a **different closed account with a positive balance** in the same association blocks a reservation. Event and non-event accounts participate. Open accounts, zero/credit balances and historical invoices do not block. The database checks every payer; the UI preview exposes only accounts the caller may read. A server refusal stays visible beside the submit button.
 
-New reservations in an adopted scope use payer folios. Quantity edits and unpaid cancellations create immutable reversal pairs. Paid lines and pending Stripe operations cannot be silently refunded or changed. A batch inserts all requested lines atomically under the caller's RLS, so a failure rolls back stock and account writes together. Historical booking rows with legacy invoice lines require reconciliation rather than automatic double billing.
+Show adoption connects reservations, entries, late-entry surcharges, block judge fees and staff sales to payer folios. Judge fees retain the previous highest-entry-fee selection and are charged once per payer/horse/rider/block. Entry prices and late surcharges are computed on the server; a status-only change preserves the quote. Document presentation freezes entry, horse, rider, block, class and back-number references.
 
-## Release gates — do not activate yet
+Reservation batches insert all lines atomically under caller RLS. Server quotes derive split amounts from option prices, distributing remainder cents deterministically; direct forged split lines are rejected. The inventory row counts stock once, while payer shares create charges without consuming inventory again. Quote admissions are private, bound to actor and transaction, and removed by a deferred trigger at commit.
 
-- The existing entry/registration and manual-sale writers still target historical invoices. An event context causes the existing engine guard to reject those writers. Adapt and test these writers before adopting the pilot show, so reservation work does not interrupt entries or other charges.
-- Validate split tack and hay amounts with server-authoritative batch quotes, including retries, changes, and concurrent requests. The initial adapter retains the existing split-line representation and its caller-supplied split amount.
-- Exercise complete authenticated browser flows against the new schema, including personal account visibility, account payment/closing, and financial-document rendering of reservation adjustments.
-- Review historical balances separately. Never mark an old invoice paid or silently copy its balance into a new folio. Determine an explicit reconciliation path before moving historical bookings.
+Unpaid changes and cancellations create immutable reversal pairs. Original charges, tax snapshots, payments and issued documents are never overwritten. Paid lines and pending Stripe operations require an explicit association adjustment/refund before changes. Reversed lines cannot receive allocations. Both account lists and the Stripe allocator consume active charges only; adjustment history remains available in the account.
 
-## Verification completed
+## Explicit setup
+
+The schema migrations activate no association and import no old balances. Enable the association's engine/personal capabilities, then call `configure_reservation_billing(show, config, taxes)` for a fresh operational show. Existing entries, bookings or sales require reconciliation first. The selected tax rules and numbering prefixes must be explicit. Product mappings for reservation options are internal, so the obsolete “Linked product” selector is removed without clearing historical mappings. Existing configured product tax flags and prices seed the modern staff-sale catalog.
+
+`configure_non_event_billing(org, year, config, taxes)` creates a separate service context for future non-event sales through the modern billing APIs. Membership purchases retain their dedicated contexts and adapter. No old invoice is paid, deleted or silently copied. Historical invoices remain in the read-only archive. The two setup commands preserve existing adopted contexts rather than repricing them.
+
+## Validation
 
 - `npm run build`.
-- `npm run test:reservations:browser`: actual mobile reservation form, independent bedding quantities, obsolete invoice does not block, closed account debt does block.
-- `supabase/tests/reservation_billing_accounts.sql`: executed against PREPROD under a rolled-back transaction containing the candidate migration. Covers authenticated RLS writes, full-show dates, quantities and tax rounding, replacement credits, cancellation/stock restoration, atomic failure, non-event open versus closed debt, a paid closed account, protection of paid booking charges, private-writer privileges, and unchanged historical invoices. No test bookings, payments, approvals or capabilities persist.
+- `npm run test:reservations:browser`: actual mobile form, per-horse bedding quantities, obsolete invoice nonblocking, closed account debt blocking, visible server refusal with retained input.
+- `supabase/tests/reservation_billing_accounts.sql`: genuine authenticated writes, full-show dates, quantities and tax rounding, immutable credits, stock restoration, rollback after a later line fails, event/non-event debt policy, paid-line protection and unchanged historical invoices.
+- `supabase/tests/entry_account_billing.sql`: genuine staff and member RLS, entry/late/judge fees, deduplication, cancellation, payer transfer, actual payment RPC, personal-account isolation, authoritative member prices, split rounding/stock, modern non-event sale, statement, closing with debt and payment of a closed account. Private financial helpers are not executable by members.
 
-The SQL test accepts disposable fixture IDs as psql variables (`org_id`, `show_id`, `option_id`, `staff_uid`). The fixture option is horse-free shavings at 9.50; staff must be an association and platform administrator, with a linked contact. The test itself ends in `ROLLBACK`. Do not use it outside an explicitly authorized test environment.
+SQL acceptance tests run in a transaction that ends in `ROLLBACK`, with candidate migrations included when not yet installed. Test-only policy relaxation isolates synthetic billing fixtures inside that rollback; it never approves or changes a real medical document. No test payment or capability persists. Supply explicit fixture IDs through psql variables; `reservation_billing_accounts.sql` uses a horse-free shavings option at 9.50, and `entry_account_billing.sql` additionally needs a member auth UID.

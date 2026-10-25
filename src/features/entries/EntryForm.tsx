@@ -1,3 +1,4 @@
+import { sourceBillingError } from "../finance/presentation";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, ModalDialog, SearchSelect } from "../../components/ui";
@@ -407,7 +408,7 @@ function EntryForm({
     } catch (error) {
       setSubmitMessage({
         tone: "error",
-        message: error instanceof Error ? error.message : uiText(locale, "Impossible de créer les inscriptions sélectionnées.", "Unable to create selected entries."),
+        message: sourceBillingError(error, locale),
       });
     } finally {
       setNrhaVerifyBusy(false);

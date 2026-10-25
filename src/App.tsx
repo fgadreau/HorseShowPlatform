@@ -528,17 +528,17 @@ function HspApp() {
       }}
       onCreateEntry={async (input) => {
         await createEntry(input);
-        setNotice({ tone: "success", message: "Entry draft created and invoice draft updated." });
+        setNotice({ tone: "success", message: "Entry created and payer account updated." });
         await refreshContext();
       }}
       onUpdateEntry={async (id, input) => {
         await updateEntry(id, input);
-        setNotice({ tone: "success", message: "Entry and invoice draft updated." });
+        setNotice({ tone: "success", message: "Entry and payer account updated." });
         await refreshContext();
       }}
       onDeleteEntry={async (id) => {
         await deleteEntry(id);
-        setNotice({ tone: "success", message: "Entry deleted and invoice draft updated." });
+        setNotice({ tone: "success", message: "Entry deleted and payer account adjusted." });
         await refreshContext();
       }}
       onCreateStallOption={async (input) => {

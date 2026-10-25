@@ -60,4 +60,10 @@ try {
  await expect(page.locator('#reservation-create-status')).toBeVisible();
  await expect(page.locator('#reservation-create-status')).toContainText('fermé avec un solde dû');
  console.log('PASS: closed account balance blocks submission and shows the reason inside the mobile modal.');
+ await prepare('?failure');
+ await page.getByRole('button',{name:'Créer la réservation',exact:true}).click();
+ await expect(page.getByRole('alert')).toContainText('Le prix a changé');
+ await expect(page.getByRole('button',{name:'Créer la réservation',exact:true})).toBeEnabled();
+ expect(await page.evaluate(()=>window.bookings.length)).toBe(0);
+ console.log('PASS: a server refusal stays visible in the form and preserves the request for retry.');
 } finally {await browser.close();await server.close();}

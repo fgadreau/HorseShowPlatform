@@ -1,3 +1,4 @@
+import { sourceBillingError } from "../finance/presentation";
 import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
@@ -66,6 +67,7 @@ function EntryEditForm({
   const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
   const [nrhaEligibilityGate, setNrhaEligibilityGate] = useState<ClassEligibilityGate | null>(null);
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const selectedHorse = findById(horses, horseId) ?? null;
   const selectedClass = findById(classes, classId) ?? null;
   const selectedBlock = selectedClass ? findById(blocks, selectedClass.block_id) ?? null : null;
@@ -136,6 +138,7 @@ function EntryEditForm({
     }
 
     setBusy(true);
+    setSubmitError("");
 
     try {
       await onUpdateEntry(entry.id, {
@@ -149,6 +152,8 @@ function EntryEditForm({
         base_fee: effectiveFee,
         total_fees: effectiveFee,
       });
+    } catch (error) {
+      setSubmitError(sourceBillingError(error, locale));
     } finally {
       setBusy(false);
     }
@@ -291,6 +296,7 @@ function EntryEditForm({
             <input min="0" step="0.01" type="number" value={baseFee} onChange={(event) => setBaseFee(event.target.value)} />
           </label>
         </div>
+        {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>

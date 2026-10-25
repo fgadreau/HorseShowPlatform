@@ -14,6 +14,7 @@ import {
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
+import { sourceBillingError } from "../finance/presentation";
 import { billingRpc } from "../../services/billingFolio";
 import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallBookingInput, StallOption } from "../../types/domain";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
@@ -1143,6 +1144,7 @@ function StallBookingForm({
   const [endDayId, setEndDayId] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const selectedShowId = showId || firstStallOption?.show_id || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
   const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
@@ -1387,6 +1389,7 @@ function StallBookingForm({
     }
 
     setBusy(true);
+    setSubmitError("");
 
     try {
       const activeOrganization = organization;
@@ -1575,6 +1578,8 @@ function StallBookingForm({
       setSelectedContactRoles(requiredReservationContactRoles);
       setNotes("");
       onCreated?.();
+    } catch (error) {
+      setSubmitError(sourceBillingError(error, locale));
     } finally {
       setBusy(false);
     }
@@ -1968,7 +1973,7 @@ function StallBookingForm({
 
         <div className="form-section">
           <div className="form-section-header">
-            <strong>{datesSectionNumber}. {uiText(locale, "Dates et facture", "Dates and invoice")}</strong>
+            <strong>{datesSectionNumber}. {uiText(locale, "Dates et compte", "Dates and account")}</strong>
             <span>{canCreate ? `Total: ${formatCurrency(totalPrice, currency)}` : reservationUsesDailyReservations ? uiText(locale, "Choisir les journées requises.", "Choose required days.") : uiText(locale, "Compléter les informations requises.", "Complete required information.")}</span>
           </div>
           <div className="form-grid">
@@ -2037,7 +2042,7 @@ function StallBookingForm({
             </span>
             <span>
               <strong>{formatCurrency(totalPrice, currency)}</strong>
-              <small>{uiText(locale, "Total facture", "Invoice total")}</small>
+              <small>{uiText(locale, "Total avant taxes", "Subtotal before taxes")}</small>
             </span>
           </div>
           <label>
@@ -2046,6 +2051,7 @@ function StallBookingForm({
           </label>
         </div>
 
+        {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <p id="reservation-create-status" role="status" aria-live="polite">{formMessage}</p>
         <button aria-describedby="reservation-create-status" className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
@@ -2100,6 +2106,7 @@ function StallBookingEditForm({
   const [endDayId, setEndDayId] = useState(booking.show_day_end_id ?? "");
   const [notes, setNotes] = useState(booking.notes ?? "");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const optionChoices = stallOptions.filter((option) => option.show_id === booking.show_id);
   const selectedOption = findById(optionChoices, optionId) ?? findById(stallOptions, booking.stall_option_id);
   const selectedHorse = findById(horses, horseId) ?? null;
@@ -2143,6 +2150,7 @@ function StallBookingEditForm({
     }
 
     setBusy(true);
+    setSubmitError("");
 
     try {
       await onUpdateStallBooking(booking.id, {
@@ -2158,6 +2166,8 @@ function StallBookingEditForm({
         total_price: totalPrice,
         notes: notes || null,
       });
+    } catch (error) {
+      setSubmitError(sourceBillingError(error, locale));
     } finally {
       setBusy(false);
     }
@@ -2315,6 +2325,7 @@ function StallBookingEditForm({
             <input value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
         </div>
+        {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
@@ -2330,7 +2341,7 @@ function reservationInvoiceState(invoice: Invoice | undefined, currency: string,
   if (!invoice) {
     return {
       badgeClass: "warning",
-      confirmationLabel: uiText(locale, "Facture à créer", "Invoice to create"),
+      confirmationLabel: uiText(locale, "Compte du concours", "Show account"),
       detail: uiText(locale, "Les frais de réservation sont à consulter dans Mes comptes.", "View reservation charges in My accounts."),
     };
   }

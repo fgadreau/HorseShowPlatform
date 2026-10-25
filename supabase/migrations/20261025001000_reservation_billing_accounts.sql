@@ -57,7 +57,8 @@ end $$;
 create or replace function public.assert_no_open_invoice_balance_for_stall_booking() returns trigger
 language plpgsql security definer set search_path='' as $$
 begin
- if not coalesce(new.billable,true) or new.status in ('cancelled','completed') then return new;end if;
+ if not coalesce(new.billable,true) or new.status='cancelled' then return new;end if;
+ if tg_op='UPDATE' and new.status='completed' and (to_jsonb(new)-array['status','notes','updated_at'])=(to_jsonb(old)-array['status','notes','updated_at']) then return new;end if;
  perform public.billing6_lock(new.organization_id);
  if exists(select 1 from public.billing_folios f
  join public.billing_customer_accounts a on a.id=f.payer_customer_account_id
@@ -117,6 +118,8 @@ begin
  insert into public.billing_charges(organization_id,folio_id,currency,source_type,source_id,product_id,category,description,quantity,unit_price,subtotal,tax_amount,exemption_reason,beneficiary_contact_id,horse_id,actor_id,authorization_snapshot)
  values(ch.organization_id,ch.folio_id,ch.currency,'reservation_credit',gen_random_uuid(),ch.product_id,ch.category,'Annulation / Cancellation — '||ch.description,ch.quantity,ch.unit_price,-ch.subtotal,-ch.tax_amount,ch.exemption_reason,ch.beneficiary_contact_id,ch.horse_id,public.current_profile_id(),jsonb_build_object('kind','reservation_reversal','original_charge_id',ch.id)) returning id into credit;
  insert into public.billing_charge_taxes select credit,tax_rule_id,name,code,jurisdiction,rate,-base,-amount from public.billing_charge_taxes where charge_id=ch.id;
+ insert into public.billing_charge_presentation(charge_id,presentation) select credit,presentation from public.billing_charge_presentation where charge_id=ch.id;
+ insert into public.billing_charge_entry_identity select credit,gen_random_uuid(),class_id,assignment_id,occurrence_id,fee_kind,identity,presentation from public.billing_charge_entry_identity where charge_id=ch.id;
  insert into public.reservation_billing_reversals(charge_id,credit_id,actor_id) values(ch.id,credit,public.current_profile_id());
  update public.billing_folios set version=version+1 where id=f.id;
  insert into public.billing_audit_events(organization_id,folio_id,actor_id,operation,authorization_snapshot,payload) values(ch.organization_id,f.id,public.current_profile_id(),'reservation_reversal',jsonb_build_object('actor',public.current_profile_id()),jsonb_build_object('charge_id',ch.id,'credit_id',credit));
@@ -163,6 +166,7 @@ begin
  insert into public.billing_charges(organization_id,folio_id,currency,source_type,source_id,product_id,category,description,quantity,unit_price,subtotal,tax_amount,exemption_reason,beneficiary_contact_id,horse_id,actor_id,authorization_snapshot)
  values(b.organization_id,f.id,ctx.currency,'reservation',gen_random_uuid(),prod,'stall_extra',opt.name,b.quantity,b.unit_price,base,taxes,case when not exists(select 1 from public.billing_tax_rules where context_id=ctx.id) then 'Configuration explicite du concours sans taxes' end,b.payer_contact_id,b.horse_id,actor,jsonb_build_object('kind','reservation','booking_id',b.id,'actor',actor,'split',not coalesce(b.affects_inventory,true))) returning id into charge;
  insert into public.billing_charge_taxes select charge,id,name,code,jurisdiction,rate,base,round(base*rate/100,2) from public.billing_tax_rules where context_id=ctx.id;
+ insert into public.billing_charge_presentation(charge_id,presentation) values(charge,jsonb_build_object('section','reservation','reservation_id',b.id::text,'period',case when b.show_day_start_id is not null then (select day_date::text from public.show_days where id=b.show_day_start_id)||' — '||(select day_date::text from public.show_days where id=b.show_day_end_id) else (select start_date::text||' — '||end_date::text from public.shows where id=b.show_id) end));
  insert into public.reservation_billing_links(booking_id,charge_id,booking_snapshot) values(b.id,charge,snapshot);
  if b.horse_id is not null then insert into public.billing_folio_horses(folio_id,horse_id,source_charge_id,actor_id) values(f.id,b.horse_id,charge,actor) on conflict do nothing;end if;
  update public.billing_folios set version=version+1 where id=f.id;
@@ -173,11 +177,12 @@ create trigger stall_bookings_account_sync after insert or update or delete on p
 
 -- Keep reversal history in statements while hiding settled reversal pairs from payable lines.
 alter function public.billing_snapshot(uuid) rename to reservation_billing_snapshot_base;
-create function public.billing_snapshot(p_folio uuid) returns jsonb language sql stable set search_path='' as $$
- select jsonb_set(s,'{charges}',coalesce((select jsonb_agg(c order by n) from jsonb_array_elements(s->'charges') with ordinality a(c,n) where not exists(select 1 from public.reservation_billing_reversals r where (c->>'id')::uuid in (r.charge_id,r.credit_id))),'[]'))
- ||jsonb_build_object('reservation_adjustments',coalesce((select jsonb_agg(c order by n) from jsonb_array_elements(s->'charges') with ordinality a(c,n) where exists(select 1 from public.reservation_billing_reversals r where (c->>'id')::uuid in (r.charge_id,r.credit_id))),'[]'))
- from (select public.reservation_billing_snapshot_base(p_folio) s) x;
-$$;
+create function public.billing_snapshot(p_folio uuid) returns jsonb language plpgsql stable set search_path='' as $$
+declare s jsonb;begin
+ s:=public.reservation_billing_snapshot_base(p_folio);
+ return jsonb_set(s,'{charges}',coalesce((select jsonb_agg(c order by n) from jsonb_array_elements(s->'charges') with ordinality a(c,n) where not exists(select 1 from public.reservation_billing_reversals r where (c->>'id')::uuid in (r.charge_id,r.credit_id))),'[]'))
+ ||jsonb_build_object('reservation_adjustments',coalesce((select jsonb_agg(c order by n) from jsonb_array_elements(s->'charges') with ordinality a(c,n) where exists(select 1 from public.reservation_billing_reversals r where (c->>'id')::uuid in (r.charge_id,r.credit_id))),'[]'));
+end $$;
 create function public.reservation_allocation_guard() returns trigger language plpgsql security definer set search_path='' as $$
 begin
  if exists(select 1 from public.reservation_billing_reversals where new.charge_id in (charge_id,credit_id)) then raise exception 'RESERVATION_CHARGE_REVERSED';end if;
