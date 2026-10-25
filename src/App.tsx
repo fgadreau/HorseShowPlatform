@@ -553,17 +553,17 @@ function HspApp() {
       }}
       onCreateStallBooking={async (input) => {
         await createStallBooking(input);
-        setNotice({ tone: "success", message: "Reservation created and invoice draft updated." });
+        setNotice({ tone: "success", message: "Reservation created and payer account updated." });
         await refreshContext();
       }}
       onUpdateStallBooking={async (id, input) => {
         await updateStallBooking(id, input);
-        setNotice({ tone: "success", message: "Reservation and invoice draft updated." });
+        setNotice({ tone: "success", message: "Reservation and payer account updated." });
         await refreshContext();
       }}
       onDeleteStallBooking={async (id) => {
         await deleteStallBooking(id);
-        setNotice({ tone: "success", message: "Reservation deleted and invoice draft updated." });
+        setNotice({ tone: "success", message: "Reservation deleted and payer account adjusted." });
         await refreshContext();
       }}
       onPrepareShowScoreClass={async (block) => {
