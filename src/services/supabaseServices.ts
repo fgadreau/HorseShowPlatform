@@ -2002,6 +2002,7 @@ export async function createContact(input: ContactInput) {
 
     if (existing) {
       const contact = await enrichExistingContact(existing, input);
+      await syncContactExternalIdentifiers(contact.id, input.external_memberships);
       await ensureContactOrganizationLink({
         organization_id: input.organization_id,
         contact_id: contact.id,
@@ -2014,8 +2015,6 @@ export async function createContact(input: ContactInput) {
         roles,
         source: input.roles?.length ? "manual" : "contact_type",
       });
-      await syncContactExternalIdentifiers(contact.id, input.external_memberships);
-
       return contact;
     }
   }
@@ -2062,6 +2061,7 @@ export async function createContact(input: ContactInput) {
 
       if (existing) {
         const contact = await enrichExistingContact(existing, input);
+        await syncContactExternalIdentifiers(contact.id, input.external_memberships);
         await ensureContactOrganizationLink({
           organization_id: input.organization_id,
           contact_id: contact.id,
@@ -2074,8 +2074,6 @@ export async function createContact(input: ContactInput) {
           roles,
           source: input.roles?.length ? "manual" : "contact_type",
         });
-        await syncContactExternalIdentifiers(contact.id, input.external_memberships);
-
         return contact;
       }
     }
