@@ -41,6 +41,7 @@
     "test:coggins": "node scripts/coggins/verification.test.mjs",
     "test:coggins:browser": "node scripts/coggins.browser.mjs",
     "test:horses:browser": "node scripts/horse-edit.browser.mjs",
+    "test:reservations:browser": "node scripts/tests/reservation-ui/run.mjs",
     "test:vaccination-review:browser": "node scripts/vaccination-review.browser.mjs"
   },
   "dependencies": {

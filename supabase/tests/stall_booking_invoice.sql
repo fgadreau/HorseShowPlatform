@@ -225,14 +225,14 @@ begin
       (select id from public.show_days where show_id = '40000000-0000-0000-0000-000000000101' and day_date = '2026-08-10' limit 1),
       (select id from public.show_days where show_id = '40000000-0000-0000-0000-000000000101' and day_date = '2026-08-10' limit 1),
       1,
-      'Open balance block test'
+      'Historical invoice must not block test'
     );
   exception when others then
     block_error := sqlerrm;
   end;
 
-  if block_error is null or block_error not like 'Solde de facture ouvert:%' then
-    raise exception 'Expected open invoice balance to block another show reservation, got %', coalesce(block_error, 'no error');
+  if block_error is not null then
+    raise exception 'Historical open invoice must not block another show reservation, got %', block_error;
   end if;
 end;
 $$;

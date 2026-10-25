@@ -5380,7 +5380,25 @@ export async function updateStallOption(id: string, input: StallOptionUpdateInpu
   return data;
 }
 
-export async function createStallBooking(input: StallBookingInput) {
+export async function createStallBooking(input: StallBookingInput | StallBookingInput[]) {
+  if (Array.isArray(input)) {
+    const client = requireSupabase();
+    for (const row of input) {
+      await ensureStallBookingOrganizationLinks({ organization_id: row.organization_id, horse_id: row.horse_id ?? null, booker_contact_id: row.booker_contact_id, payer_contact_id: row.payer_contact_id, created_by_user_id: row.created_by_user_id });
+      if (row.horse_id && !["cancelled", "completed"].includes(row.status ?? "requested")) await assertHorseHealthComplianceForShow(row.horse_id, row.show_id);
+    }
+    const roleTargets = new Map<string, { organization_id: string; contact_id: string; role: "booker" | "payer"; source: "reservation" }>();
+    for (const row of input) {
+      for (const role of ["booker", "payer"] as const) {
+        const contact_id = role === "booker" ? row.booker_contact_id : row.payer_contact_id;
+        roleTargets.set(`${row.organization_id}:${contact_id}:${role}`, { organization_id: row.organization_id, contact_id, role, source: "reservation" });
+      }
+    }
+    for (const target of roleTargets.values()) await ensureContactRole(target);
+    const { data, error } = await client.rpc("create_stall_booking_batch", { p_rows: input.map(row => cleanPayload({ ...row, horse_id: row.horse_id || null, show_day_start_id: row.show_day_start_id || null, show_day_end_id: row.show_day_end_id || null })) });
+    if (error) throw error;
+    return data as StallBooking[];
+  }
   const client = requireSupabase();
   await ensureStallBookingOrganizationLinks({
     organization_id: input.organization_id,

@@ -14,7 +14,9 @@ import {
   updateStallBooking,
   updateStallOption,
 } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallOption } from "../../types/domain";
+import { sourceBillingError } from "../finance/presentation";
+import { billingRpc } from "../../services/billingFolio";
+import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallBookingInput, StallOption } from "../../types/domain";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 
 function uiText(locale: Locale, fr: string, en: string) {
@@ -126,7 +128,7 @@ export function StallsView({
   ];
 
   async function handleDeleteBooking(booking: StallBooking) {
-    if (!window.confirm(uiText(locale, "Supprimer cette réservation et la ligne de facture liée?", "Delete this reservation and the linked invoice line?"))) {
+    if (!window.confirm(uiText(locale, "Supprimer cette réservation et ajuster son compte?", "Delete this reservation and adjust its account?"))) {
       return;
     }
 
@@ -344,7 +346,7 @@ export function MyStallsView({
   ];
 
   async function handleDeleteBooking(booking: StallBooking) {
-    if (!window.confirm(uiText(locale, "Supprimer cette réservation et la ligne de facture liée?", "Delete this reservation and the linked invoice line?"))) {
+    if (!window.confirm(uiText(locale, "Supprimer cette réservation et ajuster son compte?", "Delete this reservation and adjust its account?"))) {
       return;
     }
 
@@ -582,7 +584,7 @@ function StallBookingsTable({
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{bookings.length ? uiText(locale, `${bookings.length} réservation${bookings.length === 1 ? "" : "s"} liée${bookings.length === 1 ? "" : "s"} aux brouillons de facture.`, `${bookings.length} reservation${bookings.length === 1 ? "" : "s"} linked to billing drafts.`) : uiText(locale, "Les réservations créeront des lignes de facture brouillon.", "Reservations will create draft invoice lines.")}</p>
+          <p>{bookings.length ? uiText(locale, `${bookings.length} réservation${bookings.length === 1 ? "" : "s"} liée${bookings.length === 1 ? "" : "s"} aux comptes des payeurs.`, `${bookings.length} reservation${bookings.length === 1 ? "" : "s"} linked to payer accounts.`) : uiText(locale, "Les réservations seront ajoutées aux comptes des payeurs pour le concours.", "Reservations will be added to payer accounts for the show.")}</p>
         </div>
       </div>
       <div className="table stalls-table">
@@ -631,7 +633,6 @@ function StallBookingsTable({
 function StallOptionForm({
   locale,
   organization,
-  products,
   showDays,
   shows,
   onCreateStallOption,
@@ -660,9 +661,7 @@ function StallOptionForm({
   const [startDayId, setStartDayId] = useState("");
   const [endDayId, setEndDayId] = useState("");
   const [notes, setNotes] = useState("");
-  const [productId, setProductId] = useState("");
   const [busy, setBusy] = useState(false);
-  const reservableProducts = products.filter((product) => product.is_active && ["stall_extra", "feed", "manual"].includes(product.category));
   const selectedShowId = showId || shows[0]?.id || "";
   const dayOptions = showDays.filter((day) => day.show_id === selectedShowId);
   const usesDailyReservations = reservationPeriodMode === "daily";
@@ -708,7 +707,6 @@ function StallOptionForm({
         requires_horse_assignment: optionRequiresHorseAssignment,
         limit_per_horse_stalls: optionRequiresHorseAssignment ? null : integerValue(limitPerHorseStalls, 0) || null,
         category,
-        product_id: productId || null,
         notes,
       });
       setName(stallPresets[0].name);
@@ -724,7 +722,6 @@ function StallOptionForm({
       setStartDayId("");
       setEndDayId("");
       setNotes("");
-      setProductId("");
       setPresetKey("stall");
       onCreated?.();
     } finally {
@@ -786,17 +783,6 @@ function StallOptionForm({
           <label>
             {uiText(locale, "Prix", "Price")}
             <input disabled={!canCreate} min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
-          </label>
-          <label>
-            {uiText(locale, "Produit lié", "Linked product")}
-            <select disabled={!canCreate} value={productId} onChange={(event) => setProductId(event.target.value)}>
-              <option value="">{uiText(locale, "Aucun", "None")}</option>
-              {reservableProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
         <div className="form-grid">
@@ -905,7 +891,6 @@ function StallOptionEditForm({
   locale,
   currency,
   option,
-  products,
   showDays,
   shows,
   onCancel,
@@ -933,9 +918,7 @@ function StallOptionEditForm({
   const [startDayId, setStartDayId] = useState(option.show_day_start_id ?? "");
   const [endDayId, setEndDayId] = useState(option.show_day_end_id ?? "");
   const [notes, setNotes] = useState(option.notes ?? "");
-  const [productId, setProductId] = useState(option.product_id ?? "");
   const [busy, setBusy] = useState(false);
-  const reservableProducts = products.filter((product) => product.is_active && ["stall_extra", "feed", "manual"].includes(product.category));
   const dayOptions = showDays.filter((day) => day.show_id === option.show_id);
   const usesDailyReservations = reservationPeriodMode === "daily";
   const selectedStartDayId = usesDailyReservations ? validDayId(startDayId, dayOptions) || dayOptions[0]?.id || "" : "";
@@ -953,7 +936,6 @@ function StallOptionEditForm({
         name,
         description: description || null,
         category,
-        product_id: productId || null,
         price: numericValue(price) ?? option.price,
         total_quantity: total,
         available_quantity: Math.min(integerValue(availableQuantity, option.available_quantity), total),
@@ -997,17 +979,6 @@ function StallOptionEditForm({
           <label>
             {uiText(locale, "Prix", "Price")}
             <input min="0" required step="0.01" type="number" value={price} onChange={(event) => setPrice(event.target.value)} />
-          </label>
-          <label>
-            {uiText(locale, "Produit lié", "Linked product")}
-            <select value={productId} onChange={(event) => setProductId(event.target.value)}>
-              <option value="">{uiText(locale, "Aucun", "None")}</option>
-              {reservableProducts.map((product) => (
-                <option key={product.id} value={product.id}>
-                  {product.name}
-                </option>
-              ))}
-            </select>
           </label>
         </div>
         <div className="form-grid">
@@ -1119,7 +1090,6 @@ function StallBookingForm({
   defaultStatus,
   horseHealthDocuments,
   horses,
-  invoices,
   organization,
   profileId,
   showDays,
@@ -1174,6 +1144,7 @@ function StallBookingForm({
   const [endDayId, setEndDayId] = useState("");
   const [notes, setNotes] = useState("");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const selectedShowId = showId || firstStallOption?.show_id || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
   const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
@@ -1264,12 +1235,7 @@ function StallBookingForm({
     hasTackRequest && tackBillingMode === "single_contact" ? selectedTackPayerContactId : null,
     ...campingPayerContactIdsList,
   ]);
-  const blockingInvoices = blockingReservationInvoices({
-    invoices,
-    payerContactIds: reservationPayerContactIds,
-    selectedShowId,
-  });
-  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, locale, shows });
+  const blockingInvoiceMessage = useReservationClosedBalanceMessage(selectedShowId, reservationPayerContactIds, locale);
   const hasReservationItems = hasHorseStallRequest || hasTackRequest || hasCampingRequest;
   const hasSelectedReservableProduct = Boolean(selectedStallOption || selectedTackOption || selectedCampingOption);
   const stallAvailabilityTooLow = Boolean(selectedStallOption && stallCount > selectedStallOption.available_quantity);
@@ -1303,7 +1269,7 @@ function StallBookingForm({
       !campingAvailabilityTooLow &&
       !needsBeddingOption &&
       !needsHayOption &&
-      !blockingInvoices.length,
+      !blockingInvoiceMessage,
   );
   const availabilityLabel = selectedStallOption
     ? `${selectedStallOption.available_quantity} stall${selectedStallOption.available_quantity === 1 ? "" : "s"} disponible${selectedStallOption.available_quantity === 1 ? "" : "s"}`
@@ -1325,7 +1291,7 @@ function StallBookingForm({
     hasReservationItems,
     invalidHealthHorseNames: selectedInvalidHealth.map((item) => item.horse.name),
     blockingInvoiceMessage,
-    hasBlockingInvoiceBalance: Boolean(blockingInvoices.length),
+    hasBlockingInvoiceBalance: Boolean(blockingInvoiceMessage),
     missingCampingPayerCount,
     needsBeddingOption,
     needsHayOption,
@@ -1423,6 +1389,7 @@ function StallBookingForm({
     }
 
     setBusy(true);
+    setSubmitError("");
 
     try {
       const activeOrganization = organization;
@@ -1434,10 +1401,11 @@ function StallBookingForm({
         source: "manual",
       });
 
+      const bookingRows: StallBookingInput[] = [];
       const bookingStatus = allowStatusEdit ? status : defaultStatus;
 
       async function createInventoryBooking(option: StallOption, quantity: number, productName: string) {
-        await onCreateStallBooking({
+        bookingRows.push({
           organization_id: activeOrganization.id,
           show_id: option.show_id,
           stall_option_id: option.id,
@@ -1462,7 +1430,7 @@ function StallBookingForm({
         for (const [index, target] of selectedHorseBillingTargets.entries()) {
           const splitAmount = splitAmounts[index] ?? 0;
 
-          await onCreateStallBooking({
+          bookingRows.push({
             organization_id: activeOrganization.id,
             show_id: option.show_id,
             stall_option_id: option.id,
@@ -1485,7 +1453,7 @@ function StallBookingForm({
 
       if (selectedStallOption) {
         for (const target of selectedHorseBillingTargets) {
-          await onCreateStallBooking({
+          bookingRows.push({
             organization_id: activeOrganization.id,
             show_id: selectedStallOption.show_id,
             stall_option_id: selectedStallOption.id,
@@ -1505,7 +1473,7 @@ function StallBookingForm({
           if (selectedBeddingOption && beddingHorseIds.includes(target.horse.id)) {
             const beddingQuantity = positiveIntegerValue(beddingQuantities[target.horse.id] ?? "1", 1);
 
-            await onCreateStallBooking({
+            bookingRows.push({
               organization_id: activeOrganization.id,
               show_id: selectedBeddingOption.show_id,
               stall_option_id: selectedBeddingOption.id,
@@ -1530,7 +1498,7 @@ function StallBookingForm({
           await createInventoryBooking(selectedTackOption, tackQuantityNumber, selectedTackOption.name);
           await createSplitBookings(selectedTackOption, tackTotal, selectedTackOption.name);
         } else {
-          await onCreateStallBooking({
+          bookingRows.push({
             organization_id: activeOrganization.id,
             show_id: selectedTackOption.show_id,
             stall_option_id: selectedTackOption.id,
@@ -1552,7 +1520,7 @@ function StallBookingForm({
             await createInventoryBooking(selectedHayOption, hayTotalQuantity, selectedHayOption.name);
             await createSplitBookings(selectedHayOption, hayTotal, `${selectedHayOption.name} pour ${selectedTackOption.name}`);
           } else {
-            await onCreateStallBooking({
+            bookingRows.push({
               organization_id: activeOrganization.id,
               show_id: selectedHayOption.show_id,
               stall_option_id: selectedHayOption.id,
@@ -1573,7 +1541,7 @@ function StallBookingForm({
 
       if (selectedCampingOption && campingQuantityNumber > 0) {
         for (const [index, payerContactId] of campingPayerContactIdsList.entries()) {
-          await onCreateStallBooking({
+          bookingRows.push({
             organization_id: activeOrganization.id,
             show_id: selectedCampingOption.show_id,
             stall_option_id: selectedCampingOption.id,
@@ -1590,6 +1558,8 @@ function StallBookingForm({
           });
         }
       }
+
+      await onCreateStallBooking(bookingRows);
 
       setStallOptionId("");
       setTackOptionId("");
@@ -1608,6 +1578,8 @@ function StallBookingForm({
       setSelectedContactRoles(requiredReservationContactRoles);
       setNotes("");
       onCreated?.();
+    } catch (error) {
+      setSubmitError(sourceBillingError(error, locale));
     } finally {
       setBusy(false);
     }
@@ -2001,7 +1973,7 @@ function StallBookingForm({
 
         <div className="form-section">
           <div className="form-section-header">
-            <strong>{datesSectionNumber}. {uiText(locale, "Dates et facture", "Dates and invoice")}</strong>
+            <strong>{datesSectionNumber}. {uiText(locale, "Dates et compte", "Dates and account")}</strong>
             <span>{canCreate ? `Total: ${formatCurrency(totalPrice, currency)}` : reservationUsesDailyReservations ? uiText(locale, "Choisir les journées requises.", "Choose required days.") : uiText(locale, "Compléter les informations requises.", "Complete required information.")}</span>
           </div>
           <div className="form-grid">
@@ -2070,7 +2042,7 @@ function StallBookingForm({
             </span>
             <span>
               <strong>{formatCurrency(totalPrice, currency)}</strong>
-              <small>{uiText(locale, "Total facture", "Invoice total")}</small>
+              <small>{uiText(locale, "Total avant taxes", "Subtotal before taxes")}</small>
             </span>
           </div>
           <label>
@@ -2079,6 +2051,7 @@ function StallBookingForm({
           </label>
         </div>
 
+        {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <p id="reservation-create-status" role="status" aria-live="polite">{formMessage}</p>
         <button aria-describedby="reservation-create-status" className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
@@ -2097,7 +2070,6 @@ function StallBookingEditForm({
   currency,
   horseHealthDocuments,
   horses,
-  invoices,
   organization,
   profileId,
   showDays,
@@ -2134,6 +2106,7 @@ function StallBookingEditForm({
   const [endDayId, setEndDayId] = useState(booking.show_day_end_id ?? "");
   const [notes, setNotes] = useState(booking.notes ?? "");
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const optionChoices = stallOptions.filter((option) => option.show_id === booking.show_id);
   const selectedOption = findById(optionChoices, optionId) ?? findById(stallOptions, booking.stall_option_id);
   const selectedHorse = findById(horses, horseId) ?? null;
@@ -2165,13 +2138,8 @@ function StallBookingEditForm({
       !selectedHealthCompliance?.can_proceed &&
       !["cancelled", "completed"].includes(status),
   );
-  const blockingInvoices = blockingReservationInvoices({
-    invoices,
-    payerContactIds: payerContactId ? [payerContactId] : [],
-    selectedShowId: booking.show_id,
-  });
-  const blocksBalance = !["cancelled", "completed"].includes(status) && blockingInvoices.length > 0;
-  const blockingInvoiceMessage = blockingReservationInvoiceMessage({ contacts, currency, invoices: blockingInvoices, locale, shows });
+  const blockingInvoiceMessage = useReservationClosedBalanceMessage(booking.show_id, payerContactId ? [payerContactId] : [], locale);
+  const blocksBalance = !["cancelled", "completed"].includes(status) && Boolean(blockingInvoiceMessage);
   const canUpdate = Boolean(selectedOption && bookerContactId && payerContactId && (!selectedOptionUsesDailyReservations || (selectedStartDayId && selectedEndDayId)) && !quantityTooHigh && !healthBlocksBooking && !blocksBalance);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -2182,6 +2150,7 @@ function StallBookingEditForm({
     }
 
     setBusy(true);
+    setSubmitError("");
 
     try {
       await onUpdateStallBooking(booking.id, {
@@ -2197,6 +2166,8 @@ function StallBookingEditForm({
         total_price: totalPrice,
         notes: notes || null,
       });
+    } catch (error) {
+      setSubmitError(sourceBillingError(error, locale));
     } finally {
       setBusy(false);
     }
@@ -2354,6 +2325,7 @@ function StallBookingEditForm({
             <input value={notes} onChange={(event) => setNotes(event.target.value)} />
           </label>
         </div>
+        {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
@@ -2369,8 +2341,8 @@ function reservationInvoiceState(invoice: Invoice | undefined, currency: string,
   if (!invoice) {
     return {
       badgeClass: "warning",
-      confirmationLabel: uiText(locale, "Facture à créer", "Invoice to create"),
-      detail: uiText(locale, "La réservation attend sa ligne de facture.", "The reservation is waiting for its invoice line."),
+      confirmationLabel: uiText(locale, "Compte du concours", "Show account"),
+      detail: uiText(locale, "Les frais de réservation sont à consulter dans Mes comptes.", "View reservation charges in My accounts."),
     };
   }
 
@@ -2443,61 +2415,28 @@ function formatInvoiceNumber(value: string) {
   return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, "0") : normalized;
 }
 
-function blockingReservationInvoices({
-  invoices,
-  payerContactIds,
-  selectedShowId,
-}: {
-  invoices: Invoice[];
-  payerContactIds: string[];
-  selectedShowId: string;
-}) {
-  const payerIds = new Set(payerContactIds.filter(Boolean));
-
-  if (!payerIds.size || !selectedShowId) {
-    return [];
-  }
-
-  return invoices.filter(
-    (invoice) =>
-      payerIds.has(invoice.payer_contact_id) &&
-      invoice.show_id !== selectedShowId &&
-      invoiceHasOpenBalance(invoice),
-  );
-}
-
-function blockingReservationInvoiceMessage({
-  contacts,
-  currency,
-  invoices,
-  locale = "fr",
-  shows,
-}: {
-  contacts: Contact[];
-  currency: string;
-  invoices: Invoice[];
-  locale?: Locale;
-  shows: Show[];
-}) {
-  const invoice = invoices[0];
-
-  if (!invoice) {
-    return "";
-  }
-
-  const payerName = contactLabel(findById(contacts, invoice.payer_contact_id));
-  const showName = showLabel(findById(shows, invoice.show_id));
-  const remaining = invoices.reduce((sum, candidate) => sum + Number(candidate.balance_due ?? 0), 0);
-
-  return uiText(
-    locale,
-    `${payerName} a un solde ouvert de ${formatCurrency(remaining, currency)} dans cette association (${showName}, facture #${formatInvoiceNumber(invoice.invoice_number)}). Impossible de réserver pour un autre événement avant paiement.`,
-    `${payerName} has an open balance of ${formatCurrency(remaining, currency)} in this association (${showName}, invoice #${formatInvoiceNumber(invoice.invoice_number)}). They cannot reserve for another event before payment.`,
-  );
-}
-
-function invoiceHasOpenBalance(invoice: Invoice) {
-  return !["paid", "void"].includes(invoice.status) && Number(invoice.balance_due ?? 0) > 0;
+function useReservationClosedBalanceMessage(showId: string, payerIds: string[], locale: Locale) {
+  const key = [...new Set(payerIds.filter(Boolean))].sort().join(",");
+  const [result, setResult] = useState({ key: "", message: "" });
+  const requestKey = `${showId}:${key}:${locale}`;
+  useEffect(() => {
+    let live = true;
+    if (!showId || !key) {
+      setResult({ key: requestKey, message: "" });
+      return;
+    }
+    void billingRpc("reservation_closed_balance_blocks", { p_show: showId, p_payers: key.split(",") }).then((blocks: Array<{ account_number: string; balance: number; currency: string }>) => {
+      if (!live) return;
+      setResult({ key: requestKey, message: blocks.length ? uiText(locale,
+        `Un autre compte est fermé avec un solde dû (${blocks.map(b => `${b.account_number} : ${formatCurrency(Number(b.balance), b.currency)}`).join(", ")}). Le paiement est requis avant une nouvelle réservation.`,
+        `Another closed account has an outstanding balance (${blocks.map(b => `${b.account_number}: ${formatCurrency(Number(b.balance), b.currency)}`).join(", ")}). Payment is required before a new reservation.`) : "" });
+    }).catch(() => {
+      // The database rechecks all payers atomically when saving, even if this preview is unavailable.
+      if (live) setResult({ key: requestKey, message: "" });
+    });
+    return () => { live = false; };
+  }, [showId, key, locale, requestKey]);
+  return result.key === requestKey ? result.message : "";
 }
 
 function uniqueIds(values: Array<string | null | undefined>) {
