@@ -4,7 +4,7 @@ import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
 import {billingRpc} from '../../services/billingFolio';
 import { Brand } from "../../components/Brand";
 import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, MouseEvent } from "react";
 import {
   AlertCircle,
   ArrowDown,
@@ -730,11 +730,17 @@ export function Dashboard({
     };
   }, [isMobileMenuOpen]);
 
+  function handleHomeNavigation(event: MouseEvent<HTMLAnchorElement>) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    handleViewChange("overview");
+  }
+
   return (
     <main className="app-shell">
       <aside className={`sidebar${isMobileMenuOpen ? " open" : ""}`}>
         <div className="mobile-menu-bar">
-          <Brand symbol />
+          <a href="/" aria-label={locale === "fr" ? "HSP — Accueil" : "HSP — Home"} onClick={handleHomeNavigation}><Brand symbol /></a>
           <div className="mobile-menu-title">
             <strong>{t.shell.productName}</strong>
             <span>{activeViewLabel}</span>
@@ -751,7 +757,7 @@ export function Dashboard({
           </button>
         </div>
 
-        <div className="brand-lockup compact"><Brand /></div>
+        <a className="brand-lockup compact" href="/" aria-label={locale === "fr" ? "HSP — Accueil" : "HSP — Home"} onClick={handleHomeNavigation}><Brand /></a>
 
         <nav className="nav-list" id="primary-navigation" aria-label="Main navigation">
           {canManageAssociation || isPlatformAdmin ? (
