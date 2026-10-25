@@ -2083,6 +2083,9 @@ export async function createContact(input: ContactInput) {
     throw error;
   }
 
+  // A creator may initialize an unclaimed contact only before it is linked to
+  // a directory. Persist supplied identifiers while that authority still holds.
+  await syncContactExternalIdentifiers(contactId, input.external_memberships);
   await ensureContactOrganizationLink({
     organization_id: input.organization_id,
     contact_id: contactId,
@@ -2095,8 +2098,6 @@ export async function createContact(input: ContactInput) {
     roles,
     source: input.roles?.length ? "manual" : "contact_type",
   });
-  await syncContactExternalIdentifiers(contactId, input.external_memberships);
-
   const { data, error: readError } = await client.from("contacts").select("*").eq("id", contactId).single<Contact>();
   if (readError) throw readError;
   return data;
@@ -5858,6 +5859,12 @@ async function ensureContactOrganizationLink(input: {
 }) {
   const client = requireSupabase();
   const organizationDisciplineId = input.organization_discipline_id ?? await findDefaultOrganizationDisciplineId(input.organization_id);
+  // Ensuring an existing link must not become an UPDATE. The caller may still
+  // use/read this contact after the directory has taken identity authority.
+  const { data: existingLink, error: linkReadError } = await client.from("directory_contacts")
+    .select("id").eq("organization_discipline_id", organizationDisciplineId).eq("contact_id", input.contact_id).maybeSingle();
+  if (linkReadError) throw linkReadError;
+  if (existingLink) return;
   const { error } = await client.from("directory_contacts").upsert(
     {
       organization_discipline_id: organizationDisciplineId,
