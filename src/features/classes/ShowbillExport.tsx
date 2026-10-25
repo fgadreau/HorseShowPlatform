@@ -22,26 +22,30 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
     .sort((first, second) => first.sort_order - second.sort_order || first.day_date.localeCompare(second.day_date));
   const currency = show.default_currency || "CAD";
   const showClasses = classes.filter((classRecord) => classRecord.show_id === show.id);
-  const showAddedMoney = showClasses.some((classRecord) => Number(classRecord.added_money) > 0);
+  const isJackpot = (record: ClassRecord) => Number(record.added_money) === 0 && record.payout_schedule_type === "jackpot_100";
+  const showAddedMoney = showClasses.some((record) => Number(record.added_money) > 0 || isJackpot(record));
+  const label = (fr: string, en: string) => locale === "fr" && fr !== en ? `${fr} / ${en}` : en;
+  const arenaLabel = (arena: string) => `${label("Manège", "Arena")} ${arena}`;
+  const scheduleLabel = (block: Block) => label(classScheduleStartLabel(block, "fr", showBlocks), classScheduleStartLabel(block, "en", showBlocks));
   const showEntryFees = showClasses.some((classRecord) => Number(classRecord.entry_fee) > 0);
   const showJudgeFees = showClasses.some((classRecord) => Number(classRecord.judge_fee) > 0);
   const tableColumnCount = 2 + Number(showAddedMoney) + Number(showEntryFees) + Number(showJudgeFees);
 
   function downloadGoogleSheetsCsv() {
     const headers = [
-      uiText(locale, "Date", "Date"),
-      uiText(locale, "Journée", "Day"),
-      uiText(locale, "Arène", "Arena"),
-      uiText(locale, "Départ", "Start"),
-      uiText(locale, "Bloc", "Block"),
-      uiText(locale, "Libellé", "Label"),
-      uiText(locale, "Code classe", "Class code"),
-      uiText(locale, "Classe", "Class"),
-      uiText(locale, "Patron", "Pattern"),
-      uiText(locale, "Added money", "Added money"),
-      uiText(locale, "Frais inscription", "Entry fee"),
-      uiText(locale, "Frais juges", "Judges fee"),
-      uiText(locale, "Notes", "Notes"),
+      label("Date", "Date"),
+      label("Journée", "Day"),
+      label("Manège", "Arena"),
+      label("Départ", "Start"),
+      label("Bloc", "Block"),
+      label("Libellé", "Label"),
+      label("Code classe", "Class code"),
+      label("Classe", "Class"),
+      label("Patron", "Pattern"),
+      label("Bourse ajoutée", "Added money"),
+      label("Frais inscription", "Entry fee"),
+      label("Frais juges", "Judges fee"),
+      label("Notes", "Notes"),
     ];
     const rows: Array<Array<string | number | null>> = [headers];
 
@@ -55,8 +59,8 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
         const common = [
           day.day_date,
           day.day_name || day.day_number || "",
-          block.arena || "",
-          classScheduleStartLabel(block, locale, showBlocks),
+          block.arena ? arenaLabel(block.arena) : "",
+          scheduleLabel(block),
           block.name,
           block.display_label || "",
         ];
@@ -72,7 +76,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
             classRecord.code || "",
             classRecord.name,
             block.pattern || "",
-            classRecord.added_money || "",
+            isJackpot(classRecord) ? "Jackpot" : classRecord.added_money || "",
             classRecord.entry_fee,
             classRecord.judge_fee,
             classRecord.notes || "",
@@ -153,7 +157,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
 
       <article className="showbill-print-root">
         <header className="showbill-title">
-          <span>{uiText(locale, "HORAIRE · SHOWBILL", "SCHEDULE · SHOWBILL")}</span>
+          <span>{label("HORAIRE · SHOWBILL", "SCHEDULE · SHOWBILL")}</span>
           <h1>{show.name}</h1>
           <p>{[organization?.name, show.venue, show.location].filter(Boolean).join(" · ")}</p>
           <strong>{showDateRange(show.start_date, show.end_date, locale)}</strong>
@@ -166,22 +170,22 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
           return (
             <section className="showbill-day" key={day.id}>
               <div className="showbill-day-heading">
-                <h2>{day.day_name || uiText(locale, `Journée ${day.day_number ?? ""}`.trim(), `Day ${day.day_number ?? ""}`.trim())}</h2>
+                <h2>{day.day_name || label(`Journée ${day.day_number ?? ""}`.trim(), `Day ${day.day_number ?? ""}`.trim())}</h2>
                 <span>{formatShowbillDate(day.day_date, locale)}</span>
               </div>
 
               <div className="showbill-arena-grid">
                 {arenas.map(({ arena, blocks: arenaBlocks }) => (
                   <section className="showbill-arena" key={arena}>
-                    <h3>{arena === "__general__" ? uiText(locale, "Général", "General") : arena}</h3>
+                    <h3>{arena === "__general__" ? label("Général", "General") : arenaLabel(arena)}</h3>
                     <table>
                       <thead>
                         <tr>
-                          <th>{uiText(locale, "Classe / bloc", "Class / block")}</th>
-                          <th>{uiText(locale, "Patron", "Pattern")}</th>
-                          {showAddedMoney ? <th>{uiText(locale, "Added", "Added")}</th> : null}
-                          {showEntryFees ? <th>{uiText(locale, "Inscr.", "Entry")}</th> : null}
-                          {showJudgeFees ? <th>{uiText(locale, "Juges", "Judges")}</th> : null}
+                          <th>{label("Classe / bloc", "Class / block")}</th>
+                          <th>{label("Patron", "Pattern")}</th>
+                          {showAddedMoney ? <th>{label("Bourse ajoutée", "Added")}</th> : null}
+                          {showEntryFees ? <th>{label("Inscr.", "Entry")}</th> : null}
+                          {showJudgeFees ? <th>{label("Juges", "Judges")}</th> : null}
                         </tr>
                       </thead>
                       <tbody>
@@ -193,7 +197,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                             <tr className="showbill-block-row" key={`${block.id}-heading`}>
                               <th colSpan={tableColumnCount}>
                                 <span>{block.display_label || block.name}</span>
-                                <small>{classScheduleStartLabel(block, locale, showBlocks)}</small>
+                                <small>{scheduleLabel(block)}</small>
                               </th>
                             </tr>
                           );
@@ -203,7 +207,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                               <tr className="showbill-event-row" key={`${block.id}-event`}>
                                 <td>
                                   <strong>{block.display_label || block.name}</strong>
-                                  <small>{classScheduleStartLabel(block, locale, showBlocks)}</small>
+                                  <small>{scheduleLabel(block)}</small>
                                 </td>
                                 <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
                                 {showAddedMoney ? <td>—</td> : null}
@@ -219,7 +223,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                               <tr key={classRecord.id}>
                                 <td>{[classRecord.code, classRecord.name].filter(Boolean).join(" · ")}</td>
                                 <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
-                                {showAddedMoney ? <td>{moneyCell(classRecord.added_money, currency)}</td> : null}
+                                {showAddedMoney ? <td>{isJackpot(classRecord) ? "Jackpot" : moneyCell(classRecord.added_money, currency)}</td> : null}
                                 {showEntryFees ? <td>{moneyCell(classRecord.entry_fee, currency)}</td> : null}
                                 {showJudgeFees ? <td>{moneyCell(classRecord.judge_fee, currency)}</td> : null}
                               </tr>

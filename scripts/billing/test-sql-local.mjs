@@ -85,6 +85,8 @@ try {
  sql(readFileSync('supabase/tests/billing_checkout_compat.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_foundation.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_review.sql','utf8'));
+ sql(readFileSync('supabase/tests/paid_warmup_registration.sql','utf8'));
+ report.push('paid warmup lottery, selection, billing and cancellation SQL regressions');
  sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));
  console.log('SQL COUNTS',JSON.stringify(sqlCounts));
  report.push('SQL acceptance assertions');console.log('PASS SQL acceptance assertions');

@@ -1325,6 +1325,11 @@ export type ShowScorePaidWarmupEntry = {
 };
 
 export type ShowScorePaidWarmup = {
+  registration_enabled?: boolean;
+  entry_fee?: number;
+  capacity?: number | null;
+  registration_state?: "open" | "drawn" | "validated";
+  registration_version?: number;
   id: string;
   organization_id: string;
   show_id: string;
@@ -1902,6 +1907,9 @@ export type EntryUpdateInput = {
 };
 
 export type ShowScorePaidWarmupInput = {
+  registration_enabled?: boolean;
+  entry_fee?: number;
+  capacity?: number | null;
   id?: string;
   organization_id: string;
   show_id: string;

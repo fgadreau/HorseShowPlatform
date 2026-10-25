@@ -54,6 +54,9 @@ function PaidWarmupForm({
   const initialShowDayId = warmup?.show_day_id || defaultShowDayId || showDays.find((day) => day.show_id === initialShowId)?.id || "";
   const [showId, setShowId] = useState(initialShowId);
   const [showDayId, setShowDayId] = useState(initialShowDayId);
+  const [registrationEnabled, setRegistrationEnabled] = useState(warmup?.registration_enabled ?? !warmup);
+  const [price, setPrice] = useState(String(warmup?.entry_fee ?? ""));
+  const [capacity, setCapacity] = useState(String(warmup?.capacity ?? ""));
   const [name, setName] = useState(warmup?.name ?? "Paid warm up");
   const [arena, setArena] = useState(warmup?.arena ?? "");
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(warmup?.schedule_start_mode ?? "unscheduled");
@@ -150,6 +153,9 @@ function PaidWarmupForm({
     });
 
     const payload = {
+      registration_enabled: registrationEnabled,
+      entry_fee: Number(price || 0),
+      capacity: capacity ? Number(capacity) : null,
       show_day_id: showDayId,
       name,
       arena,
@@ -247,20 +253,26 @@ function PaidWarmupForm({
 
       <div className="form-grid three">
         <label>
-          Min / rider
+          {uiText(locale,"Minutes par cheval","Minutes per horse")}
           <input min="1" type="number" value={durationMinutesPerRider} onChange={(event) => setDurationMinutesPerRider(event.target.value)} />
         </label>
         <label>
-          Drag interval
+          {uiText(locale,"Préparation de piste tous les X chevaux","Drag every X horses")}
           <input min="1" placeholder={uiText(locale, "Manuel", "Manual")} type="number" value={dragInterval} onChange={(event) => setDragInterval(event.target.value)} />
         </label>
         <label>
-          Drag minutes
+          {uiText(locale,"Durée de préparation de piste (min)","Arena drag duration (min)")}
           <input min="0" type="number" value={dragDurationMinutes} onChange={(event) => setDragDurationMinutes(event.target.value)} />
         </label>
       </div>
 
-      <div className="paid-warmup-entry-picker">
+      <label className="checkbox-line"><input type="checkbox" checked={registrationEnabled} disabled={Boolean(warmup?.registration_enabled || warmup?.entries.length)} onChange={e => setRegistrationEnabled(e.target.checked)} />{uiText(locale,"Demandes d’inscription et tirage dans l’application","Registration requests and in-app draw")}</label>
+      {warmup && !warmup.registration_enabled && warmup.entries.length > 0 ? <p>La liste ShowScore existante est conservée. Créez une nouvelle séance pour utiliser les demandes et le tirage.</p> : null}
+      {registrationEnabled ? <div className="form-grid two">
+        <label>{uiText(locale,"Prix par cheval (avant taxes)","Price per horse (before taxes)")} · {shows.find(show => show.id === showId)?.default_currency || organization?.currency || "CAD"}<input required type="number" min="0" step="0.01" value={price} disabled={Boolean(warmup?.registration_state && warmup.registration_state !== "open")} onChange={e => setPrice(e.target.value)} /></label>
+        <label>{uiText(locale,"Nombre de places disponibles","Available places")}<input required type="number" min="1" step="1" value={capacity} disabled={Boolean(warmup?.registration_state && warmup.registration_state !== "open")} onChange={e => setCapacity(e.target.value)} /></label>
+        <p>{uiText(locale,"Une demande par cheval. Le tirage et la validation de facturation se font après l’enregistrement de la séance.","One request per horse. Run the draw and approve billing after saving the session.")}</p>
+      </div> : <div className="paid-warmup-entry-picker">
         <div className="picker-column">
           <div className="subsection-heading">
             <h3>{uiText(locale, "Inscriptions HSP", "HSP entries")}</h3>
@@ -313,7 +325,7 @@ function PaidWarmupForm({
             {!selectedEntries.length ? <p className="muted-line">{uiText(locale, "Sélectionne les inscriptions dans l'ordre voulu.", "Select entries in the desired order.")}</p> : null}
           </div>
         </div>
-      </div>
+      </div>}
 
       <FormActions
         busy={saving}

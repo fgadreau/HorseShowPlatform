@@ -1,3 +1,4 @@
+import { WarmupRoster } from "../warmups/WarmupRoster";
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Plus } from "lucide-react";
 import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
@@ -127,6 +128,7 @@ function ClassesView({
   const [editingBlock, setEditingBlock] = useState<Block | null>(null);
   const [editingClass, setEditingClass] = useState<ClassRecord | null>(null);
   const [editingSlate, setEditingSlate] = useState<Slate | null>(null);
+  const [managingWarmup, setManagingWarmup] = useState<ShowScorePaidWarmup | null>(null);
   const [editingPaidWarmup, setEditingPaidWarmup] = useState<ShowScorePaidWarmup | null>(null);
   const [showbillShow, setShowbillShow] = useState<Show | null>(null);
   const [editingRequirements, setEditingRequirements] = useState<{ scopeType: "block" | "class" | "block_template" | "class_template"; id: string; name: string } | null>(null);
@@ -546,6 +548,7 @@ function ClassesView({
             </span>
           </div>
           <div className="row-actions schedule-block-actions">
+            {warmup.registration_enabled ? <button className="text-button" type="button" onClick={() => setManagingWarmup(warmup)}>Demandes, tirage et facturation</button> : null}
             <button className="text-button" type="button" onClick={() => setEditingPaidWarmup(warmup)}>
               {uiText(locale, "Modifier", "Edit")}
             </button>
@@ -916,6 +919,7 @@ function ClassesView({
         </ModalDialog>
       ) : null}
 
+      {managingWarmup ? <ModalDialog className="class-program-modal" title={managingWarmup.name} onClose={() => setManagingWarmup(null)}><WarmupRoster warmupId={managingWarmup.id} horses={horses}/></ModalDialog> : null}
       {editingPaidWarmup ? (
         <ModalDialog className="class-program-modal paid-warmup-program-modal" description={editingPaidWarmup.name} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Modifier le paid warmup", "Edit paid warmup")} onClose={() => setEditingPaidWarmup(null)}>
           <PaidWarmupForm

@@ -1,3 +1,4 @@
+import { MyWarmupRequests } from "../warmups/MyWarmupRequests";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
@@ -12,6 +13,7 @@ import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
 import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function MyEntriesView({
+  warmupHorses,
   locale,
   blocks,
   contacts,
@@ -39,6 +41,7 @@ function MyEntriesView({
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
 }: {
+  warmupHorses?: Horse[];
   locale: Locale;
   blocks: Block[];
   contacts: Contact[];
@@ -106,6 +109,8 @@ function MyEntriesView({
           </button>
         </div>
       </section>
+
+      {organization ? <MyWarmupRequests key={organization.id} organizationId={organization.id} horses={warmupHorses ?? horses}/> : null}
 
       {creatingEntry ? (
         <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>
