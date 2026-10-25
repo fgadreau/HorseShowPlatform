@@ -1794,6 +1794,11 @@ function StallBookingForm({
                           <input checked={beddingSelected} disabled={!beddingChoices.length} type="checkbox" onChange={() => toggleBedding(horse.id)} />
                           {uiText(locale, "Ajouter de la ripe", "Add shavings")}
                         </label>
+                        {!beddingChoices.length ? (
+                          <small>
+                            {uiText(locale, "Aucune option de ripe disponible pour ce concours. L’association doit ajouter une option de réservation « Ripe » de catégorie Extra pour permettre de choisir une quantité par cheval.", "No shavings option is available for this show. The organization must add a Shavings reservation option in the Extra category to enable quantities per horse.")}
+                          </small>
+                        ) : null}
                         {beddingSelected ? (
                           <input
                             aria-label={`Quantite de ripe pour ${horse.name}`}
@@ -2074,7 +2079,8 @@ function StallBookingForm({
           </label>
         </div>
 
-        <button className="primary-button" disabled={busy || !canCreate} type="submit">
+        <p id="reservation-create-status" role="status" aria-live="polite">{formMessage}</p>
+        <button aria-describedby="reservation-create-status" className="primary-button" disabled={busy || !canCreate} type="submit">
           <Plus size={18} />
           {uiText(locale, "Créer la réservation", "Create reservation")}
         </button>

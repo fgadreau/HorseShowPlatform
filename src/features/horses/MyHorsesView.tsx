@@ -11,6 +11,8 @@ import { uiText, horseExternalReferenceChips, horseGenderLabel, todayDateValue }
 import { healthComplianceStatusLabel, healthComplianceTone, HorseAssociationComplianceGroups, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "./HorseForm";
 import { HorseEditForm } from "./HorseEditForm";
+import { DirectoryCreationPicker } from "../people/DirectoryDisciplinePicker";
+import type { Discipline, OrganizationDiscipline } from "../../types/domain";
 import { incentiveProgramAgePriceTiers, incentiveProgramFeeForHorse, incentiveProgramName, incentiveProgramTypeLabel, nominationRoleLabel, nominationStatusLabel, programUsesStallion } from "../programs/programLabels";
 
 function MyHorsesView({
@@ -29,6 +31,8 @@ function MyHorsesView({
   programHorses = horses,
   healthComplianceRevision,
   organization,
+  disciplines = [],
+  organizationDisciplines = [],
   profileId,
   onCreateContact,
   onCreateHorse,
@@ -54,6 +58,8 @@ function MyHorsesView({
   programHorses?: Horse[];
   healthComplianceRevision?: string;
   organization: Organization | null;
+  disciplines?: Discipline[];
+  organizationDisciplines?: OrganizationDiscipline[];
   profileId: string;
   onCreateContact: (input: Parameters<typeof createContact>[0]) => Promise<Contact>;
   onCreateHorse: (input: Parameters<typeof createHorse>[0]) => Promise<Horse>;
@@ -65,6 +71,7 @@ function MyHorsesView({
   onRefresh?: () => Promise<void> | void;
 }) {
   const [creatingHorse, setCreatingHorse] = useState(false);
+  const [horseDirectoryIds, setHorseDirectoryIds] = useState<Set<string>>(new Set());
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const activePrograms = incentivePrograms.filter((program) => program.is_active && program.organization_id === organization?.id);
   const [purchaseProgramId, setPurchaseProgramId] = useState(activePrograms[0]?.id ?? "");
@@ -155,12 +162,17 @@ function MyHorsesView({
             <h2>{uiText(locale, "Ajouter un cheval", "Add horse")}</h2>
             <p>{uiText(locale, "Ajoute ses infos, ses contacts et ses documents santé sans sortir de cette page.", "Add details, contacts and health documents without leaving this page.")}</p>
           </div>
-          <button className="primary-button" disabled={!organization} type="button" onClick={() => setCreatingHorse(true)}>
+          <button className="primary-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={() => {
+            const initial = organizationDisciplines.find((directory) => directory.is_default) ?? organizationDisciplines[0];
+            setHorseDirectoryIds(new Set(initial ? [initial.id] : []));
+            setCreatingHorse(true);
+          }}>
             <Plus size={18} />
             {uiText(locale, "Cheval", "Horse")}
           </button>
         </div>
       </section>
+      {!organizationDisciplines.length ? <p role="status">{uiText(locale, "Aucun répertoire actif accessible pour cette association. Choisis une autre association en haut de la page ou demande à son personnel d’activer le répertoire.", "No active directory is accessible for this association. Choose another association at the top of the page or ask its staff to activate the directory.")}</p> : null}
 
       {activePrograms.length ? <section className="panel span-2">
         <div className="panel-header"><div><h2>{uiText(locale, "Acheter une nomination", "Buy a nomination")}</h2><p>{uiText(locale, "Choisis un programme facultatif pour l’un de tes chevaux. Une nomination payante crée une facture brouillon.", "Choose an optional program for one of your horses. A paid nomination creates a draft invoice.")}</p></div></div>
@@ -187,6 +199,7 @@ function MyHorsesView({
 
       {creatingHorse ? (
         <ModalDialog description={uiText(locale, "Ajoute le cheval à ton profil et complète les documents requis.", "Add the horse to your profile and complete required documents.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouveau cheval", "New horse")} onClose={() => setCreatingHorse(false)}>
+          <DirectoryCreationPicker locale={locale} disciplines={disciplines} organizationDisciplines={organizationDisciplines} selectedIds={horseDirectoryIds} onChange={setHorseDirectoryIds} />
           <HorseForm
             locale={locale}
             contacts={contacts}
@@ -196,7 +209,7 @@ function MyHorsesView({
             membershipRequirements={membershipRequirements}
             organization={organization}
             onCreateContact={onCreateContact}
-            onCreateHorse={onCreateHorse}
+            onCreateHorse={(input) => onCreateHorse({ ...input, organization_discipline_ids: [...horseDirectoryIds] })}
             onCreateHorseHealthDocument={onCreateHorseHealthDocument}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}

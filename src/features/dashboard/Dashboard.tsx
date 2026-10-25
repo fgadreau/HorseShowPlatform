@@ -168,6 +168,7 @@ import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
 import { IncentiveProgramsSettings } from "../settings/IncentiveProgramsSettings";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
+import { PersonalDirectories } from "../profile/PersonalDirectories";
 import { ClientDashboardView } from "./ClientDashboardView";
 import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
 
@@ -803,14 +804,17 @@ export function Dashboard({
             )}
           </div>
           <div className="header-actions">
-            {!effectiveView.startsWith("my-") && organizations.length > 1 ? (
-              <select value={selectedOrganization?.id ?? ""} onChange={(event) => {onChangeOrganization(event.target.value);if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling(`/associations/${event.target.value}/finance`);else if(financeRoute())navigateBilling(`/associations/${event.target.value}/shows`);}}>
-                {organizations.map((organization) => (
-                  <option key={organization.id} value={organization.id}>
-                    {organization.name}
-                  </option>
-                ))}
-              </select>
+            {organizations.length > 1 ? (
+              <label>
+                Association
+                <select aria-label="Association" value={selectedOrganization?.id ?? ""} onChange={(event) => {onChangeOrganization(event.target.value);if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling(`/associations/${event.target.value}/finance`);else if(financeRoute())navigateBilling(`/associations/${event.target.value}/shows`);}}>
+                  {organizations.map((organization) => (
+                    <option key={organization.id} value={organization.id}>
+                      {organization.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
             ) : null}
             {shouldShowShowContext ? (
               <select
@@ -1171,6 +1175,7 @@ export function Dashboard({
         ) : null}
 
         {!showRouteUnavailable && effectiveView === "my-profile" && context ? (
+          <>
           <ProfileView
             locale={locale}
             horses={personalHorses}
@@ -1179,11 +1184,19 @@ export function Dashboard({
             onUpdateUserProfile={onUpdateUserProfile}
             onViewChange={onViewChange}
           />
+          <PersonalDirectories key={selectedOrganization?.id} locale={locale} organization={selectedOrganization}
+            directories={selectedOrganizationDisciplines} disciplines={disciplines}
+            contacts={personalContacts} directoryContacts={selectedOrganizationDirectoryContacts}
+            profileId={context.profile.id} onRefresh={onRefresh} />
+          </>
         ) : null}
 
         {!showRouteUnavailable && effectiveView === "my-horses" ? (
           <MyHorsesView
+            key={selectedOrganization?.id}
             locale={locale}
+            disciplines={disciplines}
+            organizationDisciplines={selectedOrganizationDisciplines}
             contacts={personalContacts}
             contactRoles={contactRoles}
             externalCredentialIssuers={externalCredentialIssuers}
