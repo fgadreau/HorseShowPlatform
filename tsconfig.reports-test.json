@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.payout-test.json",
+  "compilerOptions": { "outDir": ".tmp/reports-tests" },
+  "include": ["scripts/nrha-reports-test.ts", "src/lib/nrhaResultsCsv.ts", "src/lib/payouts.ts", "src/types/domain.ts"]
+}

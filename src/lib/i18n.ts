@@ -1,3 +1,4 @@
+import billingDocumentTranslations from './billingDocumentTranslations.json';
 export type Locale = "fr" | "en";
 
 export function getInitialLocale(): Locale {
@@ -16,6 +17,7 @@ export function saveLocale(locale: Locale) {
 
 export const translations = {
   fr: {
+    billingDocument: billingDocumentTranslations.fr,
     auth: {
       accountType: "Type de compte",
       accountTypes: {
@@ -42,7 +44,7 @@ export const translations = {
     nav: {
       association: "Association",
       backNumbers: "Dossards",
-      billing: "Facturation",
+      billing: "Finance",
       blocks: "Horaire",
       entries: "Inscriptions",
       health: "Santé",
@@ -51,7 +53,7 @@ export const translations = {
       myHorses: "Mes chevaux",
       myOverview: "Tableau de bord",
       myProfile: "Mon profil",
-      myInvoices: "Mes factures",
+      myInvoices: "Mes comptes",
       myRiders: "Mes cavaliers",
       myStalls: "Mes réservations",
       mySpace: "Mon espace",
@@ -60,6 +62,7 @@ export const translations = {
       people: "Répertoire",
       programs: "Programmes",
       results: "Résultats",
+      reports: "Rapports",
       scoring: "Pointage",
       settings: "Paramètres",
       shows: "Concours",
@@ -72,6 +75,7 @@ export const translations = {
     },
   },
   en: {
+    billingDocument: billingDocumentTranslations.en,
     auth: {
       accountType: "Account type",
       accountTypes: {
@@ -98,7 +102,7 @@ export const translations = {
     nav: {
       association: "Association",
       backNumbers: "Back numbers",
-      billing: "Billing",
+      billing: "Finance",
       blocks: "Schedule",
       entries: "Entries",
       health: "Health",
@@ -107,7 +111,7 @@ export const translations = {
       myHorses: "My horses",
       myOverview: "Dashboard",
       myProfile: "My profile",
-      myInvoices: "My invoices",
+      myInvoices: "My accounts",
       myRiders: "My riders",
       myStalls: "My reservations",
       mySpace: "My space",
@@ -116,6 +120,7 @@ export const translations = {
       people: "Directory",
       programs: "Programs",
       results: "Results",
+      reports: "Reports",
       scoring: "Scoring",
       settings: "Settings",
       shows: "Shows",

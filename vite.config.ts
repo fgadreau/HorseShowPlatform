@@ -63,6 +63,9 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 5173,
       strictPort: true,
+      // Persistent pilot state includes credentials, backups and private PDFs.
+      // Git ignore rules do not prevent Vite from serving those files over HTTP.
+      fs: { deny: [".env", ".env.*", "*.{crt,pem}", "**/.git/**", "**/.tmp/**"] },
       allowedHosts: localProxy && env.CODESPACE_NAME && env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN
         ? [`${env.CODESPACE_NAME}-5173.${env.GITHUB_CODESPACES_PORT_FORWARDING_DOMAIN}`]
         : [],
@@ -72,6 +75,16 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           ws: true,
           rewrite: (path: string) => path.replace(/^\/__local-supabase/, ""),
+        },
+        "/__local-billing-documents": {
+          target: "http://127.0.0.1:54332",
+          rewrite: (path: string) => path.replace(/^\/__local-billing-documents/, ""),
+          configure: proxy => {proxy.on("proxyReq",(proxyReq,req)=>{if(req.headers.origin && new URL(req.headers.origin).host===req.headers.host)proxyReq.setHeader("Origin","http://127.0.0.1:5173");});},
+        },
+        "/__local-billing": {
+          target: "http://127.0.0.1:54331",
+          rewrite: (path: string) => path.replace(/^\/__local-billing/, ""),
+          configure: proxy => {proxy.on("proxyReq",(proxyReq,req)=>{if(req.headers.origin && new URL(req.headers.origin).host===req.headers.host)proxyReq.setHeader("Origin","http://127.0.0.1:5173");});},
         },
         "/__local-vet": {
           target: "http://127.0.0.1:54330",

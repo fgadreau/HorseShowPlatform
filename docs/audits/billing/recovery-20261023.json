@@ -1,0 +1,260 @@
+{
+  "date": "2026-10-23",
+  "branch": "recovery/billing-unified-2026-10-23",
+  "sources": {
+    "preprod": "6ca720bbea4317d8644d30b05f628bc45a516241",
+    "feat/billing-pilot-integrated": "e025ab8fbc15d7931cb7c612961c0c40c4643840",
+    "feat/billing-preprod-hosted-pilot": "9c7b12119ed95997c999f4252b9de179f8708713"
+  },
+  "preprod_inventory": {
+    "source": "User SQL Editor read-only results",
+    "project_ref": "qaguotdproxamgudnnsd",
+    "latest_migration": "20260906000800",
+    "billing_tables": [],
+    "vercel_server_billing_variables": "absent per user",
+    "vercel_domain": "preprod.horseshowplatform.com",
+    "vercel_branch": "preprod",
+    "vercel_plan": "Hobby per user"
+  },
+  "migrations_after_preprod": [
+    {
+      "file": "supabase/migrations/20260906000900_billing_folio_foundation.sql",
+      "version": "20260906000900",
+      "sha256": "f7a84d86991190b34c3796bf7a4cbd011cec3d2cd3d694fb375287246d0896b2"
+    },
+    {
+      "file": "supabase/migrations/20260906001000_billing_checkout_server.sql",
+      "version": "20260906001000",
+      "sha256": "e8693007e2dc26a5eda76f5e00b2f7f915489459492aed96d7cb31a592d35947"
+    },
+    {
+      "file": "supabase/migrations/20260906001100_billing_stripe_test.sql",
+      "version": "20260906001100",
+      "sha256": "f13cbe0192e5b54763bee8f60c0f1f02165d11d7eebe7570f622f7fb3b74c410"
+    },
+    {
+      "file": "supabase/migrations/20260906001200_billing_ui_contracts.sql",
+      "version": "20260906001200",
+      "sha256": "988b70a9bb0c61f71af2e84d07bdc08021d52a5a5ad3e59f0b40933e334d00d6"
+    },
+    {
+      "file": "supabase/migrations/20260906001300_billing_document_pdf.sql",
+      "version": "20260906001300",
+      "sha256": "d5c157e008b37e5a5c2ff01169cb31100d3bdfde2ec6cf5eea8a007e9d6a653d"
+    },
+    {
+      "file": "supabase/migrations/20260907000100_billing_hsp_prototype.sql",
+      "version": "20260907000100",
+      "sha256": "26f96d603c6105f035b87d5ffb42ffff15ec36b2eaf4374cc39fa9e5c3134198"
+    },
+    {
+      "file": "supabase/migrations/20260907000200_billing_hsp_direct.sql",
+      "version": "20260907000200",
+      "sha256": "7a601e86b9c283e0f68380ed2c382eb0044cad5715add8e0e0e36e514dd9a73b"
+    },
+    {
+      "file": "supabase/migrations/20260907000300_billing_hsp_reporting.sql",
+      "version": "20260907000300",
+      "sha256": "a12e8000c5fa3e7311f9ef6fc97819028f7f73b602134b7f76ef5d0c36fd5760"
+    },
+    {
+      "file": "supabase/migrations/20260907000400_billing_document_render_v2.sql",
+      "version": "20260907000400",
+      "sha256": "422795137285505b0be81863f24a1e4d2c6becbe3127f67cc548c0945c17aa38"
+    },
+    {
+      "file": "supabase/migrations/20260907000500_billing_document_render_v3.sql",
+      "version": "20260907000500",
+      "sha256": "2a175d52d7278a64ec0be814dea857ba68f4b16717b1d38396a2c4f39304371d"
+    },
+    {
+      "file": "supabase/migrations/20260907000600_billing_entry_identity_v4.sql",
+      "version": "20260907000600",
+      "sha256": "26fcc581e0bbc64c14c0bafce0254843b424e93fbafa7e323650855c671d5bfd"
+    },
+    {
+      "file": "supabase/migrations/20260907000700_billing_document_render_v5.sql",
+      "version": "20260907000700",
+      "sha256": "14fe66acf90e80edddecea73f494522a084770550c9c390d3368e369177bba3a"
+    },
+    {
+      "file": "supabase/migrations/20260908000100_billing_hosted_pilot.sql",
+      "version": "20260908000100",
+      "sha256": "c363fae5a48ca915dad71de09fcf370300fa047b2066d05c3b5f9c0e38118e06"
+    },
+    {
+      "file": "supabase/migrations/20260909000100_billing_consolidated_suppliers.sql",
+      "version": "20260909000100",
+      "sha256": "37898271009393287bd5601fb1482fac5bc28723ff0940f0452f753de95cb3d9"
+    },
+    {
+      "file": "supabase/migrations/20260909000200_billing_document_locale.sql",
+      "version": "20260909000200",
+      "sha256": "018a25c03b2912ffe5e5f0238c9c6d0e2e7136870be4e6c1c45f924e5300e882"
+    },
+    {
+      "file": "supabase/migrations/20261023000100_billing_configurable_direct_fees.sql",
+      "version": "20261023000100",
+      "sha256": "874ceaf46b577ed5ed73256744e68b83792312ad6f9bfbc43172ab09857f286c"
+    }
+  ],
+  "local_validation": {
+    "fresh_rebuild_complete": true,
+    "migrations_replayed": 158,
+    "sql_counters": {
+      "assertions": 265,
+      "expected_rejections": 100
+    },
+    "integration_checks": 58,
+    "node_tests": 182,
+    "node_failures": 0,
+    "typescript_vite_build": "passed",
+    "business_suites": [
+      "draw",
+      "payout",
+      "paid-warmup",
+      "identity",
+      "governing",
+      "eligibility"
+    ],
+    "configurable_direct_fees": [
+      "5.00",
+      "7.34",
+      "0.00"
+    ],
+    "signed_webhooks": "synthetic; real local PostgreSQL",
+    "pdf": "real Chromium; private filesystem Storage adapter",
+    "remote_stripe_calls": false,
+    "remote_storage_http_qualified": false,
+    "vercel_preview_packaging": {
+      "status": "passed",
+      "functions": [
+        "api/billing",
+        "api/billing-documents",
+        "api/vet"
+      ],
+      "billing_max_duration_seconds": 240,
+      "public_env_source": "Known PREPROD settings and verified anon key substituted locally; existing sensitive frontend variables are returned empty by CLI pull",
+      "server_secret_static_asset_scan": "passed"
+    }
+  },
+  "remote_changes_performed": [
+    {
+      "date": "2026-10-23",
+      "project_ref": "qaguotdproxamgudnnsd",
+      "action": "Apply the 16 reviewed migrations after explicit user approval",
+      "latest_migration": "20261023000100",
+      "verification": {
+        "authenticated_can_adopt_direct": false,
+        "authenticated_can_run_worker": false,
+        "billing_accounts": 0,
+        "billing_contexts": 0,
+        "billing_documents": 0,
+        "billing_migrations": 16,
+        "billing_payments": 0,
+        "billing_tables": 43,
+        "billing_tables_without_rls": [],
+        "contacts": 48,
+        "entries": 50,
+        "horses": 45,
+        "invoices": 0,
+        "latest_migration": "20261023000100",
+        "payments": 0,
+        "pdf_bucket": {
+          "file_size_limit": 20971520,
+          "id": "billing-pdfs",
+          "mime_types": [
+            "application/pdf"
+          ],
+          "public": false
+        },
+        "pilot_organizations": 0,
+        "service_can_run_worker": true,
+        "storage_objects": 1
+      },
+      "backup_directory": ".tmp/preprod-backup-20261023",
+      "backup_export_counts_verified": true,
+      "backup_restore_rehearsal_performed": false
+    },
+    {
+      "date": "2026-10-23",
+      "provider": "Vercel",
+      "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+      "action": "Create six protected billing variables",
+      "target": [
+        "preview"
+      ],
+      "git_branch": "preprod",
+      "variables": [
+        "BILLING_HOSTED_ENABLED",
+        "BILLING_SUPABASE_URL",
+        "BILLING_WEB_ORIGIN",
+        "BILLING_SUPABASE_ANON_KEY",
+        "BILLING_SUPABASE_SERVICE_ROLE_KEY",
+        "BILLING_WORKER_SECRET"
+      ],
+      "billing_enabled": false,
+      "deployment_performed": false
+    },
+    {
+      "date": "2026-10-23",
+      "provider": "Vercel",
+      "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+      "action": "Create three protected sandbox Stripe variables",
+      "target": [
+        "preview"
+      ],
+      "git_branch": "preprod",
+      "variables": [
+        "STRIPE_SECRET_KEY",
+        "STRIPE_PUBLISHABLE_KEY",
+        "BILLING_STRIPE_CONNECTED_ACCOUNT"
+      ],
+      "production_env_metadata_unchanged": true,
+      "billing_enabled": false,
+      "deployment_performed": false
+    }
+  ],
+  "deployment_status": "PREPROD schema migrated and checked; application branch not pushed or deployed; billing pilot not activated; PROD untouched",
+  "remaining": [
+    "Confirm commercial-plan eligibility before hosted use",
+    "Configure billing on the user-created PREPROD contest; connected sandbox account verified",
+    "Configure sandbox webhook destinations, Vault and Cron",
+    "Deploy the reviewed application to PREPROD",
+    "Qualify payments, replay, private Storage HTTP downloads and recovery with Codespace closed"
+  ],
+  "official_references": [
+    "https://vercel.com/docs/functions/limitations",
+    "https://vercel.com/docs/cron-jobs/usage-and-pricing",
+    "https://vercel.com/docs/plans/hobby"
+  ],
+  "vercel_inventory": {
+    "project_id": "prj_6AChvdkELmwOorxLPwQcYOsFE6vQ",
+    "project_name": "horse-show-platform",
+    "production_branch": "main",
+    "preprod_domain": "preprod.horseshowplatform.com",
+    "preprod_branch": "preprod",
+    "preprod_target": "preview",
+    "fluid_compute": true,
+    "node_version": "24.x",
+    "production_env_metadata_unchanged": true,
+    "existing_automation_bypass_verified": true
+  },
+  "stripe_sandbox_verification": {
+    "platform_account": "acct_1U3ySLRrKNJAsFE9",
+    "connected_account": "acct_1UCs8m2NaiSJaBMx",
+    "mode": "test",
+    "charges_enabled": true,
+    "payouts_enabled": false,
+    "existing_webhook_endpoints": 0,
+    "payment_created": false,
+    "credentials_stored_in_git": false
+  },
+  "pilot_setup": {
+    "created_by": "user through application",
+    "participants": "invited volunteers using their own data",
+    "stripe_mode": "test",
+    "automated_fixture_creation": "cancelled per user preference",
+    "performance_simulation": "details to confirm before generating results"
+  }
+}

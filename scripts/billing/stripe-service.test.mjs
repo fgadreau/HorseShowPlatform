@@ -1,0 +1,69 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {createHmac} from 'node:crypto';
+import {testConfig,verifyEvent,stripeClient,createPaymentService} from '../../server/billing/stripe.mjs';
+const config={secret:'sk_test_mock',publishable:'pk_test_mock',webhook:'whsec_mock'};
+const raw=Buffer.from(JSON.stringify({id:'evt_mock',type:'payment_intent.succeeded',livemode:false,data:{object:{id:'pi_mock',livemode:false}}}));
+const sig=(b,t)=>`t=${t},v1=${createHmac('sha256',config.webhook).update(`${t}.`).update(b).digest('hex')}`;
+test('valid raw webhook signature',()=>assert.equal(verifyEvent(raw,sig(raw,1000),config.webhook,1000000).id,'evt_mock'));
+for(const [name,body,signature,now] of [['modified raw',Buffer.concat([raw,Buffer.from(' ')]),sig(raw,1000),1000000],['expired',raw,sig(raw,1000),1400000],['invalid',raw,'t=1000,v1=bad',1000000],['live object',Buffer.from(raw.toString().replaceAll('false','true')),null,1000000]])test(name,()=>assert.throws(()=>verifyEvent(body,signature??sig(body,1000),config.webhook,now)));
+for(const env of [{},{STRIPE_SECRET_KEY:'sk_live_mock'},{STRIPE_SECRET_KEY:'sk_test_mock',STRIPE_PUBLISHABLE_KEY:'pk_live_mock',STRIPE_WEBHOOK_SECRET:'whsec_mock'}])test('reject missing/live configuration '+JSON.stringify(Object.keys(env)),()=>assert.throws(()=>testConfig(env)));
+test('transport refuses live before external call',async()=>{let called=false;await assert.rejects(stripeClient({...config,secret:'sk_live_mock'},()=>{called=true;})('/account'));assert.equal(called,false);});
+function fixture({age=0,status='requires_action',lost=false}={}){
+ const calls=[],a={id:'attempt',folio_id:'folio',platform_account:'acct_platform',connected_account:'acct_connected',amount:40,currency:'CAD',created_at:new Date(Date.now()-age).toISOString()},seen=new Map();let count=0;
+ const admin={rpc:async(name,args)=>{calls.push(name);if(name==='billing_stripe_attempt_private')return {data:a};if(name==='billing_stripe_observe'){a.provider_id=args.p_object.id;return {data:{state:args.p_object.status}};}return {data:{}};}};
+ const user={rpc:async(name)=>{calls.push(name);return {data:name==='begin_billing_stripe_attempt'?{attempt_id:a.id}:a.id};}};
+ const stripe=async(path,params,key)=>{calls.push({path,params,key});if(path==='/account')return {id:'acct_platform'};if(path.startsWith('/accounts/'))return {id:'acct_connected',type:'express',charges_enabled:true};if(path==='/payment_intents'){if(!seen.has(key))seen.set(key,{id:'pi_mock',status,client_secret:'mock_secret'});count++;if(lost&&count===1)throw Error('TIMEOUT');return seen.get(key);}if(path.endsWith('/cancel'))return {id:'pi_mock',status:'canceled'};return {id:'pi_mock',status,client_secret:'mock_secret'};};
+ return {calls,user,a,seen,service:createPaymentService({admin,stripe,config})};
+}
+test('attempt persists before provider; lost response reuses provider key',async()=>{const x=fixture({lost:true});const b={action:'begin',request_id:'k',folio_id:'folio',amount:40};await assert.rejects(x.service.action(x.user,b));await x.service.action(x.user,b);assert.equal(x.seen.size,1);assert.equal(x.calls[0],'begin_billing_stripe_attempt');assert.equal(x.calls.at(-1),'authorize_billing_stripe_attempt');});
+for(const status of ['requires_action','processing','requires_payment_method','succeeded'])test('provider state '+status,async()=>{const x=fixture({status});const r=await x.service.action(x.user,{action:'resume',attempt_id:'attempt'});assert.equal(r.state,status);assert.equal(Boolean(r.client_secret),status!=='succeeded');});
+test('controlled cancellation observes provider result',async()=>{const x=fixture();assert.equal((await x.service.action(x.user,{action:'cancel',attempt_id:'attempt'})).state,'canceled');});
+test('pruned idempotency window never creates another intent',async()=>{const x=fixture({age:24*3600*1000});await assert.rejects(x.service.action(x.user,{action:'resume',attempt_id:'attempt'}),/RECONCILIATION/);assert.equal(x.seen.size,0);});
+test('injected currency/account fields rejected',async()=>{const x=fixture();await assert.rejects(x.service.action(x.user,{action:'begin',currency:'USD',account:'other'}),/UNEXPECTED/);});
+test('withdrawn payer identity never receives a client secret',async()=>{const x=fixture();let count=0;const user={rpc:async()=>{count++;return count===1?{data:'attempt'}:{error:{message:'BILLING_FORBIDDEN'}};}};await assert.rejects(x.service.action(user,{action:'resume',attempt_id:'attempt'}),/FORBIDDEN/);});
+test('webhook durable reception precedes draining and strips full provider payload',async()=>{const stored=[];const admin={rpc:async(n,a)=>{stored.push({n,a});return {data:null};}};const service=createPaymentService({admin,stripe:async()=>({id:'acct_platform'}),config});const time=Math.floor(Date.now()/1000);await service.receive(raw,sig(raw,time));assert.equal(stored[0].n,'billing_stripe_receive');assert.equal(stored[0].a.p_provider,'pi_mock');assert(!JSON.stringify(stored).includes('client_secret'));});
+test('event failure remains retryable; replay fetches current provider state',async()=>{let fail=true;const calls=[];const a={id:'a',platform_account:'acct_platform',connected_account:'acct_connected',provider_id:'pi_mock',created_at:new Date().toISOString()};
+ const admin={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:'succeeded'}:null};},from:table=>table==='billing_stripe_events'?{select:()=>({is:()=>({order:()=>({order:()=>({limit:async()=>({data:[{id:'evt_mock',provider_id:'pi_mock'}]})})})})})}:{select:()=>({eq:()=>({maybeSingle:async()=>({data:{id:'a'}})})})}};
+ const stripe=async path=>{if(path==='/account')return {id:'acct_platform'};if(path.startsWith('/accounts'))return {id:'acct_connected',type:'express',charges_enabled:true};if(fail)throw Error('BILLING_PROVIDER_RETRY');return {id:'pi_mock',status:'succeeded'};};
+ const service=createPaymentService({admin,stripe,config});await service.drain();assert.equal(calls.at(-1).args.p_error,'BILLING_PROVIDER_RETRY');fail=false;await service.drain();assert.equal(calls.at(-1).args.p_error,null);assert(calls.some(c=>c.n==='billing_stripe_observe'));
+});
+
+test('direct charge: frozen account, application fee and gross credit survive disabled new payments',async()=>{
+ const calls=[],a={id:'direct',charge_mode:'direct',application_fee_amount:5.25,platform_account:'acct_platform',connected_account:'acct_direct',provider_id:'pi_direct',amount:100,currency:'CAD',created_at:new Date().toISOString()};
+ const admin={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:'succeeded',receipt_id:'receipt'}:{}};}};
+ const stripe=async(path,params,key,account)=>{
+  calls.push({path,account});
+  if(path==='/account')return {id:'acct_platform'};
+  if(path==='/accounts/acct_direct')return {id:'acct_direct',charges_enabled:false,controller:{fees:{payer:'account'},losses:{payments:'stripe'}}};
+  if(path==='/payment_intents/pi_direct'){assert.equal(account,'acct_direct');return {id:'pi_direct',status:'succeeded',latest_charge:'ch_direct',amount:10000,amount_received:10000};}
+  if(path==='/charges/ch_direct'){assert.equal(account,'acct_direct');return {id:'ch_direct',payment_intent:'pi_direct',livemode:false,application_fee:'fee_direct',amount_refunded:0};}
+  if(path==='/application_fees/fee_direct'){assert.equal(account,undefined);return {id:'fee_direct',charge:'ch_direct',amount_refunded:100};}
+  throw Error('Unexpected provider call');
+ };
+ const r=await createPaymentService({admin,stripe,config}).sync(a.id);
+ assert.equal(r.state,'succeeded');assert.equal(r.client_secret,undefined);
+ assert.equal(calls.find(x=>x.n==='billing_stripe_observe').args.p_object.amount_received,10000);
+ assert.equal(calls.find(x=>x.n==='billing_stripe_observe').args.p_object.hsp_verified_account,'acct_direct');
+ assert.equal(calls.filter(x=>x.n==='billing_hsp_confirm_fee').length,1);
+ assert.equal(calls.find(x=>x.n==='billing_provider_flag').args.p_reason,'fee_mismatch');
+});
+
+test('direct PaymentIntent creates in connected scope, no destination transfer, stable provider key',async()=>{
+ const a={id:'new_direct',charge_mode:'direct',application_fee_amount:5.25,platform_account:'acct_platform',connected_account:'acct_direct',amount:100,currency:'CAD',created_at:new Date().toISOString()};let posts=0;
+ const admin={rpc:async(n,args)=>({data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:args.p_object.status}:{}})};
+ const stripe=async(path,params,key,account)=>{
+  if(path==='/account')return {id:'acct_platform'};
+  if(path==='/accounts/acct_direct')return {id:'acct_direct',charges_enabled:true,controller:{fees:{payer:'account'},losses:{payments:'stripe'}}};
+  assert.equal(path,'/payment_intents');assert.equal(account,'acct_direct');assert.equal(key,'hsp-test-new_direct');
+  assert.equal(params.application_fee_amount,'525');assert.equal(params.amount,'10000');assert.equal(params['transfer_data[destination]'],undefined);posts++;
+  return {id:'pi_new',status:'requires_payment_method',client_secret:'test_placeholder'};
+ };
+ const service=createPaymentService({admin,stripe,config});await service.sync(a.id);await service.sync(a.id);assert.equal(posts,2);
+});
+
+test('platform application fee event is resolved through its real connected charge scope',async()=>{
+ const stored=[];const admin={rpc:async(n,a)=>{stored.push({n,a});return {data:null};}};
+ const stripe=async(path,p,k,account)=>{if(path==='/account')return {id:'acct_platform'};if(path==='/application_fees/fee_event')return {id:'fee_event',livemode:false,account:'acct_direct',charge:'ch_event'};assert.equal(path,'/charges/ch_event');assert.equal(account,'acct_direct');return {id:'ch_event',livemode:false,application_fee:'fee_event',payment_intent:'pi_event'};};
+ const service=createPaymentService({admin,stripe,config});const b=Buffer.from(JSON.stringify({id:'evt_fee',type:'application_fee.refunded',livemode:false,data:{object:{id:'fee_event',livemode:false}}}));const time=Math.floor(Date.now()/1000);await service.receive(b,sig(b,time));assert.equal(stored[0].n,'billing_stripe_receive_direct');assert.equal(stored[0].a.p_provider,'pi_event');assert.equal(stored[0].a.p_connected,'acct_direct');
+});

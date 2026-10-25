@@ -1,0 +1,16 @@
+import {consolidatedFixture} from './consolidated-fixtures.mjs';
+import labels from '../../src/lib/billingDocumentTranslations.json' with {type:'json'};
+const rekey=(d,key)=>{const old=d.snapshot.account_number,next=`DEMO-ACC-${key}`;return JSON.parse(JSON.stringify(d).replaceAll(old,next));};
+const settle=d=>{const s=d.snapshot;for(const k of ['subtotal','tax_amount','total'])s[k]=s.charges.reduce((a,c)=>a+Math.round(c[k]*100),0)/100;s.received=s.total;s.balance=0;s.payments=[{id:'DEMO-SETTLED',amount:s.total,method:'cheque',reference:'DEMO-SETTLED',receipt_number:s.account_number+'-RCPT-1',received_at:s.issued_at,allocations:s.charges.filter(c=>c.total>0).map(c=>({charge_id:c.id,amount:c.total}))}];return d;};
+export function proofCases(){
+ const cases=[['standard',consolidatedFixture()],['commandite',consolidatedFixture({fee:0,source:'show'})],['personnalise-7-34',consolidatedFixture({fee:7.34,source:'association'})],['paiements-multiples',consolidatedFixture({multiple:true})],...[0,1,2].map(i=>[`recu-${i+1}`,consolidatedFixture({multiple:true,kind:'receipt',paymentIndex:i})])];
+ cases.push(['recu-commandite',consolidatedFixture({fee:0,source:'show',kind:'receipt'})],['recu-personnalise',consolidatedFixture({fee:7.34,source:'association',kind:'receipt'})]);
+ const due=rekey(consolidatedFixture({multiple:true,kind:'receipt',paymentIndex:1}),'DUE');due.kind='invoice';due.number='DEMO-ACC-DUE-INV-1';due.payment_id=null;due.snapshot.state='closed';cases.push(['solde-restant',due]);
+ const statement=structuredClone(due);statement.kind='statement';statement.number=null;statement.id+='-statement';statement.snapshot.state='open';cases.push(['releve-partiel',statement]);
+ const long=rekey(consolidatedFixture(),'LONG');for(let i=1;i<=16;i++){const c=structuredClone(long.snapshot.charges[0]);c.id=`DEMO-LONG-${i}`;c.description_i18n={fr:`${labels.fr.entryDemo} ${i}`,en:`${labels.en.entryDemo} ${i}`};c.horse={id:'DEMO-HORSE-'+i%3,name:`DEMO HORSE ${i%3+1}`};long.snapshot.charges.splice(-1,0,c);}cases.push(['facture-longue',settle(long)]);
+ const split=rekey(consolidatedFixture({multiple:true}),'HSP-FIRST'),s=split.snapshot;s.payments[0].allocations=[{charge_id:s.charges[0].id,amount:34.25},{charge_id:s.charges[1].id,amount:5.75}];s.payments[2].allocations=[{charge_id:s.charges[0].id,amount:30.73}];cases.push(['repartition-hsp-premier',split]);
+ const r=structuredClone(split);r.kind='receipt';r.id+='-receipt-1';r.number=s.account_number+'-RCPT-1';r.payment_id=s.payments[0].id;r.snapshot.payments=r.snapshot.payments.slice(0,1);r.snapshot.received=40;r.snapshot.balance=80.73;r.snapshot.state='open';r.snapshot.issued_at=r.snapshot.payments[0].received_at;cases.push(['recu-hsp-premier',r]);
+ const distinct=rekey(consolidatedFixture(),'TAX-PROFILES');distinct.snapshot.charges[0].taxes=distinct.snapshot.charges[0].taxes.map(t=>({...t,rate:0,amount:0}));distinct.snapshot.charges[0].tax_amount=0;distinct.snapshot.charges[0].total=100;cases.push(['profils-fiscaux-distincts',settle(distinct)]);
+ cases.push(['commandite-association',rekey(consolidatedFixture({fee:0,source:'association'}),'SPONSORED-ASSOC')]);
+ return cases.map(([name,document])=>({name,document}));
+}

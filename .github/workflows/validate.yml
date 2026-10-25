@@ -36,10 +36,15 @@ jobs:
       - run: npm run build
       - run: npm run test:draw
       - run: npm run test:payout
+      - run: npm run test:reports
       - run: npm run test:identity
       - run: npm run test:governing
       - run: npm run test:eligibility
       - run: npm run test:vet
+      - name: Billing local contracts and PDF regressions (no remote credentials)
+        # Cold PDF tests extract the same /tmp/chromium executable. Running
+        # separate test processes concurrently can launch a partially written file.
+        run: node --test --test-concurrency=1 scripts/billing/*.test.mjs
       - run: VET_TEST_SERVERLESS=true npm run test:vet:pdf
       - name: Verify immutable production migration chain
         if: github.event_name == 'pull_request' && github.base_ref == 'main'
