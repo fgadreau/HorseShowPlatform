@@ -39,7 +39,8 @@
     "test:warmups:browser": "node scripts/warmup.browser.mjs",
     "test:memberships:browser": "node scripts/membership-billing.browser.mjs",
     "test:coggins": "node scripts/coggins/verification.test.mjs",
-    "test:coggins:browser": "node scripts/coggins.browser.mjs"
+    "test:coggins:browser": "node scripts/coggins.browser.mjs",
+    "test:horses:browser": "node scripts/horse-edit.browser.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "149.0.0",

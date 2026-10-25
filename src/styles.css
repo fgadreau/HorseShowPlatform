@@ -3729,6 +3729,8 @@ summary:focus-visible,
 }
 
 .horse-list {
+  container-type: inline-size;
+  min-width: 0;
   border: 1px solid var(--border);
   border-radius: 8px;
   overflow: hidden;
@@ -3773,6 +3775,24 @@ summary:focus-visible,
   padding-bottom: 11px;
   padding-top: 11px;
   text-transform: uppercase;
+}
+
+/* The workspace can be narrow even on a desktop with the association sidebar.
+   Keep actions inside the list instead of clipping the fixed-width columns. */
+@container (max-width: 940px) {
+  .horse-list-head {
+    display: none;
+  }
+
+  .horse-list-row {
+    align-items: start;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .horse-list-identity,
+  .horse-row-actions {
+    grid-column: 1 / -1;
+  }
 }
 
 .horse-list-identity {
