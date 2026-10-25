@@ -6376,3 +6376,8 @@ input::placeholder,textarea::placeholder {color:var(--text-muted);opacity:1}
 }
 
 .public-block-list > .public-muted {background:var(--surface);margin:0;padding:14px 20px}
+
+.vaccination-review-modal { max-width: 1100px; width: min(100%, 1100px); }
+.vaccination-certificate-preview { border: 1px solid var(--border); width: 100%; height: min(58vh, 600px); }
+.vaccination-certificate-image { display: block; max-width: 100%; max-height: 65vh; margin: auto; object-fit: contain; }
+.vaccination-review-actions { position: sticky; bottom: 0; background: var(--surface); padding: 12px 0; }

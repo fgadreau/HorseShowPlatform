@@ -1,10 +1,11 @@
+import { VaccinationReviewQueue } from "./VaccinationReviewQueue";
 import { useState } from "react";
 import { X } from "lucide-react";
 import { EmptyState, Metric, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatDate, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createOrganizationHealthDocumentReview, createUploadedHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthComplianceOverview, HorseHealthDocument, Organization, Show } from "../../types/domain";
+import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthComplianceOverview, HorseHealthDocument, OrganizationHealthDocumentReview, Organization, Show } from "../../types/domain";
 import { uiText, todayDateValue } from "../dashboard/shared";
 import { HorseEditForm } from "../horses/HorseEditForm";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "./HealthComplianceSummary";
@@ -13,6 +14,8 @@ function HealthCenterView({
   locale,
   canManageHealthDocuments,
   complianceRevision,
+  documentReviews = [],
+  onRefresh,
   contacts,
   contactRoles,
   createdByUserId,
@@ -33,6 +36,8 @@ function HealthCenterView({
   locale: Locale;
   canManageHealthDocuments: boolean;
   complianceRevision?: string;
+  documentReviews?: OrganizationHealthDocumentReview[];
+  onRefresh: () => Promise<void> | void;
   contacts: Contact[];
   contactRoles: ContactRole[];
   createdByUserId: string;
@@ -140,6 +145,11 @@ function HealthCenterView({
         <Metric detail={uiText(locale, "Identification ou révision locale.", "Identity or local review pending.")} label={uiText(locale, "En attente", "Pending")} value={compliance.loading ? "…" : String(pendingResults.length)} />
         <Metric detail={referenceShow ? `${referenceShow.name} · ${formatDate(referenceDate)}` : formatDate(referenceDate)} label={uiText(locale, "Date de référence", "Reference date")} value={compliance.loading ? "…" : String(requiredResults.length)} />
       </section>
+
+      {canManageHealthDocuments && organization ? <VaccinationReviewQueue
+        key={organization.id} locale={locale} organizationId={organization.id}
+        horses={horses} documents={horseHealthDocuments} reviews={documentReviews} onReviewed={onRefresh}
+      /> : null}
 
       {currentEditingHorse ? (
         <div className="modal-backdrop">

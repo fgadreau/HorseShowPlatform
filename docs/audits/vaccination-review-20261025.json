@@ -1,0 +1,54 @@
+{
+  "scope": "PREPROD only",
+  "requestedFlow": "Open submitted vaccination certificate, approve or reject; no extra form or veterinarian portal",
+  "implementation": {
+    "ui": "Association compliance center shows pending vaccination documents and embedded PDF/image preview",
+    "decision": "One atomic authenticated staff RPC records manual identification if missing, then the association-specific versioned review",
+    "identity": "Existing identity evidence preserved; name-only review records identified, never fabricated verified DOB. Stricter policies and mismatches remain enforced.",
+    "facts": "Horse, vaccination dates, certificate classification and original file remain unchanged.",
+    "rejection": "Explicit vaccine rejection is respected even when routine association review is optional."
+  },
+  "validation": {
+    "browser": "FR/EN mobile and desktop, preview, approve/reject without re-entry, saved decisions, errors, missing-file guard and PDF iframe",
+    "sql": [
+      {
+        "file": "supabase/migrations/20261025000400_association_vaccination_review.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/association_vaccination_review.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance_presentation.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_document_identity_validations.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/verified_horse_identity_locks.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/entry_reservation_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/coggins_gvl_verification.sql",
+        "pass": true
+      }
+    ],
+    "build": "passed",
+    "cogginsVerifier": "8 tests passed"
+  },
+  "release": {
+    "migration": "20261025000400_association_vaccination_review.sql",
+    "frontend": "Pending PREPROD PR; PROD excluded"
+  }
+}
