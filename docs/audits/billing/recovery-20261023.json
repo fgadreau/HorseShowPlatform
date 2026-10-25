@@ -275,7 +275,7 @@
     "github_checks": {
       "application": "success",
       "veterinary": "success",
-      "e2e_robot": "in progress at verification"
+      "e2e_robot": "failed: test still targets the former primary-navigation scoring item; adapt to show navigation"
     },
     "production_deployment_unchanged": true,
     "guest_share_link": "Created for PREPROD; URL stored privately, never committed"
