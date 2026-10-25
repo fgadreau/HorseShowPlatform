@@ -64,6 +64,40 @@ try{
  });
  expect(serviceResult).toEqual({linked:['dir2'],hasDirectoryPayload:false,invalid:[{rejected:true,writes:0},{rejected:true,writes:0}]});
  console.log('PASS: creation service links only the chosen directory, deduplicates IDs and rejects empty/invalid selections before writes.');
+ const contactResult=await page.evaluate(async()=>{
+  const contacts=new Map();const links=new Map();const events=[];
+  window.testClient={from(table){
+   let value;let operation='select';const filters={};let failure=null;
+   const linkKey=()=>filters.contact_id+'|'+filters.organization_discipline_id;
+   const result=()=>{
+    if(failure)return {data:null,error:failure};
+    if(table==='organization_disciplines')return {data:filters.ids?[{id:'dir1'}]:{id:'dir1'},error:null};
+    if(table==='directory_contacts')return {data:operation==='select'?links.get(linkKey())??null:value,error:null};
+    if(table==='contacts')return {data:operation==='select'?contacts.get(filters.id):value,error:null};
+    return {data:{...value,id:table==='horses'?'horse':'identifier'},error:null};
+   };
+   const write=(op,payload)=>{
+    operation=op;value=payload;events.push(table);
+    if(table==='contacts')contacts.set(payload.id,payload);
+    if(table==='contact_external_identifiers'&&[...links.values()].some(l=>l.contact_id===payload.contact_id))failure={message:'RLS: identity locked after directory enrollment'};
+    if(table==='directory_contacts'){
+     const k=payload.contact_id+'|'+payload.organization_discipline_id;
+     if(links.has(k))failure={message:'RLS: redundant directory update denied'};
+     else links.set(k,{...payload,id:'link'});
+    }
+    return chain;
+   };
+   const chain={select(){return chain},eq(k,v){filters[k]=v;return chain},in(k,v){filters.ids=v;return chain},order(){return chain},limit(){return chain},
+    insert(v){return write('insert',v)},upsert(v){return write('upsert',v)},
+    single(){return Promise.resolve(result())},maybeSingle(){return Promise.resolve(result())},then(resolve,reject){return Promise.resolve(result()).then(resolve,reject)}};
+   return chain;
+  }};
+  const owner=await window.createContactThroughService({organization_id:'org',type:'owner',first_name:'Imported',last_name:'Owner',created_by_user_id:'profile',external_memberships:[{external_credential_issuer_id:'nrha',identifier_value:'12345',status:'unknown'}]});
+  await window.createHorseThroughService({organization_id:'org',organization_discipline_ids:['dir1'],name:'Imported horse',primary_owner_contact_id:owner.id,created_by_user_id:'profile'});
+  return {identifierBeforeLink:events.indexOf('contact_external_identifiers')<events.indexOf('directory_contacts'),directoryWrites:events.filter(t=>t==='directory_contacts').length};
+ });
+ expect(contactResult).toEqual({identifierBeforeLink:true,directoryWrites:1});
+ console.log('PASS: imported owner identifiers are initialized before directory authority changes; horse creation reuses the existing link without a forbidden update.');
  expect(errors).toEqual([]);
  console.log('PASS: failed enrollment displays its error, allows a retry and produces no browser exception.');
 }finally{await browser.close();await server.close();}

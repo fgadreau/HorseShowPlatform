@@ -601,6 +601,11 @@ export function Dashboard({
   );
   const personalHorses = horses.filter((horse) => personalContactIds.has(horse.primary_owner_contact_id) || personalHorseIdsFromContacts.has(horse.id));
   const personalHorseIds = new Set(personalHorses.map((horse) => horse.id));
+  const personalHorseContactIds = new Set([
+    ...personalHorses.map((horse) => horse.primary_owner_contact_id),
+    ...horseContacts.filter((link) => personalHorseIds.has(link.horse_id)).map((link) => link.contact_id),
+  ]);
+  const personalHorseContacts = contacts.filter((contact) => personalContactIds.has(contact.id) || personalHorseContactIds.has(contact.id));
   const personalContactMemberships = contactOrganizationMemberships.filter((membership) => personalContactIds.has(membership.contact_id));
   const selectedOrganizationPersonalContacts = selectedOrganization
     ? personalContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id))
@@ -1197,7 +1202,7 @@ export function Dashboard({
             locale={locale}
             disciplines={disciplines}
             organizationDisciplines={selectedOrganizationDisciplines}
-            contacts={personalContacts}
+            contacts={personalHorseContacts}
             contactRoles={contactRoles}
             externalCredentialIssuers={externalCredentialIssuers}
             membershipRequirements={selectedOrganizationMembershipRequirements}
