@@ -1574,6 +1574,21 @@ export async function setOrganizationHealthPolicy(input: {
   return data as OrganizationHealthPolicy;
 }
 
+export async function reviewCogginsDocument(input: {
+  organization_id: string; horse_document_id: string; status: "approved" | "rejected"; reason: string;
+}) {
+  const { data, error } = await requireSupabase().rpc("review_coggins_document", {
+    p_organization_id: input.organization_id, p_horse_document_id: input.horse_document_id,
+    p_status: input.status, p_reason: input.reason.trim(),
+  });
+  if (error) {
+    if (error.message?.includes("COGGINS_REVIEW_REASON_REQUIRED")) throw new Error("Indique un motif de 10 à 2000 caractères. / Enter a reason of 10–2000 characters.");
+    if (error.message?.includes("COGGINS_NEGATIVE_CERTIFICATE_REQUIRED")) throw new Error("Un certificat négatif, daté et joint est requis; un certificat positif, annulé ou non signé ne peut pas être accepté par cette dérogation. / A dated negative certificate must be attached; a positive, voided or unsigned certificate cannot be accepted through this override.");
+    throw error;
+  }
+  return data as OrganizationHealthDocumentReview;
+}
+
 export async function reviewVaccinationDocument(input: {
   organization_id: string;
   horse_document_id: string;

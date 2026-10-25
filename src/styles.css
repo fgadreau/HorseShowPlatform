@@ -6381,3 +6381,7 @@ input::placeholder,textarea::placeholder {color:var(--text-muted);opacity:1}
 .vaccination-certificate-preview { border: 1px solid var(--border); width: 100%; height: min(58vh, 600px); }
 .vaccination-certificate-image { display: block; max-width: 100%; max-height: 65vh; margin: auto; object-fit: contain; }
 .vaccination-review-actions { position: sticky; bottom: 0; background: var(--surface); padding: 12px 0; }
+.health-review-horse-summary { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.health-review-horse-summary dl { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%, 210px),1fr)); gap: 12px; margin: 0; }
+.health-review-horse-summary dt { font-size: 13px; color: var(--muted); }
+.health-review-horse-summary dd { margin: 4px 0 0; font-weight: 600; overflow-wrap: anywhere; }

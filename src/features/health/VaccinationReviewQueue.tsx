@@ -2,14 +2,18 @@ import { useEffect, useState } from "react";
 import { ModalDialog } from "../../components/ui";
 import { errorMessage, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { Horse, HorseHealthDocument, OrganizationHealthDocumentReview } from "../../types/domain";
-import { getHorseHealthDocumentFileUrl, reviewVaccinationDocument } from "../../services/supabaseServices";
+import type { Contact, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, OrganizationHealthDocumentReview } from "../../types/domain";
+import { getHorseHealthDocumentFileUrl, reviewVaccinationDocument, reviewCogginsDocument } from "../../services/supabaseServices";
+import { HorseReviewSummary } from "./HorseReviewSummary";
 import { healthDocumentTypeLabel, todayDateValue, uiText } from "../dashboard/shared";
 
-export function VaccinationReviewQueue({ locale, organizationId, horses, documents, reviews, onReviewed }: {
+export function VaccinationReviewQueue({ locale, organizationId, horses, documents, reviews, onReviewed, kind = "vaccination", contacts = [], identifiers = [], issuers = [] }: {
   locale: Locale; organizationId: string; horses: Horse[]; documents: HorseHealthDocument[];
+  kind?: "vaccination" | "coggins"; contacts?: Contact[]; identifiers?: HorseExternalIdentifier[]; issuers?: ExternalCredentialIssuer[];
   reviews: OrganizationHealthDocumentReview[]; onReviewed: () => Promise<void> | void;
 }) {
+  const isCoggins = kind === "coggins";
+  const [reason, setReason] = useState("");
   const [selected, setSelected] = useState<HorseHealthDocument | null>(null);
   const [administeredOn, setAdministeredOn] = useState("");
   const [localDates, setLocalDates] = useState<Record<string, string>>({});
@@ -33,27 +37,40 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
     return reviews.filter(review => review.organization_id === organizationId && review.horse_document_id === id)
       .sort((a, b) => b.version - a.version)[0];
   }
-  function decision(id: string) { return localDecisions[id] ?? latestReview(id)?.status; }
+  function decisionKey(document: HorseHealthDocument) { return isCoggins ? `${document.id}:${document.updated_at}` : document.id; }
+  function decision(id: string) {
+    const document = documents.find(item => item.id === id);
+    const review = latestReview(id);
+    const current = !isCoggins || review?.status === "rejected" || (review?.review_method === "manual_coggins" && review.coggins_document_updated_at === document?.updated_at);
+    return (document ? localDecisions[decisionKey(document)] : undefined) ?? (current ? review?.status : undefined);
+  }
   const vaccinationDocuments = documents.filter(document =>
-    ["combo_vaccine", "influenza_vaccine", "rhino_vaccine"].includes(document.document_type)
+    (isCoggins ? document.document_type === "coggins_eia" : ["combo_vaccine", "influenza_vaccine", "rhino_vaccine"].includes(document.document_type))
     && horses.some(horse => horse.id === document.horse_id));
   const visibleDocuments = vaccinationDocuments.filter(document => showDecisions || !decision(document.id));
   const selectedHorse = horses.find(horse => horse.id === selected?.horse_id);
+  const reasonReady = reason.trim().length >= 10 && reason.length <= 2000;
+  const cogginsCertificateReady = Boolean(selected?.document_url && selected.result?.trim().toLowerCase() === "negative"
+    && !["rejected", "expired"].includes(selected.status) && selected.test_or_administered_on
+    && selected.test_or_administered_on >= "1900-01-01" && selected.test_or_administered_on <= todayDateValue()
+    && !selected.warnings?.some(warning => ["NOT_EIA_DOCUMENT", "NOT_SIGNED", "VOIDED", "NOT_NEGATIVE", "MISSING_SAMPLE_DATE", "FUTURE_SAMPLE_DATE"].includes(warning)));
+
 
   function reviewedDate(document: HorseHealthDocument) {
     return localDates[document.id] ?? latestReview(document.id)?.vaccination_administered_on ?? document.test_or_administered_on;
   }
   function openReview(document: HorseHealthDocument) {
-    setNotice(null); setAdministeredOn(reviewedDate(document) ?? ""); setSelected(document);
+    setNotice(null); setReason(""); setAdministeredOn(reviewedDate(document) ?? ""); setSelected(document);
   }
 
   async function decide(status: "approved" | "rejected") {
     if (!selected || busy) return;
     setBusy(true); setNotice(null);
     try {
-      await reviewVaccinationDocument({ organization_id: organizationId, horse_document_id: selected.id, status, administered_on: status === "approved" ? administeredOn : null });
+      if (isCoggins) await reviewCogginsDocument({ organization_id: organizationId, horse_document_id: selected.id, status, reason });
+      else await reviewVaccinationDocument({ organization_id: organizationId, horse_document_id: selected.id, status, administered_on: status === "approved" ? administeredOn : null });
       setLocalDates(current => { const next = { ...current }; if (status === "approved") next[selected.id] = administeredOn; else delete next[selected.id]; return next; });
-      setLocalDecisions(current => ({ ...current, [selected.id]: status }));
+      setLocalDecisions(current => ({ ...current, [decisionKey(selected)]: status }));
       setSelected(null);
       setNotice({ error: false, text: status === "approved" ? uiText(locale, "Certificat approuvé par l’association.", "Certificate approved by the association.") : uiText(locale, "Certificat refusé par l’association.", "Certificate rejected by the association.") });
       try { await onReviewed(); } catch {
@@ -65,37 +82,46 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
 
   return <section className="panel span-2">
     <div className="panel-header"><div>
-      <h2>{uiText(locale, "Certificats de vaccination à approuver", "Vaccination certificates to review")}</h2>
+      <h2>{isCoggins ? uiText(locale,"Coggins : révision de concordance","Coggins: identity review") : uiText(locale, "Certificats de vaccination à approuver", "Vaccination certificates to review")}</h2>
       <p>{uiText(locale, "Ouvre le document soumis par le membre, puis approuve-le ou refuse-le.", "Open the document submitted by the member, then approve or reject it.")}</p>
     </div></div>
     {notice ? <div role="status" className={`notice ${notice.error ? "error" : "success"}`}>{notice.text}</div> : null}
     <label className="checkbox-line"><input type="checkbox" checked={showDecisions} onChange={event => setShowDecisions(event.target.checked)} />{uiText(locale, "Afficher aussi les décisions enregistrées", "Also show saved decisions")}</label>
-    {!visibleDocuments.length ? <p>{uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
+    {!visibleDocuments.length ? <p>{isCoggins ? uiText(locale,"Aucun Coggins en attente.","No Coggins awaiting review.") : uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
     <div className="stack">{visibleDocuments.map(document => {
       const horse = horses.find(candidate => candidate.id === document.horse_id);
       const review = latestReview(document.id);
       return <article className="health-document-summary" key={document.id}>
         <strong>{horse?.name}</strong><span>{healthDocumentTypeLabel(document.document_type, locale)}</span>
-        <span>{reviewedDate(document) ? formatDate(reviewedDate(document)!) : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
+        <span>{reviewedDate(document) ? formatDate(reviewedDate(document)!) : isCoggins ? uiText(locale,"Date du prélèvement non fournie","Sample date not provided") : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
         {decision(document.id) ? <span className={`badge ${decision(document.id)}`}>{decision(document.id) === "approved" ? uiText(locale, "Approuvé", "Approved") : uiText(locale, "Refusé", "Rejected")}{review ? ` · ${formatDate(review.reviewed_at)}` : ""}</span> : null}
+        {isCoggins && review?.review_notes ? <p>{review.review_notes}</p> : null}
         <div className="row-actions"><button type="button" className="primary-button" onClick={() => openReview(document)}>{uiText(locale, "Ouvrir le document", "Open document")}</button>
           <button type="button" className="ghost-button" onClick={() => openReview(document)}>{uiText(locale, "Approuver", "Approve")}</button></div>
       </article>;
     })}</div>
     {selected ? <ModalDialog className="vaccination-review-modal" title={uiText(locale, "Vérifier le certificat", "Review certificate")} description={`${selectedHorse?.name ?? ""} · ${healthDocumentTypeLabel(selected.document_type, locale)}`} onClose={() => { if (!busy) setSelected(null); }}>
-      <label>{uiText(locale, "Date du vaccin indiquée sur le document", "Vaccination date shown on the document")}
+      <HorseReviewSummary locale={locale} horse={selectedHorse} contacts={contacts} identifiers={identifiers} issuers={issuers} />
+      {isCoggins ? <>
+        <p><strong>{uiText(locale,"Nom sur le certificat","Name on certificate")} :</strong> {selected.horse_name || "—"}</p>
+        <p><strong>{uiText(locale,"Date du prélèvement","Sample date")} :</strong> {selected.test_or_administered_on ? formatDate(selected.test_or_administered_on) : "—"} · {selected.result || "—"}</p>
+        <p>{uiText(locale,"Cette dérogation accepte une différence d’identité pour cette association seulement. Elle ne modifie ni la fiche officielle du cheval, ni le certificat, ni sa date d’expiration. Vérifie les autres caractéristiques avant de confirmer.","This override accepts an identity difference for this association only. It does not change the official horse record, the certificate or its expiration. Check the other characteristics before confirming.")}</p>
+        <label>{uiText(locale,"Motif de la décision","Reason for the decision")}<textarea required minLength={10} maxLength={2000} value={reason} disabled={busy} onChange={event => setReason(event.target.value)} /></label>
+      </> : <label>{uiText(locale, "Date du vaccin indiquée sur le document", "Vaccination date shown on the document")}
         <input type="date" required min="1900-01-01" max={todayDateValue()} value={administeredOn} disabled={busy} onChange={event => setAdministeredOn(event.target.value)} />
-      </label>
+      </label>}
       <p>{uiText(locale, "Vérification manuelle de l’association : l’approbation ne dépend pas de la lecture automatique.", "Manual association review: approval does not depend on automatic reading.")}</p>
       {fileError ? <p role="alert">{uiText(locale, "L’aperçu est indisponible. La vérification manuelle reste possible.", "Preview unavailable. Manual review is still available.")}</p> : null}
       {!selectedPath ? <p role="alert">{uiText(locale, "Aucun fichier joint. Demande au membre de déposer son certificat.", "No file attached. Ask the member to upload their certificate.")}</p> : null}
       {selectedPath && !fileUrl && !fileError ? <p role="status">{uiText(locale, "Chargement du document…", "Loading document…")}</p> : null}
       {fileUrl ? <a className="text-button" href={fileUrl} target="_blank" rel="noreferrer">{uiText(locale, "Ouvrir ou télécharger le fichier original", "Open or download the original file")}</a> : null}
       {fileUrl ? selected.mime_type?.startsWith("image/") ? <img className="vaccination-certificate-image" src={fileUrl} alt={uiText(locale, "Certificat soumis par le membre", "Certificate submitted by the member")} /> : <iframe className="vaccination-certificate-preview" src={fileUrl} title={uiText(locale, "Certificat soumis par le membre", "Certificate submitted by the member")} /> : null}
+      {isCoggins && !cogginsCertificateReady ? <p role="alert">{uiText(locale,"Pour accepter une différence d’identité, le certificat joint doit être négatif, daté et non invalidé. Cette action ne permet pas d’accepter un test positif ou non signé.","Accepting an identity difference requires an attached, dated, negative certificate that has not been invalidated. This action cannot accept a positive or unsigned test.")}</p> : null}
+      {isCoggins && !reasonReady ? <p>{uiText(locale,"Indique un motif de 10 à 2000 caractères pour enregistrer la décision.","Enter a reason of 10–2000 characters to record the decision.")}</p> : null}
       {notice?.error ? <p role="alert">{notice.text}</p> : null}
       <div className="row-actions vaccination-review-actions">
-        <button className="primary-button" type="button" disabled={busy || !selectedPath || !administeredOn || administeredOn > todayDateValue() || administeredOn < "1900-01-01"} onClick={() => void decide("approved")}>{uiText(locale, "Confirmer l’approbation", "Confirm approval")}</button>
-        <button className="ghost-button danger-text" type="button" disabled={busy} onClick={() => void decide("rejected")}>{uiText(locale, "Refuser", "Reject")}</button>
+        <button className="primary-button" type="button" disabled={busy || !selectedPath || (isCoggins ? !reasonReady || !cogginsCertificateReady : !administeredOn || administeredOn > todayDateValue() || administeredOn < "1900-01-01")} onClick={() => void decide("approved")}>{uiText(locale, "Confirmer l’approbation", "Confirm approval")}</button>
+        <button className="ghost-button danger-text" type="button" disabled={busy || (isCoggins && !reasonReady)} onClick={() => void decide("rejected")}>{uiText(locale, "Refuser", "Reject")}</button>
       </div>
     </ModalDialog> : null}
   </section>;
