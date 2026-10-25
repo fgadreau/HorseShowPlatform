@@ -923,6 +923,8 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "health" ? (
           <HealthCenterView
+            documentReviews={organizationHealthDocumentReviews}
+            onRefresh={onRefresh}
             locale={locale}
             canManageHealthDocuments={canManageAssociation || isPlatformAdmin}
             complianceRevision={healthComplianceRevision}

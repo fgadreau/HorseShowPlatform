@@ -1574,6 +1574,24 @@ export async function setOrganizationHealthPolicy(input: {
   return data as OrganizationHealthPolicy;
 }
 
+export async function reviewVaccinationDocument(input: {
+  organization_id: string;
+  horse_document_id: string;
+  status: "approved" | "rejected";
+}) {
+  const { data, error } = await requireSupabase().rpc("review_vaccination_document", {
+    p_organization_id: input.organization_id,
+    p_horse_document_id: input.horse_document_id,
+    p_status: input.status,
+  });
+  if (error) {
+    if (error.message?.includes("VACCINE_IDENTITY_MISMATCH")) throw new Error("Le certificat présente une identité différente : demande une correction au membre. / The certificate identifies a different horse; request a correction.");
+    if (error.message?.includes("VACCINE_READABLE_CERTIFICATE_REQUIRED")) throw new Error("Un certificat joint et admissible à la révision est requis. / An attached certificate eligible for review is required.");
+    throw error;
+  }
+  return data as OrganizationHealthDocumentReview;
+}
+
 export async function createOrganizationHealthDocumentReview(input: {
   organization_id: string;
   horse_document_id: string;

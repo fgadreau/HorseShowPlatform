@@ -82,7 +82,7 @@ try {
   check('existing legacy regression: '+file,()=>sql(script));
  }
  stage='health compliance regressions';
- for(const file of ['horse_health_compliance.sql','horse_health_compliance_presentation.sql','horse_document_identity_validations.sql','verified_horse_identity_locks.sql','entry_reservation_health_compliance.sql','coggins_gvl_verification.sql']){check('health regression: '+file,()=>sql(readFileSync('supabase/tests/'+file,'utf8')));}
+ for(const file of ['horse_health_compliance.sql','horse_health_compliance_presentation.sql','horse_document_identity_validations.sql','verified_horse_identity_locks.sql','entry_reservation_health_compliance.sql','coggins_gvl_verification.sql','association_vaccination_review.sql']){check('health regression: '+file,()=>sql(readFileSync('supabase/tests/'+file,'utf8')));}
  stage='acceptance';
  sql(readFileSync('supabase/tests/billing_checkout_compat.sql','utf8'));
  sql(readFileSync('supabase/tests/billing_folio_foundation.sql','utf8'));
