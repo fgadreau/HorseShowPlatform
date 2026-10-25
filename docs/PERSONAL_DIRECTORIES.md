@@ -20,6 +20,7 @@ frontend:
 
 - `20261025000600_public_show_directory_discovery.sql`
 - `20261025000700_self_directory_enrollment.sql`
+- `20261025000800_horse_creator_insert_returning.sql`
 
 Discovery is limited to active directories of associations with public shows;
 existing staff access remains in place. `join_public_directory` requires an
@@ -46,6 +47,7 @@ npm run build
 node scripts/tests/directory-ui/run.mjs
 npm install --prefix .tmp/db-tools --package-lock=false @electric-sql/pglite@0.3.14
 node scripts/test-directory-enrollment.mjs
+node scripts/test-horse-insert-returning.mjs
 ```
 
 The browser test uses the real React components and horse creation service with
@@ -56,3 +58,7 @@ actual migration functions/policy in isolated PostgreSQL with minimal fixtures
 and auth helper stubs. It checks idempotency, own-contact isolation, authentication
 and inaccessible/inactive targets. It does not replace full Supabase migration
 or trigger integration tests.
+
+The horse regression test reproduces the original `INSERT ... RETURNING` RLS
+failure before applying migration 008, then checks the creator can receive the
+inserted row while unrelated horses and unauthorized inserts remain blocked.
