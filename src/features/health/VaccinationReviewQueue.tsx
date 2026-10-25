@@ -4,13 +4,15 @@ import { errorMessage, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { Horse, HorseHealthDocument, OrganizationHealthDocumentReview } from "../../types/domain";
 import { getHorseHealthDocumentFileUrl, reviewVaccinationDocument } from "../../services/supabaseServices";
-import { healthDocumentTypeLabel, uiText } from "../dashboard/shared";
+import { healthDocumentTypeLabel, todayDateValue, uiText } from "../dashboard/shared";
 
 export function VaccinationReviewQueue({ locale, organizationId, horses, documents, reviews, onReviewed }: {
   locale: Locale; organizationId: string; horses: Horse[]; documents: HorseHealthDocument[];
   reviews: OrganizationHealthDocumentReview[]; onReviewed: () => Promise<void> | void;
 }) {
   const [selected, setSelected] = useState<HorseHealthDocument | null>(null);
+  const [administeredOn, setAdministeredOn] = useState("");
+  const [localDates, setLocalDates] = useState<Record<string, string>>({});
   const [showDecisions, setShowDecisions] = useState(false);
   const [fileUrl, setFileUrl] = useState("");
   const [fileError, setFileError] = useState("");
@@ -38,11 +40,19 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
   const visibleDocuments = vaccinationDocuments.filter(document => showDecisions || !decision(document.id));
   const selectedHorse = horses.find(horse => horse.id === selected?.horse_id);
 
+  function reviewedDate(document: HorseHealthDocument) {
+    return localDates[document.id] ?? latestReview(document.id)?.vaccination_administered_on ?? document.test_or_administered_on;
+  }
+  function openReview(document: HorseHealthDocument) {
+    setNotice(null); setAdministeredOn(reviewedDate(document) ?? ""); setSelected(document);
+  }
+
   async function decide(status: "approved" | "rejected") {
     if (!selected || busy) return;
     setBusy(true); setNotice(null);
     try {
-      await reviewVaccinationDocument({ organization_id: organizationId, horse_document_id: selected.id, status });
+      await reviewVaccinationDocument({ organization_id: organizationId, horse_document_id: selected.id, status, administered_on: status === "approved" ? administeredOn : null });
+      setLocalDates(current => { const next = { ...current }; if (status === "approved") next[selected.id] = administeredOn; else delete next[selected.id]; return next; });
       setLocalDecisions(current => ({ ...current, [selected.id]: status }));
       setSelected(null);
       setNotice({ error: false, text: status === "approved" ? uiText(locale, "Certificat approuvé par l’association.", "Certificate approved by the association.") : uiText(locale, "Certificat refusé par l’association.", "Certificate rejected by the association.") });
@@ -66,20 +76,25 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
       const review = latestReview(document.id);
       return <article className="health-document-summary" key={document.id}>
         <strong>{horse?.name}</strong><span>{healthDocumentTypeLabel(document.document_type, locale)}</span>
-        <span>{document.test_or_administered_on ? formatDate(document.test_or_administered_on) : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
+        <span>{reviewedDate(document) ? formatDate(reviewedDate(document)!) : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
         {decision(document.id) ? <span className={`badge ${decision(document.id)}`}>{decision(document.id) === "approved" ? uiText(locale, "Approuvé", "Approved") : uiText(locale, "Refusé", "Rejected")}{review ? ` · ${formatDate(review.reviewed_at)}` : ""}</span> : null}
-        <div className="row-actions"><button type="button" className="primary-button" onClick={() => { setNotice(null); setSelected(document); }}>{uiText(locale, "Ouvrir le document", "Open document")}</button></div>
+        <div className="row-actions"><button type="button" className="primary-button" onClick={() => openReview(document)}>{uiText(locale, "Ouvrir le document", "Open document")}</button>
+          <button type="button" className="ghost-button" onClick={() => openReview(document)}>{uiText(locale, "Approuver", "Approve")}</button></div>
       </article>;
     })}</div>
     {selected ? <ModalDialog className="vaccination-review-modal" title={uiText(locale, "Vérifier le certificat", "Review certificate")} description={`${selectedHorse?.name ?? ""} · ${healthDocumentTypeLabel(selected.document_type, locale)}`} onClose={() => { if (!busy) setSelected(null); }}>
-      <p>{selected.test_or_administered_on ? `${uiText(locale, "Date du vaccin", "Vaccination date")} : ${formatDate(selected.test_or_administered_on)}` : uiText(locale, "La date n’a pas été fournie : approuver le document ne complétera pas sa conformité.", "No date was provided: approving the document will not complete its compliance.")}</p>
-      {fileError ? <p role="alert">{uiText(locale, "Impossible d’afficher le document.", "Unable to display the document.")} {fileError}</p> : null}
+      <label>{uiText(locale, "Date du vaccin indiquée sur le document", "Vaccination date shown on the document")}
+        <input type="date" required min="1900-01-01" max={todayDateValue()} value={administeredOn} disabled={busy} onChange={event => setAdministeredOn(event.target.value)} />
+      </label>
+      <p>{uiText(locale, "Vérification manuelle de l’association : l’approbation ne dépend pas de la lecture automatique.", "Manual association review: approval does not depend on automatic reading.")}</p>
+      {fileError ? <p role="alert">{uiText(locale, "L’aperçu est indisponible. La vérification manuelle reste possible.", "Preview unavailable. Manual review is still available.")}</p> : null}
       {!selectedPath ? <p role="alert">{uiText(locale, "Aucun fichier joint. Demande au membre de déposer son certificat.", "No file attached. Ask the member to upload their certificate.")}</p> : null}
       {selectedPath && !fileUrl && !fileError ? <p role="status">{uiText(locale, "Chargement du document…", "Loading document…")}</p> : null}
+      {fileUrl ? <a className="text-button" href={fileUrl} target="_blank" rel="noreferrer">{uiText(locale, "Ouvrir ou télécharger le fichier original", "Open or download the original file")}</a> : null}
       {fileUrl ? selected.mime_type?.startsWith("image/") ? <img className="vaccination-certificate-image" src={fileUrl} alt={uiText(locale, "Certificat soumis par le membre", "Certificate submitted by the member")} /> : <iframe className="vaccination-certificate-preview" src={fileUrl} title={uiText(locale, "Certificat soumis par le membre", "Certificate submitted by the member")} /> : null}
       {notice?.error ? <p role="alert">{notice.text}</p> : null}
       <div className="row-actions vaccination-review-actions">
-        <button className="primary-button" type="button" disabled={busy || !fileUrl || Boolean(fileError)} onClick={() => void decide("approved")}>{uiText(locale, "Approuver", "Approve")}</button>
+        <button className="primary-button" type="button" disabled={busy || !selectedPath || !administeredOn || administeredOn > todayDateValue() || administeredOn < "1900-01-01"} onClick={() => void decide("approved")}>{uiText(locale, "Confirmer l’approbation", "Confirm approval")}</button>
         <button className="ghost-button danger-text" type="button" disabled={busy} onClick={() => void decide("rejected")}>{uiText(locale, "Refuser", "Reject")}</button>
       </div>
     </ModalDialog> : null}

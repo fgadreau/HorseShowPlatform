@@ -1,0 +1,53 @@
+{
+  "scope": "PREPROD only",
+  "userRequest": "Approve manually and enter the date on the certificate even when automatic interpretation reports a different identity.",
+  "design": {
+    "decision": "Association-specific manual review with vaccination_administered_on, author, timestamp and version.",
+    "globalData": "Horse identity, original certificate metadata/date and automatic validation history remain unchanged.",
+    "compliance": "Only the approving association uses its explicit human decision and entered date. Validity duration, future-date checks, refusal and Coggins rules remain enforced.",
+    "preview": "Rendering/signing failure does not prevent manual approval with the entered date; original file link remains available when signing succeeds."
+  },
+  "verification": {
+    "sql": [
+      {
+        "file": "supabase/migrations/20261025000500_manual_vaccination_approval_date.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/manual_vaccination_approval_date.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/association_vaccination_review.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_health_compliance_presentation.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/horse_document_identity_validations.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/verified_horse_identity_locks.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/entry_reservation_health_compliance.sql",
+        "pass": true
+      },
+      {
+        "file": "supabase/tests/coggins_gvl_verification.sql",
+        "pass": true
+      }
+    ],
+    "browser": "FR/EN mobile/desktop, date-only approval, unreadable preview with missing date, refusal, no-file guard, saved decisions and errors.",
+    "build": "passed before final presentation adjustments; repeated in CI."
+  },
+  "migration": "20261025000500_manual_vaccination_approval_date.sql"
+}

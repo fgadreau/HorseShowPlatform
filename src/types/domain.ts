@@ -88,6 +88,8 @@ export type OrganizationHealthDocumentReview = {
   reviewed_by_user_id: string;
   reviewed_at: string;
   created_at: string;
+  review_method?: "manual_association" | null;
+  vaccination_administered_on?: string | null;
 };
 
 export type HorseHealthRequirementStatus =
