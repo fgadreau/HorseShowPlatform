@@ -153,6 +153,7 @@ function HealthCenterView({
       /> : null}
       {canManageHealthDocuments && organization ? <VaccinationReviewQueue
         key={`${organization.id}:coggins`} kind="coggins" locale={locale} organizationId={organization.id}
+        compliance={compliance.loading || compliance.error ? [] : compliance.results}
         horses={horses} documents={horseHealthDocuments} reviews={documentReviews} onReviewed={onRefresh}
         contacts={contacts} identifiers={horseExternalIdentifiers} issuers={externalCredentialIssuers}
       /> : null}
