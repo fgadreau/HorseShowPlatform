@@ -21,7 +21,7 @@ Les données historiques des listes importées sont conservées en base.
 
 Dans **Horaire → Catalogue récurrent**, développer un bloc puis cliquer sur
 **Inéligibilité** à côté d’une classe maison. L’association peut ajouter un
-cavalier ou un cheval et un motif interne facultatif, puis retirer l’exclusion.
+cavalier et un motif interne facultatif, puis retirer l’exclusion.
 Une exclusion s’applique jusqu’à son retrait à toutes les occurrences de cette
 classe récurrente dans les concours de cette association. Elle ne s’étend pas
 aux autres classes, aux autres associations ou aux classes sanctionnées.
@@ -31,7 +31,7 @@ La liste et les motifs restent visibles uniquement au personnel autorisé de
 l’association. Le formulaire du membre reçoit seulement les identifiants des
 classes bloquées pour sa propre équipe. Une vérification serveur interdit aussi
 de contourner l’exclusion par une inscription directe ou une modification du
-cheval, du cavalier ou de la classe.
+cavalier ou de la classe.
 
 ## Validation
 

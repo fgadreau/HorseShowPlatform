@@ -868,7 +868,7 @@ function evaluateClass({
       : !programLimitReadiness.canProceed
         ? programLimitReadiness.message
         : houseClassBlocked
-          ? { tone: "error" as const, message: uiText(locale, "Le cavalier ou le cheval est inéligible à cette classe maison selon la liste de l’association.", "The rider or horse is ineligible for this house class according to the association’s list.") }
+          ? { tone: "error" as const, message: uiText(locale, "Le cavalier est inéligible à cette classe maison selon la liste de l’association.", "The rider is ineligible for this house class according to the association’s list.") }
           : houseClassChecking
             ? { tone: "info" as const, message: uiText(locale, "Vérification de la liste d’inéligibilité de l’association…", "Checking the association’s ineligibility list…") }
         : nrhaGate.message && !nrhaGate.canProceed && nrhaGate.message.tone === "error"
