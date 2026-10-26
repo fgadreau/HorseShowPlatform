@@ -220,7 +220,9 @@ export function compareContactIdentity(reference: ContactIdentity, candidate: Co
   const referencePhone = normalizePhone(reference.phone);
   const candidatePhone = normalizePhone(candidate.phone);
   const samePhone = Boolean(referencePhone.length >= 7 && candidatePhone.length >= 7 && referencePhone === candidatePhone);
-  const nameSimilarity = stringSimilarity(normalizedContactName(reference), normalizedContactName(candidate));
+  const referenceName = normalizedContactName(reference);
+  const candidateName = normalizedContactName(candidate);
+  const nameSimilarity = referenceName && candidateName ? stringSimilarity(referenceName, candidateName) : 0;
   const sameBirthDate = Boolean(reference.date_of_birth && candidate.date_of_birth && normalizeIdentityDate(reference.date_of_birth) === normalizeIdentityDate(candidate.date_of_birth));
 
   if (sameEmail) {
@@ -248,7 +250,7 @@ export function compareContactIdentity(reference: ContactIdentity, candidate: Co
 
   const certain = sameEmail || (samePhone && nameSimilarity >= 0.82) || (sameBirthDate && nameSimilarity >= 0.82);
   const scoreValue = boundedScore(score);
-  if (!certain && scoreValue < 30) return null;
+  if (!certain && scoreValue < 30 && nameSimilarity !== 1) return null;
 
   return result({
     profile: "duplicate_contact",

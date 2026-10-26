@@ -22,6 +22,12 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(message);
 }
 
+const homonym = compareContactIdentity({ first_name: "Yannick", last_name: "Goulet" }, { first_name: "YANNICK", last_name: "Goulet" });
+assert(homonym?.reasons.includes("same_name") && homonym.confidence === "weak", "Same name without email must trigger review, without proving identity");
+const differentBirthHomonym = compareContactIdentity({ first_name: "Yannick", last_name: "Goulet", date_of_birth: "1980-01-01" }, { first_name: "Yannick", last_name: "Goulet", date_of_birth: "1990-01-01" });
+assert(differentBirthHomonym?.reasons.includes("different_birth_date") && differentBirthHomonym.confidence === "weak", "Conflicting birth dates still require an explicit homonym review");
+assert(compareContactIdentity({ first_name: "", last_name: "" }, { first_name: "", last_name: "" }) === null, "Blank names must not produce a duplicate candidate");
+
 const exactContact = compareContactIdentity(
   { first_name: "Émilie", last_name: "Lavoie", email: "Emilie@example.test", phone: null, date_of_birth: null },
   { first_name: "Emilie", last_name: "Lavoie", email: "emilie@example.test", phone: null, date_of_birth: null },

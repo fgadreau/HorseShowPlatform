@@ -154,6 +154,7 @@ function MyContactsView({
       {creatingContact && canCreateLinkedContact ? (
         <ModalDialog eyebrow={uiText(locale, "Mon espace", "My space")} title={contacts.length ? uiText(locale, "Nouveau cavalier / contact", "New rider / contact") : uiText(locale, "Premier contact", "First contact")} onClose={() => setCreatingContact(false)}>
           <ContactForm
+            contacts={contacts}
             locale={locale}
             key={defaultContactType}
             createdByUserId={profileId}

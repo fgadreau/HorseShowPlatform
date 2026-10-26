@@ -11,6 +11,7 @@ import { getPlanLabel } from "../utils/planFeatures";
 import { buildExternalMembershipFields } from "../features/dashboard/shared";
 import { ContactIdentityCandidateReview } from "../features/people/IdentityCandidateReview";
 import type { ContactIdentityCandidate } from "../services/supabaseServices";
+import { localContactIdentityCandidates, mergeContactIdentityCandidates } from "../lib/contactDuplicateReview";
 
 function uiText(locale: Locale, fr: string, en: string) {
   return locale === "en" ? en : fr;
@@ -393,8 +394,8 @@ export function ContactPicker({
         })),
       };
 
-      if (onSearchIdentityCandidates) {
-        const candidates = await onSearchIdentityCandidates(input);
+      {
+        const candidates = mergeContactIdentityCandidates(localContactIdentityCandidates(input, visibleContacts), onSearchIdentityCandidates ? await onSearchIdentityCandidates(input) : []);
         if (candidates.length) {
           setIdentityCandidates(candidates);
           setPendingContactInput(input);
@@ -415,12 +416,14 @@ export function ContactPicker({
   }
 
   async function handleUseExisting(candidate: ContactIdentityCandidate) {
-    if (!onUseExistingContact) return;
+    const existing = visibleContacts.find(contact => contact.id === candidate.contact_id);
+    if (!onUseExistingContact && !existing) return;
     setBusy(true);
     setErrorMessage("");
 
     try {
-      await onUseExistingContact(candidate);
+      await onUseExistingContact?.(candidate);
+      if (existing) setCreatedContact(existing);
       onChange(candidate.contact_id);
       resetCreateForm();
       setCreating(false);
@@ -438,7 +441,7 @@ export function ContactPicker({
 
     try {
       if (onDismissIdentityCandidate) {
-        await Promise.all(identityCandidates.map((candidate) => onDismissIdentityCandidate(candidate)));
+        await Promise.all(identityCandidates.filter(candidate => candidate.search_signature).map((candidate) => onDismissIdentityCandidate(candidate)));
       }
       const contact = await onCreateContact(pendingContactInput);
       setCreatedContact(contact);

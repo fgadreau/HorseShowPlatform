@@ -315,6 +315,7 @@ function PeopleView({
             onChange={setContactCreationDirectoryIds}
           />
           <ContactForm
+            contacts={contacts}
             locale={locale}
             allowCredentialReview
             createdByUserId={createdByUserId}

@@ -10,6 +10,7 @@ import type { Contact, ContactExternalIdentifier, ExternalCredentialIssuer, Exte
 import { uiText, buildExternalMembershipFields, InlineHealthMessage } from "../dashboard/shared";
 import { compareNrhaMemberIdentity, integerFromMembershipNumber, nrhaMemberDataImportRows, nrhaMemberImportDecisionPayload, nrhaMemberMismatchMessage, nrhaMemberStatus, nrhaMemberVerificationPayload, nrhaOfficialMemberValues, type NrhaMemberDataImportRow, type NrhaMemberLocalValues, type NrhaMemberVerificationState } from "./nrhaMemberValidation";
 import { ContactIdentityCandidateReview } from "./IdentityCandidateReview";
+import { localContactIdentityCandidates, mergeContactIdentityCandidates } from "../../lib/contactDuplicateReview";
 
 type ContactCreationMode = "manual" | "import";
 
@@ -19,6 +20,7 @@ type NrhaMemberImportResult = {
 };
 
 function ContactForm({
+  contacts = [],
   locale = "fr",
   createdByUserId,
   defaultType = "owner",
@@ -37,6 +39,7 @@ function ContactForm({
   onVerifyNrhaMember,
   onCreated,
 }: {
+  contacts?: Contact[];
   locale?: Locale;
   createdByUserId?: string;
   defaultType?: Contact["type"];
@@ -171,8 +174,8 @@ function ContactForm({
     setBusy(true);
 
     try {
-      if (onSearchIdentityCandidates) {
-        const candidates = await onSearchIdentityCandidates(input);
+      {
+        const candidates = mergeContactIdentityCandidates(localContactIdentityCandidates(input, contacts), onSearchIdentityCandidates ? await onSearchIdentityCandidates(input) : []);
 
         if (candidates.length) {
           setPendingContactInput(input);
@@ -194,11 +197,11 @@ function ContactForm({
   }
 
   async function handleUseExistingContact(candidate: ContactIdentityCandidate) {
-    if (!onUseExistingContact) return;
+    if (!onUseExistingContact && !contacts.some(contact => contact.id === candidate.contact_id)) return;
     setBusy(true);
 
     try {
-      await onUseExistingContact(candidate);
+      await onUseExistingContact?.(candidate);
       resetForm();
       onCreated?.();
     } finally {
@@ -212,7 +215,7 @@ function ContactForm({
 
     try {
       if (onDismissIdentityCandidate) {
-        await Promise.all(identityCandidates.map((candidate) => onDismissIdentityCandidate(candidate)));
+        await Promise.all(identityCandidates.filter(candidate => candidate.search_signature).map((candidate) => onDismissIdentityCandidate(candidate)));
       }
       await finishContactCreation(pendingContactInput);
     } finally {
