@@ -6,6 +6,16 @@ et de recherche sont conservés dans l’URL. Les comptes sont paginés par 25 e
 les concours par 12 ; les totaux ne sont jamais calculés à partir d’une seule
 page de résultats. Les devises restent séparées.
 
+La présentation Finance utilise une densité compacte sur ordinateur : texte
+courant de 14 px, boutons de 13 px et espacements réduits. Sur mobile, les
+champs restent à 16 px et les boutons conservent une hauteur de 44 px.
+Le zoom du navigateur reste sous le contrôle de l’utilisateur.
+
+La liste des concours calcule ses montants directement depuis les charges et
+paiements, uniquement pour la page demandée. Elle ne reconstruit pas les
+documents complets des comptes pour chaque total. En cas d’erreur de lecture,
+un message de chargement échoué remplace le faux état « premières opérations ».
+
 La vue d’ensemble distingue les montants facturés aux clients, les paiements
 reçus, les soldes à recevoir et les comptes encore ouverts. Ces montants
 opérationnels comprennent les taxes et frais HSP. Une recherche permet de
