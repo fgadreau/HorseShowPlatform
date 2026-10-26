@@ -6406,3 +6406,8 @@ input::placeholder,textarea::placeholder {color:var(--text-muted);opacity:1}
 .entry-horse-group > summary:focus-visible { outline: 2px solid currentColor; outline-offset: -3px; }
 .entry-horse-group[open] > summary { border-bottom: 1px solid var(--border); }
 .entry-horse-group .table { border: 0; border-radius: 0; }
+
+.entry-block-judge-fee { margin: 0; color: var(--muted); font-size: 13px; }
+.entry-judge-fee.included { color: var(--muted); }
+.entry-judge-fee s { text-decoration-thickness: 2px; }
+.entry-checkout-judge-line { background: var(--surface); }

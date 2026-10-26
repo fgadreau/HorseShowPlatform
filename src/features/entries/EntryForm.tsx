@@ -227,6 +227,9 @@ function EntryForm({
     organization,
     show: selectedShow,
   });
+  const judgeFeePreviewLines = buildJudgeFeePreviewLines(checkoutPreview.lines);
+  const judgeFeeByBlockId = new Map(judgeFeePreviewLines.map((item) => [item.line.evaluation.block!.id, item]));
+  const selectedBlockIds = new Set(selectedEvaluations.flatMap((evaluation) => evaluation.block ? [evaluation.block.id] : []));
   const requiresPreauthAcceptance = checkoutPreview.preauthRequired && selectedClassIds.length > 0;
   const canCreate = Boolean(
     organization &&
@@ -645,9 +648,24 @@ function EntryForm({
                     <span>{[classScheduleStartLabel(block.block, locale, blocks), block.block.arena].filter(Boolean).join(" · ")}</span>
                   </div>
                 </div>
+                <p className="entry-block-judge-fee">
+                  {selectedBlockIds.has(block.block.id)
+                    ? uiText(locale, `Frais de juge du bloc : ${formatCurrency(judgeFeeByBlockId.get(block.block.id)?.amount ?? 0, checkoutPreview.currency)} — une seule fois pour ce cheval et ce cavalier.`, `Block judge fee: ${formatCurrency(judgeFeeByBlockId.get(block.block.id)?.amount ?? 0, checkoutPreview.currency)} — once for this horse and rider.`)
+                    : uiText(locale, "Un seul frais de juge par bloc pour ce cheval et ce cavalier.", "One judge fee per block for this horse and rider.")}
+                </p>
                 <div className="entry-showbill-class-list">
                   {block.evaluations.map((evaluation) => {
                     const selected = selectedClassIds.includes(evaluation.classRecord.id);
+                    const retainedJudgeFee = judgeFeeByBlockId.get(block.block.id);
+                    const currentJudgeAmount = retainedJudgeFee?.amount ?? 0;
+                    const nominalJudgeFee = evaluation.classRecord.judge_fee ?? 0;
+                    const blockHasSelection = selectedBlockIds.has(block.block.id);
+                    const nextJudgeAmount = !selected && blockHasSelection
+                      ? buildJudgeFeePreviewLines([...checkoutPreview.lines, {evaluation, fee: entryFeePreview(evaluation)}]).find((item) => item.line.evaluation.block?.id === block.block.id)?.amount ?? 0
+                      : currentJudgeAmount;
+                    const judgeFeeIncluded = nominalJudgeFee > 0 && blockHasSelection && (selected
+                      ? retainedJudgeFee?.line.evaluation.classRecord.id !== evaluation.classRecord.id
+                      : nextJudgeAmount === currentJudgeAmount);
                     const pendingNrha = evaluation.nrhaPending;
                     const Icon = pendingNrha ? ShieldCheck : evaluation.canSelect ? CheckCircle2 : AlertCircle;
 
@@ -662,7 +680,13 @@ function EntryForm({
                         <Icon size={18} />
                         <span>
                           <strong>{entryClassLabel(evaluation.classRecord, locale)}</strong>
-                          <small>{evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, organization?.currency ?? "CAD")}</small>
+                          <small>{uiText(locale, "Inscription", "Entry")}: {evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, checkoutPreview.currency)}</small>
+                          <small className={`entry-judge-fee${judgeFeeIncluded ? " included" : ""}`}>
+                            {uiText(locale, "Frais de juge", "Judge fee")}: {judgeFeeIncluded ? <s>{formatCurrency(nominalJudgeFee, checkoutPreview.currency)}</s> : formatCurrency(nominalJudgeFee, checkoutPreview.currency)}
+                            {judgeFeeIncluded ? <span> · {uiText(locale, "Aucun frais de juge supplémentaire", "No additional judge fee")}</span> : null}
+                            {selected && retainedJudgeFee?.line.evaluation.classRecord.id === evaluation.classRecord.id ? <span> · {uiText(locale, "Une seule fois pour le bloc", "Once for the block")}</span> : null}
+                            {!selected && blockHasSelection && nextJudgeAmount !== currentJudgeAmount ? <span> · {uiText(locale, `Frais du bloc si sélectionnée : ${formatCurrency(nextJudgeAmount, checkoutPreview.currency)}`, `Block fee if selected: ${formatCurrency(nextJudgeAmount, checkoutPreview.currency)}`)}</span> : null}
+                          </small>
                         </span>
                         {evaluation.nrhaResult && !evaluation.message ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
                         {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA de la journée en cours...", "Checking this day's NRHA blocks...")}</small> : null}
@@ -701,6 +725,16 @@ function EntryForm({
                       ) : null}
                     </div>
                     <strong>{formatCurrency(line.fee.total, checkoutPreview.currency)}</strong>
+                  </div>
+                ))}
+                {judgeFeePreviewLines.map(({line, amount}) => (
+                  <div className="entry-checkout-line entry-checkout-judge-line" key={`judge-${line.evaluation.block!.id}`}>
+                    <div>
+                      <strong>{uiText(locale, "Frais de juge", "Judge fee")} — {line.evaluation.block?.display_label || line.evaluation.block?.name}</strong>
+                      <span>{uiText(locale, "Retenu avec la classe", "Applied with class")} {entryClassLabel(line.evaluation.classRecord, locale)}</span>
+                      <small>{uiText(locale, "Une seule fois pour ce cheval et ce cavalier dans ce bloc.", "Once for this horse and rider in this block.")}</small>
+                    </div>
+                    <strong>{formatCurrency(amount, checkoutPreview.currency)}</strong>
                   </div>
                 ))}
               </div>
