@@ -613,6 +613,10 @@ export function Dashboard({
   const selectedOrganizationPersonalHorses = selectedOrganization
     ? personalHorses.filter((horse) => selectedOrganizationHorseIds.has(horse.id))
     : personalHorses;
+  const selectedOrganizationPersonalHorseContacts = selectedOrganization
+    ? personalHorseContacts.filter((contact) => selectedOrganizationContactIds.has(contact.id)
+      || selectedOrganizationPersonalHorses.some((horse) => horse.primary_owner_contact_id === contact.id))
+    : personalHorseContacts;
   const personalBackNumbers = selectedOrganizationBackNumbers.filter(
     (backNumber) =>
       (backNumber.assigned_horse_id ? personalHorseIds.has(backNumber.assigned_horse_id) : false) ||
@@ -1296,7 +1300,7 @@ export function Dashboard({
           <MyStallsView
             locale={locale}
             bookings={selectedShowPersonalStallBookings}
-            contacts={selectedOrganizationPersonalContacts}
+            contacts={selectedOrganizationPersonalHorseContacts}
             contactRoles={selectedOrganizationContactRoles}
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={personalHorseHealthDocuments}

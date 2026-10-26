@@ -35,11 +35,14 @@ try {
   await page.locator('.horse-reservation-row').filter({hasText:'Great Holly Whiz'}).getByRole('checkbox').first().check();
  }
  await prepare();
+ await expect(page.getByText('Ce payeur n’a pas encore de connexion HSP.',{exact:false})).toBeVisible();
  await expect(page.getByLabel('Ajouter de la ripe')).toBeDisabled();
  await expect(page.getByText('Aucune option de ripe disponible', {exact:false})).toBeVisible();
  await expect(page.getByRole('button',{name:'Créer la réservation',exact:true})).toBeEnabled();
  await page.getByRole('button',{name:'Créer la réservation',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.bookings.length)).toBe(1);
+ expect(await page.evaluate(()=>({payer:window.bookings[0].payer_contact_id,booker:window.bookings[0].booker_contact_id}))).toEqual({payer:'payer',booker:'booker'});
+ console.log('PASS: agent books the stall for its owner without an HSP login; payer remains separate from booker.');
  console.log('PASS: missing shavings option explains disabled checkbox and does not block stall-only booking.');
  await prepare('?bedding');
  await page.locator('.horse-reservation-row').filter({hasText:'Second Horse'}).getByRole('checkbox').first().check();
