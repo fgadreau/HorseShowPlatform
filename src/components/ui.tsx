@@ -264,7 +264,6 @@ export function SearchSelect({
 export function ContactPicker({
   allowEmpty = false,
   contacts,
-  contactRoles = [],
   createdByUserId,
   disabled = false,
   externalCredentialIssuers = [],
@@ -466,7 +465,6 @@ export function ContactPicker({
             items={visibleContacts.map((contact) => ({
               id: contact.id,
               label: contactLabel(contact),
-              detail: contactPickerDetail(contact, contactRoles, organization, locale),
             }))}
             clearLabel={uiText(locale, "Effacer la sélection", "Clear selection")}
             emptyLabel={uiText(locale, "Aucun résultat", "No matches")}
@@ -492,9 +490,9 @@ export function ContactPicker({
       {creating ? (
         <ModalDialog
           className="contact-create-modal"
-          description={uiText(locale, `Ce contact sera lié comme ${roleLabel.toLowerCase()}.`, `This contact will receive the ${roleLabel.toLowerCase()} role automatically.`)}
+          description={uiText(locale, "Renseigne les informations du contact.", "Enter the contact’s information.")}
           eyebrow="Contact"
-          title={uiText(locale, `Nouveau contact ${roleLabel.toLowerCase()}`, `New ${roleLabel.toLowerCase()}`)}
+          title={uiText(locale, "Nouveau contact", "New contact")}
           onClose={() => {
             if (!busy) {
               setCreating(false);
@@ -503,22 +501,6 @@ export function ContactPicker({
           }}
         >
           <form className="contact-create-inline" onSubmit={handleCreate}>
-            <label>
-              Type
-              <select
-                value={type}
-                onChange={(event) => {
-                  setType(event.target.value as Contact["type"]);
-                  setErrorMessage("");
-                }}
-              >
-                <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
-                <option value="agent">Agent</option>
-                <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
-                <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
-                <option value="other">{uiText(locale, "Autre", "Other")}</option>
-              </select>
-            </label>
             <div className="form-grid">
               <label>
                 {uiText(locale, "Prénom", "First name")}
@@ -719,17 +701,6 @@ function contactCreateErrorMessage(error: unknown, locale: Locale) {
   }
 
   return message || uiText(locale, "Impossible de créer le contact pour l'instant.", "Unable to create the contact right now.");
-}
-
-function contactRoleSummary(contact: Contact, contactRoles: ContactRole[], locale: Locale = "fr") {
-  const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => contactRoleLabel(role.role, locale));
-
-  return roles.length ? Array.from(new Set(roles)).join(" / ") : contactRoleLabel(contact.type, locale);
-}
-
-function contactPickerDetail(contact: Contact, contactRoles: ContactRole[], organization: Organization | null, locale: Locale) {
-  const scope = organization ? uiText(locale, "Association active", "Active organization") : uiText(locale, "Contact global", "Global contact");
-  return `${contactRoleSummary(contact, contactRoles, locale)} - ${scope}`;
 }
 
 function contactRoleLabel(role: ContactRoleName, locale: Locale = "fr") {

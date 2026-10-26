@@ -7,7 +7,7 @@ import { contactLabel, findById, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { assignBackNumber, assignNextBackNumber, claimHorseBackNumber, createBackNumberRange, deleteBackNumber, releaseBackNumber, updateBackNumberStatus } from "../../services/supabaseServices";
 import type { Contact, Horse, HorseContact, Organization, OrganizationBackNumber } from "../../types/domain";
-import { uiText, entryNumberValue, organizationBackNumberMode, backNumberModeNeedsHorse, backNumberModeNeedsRider, backNumberAssignmentMatchesTarget, backNumberAssigneeLabel, backNumberAssignmentMeta, backNumberModeLabel, backNumberStatusLabel, backNumberStatusBadgeClass, contactBackNumberDetail } from "../dashboard/shared";
+import { uiText, entryNumberValue, organizationBackNumberMode, backNumberModeNeedsHorse, backNumberModeNeedsRider, backNumberAssignmentMatchesTarget, backNumberAssigneeLabel, backNumberAssignmentMeta, backNumberModeLabel, backNumberStatusLabel, backNumberStatusBadgeClass } from "../dashboard/shared";
 
 function BackNumbersView({
   onRefresh,
@@ -254,7 +254,6 @@ function BackNumbersView({
                 items={contacts.map((contact) => ({
                   id: contact.id,
                   label: contactLabel(contact),
-                  detail: contactBackNumberDetail(contact, selectedHorse, horseContacts),
                 }))}
                 placeholder={uiText(locale, "Rechercher un cavalier", "Search rider")}
                 value={riderContactId}
@@ -451,7 +450,6 @@ function MyBackNumbersView({
                 items={contacts.map((contact) => ({
                   id: contact.id,
                   label: contactLabel(contact),
-                  detail: contact.email || contact.type,
                 }))}
                 placeholder={uiText(locale, "Rechercher un cavalier", "Search rider")}
                 value={riderContactId}

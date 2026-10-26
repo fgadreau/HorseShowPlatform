@@ -38,13 +38,6 @@ function stallPresetLabel(preset: (typeof stallPresets)[number], locale: Locale)
 
 const bookingStatuses: StallBooking["status"][] = ["requested", "reserved", "active", "cancelled", "completed"];
 const requiredReservationContactRoles: ContactRoleName[] = ["booker"];
-function reservationContactRoleChoices(locale: Locale): Array<{ detail: string; label: string; role: ContactRoleName }> {
-  return [
-    { detail: uiText(locale, "Personne qui fait la demande.", "Person making the request."), label: "Booker", role: "booker" },
-    { detail: uiText(locale, "Personne liée à la facture.", "Person linked to the invoice."), label: uiText(locale, "Payeur", "Payer"), role: "payer" },
-    { detail: uiText(locale, "Rôle ajouté au contact, sans changer le propriétaire du cheval.", "Role added to the contact without changing the horse owner."), label: uiText(locale, "Propriétaire", "Owner"), role: "owner" },
-  ];
-}
 type ReservationPeriodMode = "full_show" | "daily";
 type TackBillingMode = "split_horses" | "single_contact";
 
@@ -1147,7 +1140,7 @@ function StallBookingForm({
   const [beddingHorseIds, setBeddingHorseIds] = useState<string[]>([]);
   const [beddingQuantities, setBeddingQuantities] = useState<Record<string, string>>({});
   const [responsibleContactId, setResponsibleContactId] = useState("");
-  const [selectedContactRoles, setSelectedContactRoles] = useState<ContactRoleName[]>(requiredReservationContactRoles);
+  const selectedContactRoles = requiredReservationContactRoles;
   const [status, setStatus] = useState<StallBooking["status"]>(defaultStatus);
   const [startDayId, setStartDayId] = useState("");
   const [endDayId, setEndDayId] = useState("");
@@ -1181,7 +1174,6 @@ function StallBookingForm({
   const contactItems = contacts.map((contact) => ({
     id: contact.id,
     label: contactLabel(contact),
-    detail: [contact.type, contact.email].filter(Boolean).join(" / "),
   }));
   const reservedHorseBookingById = new Map<string, StallBooking>();
   bookings.forEach((booking) => {
@@ -1584,7 +1576,6 @@ function StallBookingForm({
       setBeddingHorseIds([]);
       setBeddingQuantities({});
       setResponsibleContactId("");
-      setSelectedContactRoles(requiredReservationContactRoles);
       setNotes("");
       onCreated?.();
     } catch (error) {
@@ -1607,9 +1598,6 @@ function StallBookingForm({
     setBeddingQuantities((current) => (current[horseId] ? current : { ...current, [horseId]: "1" }));
   }
 
-  function toggleContactRole(role: ContactRoleName) {
-    setSelectedContactRoles((current) => toggleValue(current, role));
-  }
 
   return (
     <section className="panel">
@@ -1638,17 +1626,6 @@ function StallBookingForm({
             onChange={setResponsibleContactId}
             onCreateContact={onCreateContact}
           />
-          <div className="contact-role-grid" aria-label={uiText(locale, "Rôles du contact", "Contact roles")}>
-            {reservationContactRoleChoices(locale).map((choice) => (
-              <label className="contact-role-option" key={choice.role}>
-                <input checked={selectedContactRoles.includes(choice.role)} type="checkbox" onChange={() => toggleContactRole(choice.role)} />
-                <span>
-                  <strong>{choice.label}</strong>
-                  <small>{choice.detail}</small>
-                </span>
-              </label>
-            ))}
-          </div>
         </div>
 
         <div className="form-section">
@@ -2243,7 +2220,6 @@ function StallBookingEditForm({
         <div className="form-section">
           <div className="form-section-header">
             <strong>2. Contacts</strong>
-            <span>{uiText(locale, "Rôles booker et payeur assignés automatiquement.", "Booker and payer roles are assigned automatically.")}</span>
           </div>
           <label>
             {uiText(locale, "Cheval", "Horse")}

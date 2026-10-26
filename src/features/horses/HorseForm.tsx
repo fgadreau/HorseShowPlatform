@@ -1170,7 +1170,6 @@ function HorseForm({
                         items={contacts.map((contact) => ({
                           id: contact.id,
                           label: contactLabel(contact),
-                          detail: contactImportDetail(contact),
                         }))}
                         placeholder={uiText(locale, "Rechercher un propriétaire", "Search an owner")}
                         value={importOwnerContactId}
@@ -1339,10 +1338,6 @@ function normalizeImportText(value: string) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, " ")
     .trim();
-}
-
-function contactImportDetail(contact: Contact) {
-  return [contact.email, contact.barn_name, contact.city, contact.state].filter(Boolean).join(" · ");
 }
 
 export { HorseForm };
