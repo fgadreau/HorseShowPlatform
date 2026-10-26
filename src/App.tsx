@@ -1,3 +1,4 @@
+import {sourceBillingError} from "./features/finance/presentation";
 import {financeRoute} from './features/finance/navigation';
 import { lazy, Suspense, useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -537,9 +538,13 @@ function HspApp() {
         await refreshContext();
       }}
       onDeleteEntry={async (id) => {
-        await deleteEntry(id);
-        setNotice({ tone: "success", message: "Entry deleted and payer account adjusted." });
-        await refreshContext();
+        try {
+          await deleteEntry(id);
+          setNotice({ tone: "success", message: "Entry deleted and payer account adjusted." });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: sourceBillingError(error, locale) });
+        }
       }}
       onCreateStallOption={async (input) => {
         await createStallOption(input);
@@ -562,9 +567,13 @@ function HspApp() {
         await refreshContext();
       }}
       onDeleteStallBooking={async (id) => {
-        await deleteStallBooking(id);
-        setNotice({ tone: "success", message: "Reservation deleted and payer account adjusted." });
-        await refreshContext();
+        try {
+          await deleteStallBooking(id);
+          setNotice({ tone: "success", message: "Reservation deleted and payer account adjusted." });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: sourceBillingError(error, locale) });
+        }
       }}
       onPrepareShowScoreClass={async (block) => {
         if (!context) {

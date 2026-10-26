@@ -40,6 +40,7 @@ jobs:
       - run: npm run test:warmups
       - run: npm run test:vaccination-review:browser
       - run: npm run test:reservations:browser
+      - run: node scripts/tests/directory-ui/run.mjs
       - run: npm run test:horses:browser
       - run: npm run test:coggins
       - run: npm run test:identity

@@ -66,4 +66,12 @@ try {
  await expect(page.getByRole('button',{name:'Créer la réservation',exact:true})).toBeEnabled();
  expect(await page.evaluate(()=>window.bookings.length)).toBe(0);
  console.log('PASS: a server refusal stays visible in the form and preserves the request for retry.');
+ await page.goto('http://127.0.0.1:5180/scripts/tests/reservation-ui/index.html?camping');
+ await page.getByRole('combobox').first().click();await page.getByRole('option').filter({hasText:'Laurence'}).click();
+ await page.locator('select').filter({has:page.locator('option[value="camping"]')}).selectOption('camping');
+ await expect(page.getByRole('button',{name:'Créer la réservation',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Créer la réservation',exact:true}).click();
+ await expect.poll(()=>page.evaluate(()=>window.bookings.length)).toBe(1);
+ expect(await page.evaluate(()=>window.bookings[0].stall_option_id)).toBe('camping');
+ console.log('PASS: camping-only requests submit without selecting a stall or a horse.');
 } finally {await browser.close();await server.close();}

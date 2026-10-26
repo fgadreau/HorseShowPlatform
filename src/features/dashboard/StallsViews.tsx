@@ -1683,7 +1683,6 @@ function StallBookingForm({
             {uiText(locale, "Produit stall", "Stall product")}
             <select
               disabled={!stallChoices.length}
-              required
               value={stallOptionId}
               onChange={(event) => {
                 setStallOptionId(event.target.value);
@@ -2730,7 +2729,7 @@ function ReservationProductSummary({
       <span>
         <strong>{formatCurrency(totalPrice, currency)}</strong>
         <small>
-          {quantityNumber} x {uiText(locale, "facture", "invoice")}
+          {uiText(locale, "Quantité", "Quantity")}: {quantityNumber}
         </small>
       </span>
     </div>

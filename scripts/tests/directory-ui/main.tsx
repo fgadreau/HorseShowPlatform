@@ -2,7 +2,7 @@ import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {PersonalDirectories} from '../../../src/features/profile/PersonalDirectories';
 import {MyHorsesView} from '../../../src/features/horses/MyHorsesView';
-import {createHorse,createContact} from '../../../src/services/supabaseServices';
+import {createHorse,createContact,ensureHorseOrganizationLink} from '../../../src/services/supabaseServices';
 import '../../../src/styles.css';
 const directories=[{id:'dir1',organization_id:'org',discipline_id:'d1',is_active:true,is_default:true},{id:'dir2',organization_id:'org',discipline_id:'d2',is_active:true,is_default:false}];
 const disciplines=[{id:'d1',name:'Reining'},{id:'d2',name:'Ranch'}];
@@ -11,6 +11,7 @@ window.enrollments=[];window.createdHorses=[];window.refreshCount=0;window.failE
 window.serviceWrites=[];
 window.createHorseThroughService=createHorse;
 window.createContactThroughService=createContact;
+window.ensureHorseDirectoryLink=ensureHorseOrganizationLink;
 window.testClient={from(table){
  let payload;let requestedIds=[];
  const result=()=>({data:table==='organization_disciplines'?requestedIds.filter(id=>['dir1','dir2'].includes(id)).map(id=>({id})):table==='horses'?{...payload,id:'service-horse'}:payload,error:null});
