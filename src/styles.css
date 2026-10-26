@@ -6389,3 +6389,11 @@ input::placeholder,textarea::placeholder {color:var(--text-muted);opacity:1}
 .reservation-group { border-bottom: 1px solid var(--border, #dce2e0); padding: 0.8rem 0; }
 .reservation-group > summary { cursor: pointer; line-height: 1.6; padding: 0.4rem; }
 .reservation-group > summary:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+
+.entry-rider-mobile-label { display: none; }
+@media (min-width: 681px) {
+  .association-entries-table .table-row { grid-template-columns: 1.2fr 1.3fr 1fr 1fr 1.2fr; }
+}
+@media (max-width: 680px) {
+  .entry-rider-mobile-label { display: inline; }
+}

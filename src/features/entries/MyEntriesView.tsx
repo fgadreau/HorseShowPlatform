@@ -9,7 +9,7 @@ import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecor
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
-import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
+import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
 import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function MyEntriesView({
@@ -195,6 +195,7 @@ function MyEntriesView({
               <div>
                 <span>{entryClassLabel(findById(classes, entry.class_id), locale)}</span>
                 <span className="muted-line">{entryClassBlockDetail(findById(classes, entry.class_id), blocks, locale)}</span>
+                <span className="muted-line">{entryClassPatternDetail(findById(classes, entry.class_id), blocks, locale)}</span>
                 {entry.is_late ? (
                   <span className="muted-line">
                     {uiText(locale, "Retard", "Late")} +{entry.late_fee_percent}%{entry.late_fee_amount ? ` - ${formatCurrency(entry.late_fee_amount, organization?.currency ?? "CAD")}` : ""}
