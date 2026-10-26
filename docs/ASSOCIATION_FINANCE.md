@@ -32,6 +32,16 @@ Dans **Rapports**, choisir le concours ou l’activité. Le rapport présente :
 - les revenus par catégorie, les paiements reçus par moyen et l’état des comptes ;
 - les taxes, encaissements, soldes et frais HSP présentés séparément.
 
+Dans les revenus par catégorie, **Réservations** se déplie pour afficher les
+montants hors taxes par option facturée : tack et stalles selon l’écurie,
+ripe, foin et autres options du concours. Les libellés proviennent des lignes
+facturées, sans dépendre du nom actuel des options. Les crédits reprennent le
+libellé de la ligne d’origine pour déduire les annulations du bon groupe.
+Les groupes intégralement annulés sont masqués. La somme du détail correspond
+au total Réservations ; elle ne s’ajoute pas une seconde fois aux revenus.
+Le CSV et l’impression comprennent toujours le détail complet, même quand
+la section est repliée à l’écran.
+
 Les allocations de paiement déterminent la part encaissée pour chaque
 fournisseur. Un encaissement mixte n’est jamais compté intégralement comme un
 revenu de l’association. La part association des frais de traitement suit le

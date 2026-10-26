@@ -178,6 +178,7 @@ try {
  stage='configurable direct fee compatibility';sql(readFileSync('supabase/tests/billing_configurable_direct_fees.sql','utf8'));
  stage='platform fee permissions';sql(readFileSync('supabase/tests/platform_hsp_fee_permissions.sql','utf8'));
  stage='association finance reports';sql(readFileSync('supabase/tests/association_finance_reports.sql','utf8'));
+ stage='reservation revenue breakdown';sql(readFileSync('supabase/tests/reservation_revenue_breakdown.sql','utf8'));
  stage='Stripe allocation after reservation replacement';sql(readFileSync('supabase/tests/stripe_reservation_allocation.sql','utf8'));
  report.push('Direct quoted sales, frozen configurable/zero fees, stale quote rejection, retry and Stripe commission compatibility');
  stage='PDF integration';await pdfIntegration({sql,session,check});

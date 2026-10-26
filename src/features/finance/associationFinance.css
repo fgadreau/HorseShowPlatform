@@ -87,6 +87,17 @@
 .finance-breakdown dd { margin: 0; white-space: nowrap; font-weight: 650; font-variant-numeric: tabular-nums; }
 .finance-report-total { display: flex; justify-content: space-between; padding-top: 15px; font-weight: 700; }
 .finance-fine-print { color: var(--text-muted); font-size: 12px; line-height: 1.6; }
+.finance-reservation-details > summary, .finance-reservation-print-heading { display: flex; align-items: baseline; gap: 8px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.finance-reservation-details > summary { cursor: pointer; list-style: none; }
+.finance-reservation-details > summary::-webkit-details-marker { display: none; }
+.finance-reservation-details > summary::before { content: "▸"; color: var(--brand); }
+.finance-reservation-details[open] > summary::before { transform: rotate(90deg); }
+.finance-reservation-details > summary > span, .finance-reservation-print-heading > span { flex: 1; }
+.finance-reservation-details > summary > strong, .finance-reservation-print-heading > strong { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.finance .finance-reservation-lines { padding-left: 18px; }
+.finance .finance-reservation-lines dt { font-size: 13px; overflow-wrap: anywhere; }
+.finance .finance-reservation-lines dd { font-size: 13px; }
+.finance-reservation-print { display: none; }
 .finance-expenses { display: grid; gap: 0; }
 .finance-expense { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 15px; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .finance-expense small { color: var(--text-muted); font-size: 12px; margin-top: 5px; }
@@ -130,6 +141,8 @@
  .finance-breakdown dd { white-space: normal; text-align: right; }
 }
 @media print {
+ .finance-reservation-details { display: none !important; }
+ .finance-reservation-print { display: block; }
  body:has(.finance-report) * { visibility: hidden; }
  body:has(.finance-report) .finance-report, body:has(.finance-report) .finance-report * { visibility: visible; }
  body:has(.finance-report) .finance-report { position: absolute; top: 0; left: 0; width: 100%; gap: 10px; color: #111; }

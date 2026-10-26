@@ -1,4 +1,4 @@
-type Report = { context: { name_fr: string; name_en: string; currency: string }; totals: Record<string, number>; revenue_categories: { category: string; subtotal: number; tax_amount: number; total: number }[]; payment_methods: { method: string; amount: number }[]; };
+type Report = { context: { name_fr: string; name_en: string; currency: string }; totals: Record<string, number>; revenue_categories: { category: string; subtotal: number; tax_amount: number; total: number }[]; reservation_revenue?: { product_id: string; label_fr: string; label_en: string; subtotal: number; tax_amount: number; total: number }[]; payment_methods: { method: string; amount: number }[]; };
 
 export function csvCell(value: string | number) {
   const safe = typeof value === "string" && /^[\s]*[=+\-@]/.test(value) ? `'${value}` : String(value);
@@ -19,6 +19,7 @@ export function financeReportCsv(report: Report, locale: string) {
     [fr ? "Paiements sans frais de traitement renseignés" : "Payments with unrecorded processing fees", t.unknown_processing_fees],
     [], [fr ? "Revenus par catégorie" : "Revenue by category", fr ? "Hors taxes" : "Before tax", "Taxes", "Total"],
     ...report.revenue_categories.map(row => [revenueCategoryLabels[row.category]?.[fr ? 0 : 1] ?? (fr ? "Autres services" : "Other services"), row.subtotal, row.tax_amount, row.total]),
+    ...((report.reservation_revenue?.length ?? 0) > 0 ? [[], [fr ? "Détail des réservations" : "Reservation breakdown", fr ? "Hors taxes" : "Before tax", "Taxes", "Total"], ...report.reservation_revenue!.map(row => [(fr ? row.label_fr : row.label_en) || row.label_fr || row.label_en, row.subtotal, row.tax_amount, row.total])] : []),
     [], [fr ? "Encaissements par moyen" : "Collections by method", fr ? "Montant, tous fournisseurs" : "Amount, all suppliers"],
     ...report.payment_methods.map(row => [paymentMethodLabels[row.method]?.[fr ? 0 : 1] ?? (fr ? "Autre" : "Other"), row.amount]),
     [], [fr ? "Rapport de revenus, paiements et soldes. Aucun bénéfice net n’est calculé. Ce rapport ne remplace pas les factures." : "Revenue, payments and balances report. No net profit is calculated. This report does not replace invoices."],
