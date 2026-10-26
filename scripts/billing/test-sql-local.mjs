@@ -176,6 +176,7 @@ try {
  stage='consolidated suppliers';sql(readFileSync('supabase/tests/billing_consolidated_suppliers.sql','utf8'));report.push('Consolidated suppliers SQL acceptance');sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));console.log('FINAL CONSOLIDATED SQL COUNTS',JSON.stringify(sqlCounts));
  stage='document locale';sql(readFileSync('supabase/tests/billing_document_locale.sql','utf8'));sqlCounts=JSON.parse(sql("select jsonb_object_agg(kind,total) from public.billing_test_counts;"));report.push('Persisted bilingual document flows and immutable presentation');
  stage='configurable direct fee compatibility';sql(readFileSync('supabase/tests/billing_configurable_direct_fees.sql','utf8'));
+ stage='platform fee permissions';sql(readFileSync('supabase/tests/platform_hsp_fee_permissions.sql','utf8'));
  report.push('Direct quoted sales, frozen configurable/zero fees, stale quote rejection, retry and Stripe commission compatibility');
  stage='PDF integration';await pdfIntegration({sql,session,check});
  stage='hosted pilot operations';sql(readFileSync('supabase/tests/billing_hosted_pilot.sql','utf8'));

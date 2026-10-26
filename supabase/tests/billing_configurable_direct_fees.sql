@@ -1,5 +1,8 @@
 -- Disposable database only. Exercise the boundary between both recovered branches.
 begin;
+-- Fee setup is a platform operation; this is the disposable fixture actor only.
+insert into public.platform_admins(user_id) values('20000000-0000-0000-0000-000000000002');
+
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
 do $$
 declare

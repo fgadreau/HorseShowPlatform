@@ -1,5 +1,8 @@
 -- Full persisted DEMO flows, disposable database only. No direct financial row writes.
 reset role;
+-- Fee setup is a platform operation; this is the disposable fixture actor only.
+insert into public.platform_admins(user_id) values('20000000-0000-0000-0000-000000000002');
+
 create table public.billing_document_proof_cases(name text primary key,document_id uuid not null references public.billing_documents(id));
 -- These identifiers refer exclusively to fixtures created earlier in this same test run.
 update public.organizations set name='Association DEMO',billing_name='Association DEMO',address='123 DEMO',tax_number='DEMO-ASSOC-TPS',secondary_tax_number='DEMO-ASSOC-TVQ' where id='f3000000-0000-0000-0000-000000000001';
@@ -48,3 +51,4 @@ begin
  perform public.set_billing_product_document_labels('f5000000-0000-0000-0000-000000000002','Inscription et stalle DEMO','DEMO entry and stall');
  end loop;
 end $$;
+delete from public.platform_admins where user_id='20000000-0000-0000-0000-000000000002';

@@ -686,7 +686,7 @@ export function Dashboard({
     stallOptions: selectedOrganizationStallOptions,
   });
   const activeNavItem = [...associationNavigation, ...personalNavigation].find((item) => item.key === effectiveView);
-  const activeViewLabel = effectiveView === "show-accounts" ? (locale === "fr" ? "Comptes du concours" : "Show accounts") : effectiveView === "platform-admin" ? "Admin plans" : activeNavItem ? t.nav[activeNavItem.labelKey] : t.shell.productName;
+  const activeViewLabel = effectiveView === "show-accounts" ? (locale === "fr" ? "Comptes du concours" : "Show accounts") : effectiveView === "platform-admin" ? (locale === "fr" ? "Paramètres plateforme" : "Platform settings") : activeNavItem ? t.nav[activeNavItem.labelKey] : t.shell.productName;
 
   const handleViewChange = (view: ViewKey) => {
     setIsMobileMenuOpen(false);
@@ -783,7 +783,7 @@ export function Dashboard({
                 onClick={() => handleViewChange("platform-admin")}
               >
                 <Shield size={18} />
-                Admin plans
+                {locale === "fr" ? "Paramètres plateforme" : "Platform settings"}
               </button>
             </div>
           ) : null}
@@ -1381,6 +1381,8 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "platform-admin" && isPlatformAdmin ? (
           <PlatformAdminView
+            locale={locale}
+            shows={shows}
             currentUserProfileId={context?.profile.id ?? null}
             organizations={organizations}
             disciplines={disciplines}

@@ -8,10 +8,15 @@ import { setOrganizationPlan } from "../../services/supabaseServices";
 import { getPlanLabel, PLAN_FEATURES } from "../../utils/planFeatures";
 import type { Notice } from "../../types/ui";
 import { SportsConfigurationAdmin } from "./SportsConfigurationAdmin";
+import { PlatformHspFeeSettings } from "./HspFeeSettings";
+import type { Locale } from "../../lib/i18n";
+import type { Show } from "../../types/domain";
 
 const PLAN_OPTIONS: PlanTier[] = ["community", "professional", "premium"];
 
 export function PlatformAdminView({
+  locale,
+  shows,
   currentUserProfileId,
   organizations,
   disciplines,
@@ -22,6 +27,8 @@ export function PlatformAdminView({
   governingBodies,
   onRefresh,
 }: {
+  locale: Locale;
+  shows: Show[];
   currentUserProfileId: string | null;
   organizations: Organization[];
   disciplines: Discipline[];
@@ -62,11 +69,12 @@ export function PlatformAdminView({
       <a href="/vet">Portail pilote de certificats vétérinaires</a>
       <ViewIntro
         eyebrow="Platform Admin"
-        title="Gestion des plans"
-        description="Gérer les plans d'abonnement de toutes les organisations."
+        title={locale === "fr" ? "Paramètres de la plateforme" : "Platform settings"}
+        description={locale === "fr" ? "Gérer les frais HSP, les plans et la configuration de la plateforme." : "Manage HSP fees, plans and platform configuration."}
       />
 
       {notice ? <NoticeBanner notice={notice} /> : null}
+      <PlatformHspFeeSettings organizations={organizations} shows={shows} locale={locale} />
 
       <SportsConfigurationAdmin
         currentUserProfileId={currentUserProfileId}
