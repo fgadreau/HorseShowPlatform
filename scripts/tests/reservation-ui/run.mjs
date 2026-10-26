@@ -22,7 +22,7 @@ const server=await createServer({configFile:false,root:process.cwd(),server:{hos
  }
 }},react()]});
 await server.listen();
-const browser=await chromium.launch({executablePath:await bundledChromium.executablePath(),args:bundledChromium.args});
+const browser=await chromium.launch(process.platform==='linux'?{executablePath:await bundledChromium.executablePath(),args:bundledChromium.args}:{channel:'chrome',headless:true});
 try {
  const page=await browser.newPage({viewport:{width:390,height:844}});
  page.setDefaultTimeout(10000);
@@ -30,7 +30,11 @@ try {
  async function prepare(query=''){
   await page.goto('http://127.0.0.1:5180/scripts/tests/reservation-ui/index.html'+query);
   const responsible=page.getByRole('combobox').first();
-  await responsible.click();await page.getByRole('option').filter({hasText:'Laurence'}).click();
+  await responsible.click();
+  await expect(page.getByRole('option').filter({hasText:'Laurence'})).toHaveText('Laurence Agent');
+  await page.getByRole('option').filter({hasText:'Laurence'}).click();
+  await expect(responsible).toHaveValue('Laurence Agent');
+  await expect(page.locator('.contact-role-grid')).toHaveCount(0);
   await page.locator('select').filter({has:page.locator('option[value="stall"]')}).selectOption('stall');
   await page.locator('.horse-reservation-row').filter({hasText:'Great Holly Whiz'}).getByRole('checkbox').first().check();
  }

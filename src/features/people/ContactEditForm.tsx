@@ -46,7 +46,7 @@ function ContactEditForm({
   onUpdateContact: (id: string, input: Parameters<typeof updateContact>[1]) => Promise<void>;
   onVerifyNrhaMember: (input: Parameters<typeof verifyNrhaMember>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaMember>>>;
 }) {
-  const [type, setType] = useState<Contact["type"]>(contact.type);
+  const type = contact.type;
   const [firstName, setFirstName] = useState(contact.first_name);
   const [middleName, setMiddleName] = useState(contact.middle_name ?? "");
   const [lastName, setLastName] = useState(contact.last_name);
@@ -375,16 +375,6 @@ function ContactEditForm({
         </div>
       </div>
       <form className="stack" onSubmit={handleSubmit}>
-        <label>
-          Type
-          <select value={type} onChange={(event) => setType(event.target.value as Contact["type"])}>
-            <option value="owner">{uiText(locale, "Propriétaire", "Owner")}</option>
-            <option value="agent">Agent</option>
-            <option value="rider">{uiText(locale, "Cavalier", "Rider")}</option>
-            <option value="payer">{uiText(locale, "Payeur", "Payer")}</option>
-            <option value="other">{uiText(locale, "Autre", "Other")}</option>
-          </select>
-        </label>
         <div className="form-grid">
           <label>
             {uiText(locale, "Prénom", "First name")}

@@ -130,10 +130,9 @@ function MyContactsView({
       <ViewIntro
         eyebrow={uiText(locale, "Mon espace", "My space")}
         title={uiText(locale, "Mes cavaliers et contacts", "My riders and contacts")}
-        description={uiText(locale, "Gère les propriétaires, cavaliers et payeurs liés à ton compte.", "Manage owners, riders and payers linked to your account.")}
+        description={uiText(locale, "Gère les contacts liés à ton compte.", "Manage contacts linked to your account.")}
         stats={[
           { label: "Contacts", value: String(contacts.length) },
-          { label: uiText(locale, "Cavaliers", "Riders"), value: String(contacts.filter((contact) => contact.type === "rider").length) },
           { label: uiText(locale, "Cartes", "Memberships"), value: String(contactOrganizationMemberships.filter((membership) => membership.status !== "cancelled").length) },
         ]}
       />

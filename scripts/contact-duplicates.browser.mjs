@@ -11,7 +11,15 @@ try{
   await page.setViewportSize({width,height});await page.goto(`http://127.0.0.1:5195/scripts/tests/contact-duplicates/index.html?locale=${locale}&scenario=${scenario}`);
   const create=locale==='fr'?'Créer le contact':'Create contact',distinct=locale==='fr'?'Ce sont des fiches différentes — créer quand même':'These are different records — create anyway';
   async function fill(){
-   if(scenario==='picker')await page.locator('.contact-picker-row .ghost-button').click();
+   if(scenario==='picker'){
+    const picker=page.getByRole('combobox');await picker.click();
+    const option=page.getByRole('option').filter({hasText:'Yannick Goulet'}).first();
+    assert.equal((await option.innerText()).trim(),'Yannick Goulet');
+    await option.click();await expect(picker).toHaveValue('Yannick Goulet');
+    await page.locator('.contact-picker-row .ghost-button').click();
+    assert.equal(await page.getByRole('dialog').locator('select').count(),0);
+    await expect(page.getByRole('dialog').getByRole('heading',{name:locale==='fr'?'Nouveau contact':'New contact',exact:true})).toBeVisible();
+   }
    else await page.getByRole('button',{name:locale==='fr'?'Création manuelle':'Manual creation',exact:true}).click();
    await page.getByLabel(locale==='fr'?'Prénom':'First name',{exact:true}).fill('Yannick');await page.getByLabel(locale==='fr'?'Nom':'Last name',{exact:true}).fill('Goulet');
    await page.getByLabel(locale==='fr'?'Date de naissance':'Date of birth',{exact:true}).fill('1990-01-01');
@@ -24,5 +32,12 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
   console.log(`PASS duplicates ${scenario} ${locale} ${width}x${height}`);
  }
- assert.deepEqual(errors,[]);console.log('PASS: same names without email, optional middle name, no creation before review, reuse without duplicate, explicit homonym confirmation, warning on every subsequent creation despite dismissed global results; FR/EN mobile, external traffic blocked.');
+ for(const locale of ['en','fr']){
+  await page.goto(`http://127.0.0.1:5195/scripts/tests/contact-duplicates/index.html?locale=${locale}&scenario=edit`);
+  assert.equal(await page.locator('select').count(),0);
+  await page.getByRole('button',{name:locale==='fr'?'Sauvegarder':'Save changes',exact:true}).click();
+  await expect.poll(()=>page.evaluate(()=>window.creations.length)).toBe(1);
+  assert.equal(await page.evaluate(()=>window.creations[0].type),'owner');
+ }
+ assert.deepEqual(errors,[]);console.log('PASS: name-only contact choices and selection, no role/type controls, edit preserves stored type; duplicate review and reuse; FR/EN mobile, external traffic blocked.');
 }finally{await browser?.close();await server.close();}

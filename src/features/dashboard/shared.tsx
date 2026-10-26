@@ -9,7 +9,6 @@ import type {
   Contact,
   ContactExternalIdentifier,
   ContactRole,
-  ContactRoleName,
   ClassRecord,
   Entry,
   ExternalCredentialIssuer,
@@ -599,31 +598,6 @@ export function notificationPriorityRank(priority: NotificationPriority) {
   return 2;
 }
 
-export function contactRoleSummary(contact: Contact, contactRoles: ContactRole[], locale: Locale = "fr") {
-  const roles = contactRoles.filter((role) => role.contact_id === contact.id).map((role) => role.role);
-  const unique = Array.from(new Set(roles.length ? roles : [contact.type]));
-
-  return unique.map((role) => contactRoleDisplayLabel(role, locale)).join(" / ");
-}
-
-export function contactRoleDisplayLabel(role: ContactRoleName, locale: Locale) {
-  switch (role) {
-    case "owner":
-      return uiText(locale, "Propriétaire", "Owner");
-    case "agent":
-      return "Agent";
-    case "rider":
-      return uiText(locale, "Cavalier", "Rider");
-    case "payer":
-      return uiText(locale, "Payeur", "Payer");
-    case "booker":
-      return uiText(locale, "Réservataire", "Booker");
-    case "other":
-    default:
-      return uiText(locale, "Autre", "Other");
-  }
-}
-
 export function normalizeDirectorySearch(value: string) {
   return value
     .normalize("NFD")
@@ -636,12 +610,10 @@ export function matchesDirectorySearch(values: Array<string | null | undefined>,
   return values.some((value) => normalizeDirectorySearch(value ?? "").includes(query));
 }
 
-export function contactMatchesDirectorySearch(contact: Contact, contactRoles: ContactRole[], query: string) {
+export function contactMatchesDirectorySearch(contact: Contact, _contactRoles: ContactRole[], query: string) {
   return matchesDirectorySearch(
     [
       contactLabel(contact),
-      contactRoleSummary(contact, contactRoles),
-      contact.type,
       contact.email,
       contact.phone,
       contact.barn_name,
@@ -796,15 +768,6 @@ export function backNumberStatusBadgeClass(status: OrganizationBackNumber["statu
   }
 
   return "error";
-}
-
-export function contactBackNumberDetail(contact: Contact, selectedHorse: Horse | null, horseContacts: HorseContact[]) {
-  if (!selectedHorse) {
-    return contact.email || contact.type;
-  }
-
-  const horseContact = horseContacts.find((candidate) => candidate.horse_id === selectedHorse.id && candidate.contact_id === contact.id);
-  return horseContact ? `Lie au cheval - ${horseContact.role}` : contact.email || contact.type;
 }
 
 export function buildShowReadinessItems(
