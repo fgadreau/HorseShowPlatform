@@ -3,6 +3,9 @@ set role authenticated;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000002';
 select public.billing_test_checkout_account('consolidated-demo',100) as fixture \gset consolidated_
 reset role;
+-- Fee setup is a platform operation; this is the disposable fixture actor only.
+insert into public.platform_admins(user_id) values('20000000-0000-0000-0000-000000000002');
+
 select set_config('billing.test.consolidated', :'consolidated_fixture', false);
 do $$
 declare x jsonb:=current_setting('billing.test.consolidated')::jsonb; f public.billing_folios; ctx public.billing_contexts; s jsonb; r jsonb; cmd jsonb; req uuid:=gen_random_uuid(); old jsonb; st jsonb; inv jsonb; amount numeric; h uuid;
@@ -75,6 +78,8 @@ begin
  perform public.billing_test_assert(s#>'{processing_fee}' @> '{"association":1.11,"hsp":0.12,"funds_separated":false}','proportional processing cost, exact remainder, no Connect transfer');
  perform public.billing_test_assert((select count(*)>=8 from public.billing_hsp_fee_setting_events where setting->>'changed_by' is not null),'settings audit actor timestamp');
 end $$;
+delete from public.platform_admins where user_id='20000000-0000-0000-0000-000000000002';
+
 
 set role authenticated;
 set request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';

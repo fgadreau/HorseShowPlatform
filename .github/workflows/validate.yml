@@ -45,6 +45,7 @@ jobs:
       - run: npm run test:schedule:browser
       - run: npm run test:contact-duplicates:browser
       - run: npm run test:horse-access:browser
+      - run: node scripts/billing/hsp-fee-browser.mjs
       - run: npm run test:horses:browser
       - run: npm run test:coggins
       - run: npm run test:identity
