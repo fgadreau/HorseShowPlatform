@@ -51,7 +51,10 @@ VITE_SUPABASE_PROJECT_REF=
 VITE_PRODUCTION_SUPABASE_PROJECT_REF=
 ```
 
-Supabase Auth URL configuration should include local and production URLs:
+For PREPROD, use [the HSP Auth email configuration](PREPROD_AUTH_EMAIL.md).
+The production values below must not be copied into the shared PREPROD project.
+
+Supabase Auth URL configuration for production:
 
 ```text
 Site URL:
