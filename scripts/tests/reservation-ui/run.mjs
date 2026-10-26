@@ -4,7 +4,7 @@ import ts from 'typescript';
 import {chromium,expect} from '@playwright/test';
 import bundledChromium from '@sparticuz/chromium';
 const server=await createServer({configFile:false,root:process.cwd(),server:{host:'127.0.0.1',port:5180,strictPort:true},plugins:[{name:'isolated-reservation-fixture',enforce:'pre',transform(code,id){
- if(id.endsWith('/src/features/dashboard/StallsViews.tsx'))return code+'\nexport { StallBookingForm };';
+ if(id.endsWith('/src/features/dashboard/StallsViews.tsx'))return code+'\nexport { StallBookingForm, StallBookingsTable };';
  if(id.endsWith('/src/services/billingFolio.ts')) {
    const ast=ts.createSourceFile(id,code,ts.ScriptTarget.Latest,true);
    const node=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text==='billingRpc');
@@ -74,4 +74,14 @@ try {
  await expect.poll(()=>page.evaluate(()=>window.bookings.length)).toBe(1);
  expect(await page.evaluate(()=>window.bookings[0].stall_option_id)).toBe('camping');
  console.log('PASS: camping-only requests submit without selecting a stall or a horse.');
+ for (const mode of ['legacy','identity','distinct']) {
+  await page.goto('http://127.0.0.1:5180/scripts/tests/reservation-ui/index.html?groups='+mode);
+  const expected=mode==='distinct'?2:1;
+  await expect(page.locator('details.reservation-group')).toHaveCount(expected);
+  await expect(page.getByText(`${expected} réservation(s), avec tous leurs éléments.`)).toBeVisible();
+  await page.locator('details.reservation-group').first().locator('summary').click();
+  await expect(page.getByText('Box écurie régulière',{exact:true}).first()).toBeVisible();
+  if(mode!=='distinct') await expect(page.locator('details[open] .table-row')).toHaveCount(11);
+ }
+ console.log('PASS: 11 items form one reservation for legacy and persistent IDs; separate submissions stay separate.');
 } finally {await browser.close();await server.close();}

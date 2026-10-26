@@ -103,10 +103,10 @@ export function StallsView({
   const reservedQuantity = bookings
     .filter((booking) => booking.status !== "cancelled" && booking.affects_inventory !== false)
     .reduce((sum, booking) => sum + Number(booking.quantity ?? 1), 0);
-  const billableTotal = bookings.reduce((sum, booking) => sum + Number(booking.total_price ?? 0), 0);
+  const billableTotal = bookings.reduce((sum, booking) => sum + (booking.billable === false ? 0 : Number(booking.total_price ?? 0)), 0);
   const associationTabs: Array<ReservationTabItem<AssociationReservationTab>> = [
     {
-      count: bookings.length,
+      count: groupReservations(bookings).size,
       detail: uiText(locale, "Demandes, réservations et statuts.", "Requests, reservations and statuses."),
       icon: ClipboardList,
       key: "reservations",
@@ -145,7 +145,7 @@ export function StallsView({
         title={uiText(locale, "Réservations et options réservables", "Reservations and reservable options")}
         description={uiText(locale, "Gère les demandes de stalls, camping et extras, puis garde l'inventaire disponible à jour.", "Manage stall, camping and extra requests while keeping available inventory current.")}
         stats={[
-          { label: uiText(locale, "Réservations", "Reservations"), value: String(bookings.length) },
+          { label: uiText(locale, "Réservations", "Reservations"), value: String(groupReservations(bookings).size) },
           { label: "Options", value: String(stallOptions.length) },
         ]}
       />
@@ -320,11 +320,11 @@ export function MyStallsView({
 }) {
   const [editingBooking, setEditingBooking] = useState<StallBooking | null>(null);
   const [activeTab, setActiveTab] = useState<PersonalReservationTab>("my-reservations");
-  const billableTotal = bookings.reduce((sum, booking) => sum + Number(booking.total_price ?? 0), 0);
+  const billableTotal = bookings.reduce((sum, booking) => sum + (booking.billable === false ? 0 : Number(booking.total_price ?? 0)), 0);
   const availableOptions = stallOptions.filter((option) => option.available_quantity > 0);
   const personalTabs: Array<ReservationTabItem<PersonalReservationTab>> = [
     {
-      count: bookings.length,
+      count: groupReservations(bookings).size,
       detail: uiText(locale, "Mes demandes et réservations actives.", "My active requests and reservations."),
       icon: ClipboardList,
       key: "my-reservations",
@@ -363,13 +363,13 @@ export function MyStallsView({
         title={uiText(locale, "Mes réservations", "My reservations")}
         description={uiText(locale, "Réserve les options disponibles pour tes chevaux et suis les demandes liées à ton compte.", "Reserve available options for your horses and track requests linked to your account.")}
         stats={[
-          { label: uiText(locale, "Réservations", "Reservations"), value: String(bookings.length) },
+          { label: uiText(locale, "Réservations", "Reservations"), value: String(groupReservations(bookings).size) },
           { label: uiText(locale, "Disponibles", "Available"), value: String(availableOptions.length) },
         ]}
       />
 
       <section className="metric-grid span-2">
-        <Metric label={uiText(locale, "Réservations", "Reservations")} value={String(bookings.length)} />
+        <Metric label={uiText(locale, "Réservations", "Reservations")} value={String(groupReservations(bookings).size)} />
         <Metric label={uiText(locale, "Options disponibles", "Available options")} value={String(availableOptions.length)} />
         <Metric label={uiText(locale, "Facturable", "Billable")} value={formatCurrency(billableTotal, currency)} />
       </section>
@@ -584,7 +584,7 @@ function StallBookingsTable({
       <div className="panel-header">
         <div>
           <h2>{title}</h2>
-          <p>{bookings.length ? uiText(locale, `${bookings.length} réservation${bookings.length === 1 ? "" : "s"} liée${bookings.length === 1 ? "" : "s"} aux comptes des payeurs.`, `${bookings.length} reservation${bookings.length === 1 ? "" : "s"} linked to payer accounts.`) : uiText(locale, "Les réservations seront ajoutées aux comptes des payeurs pour le concours.", "Reservations will be added to payer accounts for the show.")}</p>
+          <p>{bookings.length ? uiText(locale, `${groupReservations(bookings).size} réservation(s), avec tous leurs éléments.`, `${groupReservations(bookings).size} reservation(s), including all their items.`) : uiText(locale, "Les réservations seront ajoutées aux comptes des payeurs pour le concours.", "Reservations will be added to payer accounts for the show.")}</p>
         </div>
       </div>
       <div className="table stalls-table">
@@ -594,7 +594,14 @@ function StallBookingsTable({
           <span>{uiText(locale, "Statuts", "Statuses")}</span>
           <span>Action</span>
         </div>
-        {bookings.map((booking) => {
+        {Array.from(groupReservations(bookings), ([id, items]) => (
+          <details key={id} className="reservation-group">
+            <summary>
+              <strong>{uiText(locale, "Réservation", "Reservation")} · {contactLabel(findById(contacts, items[0].booker_contact_id))}</strong>
+              <span className="muted-line">{Array.from(new Set(items.filter(item => item.horse_id).map(item => horseLabel(findById(horses, item.horse_id))))).join(", ")}</span>
+              <span>{formatCurrency(items.reduce((sum,item) => sum + (item.billable === false ? 0 : Number(item.total_price ?? 0)), 0), currency)} · {uiText(locale, "Voir les détails", "View details")}</span>
+            </summary>
+            {items.map((booking) => {
           const option = findById(options, booking.stall_option_id);
           const invoice = invoiceForBooking(booking, invoices, invoiceLineItems);
           const invoiceState = reservationInvoiceState(invoice, currency, locale);
@@ -623,7 +630,9 @@ function StallBookingsTable({
               </div>
             </div>
           );
-        })}
+            })}
+          </details>
+        ))}
         {!bookings.length ? <EmptyState label={uiText(locale, "Aucune réservation pour l'instant.", "No reservations yet.")} /> : null}
       </div>
     </section>
@@ -2779,4 +2788,19 @@ function integerValue(value: string, fallback: number) {
 
 function positiveIntegerValue(value: string, fallback: number) {
   return Math.max(1, integerValue(value, fallback));
+}
+
+// Older batches share the exact transaction timestamp. Never merge by a time window,
+// payer, or horse: distinct submissions must remain distinct reservations.
+function groupReservations(bookings: StallBooking[]) {
+  const groups = new Map<string, StallBooking[]>();
+  for (const booking of bookings) {
+    const key = booking.reservation_id || (booking.created_at
+      ? JSON.stringify([booking.organization_id, booking.show_id, booking.created_by_user_id, booking.booker_contact_id, booking.created_at])
+      : booking.id);
+    const items = groups.get(key) ?? [];
+    items.push(booking);
+    groups.set(key, items);
+  }
+  return groups;
 }
