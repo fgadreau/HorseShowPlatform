@@ -39,6 +39,7 @@ jobs:
       - run: npm run test:reports
       - run: npm run test:warmups
       - run: npm run test:vaccination-review:browser
+      - run: node scripts/health-lists.browser.mjs
       - run: npm run test:reservations:browser
       - run: node scripts/tests/directory-ui/run.mjs
       - run: npm run test:back-numbers:browser
