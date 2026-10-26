@@ -6,7 +6,7 @@ import { chromium } from '@playwright/test';
 
 // Isolate the UI review from accounts, payments, and every external service.
 const fakeClient = `
-export const supabase = { rpc: async(name) => ({data: name === 'billing_navigation_scope' ? {staff:false} : name.startsWith('list_my_billing') ? {items:[],total:0} : [], error:null}), auth:{getSession:async()=>({data:{session:null}})} };
+export const supabase = { rpc: async(name,args) => { (window.mobileRpcCalls ??= []).push({name,args}); return {data: name === 'billing_navigation_scope' ? {staff:false} : name.startsWith('list_my_billing') ? {items:[],total:0} : [], error:null}; }, auth:{getSession:async()=>({data:{session:null}})} };
 export const requireSupabase = () => supabase;`;
 const server = await createServer({ configFile: false, envDir: false, publicDir: 'public',
   plugins: [{ name: 'isolated-mobile-client', enforce: 'pre', load(id) { if (id.endsWith('/src/lib/supabase.ts')) return fakeClient; } }, react()],
@@ -146,6 +146,15 @@ try {
       const readable = await field.evaluate(element => parseFloat(getComputedStyle(element).fontSize) >= 16);
       if (width <= 980) assert(readable, 'Mobile fields must avoid automatic focus zoom');
     }
+    await page.goto(`${base}?locale=${locale}&view=my-profile&unlinked=1`);
+    const directory = page.getByRole('combobox',{name: locale === 'fr' ? 'Répertoire' : 'Directory',exact:true});
+    await directory.waitFor();
+    assert.equal(await directory.inputValue(), 'reining-directory');
+    assert.deepEqual(await page.evaluate(() => window.mobileRpcCalls.filter(call => /directory/.test(call.name))), []);
+    await fits(page, 'Directory confirmation form');
+    await page.getByRole('button',{name: locale === 'fr' ? 'Confirmer mon répertoire' : 'Confirm my directory',exact:true}).click();
+    await page.waitForFunction(() => window.mobileRpcCalls.some(call => call.name === 'join_public_directory'));
+    assert.equal(await page.evaluate(() => window.mobileRpcCalls.find(call => call.name === 'join_public_directory').args.p_directory_id), 'reining-directory');
     assert.deepEqual(errors, [], `${locale} ${width}x${height}: runtime errors`);
     await page.close();
     console.log(`PASS ${locale} ${width}x${height}`);

@@ -17,6 +17,7 @@ const directories = disciplines.map((discipline, index) => ({ id: discipline.id 
 const membershipTypes = [{ id: 'membership', organization_id: 'org', name: 'Carte annuelle', code: 'ANNUAL', is_active: true, season_year: 2099, valid_from: '2099-01-01', valid_until: '2099-12-31', price: 25, currency: 'CAD' }];
 const stallOptions = [{ id: 'stall', organization_id: 'org', show_id: 'show', name: 'Stalle', category: 'stall', price: 100, total_quantity: 50, available_quantity: 50 }];
 const context = new Proxy({ profile, isPlatformAdmin: false, loadedOrganizationId: 'org', organizations: [organization], disciplines, organizationDisciplines: directories, organizationMembershipTypes: membershipTypes, stallOptions, contacts: [contact], directoryContacts: [{ id: 'link', contact_id: 'contact', organization_discipline_id: 'reining-directory' }], contactOrganizationLinks: [{ contact_id: 'contact', organization_id: 'org' }], shows: [{ id: 'show', organization_id: 'org', name: 'Show pilote', status: 'open', start_date: '2099-01-01', end_date: '2099-01-03', default_currency: 'CAD', is_public: true }] }, { get: (target, key) => key in target ? target[key] : [] });
+if (params.has('unlinked')) context.directoryContacts = [];
 window.mobileActions = [];
 function Fixture() {
   const [view, setView] = useState(params.get('view') || 'my-overview');

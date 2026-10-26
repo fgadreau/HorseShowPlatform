@@ -23,12 +23,15 @@ Branche : `fix/preprod-client-mobile`, destinée à `preprod`.
 
 ## Reining initial
 
-Lors du chargement d'une association accessible, un participant sans répertoire
-reçoit automatiquement Reining s'il est actif. Une association privée reste
-inaccessible aux non-membres. Si le nom est incomplet, l'initialisation attend la
-complétion du profil. Tout choix de répertoire déjà enregistré est conservé.
+Reining est présélectionné dans le formulaire initial de répertoire. Le
+participant confirme explicitement le partage de ses fiches avec l'association
+nommée avant l'inscription. Le chargement d'une association ou une connexion
+ne déclenche aucune inscription : l'ordre des associations publiques ne peut
+donc pas provoquer de partage automatique. Tout choix existant est conservé.
 
-La fonction ne crée ni rôle d'organisation ni carte de membre payante. Elle
+La fonction utilitaire d'initialisation n'est pas appelée par le chargement du
+contexte ; le formulaire utilise l'inscription explicite existante. Elle
+ne crée ni rôle d'organisation ni carte de membre payante. Elle
 s'exécute avec les droits et politiques RLS de l'appelant, puis réutilise la
 fonction existante d'inscription à un répertoire. Elle est réservée aux sessions
 authentifiées. Les migrations `20261026130114` et `20261026130312` ont été
