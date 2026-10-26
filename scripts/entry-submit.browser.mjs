@@ -21,7 +21,7 @@ const plugin={name:'entry-submit-fixture',enforce:'pre',transform(code,id){
 import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {EntryForm} from '/src/features/entries/EntryForm.tsx';import {assertEntryProgramLimits} from '/src/services/supabaseServices.ts';import '/src/styles.css';
 const f=${JSON.stringify(fixture)},mode=new URLSearchParams(location.search).get('mode');if(mode==='same-judge')f.classes[1].judge_fee=10;
 window.checks={};window.created=[];window.failedOnce=false;window.calls=[];
-const initial=mode==='existing'?[{id:'existing',horse_id:'horse',class_id:'c1',rider_contact_id:'rider',owner_contact_id:'owner',status:'draft'}]:[];
+const initial=['existing','different-rider'].includes(mode)?[{id:'existing',horse_id:'horse',class_id:'c1',rider_contact_id:mode==='different-rider'?'other-rider':'rider',owner_contact_id:'owner',status:'draft'}]:[];
 window.fixtureEntries=initial;
 window.fixtureClient={from(table){if(table!=='entries')throw Error('Unexpected query '+table);const filters=[];
  const result=()=>{const data=window.fixtureEntries.filter(e=>filters.every(fn=>fn(e)));return {data,count:data.length,error:null};};
@@ -37,7 +37,7 @@ createRoot(document.getElementById('root')).render(React.createElement(Harness))
 const server=await createServer({configFile:false,root:process.cwd(),plugins:[plugin,react()],server:{host:'127.0.0.1',port:5197,strictPort:true}});let browser;
 try{await server.listen();browser=await chromium.launch({executablePath:await bundled.executablePath(),args:bundled.args});const page=await browser.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>console.error(e.message));await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  const classButton=id=>page.locator('.entry-showbill-class').filter({hasText:id==='c1'?'1100 - Open':'1200 - Intermediate Open'});
- async function prepare(mode){await page.goto('http://127.0.0.1:5197/entry-submit-fixture?mode='+mode);await page.getByRole('combobox').nth(1).click();await page.getByRole('option').filter({hasText:'TEST Horse'}).click();await page.getByRole('combobox').nth(2).click();await page.getByRole('option').filter({hasText:'TEST Rider'}).click();await expect(classButton('c2')).toBeEnabled();}
+ async function prepare(mode){await page.goto('http://127.0.0.1:5197/entry-submit-fixture?mode='+mode);await page.getByRole('combobox').nth(1).click();await page.getByRole('option').filter({hasText:'TEST Horse'}).click();await page.getByRole('combobox').nth(2).click();await page.getByRole('option').filter({hasText:'TEST Rider'}).click();if(mode!=='different-rider')await expect(classButton('c2')).toBeEnabled();}
  const submit=()=>page.getByRole('button',{name:/Créer les? brouillons? et la facture/});
  await prepare('success');
  await expect(classButton('c1').locator('.entry-judge-fee')).toContainText('$10.00');
@@ -60,6 +60,9 @@ try{await server.listen();browser=await chromium.launch({executablePath:await bu
  const riderLimit=await page.evaluate(async()=>{window.fixtureEntries=Array.from({length:3},(_,i)=>({id:'other-'+i,horse_id:'other-horse-'+i,class_id:'c2',rider_contact_id:'rider',owner_contact_id:'owner',status:'draft'}));try{await window.checkProgramLimits({class_id:'c2',horse_id:'new-horse',rider_contact_id:'rider',owner_contact_id:'owner'});return null;}catch(e){return e.message;}});
  expect(riderLimit).toContain('trois fois dans une même classe');
  console.log('PASS: the rider limit of three entries in one class remains enforced.');
+ await prepare('different-rider');await expect(classButton('c2')).toBeDisabled();await expect(classButton('c2')).toContainText('Ce cheval a déjà un autre cavalier dans ce bloc.');
+ console.log('PASS: the entry form blocks a second rider for the same horse in another class of the block.');
+
  await prepare('same-judge');await classButton('c1').click();await expect(classButton('c2').locator('s')).toHaveText('$10.00');await expect(classButton('c2')).toContainText('Aucun frais de juge supplémentaire');await classButton('c2').click();await expect(page.locator('.entry-checkout-judge-line')).toHaveCount(1);await expect(page.locator('.entry-checkout-judge-line')).toContainText('$10.00');
  console.log('PASS: judge fees show per class, strike included fees, update when selecting/removing a higher-fee class, and appear once per block in the summary.');
 

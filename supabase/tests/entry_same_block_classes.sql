@@ -79,4 +79,5 @@ do $$ begin
  if (select sum((public.billing_snapshot(f.id)->>'balance')::numeric) from public.billing_folios f)<>70 then raise exception 'SHARED_JUDGE_FEE_INCORRECT';end if;
 end $$;
 select 'PASS: same horse in two classes of one block, owner billed 25 + 30 + one judge fee 15';
+\ir entry_block_rider_assertions.sql
 rollback;
