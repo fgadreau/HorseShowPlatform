@@ -14,6 +14,7 @@ try{
    if(scenario==='picker')await page.locator('.contact-picker-row .ghost-button').click();
    else await page.getByRole('button',{name:locale==='fr'?'Création manuelle':'Manual creation',exact:true}).click();
    await page.getByLabel(locale==='fr'?'Prénom':'First name',{exact:true}).fill('Yannick');await page.getByLabel(locale==='fr'?'Nom':'Last name',{exact:true}).fill('Goulet');
+   await page.getByLabel(locale==='fr'?'Date de naissance':'Date of birth',{exact:true}).fill('1990-01-01');
    await page.getByRole('button',{name:scenario==='picker'?(locale==='fr'?'Créer et sélectionner':'Create and select'):create,exact:true}).click();
   }
   await fill();const review=page.getByRole('region',{name:locale==='fr'?'Doublons possibles':'Possible duplicates'});await expect(review).toBeVisible();await expect(review.locator('.identity-candidate-card')).toHaveCount(3);assert.equal(await page.evaluate(()=>window.creations.length),0);

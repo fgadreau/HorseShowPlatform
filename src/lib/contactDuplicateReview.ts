@@ -9,7 +9,7 @@ export function localContactIdentityCandidates(input: ContactInput, contacts: Co
   return contacts.flatMap(contact => {
     const match = compareContactIdentity(input, contact)
       ?? compareContactIdentity({ ...input, middle_name: null }, { ...contact, middle_name: null });
-    if (!match) return [];
+    if (!match || !match.reasons.some(reason => ["same_name", "similar_name", "same_email", "same_phone"].includes(reason))) return [];
     return [{
       contact_id: contact.id, first_name: contact.first_name, middle_name: contact.middle_name ?? null,
       last_name: contact.last_name, date_of_birth: contact.date_of_birth ?? null,

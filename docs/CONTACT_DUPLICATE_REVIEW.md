@@ -20,6 +20,10 @@ Le choix d’une fiche existante n’ajoute pas un contact.
 
 Cette vérification ne donne aucun accès supplémentaire aux contacts privés et
 ne fusionne ni ne supprime les fiches existantes. Aucun changement de schéma.
+Un membre ne peut donc pas rechercher une personne dans le répertoire privé
+de l’association pour confirmer un homonyme. Si la fiche lui est inaccessible,
+le nom seul ne permet pas de la détecter depuis son compte. Un éventuel parcours
+de demande de rattachement avec approbation reste une fonctionnalité distincte.
 
 Validation : `npm run build`, `npm run test:identity`,
 `npm run test:contact-duplicates:browser`, `npm run test:client:mobile`.
