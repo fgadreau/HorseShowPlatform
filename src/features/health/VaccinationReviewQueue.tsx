@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
+import { ChevronDown, Search } from "lucide-react";
 import { ModalDialog } from "../../components/ui";
-import { errorMessage, formatDate } from "../../lib/display";
+import { contactLabel, errorMessage, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { Contact, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthComplianceOverview, HorseHealthDocument, OrganizationHealthDocumentReview } from "../../types/domain";
 import { getHorseHealthDocumentFileUrl, reviewVaccinationDocument, reviewCogginsDocument } from "../../services/supabaseServices";
 import { HorseReviewSummary } from "./HorseReviewSummary";
-import { healthDocumentTypeLabel, todayDateValue, uiText } from "../dashboard/shared";
+import { healthDocumentTypeLabel, matchesDirectorySearch, normalizeDirectorySearch, todayDateValue, uiText } from "../dashboard/shared";
 
 export function VaccinationReviewQueue({ locale, organizationId, horses, documents, reviews, onReviewed, kind = "vaccination", contacts = [], identifiers = [], issuers = [], compliance = [] }: {
   locale: Locale; organizationId: string; horses: Horse[]; documents: HorseHealthDocument[];
@@ -19,6 +20,8 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
   const [administeredOn, setAdministeredOn] = useState("");
   const [localDates, setLocalDates] = useState<Record<string, string>>({});
   const [showDecisions, setShowDecisions] = useState(false);
+  const [search, setSearch] = useState("");
+  const [visibleCount, setVisibleCount] = useState(4);
   const [fileUrl, setFileUrl] = useState("");
   const [fileError, setFileError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -52,12 +55,23 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
     return compliance.some(result => result.organization_id === organizationId && result.horse_id === document.horse_id
       && result.requirements.coggins.status === "valid" && result.requirements.coggins.document_id === document.id);
   }
+  function documentActivity(document: HorseHealthDocument) {
+    return Math.max(Date.parse(latestReview(document.id)?.reviewed_at ?? "") || 0, Date.parse(document.updated_at || document.created_at) || 0);
+  }
   const vaccinationDocuments = documents.filter(document =>
     (isCoggins ? document.document_type === "coggins_eia" : ["combo_vaccine", "influenza_vaccine", "rhino_vaccine"].includes(document.document_type))
     && horses.some(horse => horse.id === document.horse_id));
-  const visibleDocuments = vaccinationDocuments.filter(document => showDecisions || (!decision(document.id) && !acceptedAutomatically(document)));
+  const normalizedSearch = normalizeDirectorySearch(search);
+  const matchingDocuments = vaccinationDocuments.filter(document => {
+    if (!showDecisions && (decision(document.id) || acceptedAutomatically(document))) return false;
+    const horse = horses.find(horse => horse.id === document.horse_id);
+    const owner = contacts.find(contact => contact.id === horse?.primary_owner_contact_id);
+    return !normalizedSearch || matchesDirectorySearch([horse?.name, horse?.registration_number, owner ? contactLabel(owner) : "", document.certificate_number], normalizedSearch);
+  }).sort((a, b) => documentActivity(b) - documentActivity(a) || a.id.localeCompare(b.id));
+  const visibleDocuments = matchingDocuments.slice(0, visibleCount);
   const pendingCount = vaccinationDocuments.filter(document => !decision(document.id) && !acceptedAutomatically(document)).length;
   const processedCount = vaccinationDocuments.length - pendingCount;
+  const rejectedCount = vaccinationDocuments.filter(document => decision(document.id) === "rejected").length;
   const selectedAcceptedAutomatically = selected ? acceptedAutomatically(selected) : false;
   const selectedHorse = horses.find(horse => horse.id === selected?.horse_id);
   const reasonReady = reason.trim().length >= 10 && reason.length <= 2000;
@@ -91,17 +105,22 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
     finally { setBusy(false); }
   }
 
-  return <section className="panel span-2 health-review-queue">
-    <div className="panel-header"><div>
+  return <details className="panel span-2 health-review-queue">
+    <summary className="health-review-queue-summary"><h2>{isCoggins ? "Coggins" : uiText(locale, "Vaccinations", "Vaccinations")}</h2>
+      <span className={`badge ${pendingCount ? "pending_review" : "approved"}`}>{pendingCount ? uiText(locale, `${pendingCount} document${pendingCount === 1 ? "" : "s"} à approuver`, `${pendingCount} document${pendingCount === 1 ? "" : "s"} awaiting approval`) : vaccinationDocuments.length && !rejectedCount ? uiText(locale, "Tout approuvé", "All approved") : uiText(locale, "Rien à approuver", "Nothing to approve")}</span>
+      <ChevronDown size={18} aria-hidden="true" />
+    </summary>
+    <div className="health-review-queue-content"><div className="panel-header"><div>
       <h2>{isCoggins ? uiText(locale,"Coggins à approuver","Coggins certificates to review") : uiText(locale, "Certificats de vaccination à approuver", "Vaccination certificates to review")}</h2>
       <p>{uiText(locale, "Ouvre le document soumis par le membre, puis approuve-le ou refuse-le.", "Open the document submitted by the member, then approve or reject it.")}</p>
     </div></div>
     {notice ? <div role="status" className={`notice ${notice.error ? "error" : "success"}`}>{notice.text}</div> : null}
     <div className="health-review-toolbar">
       <p className="muted-line">{uiText(locale, `${pendingCount} à traiter · ${processedCount} traité${processedCount === 1 ? "" : "s"}`, `${pendingCount} awaiting review · ${processedCount} processed`)}</p>
-      <label className="health-review-history"><input type="checkbox" checked={showDecisions} onChange={event => setShowDecisions(event.target.checked)} /><span>{uiText(locale, "Afficher aussi les documents traités", "Also show processed documents")}</span></label>
+      <label className="health-review-history"><input type="checkbox" checked={showDecisions} onChange={event => { setShowDecisions(event.target.checked); setVisibleCount(4); }} /><span>{uiText(locale, "Afficher aussi les documents traités", "Also show processed documents")}</span></label>
     </div>
-    {!visibleDocuments.length ? <p className="empty-state">{showDecisions ? uiText(locale, "Aucun document à afficher.", "No documents to display.") : isCoggins ? uiText(locale,"Aucun Coggins en attente.","No Coggins awaiting review.") : uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
+    <label className="directory-search-field"><span>{isCoggins ? uiText(locale, "Rechercher un Coggins", "Search Coggins certificates") : uiText(locale, "Rechercher un certificat de vaccination", "Search vaccination certificates")}</span><div><Search size={16} aria-hidden="true" /><input type="search" placeholder={uiText(locale, "Cheval, propriétaire ou numéro de certificat…", "Horse, owner or certificate number…")} value={search} onChange={event => { setSearch(event.target.value); setVisibleCount(4); }} /></div></label>
+    {!visibleDocuments.length ? <p className="empty-state">{normalizedSearch ? uiText(locale, "Aucun certificat ne correspond à cette recherche.", "No certificates match this search.") : showDecisions ? uiText(locale, "Aucun document à afficher.", "No documents to display.") : isCoggins ? uiText(locale,"Aucun Coggins en attente.","No Coggins awaiting review.") : uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
     <div className="stack">{visibleDocuments.map(document => {
       const horse = horses.find(candidate => candidate.id === document.horse_id);
       const review = latestReview(document.id);
@@ -122,6 +141,7 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
           {!automatic ? <button type="button" className="ghost-button" onClick={() => openReview(document)}>{savedDecision ? uiText(locale, "Modifier la décision", "Change decision") : uiText(locale, "Approuver", "Approve")}</button> : null}</div>
       </article>;
     })}</div>
+    {matchingDocuments.length ? <div className="row-actions"><span className="muted-line">{uiText(locale, `${visibleDocuments.length} sur ${matchingDocuments.length} certificats · les plus récents d’abord`, `${visibleDocuments.length} of ${matchingDocuments.length} certificates · most recent first`)}</span>{matchingDocuments.length > visibleCount ? <button className="ghost-button" type="button" onClick={() => setVisibleCount(count => count + 4)}>{uiText(locale, "Afficher les 4 suivants", "Show next 4")}</button> : null}</div> : null}
     {selected ? <ModalDialog className="vaccination-review-modal" title={selectedAcceptedAutomatically ? uiText(locale, "Consulter le certificat", "View certificate") : uiText(locale, "Vérifier le certificat", "Review certificate")} description={`${selectedHorse?.name ?? ""} · ${healthDocumentTypeLabel(selected.document_type, locale)}`} onClose={() => { if (!busy) setSelected(null); }}>
       <HorseReviewSummary locale={locale} horse={selectedHorse} contacts={contacts} identifiers={identifiers} issuers={issuers} />
       {isCoggins ? <>
@@ -146,5 +166,6 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
         <button className="ghost-button danger-text" type="button" disabled={busy || (isCoggins && !reasonReady)} onClick={() => void decide("rejected")}>{uiText(locale, "Refuser", "Reject")}</button>
       </div> : null}
     </ModalDialog> : null}
-  </section>;
+    </div>
+  </details>;
 }

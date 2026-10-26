@@ -1,12 +1,12 @@
 import { VaccinationReviewQueue } from "./VaccinationReviewQueue";
 import { useState } from "react";
-import { X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import { EmptyState, Metric, ViewIntro } from "../../components/ui";
 import { contactLabel, findById, formatDate, horseLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createOrganizationHealthDocumentReview, createUploadedHorseHealthDocument, updateHorse, verifyGvlCogginsDocument, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { Contact, ContactRole, ExternalCredentialIssuer, Horse, HorseContact, HorseExternalIdentifier, HorseHealthComplianceOverview, HorseHealthDocument, OrganizationHealthDocumentReview, Organization, Show } from "../../types/domain";
-import { uiText, todayDateValue } from "../dashboard/shared";
+import { matchesDirectorySearch, normalizeDirectorySearch, uiText, todayDateValue } from "../dashboard/shared";
 import { HorseEditForm } from "../horses/HorseEditForm";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "./HealthComplianceSummary";
 
@@ -57,6 +57,8 @@ function HealthCenterView({
 }) {
   const [editingHorse, setEditingHorse] = useState<Horse | null>(null);
   const [busyReviewKey, setBusyReviewKey] = useState("");
+  const [horseSearch, setHorseSearch] = useState("");
+  const [visibleCounts, setVisibleCounts] = useState<Record<string, number>>({});
   const today = todayDateValue();
   const upcomingShows = [...shows]
     .filter((show) => show.status !== "archived" && show.end_date >= today)
@@ -73,27 +75,44 @@ function HealthCenterView({
   const currentResults = compliance.results.filter((result) => result.compliance_status === "compliant" || result.compliance_status === "not_required");
   const pendingResults = compliance.results.filter((result) => result.compliance_status === "pending_review");
   const requiredResults = compliance.results.filter((result) => result.compliance_status === "non_compliant");
+  const normalizedSearch = normalizeDirectorySearch(horseSearch);
+  const horseActivity = new Map(horses.map(horse => [horse.id, Date.parse(horse.created_at) || 0]));
+  const documentsById = new Map(horseHealthDocuments.map(document => [document.id, document]));
+  for (const document of horseHealthDocuments) {
+    horseActivity.set(document.horse_id, Math.max(horseActivity.get(document.horse_id) ?? 0, Date.parse(document.updated_at || document.created_at) || 0));
+  }
+  for (const review of documentReviews) {
+    const document = documentsById.get(review.horse_document_id);
+    if (document) horseActivity.set(document.horse_id, Math.max(horseActivity.get(document.horse_id) ?? 0, Date.parse(review.reviewed_at) || 0));
+  }
+  function matchingRecentResults(results: HorseHealthComplianceOverview[]) {
+    return results.filter(result => {
+      const horse = findById(horses, result.horse_id);
+      const owner = findById(contacts, horse?.primary_owner_contact_id);
+      return !normalizedSearch || matchesDirectorySearch([horse?.name, horse?.registration_number, owner ? contactLabel(owner) : ""], normalizedSearch);
+    }).sort((a, b) => (horseActivity.get(b.horse_id) ?? 0) - (horseActivity.get(a.horse_id) ?? 0) || a.horse_id.localeCompare(b.horse_id));
+  }
   const groups = [
     {
       key: "current",
       title: uiText(locale, "À jour", "Up to date"),
       description: uiText(locale, "Toutes les exigences de l'association sont satisfaites.", "All association requirements are satisfied."),
       tone: "success" as const,
-      results: currentResults,
+      results: matchingRecentResults(currentResults),
     },
     {
       key: "pending",
       title: uiText(locale, "En attente", "Pending"),
       description: uiText(locale, "Une identification ou une révision doit être complétée.", "An identification or review still needs completion."),
       tone: "warning" as const,
-      results: pendingResults,
+      results: matchingRecentResults(pendingResults),
     },
     {
       key: "required",
       title: uiText(locale, "Mise à jour requise", "Update required"),
       description: uiText(locale, "Un document est manquant, expiré, différent ou refusé.", "A document is missing, expired, mismatched, or rejected."),
       tone: "error" as const,
-      results: requiredResults,
+      results: matchingRecentResults(requiredResults),
     },
   ];
 
@@ -208,6 +227,11 @@ function HealthCenterView({
           </div>
         </div>
 
+        <label className="directory-search-field">
+          <span>{uiText(locale, "Rechercher un cheval", "Search horses")}</span>
+          <div><Search size={16} aria-hidden="true" /><input type="search" placeholder={uiText(locale, "Cheval, propriétaire ou numéro d’enregistrement…", "Horse, owner or registration number…")} value={horseSearch} onChange={event => { setHorseSearch(event.target.value); setVisibleCounts({}); }} /></div>
+        </label>
+        <p className="muted-line">{uiText(locale, "Les quatre plus récents par groupe sont affichés. La recherche porte sur tous les chevaux.", "The four most recent horses in each group are shown. Search covers all horses.")}</p>
         {compliance.error ? <div className="notice error">{compliance.error}</div> : null}
         {compliance.loading ? <EmptyState label={uiText(locale, "Calcul de la conformité en cours…", "Calculating compliance…")} /> : null}
 
@@ -223,7 +247,7 @@ function HealthCenterView({
                   <strong>{group.results.length}</strong>
                 </header>
                 <div className="health-compliance-rows">
-                  {group.results.map((result) => {
+                  {group.results.slice(0, visibleCounts[group.key] ?? 4).map((result) => {
                     const horse = findById(horses, result.horse_id);
                     const owner = findById(contacts, horse?.primary_owner_contact_id);
                     const reviewableIds = reviewableDocumentIds(result);
@@ -261,8 +285,9 @@ function HealthCenterView({
                       </article>
                     );
                   })}
-                  {!group.results.length ? <EmptyState label={uiText(locale, "Aucun cheval dans ce groupe.", "No horse in this group.")} /> : null}
+                  {!group.results.length ? <EmptyState label={normalizedSearch ? uiText(locale, "Aucun cheval ne correspond à cette recherche dans ce groupe.", "No horses match this search in this group.") : uiText(locale, "Aucun cheval dans ce groupe.", "No horse in this group.")} /> : null}
                 </div>
+                {group.results.length ? <div className="row-actions"><span className="muted-line">{uiText(locale, `${Math.min(visibleCounts[group.key] ?? 4, group.results.length)} sur ${group.results.length} chevaux`, `${Math.min(visibleCounts[group.key] ?? 4, group.results.length)} of ${group.results.length} horses`)}</span>{group.results.length > (visibleCounts[group.key] ?? 4) ? <button className="ghost-button" type="button" onClick={() => setVisibleCounts(current => ({ ...current, [group.key]: (current[group.key] ?? 4) + 4 }))}>{uiText(locale, "Afficher les 4 suivants", "Show next 4")}</button> : null}</div> : null}
               </section>
             ))}
           </div>
