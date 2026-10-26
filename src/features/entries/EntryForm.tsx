@@ -1,4 +1,6 @@
-import { sourceBillingError } from "../finance/presentation";
+import { billingRpc, type Json } from "../../services/billingFolio";
+import { WarmupScheduleSignup } from "../warmups/WarmupScheduleSignup";
+import { warmupError } from "../warmups/errors";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Plus, ShieldCheck } from "lucide-react";
 import { ContactPicker, ModalDialog, SearchSelect } from "../../components/ui";
@@ -95,6 +97,17 @@ function EntryForm({
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
   onCreated?: () => void;
 }) {
+  const [warmupSessions, setWarmupSessions] = useState<Json[]>([]);
+  const [warmupLoadError, setWarmupLoadError] = useState("");
+  const warmupOrgId = organization?.id;
+  useEffect(() => {
+    let live = true;
+    setWarmupSessions([]); setWarmupLoadError("");
+    if (warmupOrgId) void billingRpc("paid_warmup_signup_options", { p_org: warmupOrgId })
+      .then((sessions) => { if (live) setWarmupSessions(sessions); })
+      .catch((error) => { if (live) setWarmupLoadError(warmupError(error)); });
+    return () => { live = false; };
+  }, [warmupOrgId]);
   const [creatingHorse, setCreatingHorse] = useState(false);
   const [createdHorse, setCreatedHorse] = useState<Horse | null>(null);
   const [showId, setShowId] = useState("");
@@ -195,6 +208,11 @@ function EntryForm({
     () => buildShowbillBlocks({ blocks, evaluations: showbillEvaluations, showDayId: effectiveActiveDayId === "unscheduled" ? null : effectiveActiveDayId }),
     [blocks, effectiveActiveDayId, showbillEvaluations],
   );
+  const daySchedule = [
+    ...dayBlocks.map((block) => ({ id: block.block.id, sort: block.block.sort_order, time: block.block.scheduled_time, block, warmup: null as Json | null })),
+    ...warmupSessions.filter((session) => session.show_id === selectedShowId && session.show_day_id === effectiveActiveDayId)
+      .map((warmup) => ({ id: warmup.id as string, sort: Number(warmup.sort_order), time: warmup.schedule_start_time as string | null, block: null, warmup })),
+  ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99") || a.sort - b.sort || a.id.localeCompare(b.id));
   const activeDayNrhaPending = useMemo(
     () => uniqueClassEvaluations(dayBlocks.flatMap((block) => block.evaluations).filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)),
     [dayBlocks],
@@ -408,7 +426,7 @@ function EntryForm({
     } catch (error) {
       setSubmitMessage({
         tone: "error",
-        message: sourceBillingError(error, locale),
+        message: error instanceof Error ? error.message : uiText(locale, "Impossible de créer les inscriptions sélectionnées.", "Unable to create selected entries."),
       });
     } finally {
       setNrhaVerifyBusy(false);
@@ -599,7 +617,12 @@ function EntryForm({
           </div>
           <NrhaBulkSummaryLine locale={locale} summary={nrhaBulkSummary} />
           <div className="entry-showbill-list">
-            {dayBlocks.map((block) => (
+            {warmupLoadError ? <p role="alert">{warmupLoadError}</p> : null}
+            {daySchedule.map(({ block, warmup, id }) => warmup ? (
+              <WarmupScheduleSignup key={id} session={warmup} horseId={selectedHorse?.id ?? ""} locale={locale} onUpdated={async () => {
+                if (warmupOrgId) setWarmupSessions(await billingRpc("paid_warmup_signup_options", { p_org: warmupOrgId }));
+              }} />
+            ) : block ? (
               <section className="entry-showbill-block" key={block.block.id}>
                 <div className="entry-showbill-block-header">
                   <div>
@@ -635,8 +658,8 @@ function EntryForm({
                   })}
                 </div>
               </section>
-            ))}
-            {!dayBlocks.length ? <p className="muted-line">{uiText(locale, "Aucun bloc pour cette journée.", "No blocks for this day.")}</p> : null}
+            ) : null)}
+            {!daySchedule.length ? <p className="muted-line">{uiText(locale, "Aucun bloc pour cette journée.", "No blocks for this day.")}</p> : null}
           </div>
         </section>
 

@@ -1768,6 +1768,11 @@ function StallBookingForm({
                             onChange={(contactId) => setHorsePayerContactIds((current) => ({ ...current, [horse.id]: contactId }))}
                           />
                         </label>
+                        {!findById(contacts, horsePayerContactIds[horse.id] || horse.primary_owner_contact_id)?.linked_user_id ? (
+                          <p className="muted-line">{uiText(locale,
+                            "Ce payeur n’a pas encore de connexion HSP. Le box sera facturé sur sa fiche contact. Il pourra retrouver son compte après inscription avec le même courriel vérifié; l’association peut aussi enregistrer un paiement manuel.",
+                            "This payer does not have an HSP login yet. The stall will be billed to their contact record. They can access their account after registering with the same verified email; the association can also record a manual payment.")}</p>
+                        ) : null}
                       </div>
                       <div className="horse-addons">
                         <label>

@@ -115,7 +115,7 @@ function HorseForm({
   const currentUserContact = createdByUserId ? contacts.find((contact) => contact.linked_user_id === createdByUserId) : null;
   const selectedOwnerId = ownerContactId || currentUserContact?.id || "";
   const selectedOwnerContact = findById(contacts, selectedOwnerId) ?? null;
-  const defaultAgentId = currentUserContact && selectedOwnerId !== currentUserContact.id ? currentUserContact.id : "";
+  const defaultAgentId = currentUserContact && selectedOwnerContact?.linked_user_id !== createdByUserId ? currentUserContact.id : "";
   const selectedAgentId = agentContactId ?? defaultAgentId;
   const externalReferenceFields = useMemo(() => buildHorseExternalIdentifierFields(externalCredentialIssuers), [externalCredentialIssuers]);
   const nrhaExternalCredentialIssuer = externalReferenceFields.find((externalCredentialIssuer) => externalCredentialIssuer.code.toUpperCase() === "NRHA") ?? null;
@@ -435,7 +435,7 @@ function HorseForm({
       const importedName = importedHorse.horseName?.trim() || nrhaImportResult.verification.officialHorseName || nrhaImportResult.searchName;
       const importedFoalDate = normalizeNrhaDate(importedHorse.foalDate ?? nrhaImportResult.verification.officialFoalDate ?? "");
       const importedReferenceNumber = nrhaImportResult.referenceNumber;
-      const importedAgentId = currentUserContact && ownerContactIdForImport !== currentUserContact.id ? currentUserContact.id : "";
+      const importedAgentId = currentUserContact && ownerContact?.linked_user_id !== createdByUserId ? currentUserContact.id : "";
       const officialValues = nrhaOfficialHorseValues(nrhaImportResult.verification, { licenseNumber: integerFromReference(importedReferenceNumber), name: importedName });
       const importedOwnerName = ownerContact ? contactLabel(ownerContact) : [importOwnerFirstName, importOwnerLastName].filter(Boolean).join(" ");
       const importRows = nrhaHorseDataImportRows(officialValues, {
@@ -911,6 +911,7 @@ function HorseForm({
               onSearchIdentityCandidates={onSearchContactIdentityCandidates}
               onUseExistingContact={onUseExistingContact}
             />
+            {defaultAgentId ? <p className="muted-line">{uiText(locale, "Tu seras automatiquement ajouté comme agent de ce cheval pour pouvoir l’inscrire et réserver ses services.", "You will automatically be added as this horse’s agent so you can enter it and reserve services.")}</p> : null}
             <div className="form-grid">
               <label>
                 {uiText(locale, "Race", "Breed")}
