@@ -11,7 +11,7 @@ import { uiText, InlineHealthMessage, ReadinessChecklist, entryNumberValue } fro
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
 import { ClassEligibilityCheck, sameClassEligibilityGate, withClassEligibilityReadiness, type ClassEligibilityGate } from "./NrhaEligibilityCheck";
-import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
+import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
 
 function EntryEditForm({
   locale = "fr",
@@ -217,6 +217,7 @@ function EntryEditForm({
                 label: entryClassLabel(classRecord, locale),
                 detail: [
                   entryClassBlockDetail(classRecord, blocks, locale),
+                  entryClassPatternDetail(classRecord, blocks, locale),
                   effectiveEntryFee == null ? null : `${uiText(locale, "Inscription", "Entry")} ${formatCurrency(effectiveEntryFee, organization?.currency ?? "CAD")}`,
                   classRecord.judge_fee == null ? null : `${uiText(locale, "Juge", "Judge")} ${formatCurrency(classRecord.judge_fee, organization?.currency ?? "CAD")}`,
                 ]
@@ -228,6 +229,7 @@ function EntryEditForm({
             value={classId}
             onChange={setClassId}
           />
+          <span className="muted-line">{entryClassPatternDetail(selectedClass, blocks, locale)}</span>
         </label>
         <InlineHealthMessage value={selectedClass ? entryProgramLimitReadiness.message : null} />
         <div className="form-grid">

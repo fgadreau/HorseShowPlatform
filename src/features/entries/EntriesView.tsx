@@ -8,7 +8,7 @@ import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecor
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";
-import { entryClassBlockDetail, entryClassLabel } from "./entryDisplay";
+import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
 import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function EntriesView({
@@ -177,10 +177,11 @@ function EntriesView({
             <p>{entries.length ? uiText(locale, `${entries.length} inscription${entries.length === 1 ? "" : "s"} créée${entries.length === 1 ? "" : "s"}.`, `${entries.length} entr${entries.length === 1 ? "y" : "ies"} created.`) : uiText(locale, "Les brouillons d'inscription apparaissent ici avant paiement.", "Draft entries appear here before checkout.")}</p>
           </div>
         </div>
-        <div className="table">
+        <div className="table association-entries-table">
           <div className="table-row table-head">
             <span>{uiText(locale, "Cheval", "Horse")}</span>
             <span>{uiText(locale, "Classe", "Class")}</span>
+            <span>{uiText(locale, "Cavalier", "Rider")}</span>
             <span>{uiText(locale, "Propriétaire", "Owner")}</span>
             <span>Action</span>
           </div>
@@ -193,7 +194,9 @@ function EntriesView({
               <div>
                 <span>{entryClassLabel(findById(classes, entry.class_id), locale)}</span>
                 <span className="muted-line">{entryClassBlockDetail(findById(classes, entry.class_id), blocks, locale)}</span>
+                <span className="muted-line">{entryClassPatternDetail(findById(classes, entry.class_id), blocks, locale)}</span>
               </div>
+              <span><span className="entry-rider-mobile-label">{uiText(locale, "Cavalier", "Rider")}: </span>{entry.rider_contact_id ? contactLabel(findById(contacts, entry.rider_contact_id)) : uiText(locale, "À confirmer", "To be confirmed")}</span>
               <span>{contactLabel(findById(contacts, entry.owner_contact_id))}</span>
               <div className="row-actions">
                 <EntryEligibilityStatus assessment={eligibilityAssessments[entry.id]} locale={locale} />

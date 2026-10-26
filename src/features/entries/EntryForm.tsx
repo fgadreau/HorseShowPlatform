@@ -14,7 +14,7 @@ import { uiText, entryNumberValue, InlineHealthMessage, ReadinessChecklist, birt
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "../horses/HorseForm";
 import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
-import { entryClassLabel } from "./entryDisplay";
+import { entryClassLabel, entryPatternLabel } from "./entryDisplay";
 
 type ClassEvaluation = {
   canSelect: boolean;
@@ -641,6 +641,7 @@ function EntryForm({
                 <div className="entry-showbill-block-header">
                   <div>
                     <strong>{block.block.display_label || block.block.name}</strong>
+                    <span className="muted-line">{entryPatternLabel(block.block, locale)}</span>
                     <span>{[classScheduleStartLabel(block.block, locale, blocks), block.block.arena].filter(Boolean).join(" · ")}</span>
                   </div>
                 </div>
