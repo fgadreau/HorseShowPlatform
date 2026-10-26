@@ -594,6 +594,14 @@ function buildEntryProgramLimitReadiness({
     return { canProceed: true, message: null };
   }
 
+  const blockClassIds = new Set(classes.filter((candidate) => candidate.block_id === classRecord.block_id).map((candidate) => candidate.id));
+  const otherRiderInBlock = activeEntries.some((entry) => entry.horse_id === horse.id
+    && blockClassIds.has(entry.class_id)
+    && (entry.rider_contact_id ?? entry.owner_contact_id) !== riderContactId);
+  if (otherRiderInBlock) {
+    return {canProceed: false, message: {tone: "error", message: "Ce cheval a déjà un autre cavalier dans ce bloc. Le même cavalier doit être conservé pour toutes ses classes du bloc."}};
+  }
+
   const riderEntryCount = activeEntries.filter((entry) => entry.class_id === classRecord.id && (entry.rider_contact_id ?? entry.owner_contact_id) === riderContactId).length;
 
   if (riderEntryCount >= 3) {
