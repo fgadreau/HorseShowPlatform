@@ -374,6 +374,7 @@ function EntryForm({
     setBusy(true);
     setSubmitMessage(null);
 
+    let createdCount = 0;
     try {
       if (selectedNrhaFinalChecks.length) {
         setNrhaVerifyBusy(true);
@@ -388,11 +389,18 @@ function EntryForm({
           const message = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
           nextResults[evaluation.classRecord.id] = message;
 
-          if (message.tone === "error") {
+          const finalGate = buildClassEligibilityGateForEntry({
+            block: evaluation.block, classRecord: evaluation.classRecord,
+            contactExternalIdentifiers, externalCredentialIssuers,
+            horse: selectedHorse, horseExternalIdentifiers, locale,
+            nrhaRiderRankings, organization, resultMessage: message,
+            riderContact: selectedRiderContact, show: selectedShow,
+          });
+          if (!finalGate.canProceed) {
             setNrhaResults((current) => ({ ...current, ...nextResults }));
             setSubmitMessage({
               tone: "error",
-              message: uiText(locale, `Validation finale NRHA refusée: ${message.message}`, `Final NRHA validation refused: ${message.message}`),
+              message: uiText(locale, `Validation finale NRHA refusée: ${finalGate.message?.message ?? message.message}`, `Final NRHA validation refused: ${finalGate.message?.message ?? message.message}`),
             });
             return;
           }
@@ -414,6 +422,9 @@ function EntryForm({
           entry_number: entryNumberValue(entryNumber) ?? undefined,
           base_fee: evaluation.fee ?? undefined,
         });
+        createdCount += 1;
+        // A later failure must leave only the unsaved classes selected for retry.
+        setSelectedClassIds((current) => current.filter((id) => id !== evaluation.classRecord.id));
       }
 
       setEntryNumber("");
@@ -426,7 +437,10 @@ function EntryForm({
     } catch (error) {
       setSubmitMessage({
         tone: "error",
-        message: error instanceof Error ? error.message : uiText(locale, "Impossible de créer les inscriptions sélectionnées.", "Unable to create selected entries."),
+        message: [
+          createdCount ? uiText(locale, `${createdCount} inscription${createdCount > 1 ? "s" : ""} créée${createdCount > 1 ? "s" : ""}. Les classes restantes sont conservées pour réessayer.`, `${createdCount} ${createdCount > 1 ? "entries" : "entry"} created. Remaining classes are kept for retry.`) : "",
+          error instanceof Error ? error.message : uiText(locale, "Impossible de créer les inscriptions sélectionnées.", "Unable to create selected entries."),
+        ].filter(Boolean).join(" "),
       });
     } finally {
       setNrhaVerifyBusy(false);
@@ -649,9 +663,9 @@ function EntryForm({
                           <strong>{entryClassLabel(evaluation.classRecord, locale)}</strong>
                           <small>{evaluation.fee == null ? uiText(locale, "Frais à confirmer", "Fee to confirm") : formatCurrency(evaluation.fee, organization?.currency ?? "CAD")}</small>
                         </span>
-                        {evaluation.nrhaResult ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
+                        {evaluation.nrhaResult && !evaluation.message ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
                         {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA de la journée en cours...", "Checking this day's NRHA blocks...")}</small> : null}
-                        {!evaluation.nrhaResult && evaluation.message ? <small className={`entry-class-status ${evaluation.message.tone}`}>{evaluation.message.message}</small> : null}
+                        {evaluation.message ? <small className={`entry-class-status ${evaluation.message.tone}`}>{evaluation.message.message}</small> : null}
                         {!evaluation.nrhaResult && !evaluation.message && evaluation.nrhaMessage && !pendingNrha ? <small className={`entry-class-status ${evaluation.nrhaMessage.tone}`}>{evaluation.nrhaMessage.message}</small> : null}
                       </button>
                     );
@@ -724,14 +738,11 @@ function EntryForm({
             <p className="muted-line">{uiText(locale, "Aucune classe sélectionnée.", "No selected blocks.")}</p>
           )}
           <InlineHealthMessage value={submitMessage} />
-          {selectedBlocked.length ? (
-            <InlineHealthMessage
-              value={{
-                tone: "error",
-                message: uiText(locale, "Une classe sélectionnée n'est plus admissible. Retire-la avant de continuer.", "A selected class is no longer eligible. Remove it before continuing."),
-              }}
+          {selectedBlocked.map((evaluation) => (
+            <InlineHealthMessage key={evaluation.classRecord.id}
+              value={{tone: "error", message: `${entryClassLabel(evaluation.classRecord, locale)} — ${evaluation.message?.message ?? evaluation.nrhaMessage?.message ?? uiText(locale, "Cette classe n’est plus admissible.", "This class is no longer eligible.")}`}}
             />
-          ) : null}
+          ))}
           {selectedNrhaFinalChecks.length ? (
             <InlineHealthMessage
               value={{

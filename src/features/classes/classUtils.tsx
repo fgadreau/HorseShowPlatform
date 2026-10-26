@@ -576,15 +576,14 @@ function buildEntryProgramLimitReadiness({
   }
 
   const activeEntries = entries.filter((entry) => entry.id !== existingEntryId && !inactiveProgramEntryStatuses.has(entry.status));
-  const blockClassIds = new Set(classes.filter((candidate) => candidate.block_id === classRecord.block_id).map((candidate) => candidate.id));
-  const duplicateHorseEntry = activeEntries.find((entry) => entry.horse_id === horse.id && blockClassIds.has(entry.class_id));
+  const duplicateHorseEntry = activeEntries.find((entry) => entry.horse_id === horse.id && entry.class_id === classRecord.id);
 
   if (duplicateHorseEntry) {
     return {
       canProceed: false,
       message: {
         tone: "error",
-        message: "Ce cheval est déjà inscrit dans ce bloc.",
+        message: "Ce cheval est déjà inscrit dans cette classe.",
       },
     };
   }
