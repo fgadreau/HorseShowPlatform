@@ -8,6 +8,7 @@ import type { Locale } from "../../lib/i18n";
 import { assignBackNumber, assignNextBackNumber, claimHorseBackNumber, createBackNumberRange, deleteBackNumber, releaseBackNumber, updateBackNumberStatus } from "../../services/supabaseServices";
 import type { Contact, Horse, HorseContact, Organization, OrganizationBackNumber } from "../../types/domain";
 import { uiText, entryNumberValue, organizationBackNumberMode, backNumberModeNeedsHorse, backNumberModeNeedsRider, backNumberAssignmentMatchesTarget, backNumberAssigneeLabel, backNumberAssignmentMeta, backNumberModeLabel, backNumberStatusLabel, backNumberStatusBadgeClass } from "../dashboard/shared";
+import { matchesDirectorySearch, normalizeDirectorySearch } from "../dashboard/shared";
 
 function BackNumbersView({
   onRefresh,
@@ -43,6 +44,7 @@ function BackNumbersView({
   const [startNumber, setStartNumber] = useState("");
   const [endNumber, setEndNumber] = useState("");
   const [rangeNotes, setRangeNotes] = useState("");
+  const [registerSearch, setRegisterSearch] = useState("");
   const [horseId, setHorseId] = useState("");
   const [riderContactId, setRiderContactId] = useState("");
   const [number, setNumber] = useState("");
@@ -52,6 +54,15 @@ function BackNumbersView({
   const needsHorse = backNumberModeNeedsHorse(assignmentMode);
   const needsRider = backNumberModeNeedsRider(assignmentMode);
   const sortedBackNumbers = [...backNumbers].sort((first, second) => first.number - second.number);
+  const normalizedRegisterSearch = normalizeDirectorySearch(registerSearch);
+  const filteredBackNumbers = normalizedRegisterSearch
+    ? sortedBackNumbers.filter((backNumber) => matchesDirectorySearch([
+        `#${backNumber.number}`,
+        backNumberAssigneeLabel(backNumber, horses, contacts, locale),
+        backNumberStatusLabel(backNumber.status, locale),
+        backNumber.notes,
+      ], normalizedRegisterSearch))
+    : sortedBackNumbers;
   const selectedHorse = findById(horses, horseId) ?? null;
   const selectedHorseId = needsHorse ? selectedHorse?.id ?? null : null;
   const selectedRiderId = needsRider ? riderContactId || null : null;
@@ -290,6 +301,14 @@ function BackNumbersView({
             <p>{backNumbers.length ? uiText(locale, `${backNumbers.length} dossard${backNumbers.length === 1 ? "" : "s"} dans l'association.`, `${backNumbers.length} back number${backNumbers.length === 1 ? "" : "s"} in the association.`) : uiText(locale, "Ajoute une plage pour commencer.", "Add a range to get started.")}</p>
           </div>
         </div>
+        <label className="directory-search-field">
+          <span>{uiText(locale, "Rechercher un dossard", "Search back numbers")}</span>
+          <div>
+            <Search size={16} aria-hidden="true" />
+            <input type="search" placeholder={uiText(locale, "Numéro, cheval, cavalier, statut ou notes...", "Number, horse, rider, status or notes...")} value={registerSearch} onChange={(event) => setRegisterSearch(event.target.value)} />
+          </div>
+        </label>
+        {normalizedRegisterSearch ? <p className="muted-line" role="status">{uiText(locale, `${filteredBackNumbers.length} résultat${filteredBackNumbers.length === 1 ? "" : "s"} sur ${backNumbers.length} dossard${backNumbers.length === 1 ? "" : "s"}.`, `${filteredBackNumbers.length} result${filteredBackNumbers.length === 1 ? "" : "s"} across ${backNumbers.length} back number${backNumbers.length === 1 ? "" : "s"}.`)}</p> : null}
         <div className="table back-number-table">
           <div className="table-row table-head">
             <span>Dossard</span>
@@ -297,7 +316,7 @@ function BackNumbersView({
             <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Action</span>
           </div>
-          {sortedBackNumbers.map((backNumber) => (
+          {filteredBackNumbers.map((backNumber) => (
             <div className="table-row" key={backNumber.id}>
               <div>
                 <strong>#{backNumber.number}</strong>
@@ -333,6 +352,7 @@ function BackNumbersView({
             </div>
           ))}
           {!backNumbers.length ? <EmptyState label={uiText(locale, "Aucun dossard dans l'inventaire.", "No back numbers in inventory.")} /> : null}
+          {backNumbers.length > 0 && !filteredBackNumbers.length ? <EmptyState label={uiText(locale, "Aucun dossard ne correspond à cette recherche.", "No back numbers match this search.")} /> : null}
         </div>
       </section>
     </div>
