@@ -16,6 +16,8 @@ begin
  insert into public.organization_products(id,organization_id,name,category,default_price,tax_applicable) values(product,org,'Report TEST product','merch',100,true);
  insert into public.billing_contexts(id,organization_id,kind,show_id,currency,config,opens_at,created_by)
  values(ctx,org,'event',show_id,'CAD','{"name_fr":"Concours TEST","name_en":"TEST show","timezone":"America/Toronto","account_prefix":"TEST-ACC","receipt_prefix":"TEST-RCPT","invoice_prefix":"TEST-INV","closing_policy":"manual","payment_policy":"received_only","activation_policy":"allocated_received","categories":["merch","stall","other"],"staff_roles":["admin","secretary"]}',now(),staff_profile);
+ insert into public.billing_context_access(context_id,financial_year,year_basis) values(ctx,2026,'show_start')
+ on conflict(context_id) do update set financial_year=2026,year_basis='show_start';
  insert into public.billing_customer_accounts(id,organization_id,payer_contact_id) values(customer,org,payer);
  insert into public.billing_folios(id,organization_id,billing_context_id,payer_customer_account_id,currency,public_number,created_by) values(folio,org,ctx,customer,'CAD','TEST-'||folio,staff_profile);
  insert into public.billing_charges(organization_id,folio_id,currency,source_type,source_id,product_id,category,description,quantity,unit_price,subtotal,tax_amount,beneficiary_contact_id,actor_id,authorization_snapshot)
@@ -33,6 +35,8 @@ begin
  select count(*) into before_charges from public.billing_charges where folio_id=folio;
  perform set_config('request.jwt.claim.sub',stranger_user::text,true);perform set_config('request.jwt.claims',json_build_object('sub',stranger_user,'role','authenticated')::text,true);
  set local role authenticated;
+ page:=public.list_billing_contexts(org,'event',2026,100,0);
+ if (page->>'total')::integer<>0 then raise exception 'Stranger can list financial contexts';end if;
  blocked:=false;begin perform public.get_billing_context_report(ctx,org);exception when insufficient_privilege then blocked:=true;end;
  if not blocked then raise exception 'Stranger read report';end if;
  blocked:=false;begin perform public.record_billing_context_expense(ctx,request,'{"category":"judges","description":"TEST expense","amount":20,"incurred_on":"2026-10-26"}');exception when insufficient_privilege then blocked:=true;end;
@@ -40,6 +44,14 @@ begin
  reset role;
  perform set_config('request.jwt.claim.sub',staff_user::text,true);perform set_config('request.jwt.claims',json_build_object('sub',staff_user,'role','authenticated')::text,true);
  set local role authenticated;
+ page:=public.list_billing_contexts(org,'event',2026,100,0);
+ if (page->>'total')::integer<>1 or (page#>>'{items,0,accounts}')::integer<>1
+   or (page#>>'{items,0,total}')::numeric<>110.25 or (page#>>'{items,0,paid}')::numeric<>60
+   or (page#>>'{items,0,balance}')::numeric<>50.25 then raise exception 'Context summary must net credits, include both suppliers and count payments once';end if;
+ page:=public.list_billing_contexts(org,'event',2026,1,1);
+ if (page->>'total')::integer<>1 or jsonb_array_length(page->'items')<>0 then raise exception 'Context pagination must retain full count';end if;
+ page:=public.list_billing_contexts(org,'non_event',2026,100,0);
+ if (page->>'total')::integer<>0 then raise exception 'Non-event filter must exclude shows';end if;
  report:=public.get_billing_context_report(ctx,org);
  if (report#>>'{totals,revenue}')::numeric<>100 or (report#>>'{totals,association_tax}')::numeric<>5 or (report#>>'{totals,hsp_subtotal}')::numeric<>5 then raise exception 'Revenue must exclude HSP/tax and net cancelled charges';end if;
  if not exists(select 1 from jsonb_array_elements(report->'revenue_categories') row where row->>'category'='entry' and (row->>'subtotal')::numeric=100) then raise exception 'Frozen entry presentation must classify entry revenue';end if;

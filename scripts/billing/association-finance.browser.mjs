@@ -44,5 +44,10 @@ try{
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);assert.deepEqual(errors,[]);
  }
  await page.goto('http://127.0.0.1:5197/associations/demo/finance?tab=accounts');await page.locator('.finance-dashboard-table').waitFor();await page.evaluate(()=>{window.failAccounts=true});await page.getByRole('button',{name:'Actualiser',exact:true}).click();await page.getByRole('alert').waitFor();await page.evaluate(()=>{window.failAccounts=false});await page.getByRole('button',{name:'Réessayer',exact:true}).click();await page.locator('.finance-dashboard-table').waitFor();assert.deepEqual(errors,[]);
- console.log('PASS association finance FR/EN portrait/landscape/desktop: overview, 105 show scopes, paginated/searchable accounts, existing account navigation, report totals, CSV/print, no expense controls or expense RPC calls, and error recovery; external traffic blocked.');
+ await page.goto('http://127.0.0.1:5197/associations/demo/finance');await page.locator('.finance-kpi').first().waitFor();
+ await page.evaluate(()=>{const rpc=window.fakeSupabase.rpc;window.fakeSupabase.rpc=async(name,args)=>name==='list_billing_contexts'?{data:null,error:{message:'canceling statement due to statement timeout'}}:rpc(name,args);});
+ await page.getByRole('button',{name:'Actualiser',exact:true}).click();await page.getByRole('alert').waitFor();
+ assert((await page.getByRole('alert').innerText()).includes('Impossible de charger'));
+ assert.equal(await page.getByRole('heading',{name:'Prêt pour tes premières opérations',exact:true}).count(),0);
+ console.log('PASS association finance FR/EN portrait/landscape/desktop: overview, 105 show scopes, paginated/searchable accounts, existing account navigation, report totals, CSV/print, no expense controls or expense RPC calls, and read errors without false empty summary; external traffic blocked.');
 }finally{await browser?.close();await server.close();}
