@@ -16,6 +16,7 @@ import { HorseForm } from "../horses/HorseForm";
 import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
 import { entryClassLabel, entryPatternLabel } from "./entryDisplay";
 import { EntryBackNumberField, type EntryBackNumberSelection } from "../backNumbers/EntryBackNumberField";
+import { useHouseClassBlocks } from "./useHouseClassBlocks";
 
 type ClassEvaluation = {
   canSelect: boolean;
@@ -126,11 +127,11 @@ function EntryForm({
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [nrhaResults, setNrhaResults] = useState<Record<string, NrhaEligibilityMessage>>({});
   const [nrhaVerifyBusy, setNrhaVerifyBusy] = useState(false);
+  const [nrhaRetry, setNrhaRetry] = useState(0);
   const [nrhaBulkSummary, setNrhaBulkSummary] = useState<NrhaBulkSummary | null>(null);
   const [preauthAccepted, setPreauthAccepted] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<InlineHealthMessage | null>(null);
   const [busy, setBusy] = useState(false);
-  const nrhaDayLastAttemptSignature = useRef("");
 
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShow = findById(shows, selectedShowId) ?? null;
@@ -154,6 +155,8 @@ function EntryForm({
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
   const selectedPayerContact = findById(contacts, selectedPayerId) ?? null;
   const teamIsDefined = Boolean(selectedShow && selectedHorse && selectedRiderContact && selectedPayerContact);
+  const hasHouseClasses = classes.some(item => item.show_id === selectedShowId && item.class_template_id && !item.governing_body_assignments.length);
+  const houseBlocks = useHouseClassBlocks(organization?.id, selectedShowId, horseId, riderContactId, teamIsDefined && hasHouseClasses);
   const selectedHorseAgeOnJan1 = horseAgeOnJan1ForShow(selectedHorse, selectedShow);
   const selectedRiderAgeOnJan1 = riderAgeOnJan1ForShow(selectedRiderContact, selectedShow);
   const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
@@ -206,9 +209,11 @@ function EntryForm({
           organization,
           riderContact: selectedRiderContact,
           selectedShow,
+          houseClassBlocked: houseBlocks.blocked.has(classRecord.id),
+          houseClassChecking: Boolean(classRecord.class_template_id && !classRecord.governing_body_assignments.length && (houseBlocks.loading || houseBlocks.error)),
         }),
       ),
-    [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow],
+    [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow, houseBlocks.loading, houseBlocks.error, houseBlocks.blocked],
   );
   const evaluationByClassId = useMemo(() => new Map(showbillEvaluations.map((evaluation) => [evaluation.classRecord.id, evaluation])), [showbillEvaluations]);
   const dayBlocks = useMemo(
@@ -220,11 +225,18 @@ function EntryForm({
     ...warmupSessions.filter((session) => session.show_id === selectedShowId && session.show_day_id === effectiveActiveDayId)
       .map((warmup) => ({ id: warmup.id as string, sort: Number(warmup.sort_order), time: warmup.schedule_start_time as string | null, block: null, warmup })),
   ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99") || a.sort - b.sort || a.id.localeCompare(b.id));
-  const activeDayNrhaPending = useMemo(
-    () => uniqueClassEvaluations(dayBlocks.flatMap((block) => block.evaluations).filter((evaluation) => evaluation.nrhaRequiresVerification && evaluation.nrhaRequest)),
-    [dayBlocks],
+  // The signature excludes results and the visible day: publishing results or
+  // navigating the schedule must not restart an in-flight verification queue.
+  const nrhaQueue = showbillEvaluations.filter(evaluation =>
+    evaluation.classRecord.show_id === selectedShowId && evaluation.nrhaRequest,
   );
-  const activeDayNrhaSignature = activeDayNrhaPending.map((evaluation) => `${evaluation.classRecord.id}:${evaluation.nrhaKey}`).join("|");
+  const nrhaQueueSignature = JSON.stringify(nrhaQueue.map(evaluation => [evaluation.classRecord.id, evaluation.nrhaKey, evaluation.nrhaRequest]));
+  const nrhaQueueRef = useRef(nrhaQueue);
+  nrhaQueueRef.current = nrhaQueue;
+  const nrhaVisibleDayRef = useRef(effectiveActiveDayId);
+  nrhaVisibleDayRef.current = effectiveActiveDayId;
+  const nrhaVerifierRef = useRef(onVerifyNrhaEligibility);
+  nrhaVerifierRef.current = onVerifyNrhaEligibility;
   const selectedEvaluations = selectedClassIds.map((classId) => evaluationByClassId.get(classId)).filter((evaluation): evaluation is ClassEvaluation => Boolean(evaluation));
   const selectedTotal = selectedEvaluations.reduce((total, evaluation) => total + (evaluation.fee ?? 0), 0);
   const selectedNrhaFinalChecks = selectedEvaluations.filter((evaluation) => evaluation.nrhaRequest);
@@ -259,76 +271,40 @@ function EntryForm({
       : uiText(locale, "Commence par choisir le cheval, le cavalier et le payeur.", "Start by choosing the horse, rider and payer.");
 
   useEffect(() => {
-    if (!teamIsDefined || !activeDayNrhaSignature || nrhaDayLastAttemptSignature.current === activeDayNrhaSignature) {
-      return;
-    }
-
+    if (!teamIsDefined || !nrhaQueueSignature) { setNrhaVerifyBusy(false); return; }
     let cancelled = false;
-    const pendingEvaluations = activeDayNrhaPending;
-    nrhaDayLastAttemptSignature.current = activeDayNrhaSignature;
+    const visibleDay = nrhaVisibleDayRef.current;
+    const pending = nrhaQueueRef.current.filter(evaluation => evaluation.nrhaResult?.key !== evaluation.nrhaKey);
+    // Finish the visible day, then continue through the remaining days in schedule order.
+    const days = [visibleDay, ...selectedShowDays.map(day => day.id).filter(id => id !== visibleDay), null];
+    pending.sort((a, b) => days.indexOf(a.block?.show_day_id ?? null) - days.indexOf(b.block?.show_day_id ?? null) || (a.block && b.block ? compareScheduleClasses(a.block, b.block) : 0) || compareClassEvaluations(a, b));
+    if (!pending.length) { setNrhaVerifyBusy(false); return; }
     setNrhaVerifyBusy(true);
-    setNrhaBulkSummary({
-      blocked: 0,
-      eligible: 0,
-      requested: pendingEvaluations.length,
-      status: "checking",
-    });
-
-    async function verifyActiveDay() {
-      try {
-        const nextResults: Record<string, NrhaEligibilityMessage> = {};
-
-        for (const evaluation of pendingEvaluations) {
-          if (cancelled || !evaluation.nrhaRequest) {
-            continue;
-          }
-
-          const verification = await onVerifyNrhaEligibility(evaluation.nrhaRequest);
-
-          if (cancelled) {
-            return;
-          }
-
-          nextResults[evaluation.classRecord.id] = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
+    setNrhaBulkSummary({ blocked: 0, eligible: 0, requested: pending.length, status: "checking" });
+    void (async () => {
+      let eligible = 0, blocked = 0, failures = 0;
+      for (const evaluation of pending) {
+        if (cancelled) return;
+        try {
+          const verification = await nrhaVerifierRef.current(evaluation.nrhaRequest!);
+          if (cancelled) return;
+          const message = formatNrhaEligibilityMessage(verification, evaluation.nrhaKey, locale);
+          if (message.tone === "error") blocked++; else if (message.tone === "success") eligible++;
+          setNrhaResults(current => ({ ...current, [evaluation.classRecord.id]: message }));
+        } catch {
+          if (cancelled) return;
+          failures++;
         }
-
-        if (cancelled) {
-          return;
-        }
-
-        const resultMessages = Object.values(nextResults);
-        setNrhaResults((current) => ({ ...current, ...nextResults }));
-        setNrhaBulkSummary({
-          blocked: resultMessages.filter((message) => message.tone === "error").length,
-          eligible: resultMessages.filter((message) => message.tone === "success").length,
-          requested: pendingEvaluations.length,
-          status: "complete",
-        });
-      } catch (error) {
-        if (cancelled) {
-          return;
-        }
-
-        setNrhaBulkSummary({
-          blocked: 0,
-          eligible: 0,
-          message: error instanceof Error ? error.message : uiText(locale, "Validation NRHA de la journée impossible.", "Unable to check this day's NRHA blocks."),
-          requested: pendingEvaluations.length,
-          status: "error",
-        });
-      } finally {
-        if (!cancelled) {
-          setNrhaVerifyBusy(false);
-        }
+        setNrhaBulkSummary({ blocked, eligible, requested: pending.length, status: "checking" });
       }
-    }
-
-    void verifyActiveDay();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeDayNrhaPending, activeDayNrhaSignature, locale, onVerifyNrhaEligibility, teamIsDefined]);
+      if (!cancelled) {
+        setNrhaVerifyBusy(false);
+        setNrhaBulkSummary({ blocked, eligible, requested: pending.length, status: failures ? "error" : "complete",
+          message: failures ? uiText(locale, "Certaines vérifications ont échoué. Réessaie pour ces classes.", "Some checks failed. Retry these classes.") : undefined });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [nrhaQueueSignature, locale, teamIsDefined, nrhaRetry]);
 
   function handleShowChange(nextShowId: string) {
     setShowId(nextShowId);
@@ -336,7 +312,6 @@ function EntryForm({
     setSelectedClassIds([]);
     setNrhaResults({});
     setNrhaBulkSummary(null);
-    nrhaDayLastAttemptSignature.current = "";
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
@@ -346,15 +321,12 @@ function EntryForm({
     setSelectedClassIds([]);
     setNrhaResults({});
     setNrhaBulkSummary(null);
-    nrhaDayLastAttemptSignature.current = "";
     setPreauthAccepted(false);
     setSubmitMessage(null);
   }
 
   function handleDayChange(nextDayId: string) {
     setActiveDayId(nextDayId);
-    setNrhaBulkSummary(null);
-    nrhaDayLastAttemptSignature.current = "";
     setSubmitMessage(null);
   }
 
@@ -647,6 +619,8 @@ function EntryForm({
             </button>
           </div>
           <NrhaBulkSummaryLine locale={locale} summary={nrhaBulkSummary} />
+          {houseBlocks.error ? <div role="alert"><p>{houseBlocks.error}</p><button className="ghost-button" type="button" onClick={houseBlocks.retry}>{uiText(locale, "Réessayer la vérification maison", "Retry house class checks")}</button></div> : null}
+          {nrhaBulkSummary?.status === "error" ? <button className="ghost-button" type="button" onClick={() => setNrhaRetry(value => value + 1)}>{uiText(locale, "Réessayer les vérifications", "Retry checks")}</button> : null}
           <div className="entry-showbill-list">
             {warmupLoadError ? <p role="alert">{warmupLoadError}</p> : null}
             {daySchedule.map(({ block, warmup, id }) => warmup ? (
@@ -824,6 +798,8 @@ function EntryForm({
 }
 
 function evaluateClass({
+  houseClassBlocked = false,
+  houseClassChecking = false,
   blocks,
   contactExternalIdentifiers,
   classRecord,
@@ -840,6 +816,8 @@ function evaluateClass({
   riderContact,
   selectedShow,
 }: {
+  houseClassBlocked?: boolean;
+  houseClassChecking?: boolean;
   blocks: Block[];
   contactExternalIdentifiers: ContactExternalIdentifier[];
   classRecord: ClassRecord;
@@ -889,16 +867,22 @@ function evaluateClass({
       ? deadlineReadiness.message
       : !programLimitReadiness.canProceed
         ? programLimitReadiness.message
+        : houseClassBlocked
+          ? { tone: "error" as const, message: uiText(locale, "Le cavalier ou le cheval est inéligible à cette classe maison selon la liste de l’association.", "The rider or horse is ineligible for this house class according to the association’s list.") }
+          : houseClassChecking
+            ? { tone: "info" as const, message: uiText(locale, "Vérification de la liste d’inéligibilité de l’association…", "Checking the association’s ineligibility list…") }
         : nrhaGate.message && !nrhaGate.canProceed && nrhaGate.message.tone === "error"
           ? nrhaGate.message
           : null;
-  const nrhaRequiresVerification = Boolean(nrhaGate.applies && nrhaGate.request && !nrhaResult);
+  const currentNrhaResult = nrhaResult?.key === nrhaGate.key ? nrhaResult : null;
+  const nrhaRequiresVerification = Boolean(nrhaGate.applies && nrhaGate.request && !currentNrhaResult);
   const canSelect = Boolean(
     horse &&
       riderContact &&
       entryReadinessCanProceed &&
       deadlineReadiness.canProceed &&
       programLimitReadiness.canProceed &&
+      !houseClassBlocked && !houseClassChecking &&
       (!nrhaGate.applies || Boolean(nrhaGate.request)) &&
       (!nrhaGate.applies || nrhaGate.canProceed),
   );
@@ -914,7 +898,7 @@ function evaluateClass({
     nrhaPending: nrhaRequiresVerification,
     nrhaRequest: nrhaGate.request ?? null,
     nrhaRequiresVerification,
-    nrhaResult,
+    nrhaResult: currentNrhaResult,
     show: selectedShow,
   };
 }
@@ -1010,10 +994,10 @@ function NrhaBulkSummaryLine({ locale, summary }: { locale: Locale; summary: Nrh
 
   const statusLabel =
     summary.status === "checking"
-      ? uiText(locale, "Validation NRHA de la journée", "Checking this day's NRHA blocks")
+      ? uiText(locale, "Validation NRHA des journées", "Checking NRHA across show days")
       : summary.status === "error"
         ? uiText(locale, "Validation NRHA incomplète", "NRHA validation incomplete")
-        : uiText(locale, "Validation NRHA de la journée prête", "This day's NRHA validation is ready");
+        : uiText(locale, "Validation NRHA des journées prête", "NRHA checks across show days are ready");
   const resultLabel =
     summary.status === "complete"
       ? uiText(

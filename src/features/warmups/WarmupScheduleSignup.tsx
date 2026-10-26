@@ -19,7 +19,7 @@ export function WarmupScheduleSignup({ session, horseId, locale, onUpdated }: {
     <p>{fr ? "En cas de surnombre, les places sont tirées au sort. Seules les places validées sont facturées." : "Oversubscribed sessions use a lottery. Only validated spots are billed."}</p>
     {request ? <p role="status">{states[request.status]}{request.billed ? (fr ? " · Facturé" : " · Billed") : (fr ? " · Non facturé" : " · Not billed")}</p> : null}
     {!horseId ? <p>{fr ? "Choisis un cheval pour demander une place." : "Choose a horse to request a spot."}</p> : null}
-    <button type="button" disabled={busy || !horseId || Boolean(request) || session.state !== "open"} onClick={async () => {
+    <button className="primary-button" type="button" disabled={busy || !horseId || Boolean(request) || session.state !== "open"} onClick={async () => {
       setBusy(true); setError("");
       try { await billingRpc("paid_warmup_request", { p_warmup: session.id, p_horse: horseId, p_cancel: false }); await onUpdated(); }
       catch (e) { setError(warmupError(e)); }

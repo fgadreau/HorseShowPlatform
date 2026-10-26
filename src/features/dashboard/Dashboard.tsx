@@ -81,7 +81,6 @@ import {
   linkContactToDirectory,
   linkHorseToDirectory,
   releaseBackNumber,
-  replaceNrhaRiderRankings,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
   setOrganizationExternalCredentialRequirement,
@@ -239,7 +238,6 @@ export function Dashboard({
   onShowScorePaidWarmupSaveError,
   onDeleteShowScorePaidWarmup,
   onRefresh,
-  onReplaceNrhaRiderRankings,
   onReviewOrganizationHealthDocuments,
   onSavePayoutCalculationDraft,
   onSignOut,
@@ -323,7 +321,6 @@ export function Dashboard({
   onShowScorePaidWarmupSaveError: (error: unknown) => void;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
   onRefresh: () => void;
-  onReplaceNrhaRiderRankings: (input: Parameters<typeof replaceNrhaRiderRankings>[0]) => Promise<void>;
   onReviewOrganizationHealthDocuments: (inputs: Parameters<typeof createOrganizationHealthDocumentReview>[0][]) => Promise<void>;
   onSavePayoutCalculationDraft: (input: Parameters<typeof savePayoutCalculationDraft>[0]) => Promise<void>;
   onSignOut: () => void;
@@ -1385,7 +1382,6 @@ export function Dashboard({
         {!showRouteUnavailable && effectiveView === "platform-admin" && isPlatformAdmin ? (
           <PlatformAdminView
             currentUserProfileId={context?.profile.id ?? null}
-            nrhaRiderRankings={nrhaRiderRankings}
             organizations={organizations}
             disciplines={disciplines}
             disciplineCredentialIssuers={context?.disciplineCredentialIssuers ?? []}
@@ -1393,7 +1389,6 @@ export function Dashboard({
             externalCredentialIssuers={externalCredentialIssuers}
             externalCredentialProducts={context?.externalCredentialProducts ?? []}
             governingBodies={sanctioningBodies}
-            onImportNrhaRiderRankings={onReplaceNrhaRiderRankings}
             onRefresh={onRefresh}
           />
         ) : null}
