@@ -1430,6 +1430,7 @@ export type StallOption = {
 
 export type StallBooking = {
   id: string;
+  reservation_id?: string | null;
   organization_id: string;
   show_id: string;
   stall_option_id: string;
