@@ -18,9 +18,7 @@ sélection. Les comptes et leurs opérations existantes restent accessibles.
 Dans **Rapports**, choisir le concours ou l’activité. Le rapport présente :
 
 - les revenus de l’association hors taxes, nets des annulations et crédits ;
-- les dépenses saisies hors taxes et les frais de traitement connus attribués
-  à l’association ;
-- le résultat provisoire : revenus moins ces dépenses et frais connus ;
+- les frais de traitement connus attribués à l’association ;
 - les revenus par catégorie, les paiements reçus par moyen et l’état des comptes ;
 - les taxes, encaissements, soldes et frais HSP présentés séparément.
 
@@ -30,19 +28,20 @@ revenu de l’association. La part association des frais de traitement suit le
 même prorata et l’arrondi au cent que les documents existants. Les frais
 inconnus sont signalés ; ils ne sont pas estimés.
 
-Le registre de dépenses est un suivi de gestion simple. Il ne crée aucun
-paiement, facture fournisseur, retour de taxe ou charge au compte d’un client.
-Il faut notamment saisir les bourses et autres coûts du concours à inclure dans
-le bilan ; les bourses calculées ne sont pas déduites automatiquement. Une
-annulation exige un motif et conserve la dépense ainsi que son audit.
+Cette première version se limite aux revenus, paiements et soldes. Aucune
+saisie de dépenses ni calcul de résultat net n’est proposé dans l’interface
+ou dans les exports. Les encaissements comprennent les taxes et ne représentent
+pas un bénéfice net.
 
-La saisie d’une dépense est idempotente et utilise la reprise durable des
-opérations existantes. Une réponse réseau perdue se résout avec la même demande,
-sans ajouter une seconde dépense.
+La migration additive déjà publiée conserve son registre et son audit de
+dépenses : aucune donnée ni migration historique n’est supprimée. L’interface
+n’expose plus ces opérations et n’utilise pas leurs montants dans les rapports.
+La reprise générique reste disponible pour une opération lancée avant cette
+simplification.
 
 Le rapport peut être imprimé ou exporté en CSV UTF-8 à séparateur point-virgule.
 Les cellules textuelles susceptibles d’être interprétées comme des formules de
-tableur sont neutralisées. L’export exclut les dépenses annulées du résultat.
+tableur sont neutralisées.
 Ce rapport de gestion reste provisoire ; il ne remplace pas les factures ou la
 comptabilité. Les anciennes factures en archives ne sont pas ajoutées aux
 rapports des comptes actuels.
@@ -55,7 +54,8 @@ dépenses ne peuvent pas être modifiées directement depuis un client. Aucun
 réglage de frais HSP n’est réintroduit dans les finances de l’association.
 
 Validation : build ; `scripts/billing/association-finance.browser.mjs` en FR/EN
-sur téléphone portrait, paysage et ordinateur ; export et reprise de dépense ;
+sur téléphone portrait, paysage et ordinateur ; export et absence de commandes
+de dépenses ;
 `scripts/billing/finance-browser.mjs` pour les parcours financiers existants ;
 `scripts/billing/finance-report.test.mjs` pour le CSV ;
 `supabase/tests/association_finance_reports.sql` pour les calculs et autorisations
