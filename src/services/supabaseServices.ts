@@ -5114,32 +5114,11 @@ async function assertEntryProgramLimits(input: {
 
   const client = requireSupabase();
   const inactiveStatusFilter = `(${inactiveEntryStatuses.join(",")})`;
-  const { data: classRecord, error: classError } = await client
-    .from("classes")
-    .select("id, block_id")
-    .eq("id", input.class_id)
-    .single<Pick<ClassRecord, "id" | "block_id">>();
-
-  if (classError) {
-    throw classError;
-  }
-
-  const { data: blockClasses, error: blockClassesError } = await client
-    .from("classes")
-    .select("id")
-    .eq("block_id", classRecord.block_id)
-    .returns<Array<Pick<ClassRecord, "id">>>();
-
-  if (blockClassesError) {
-    throw blockClassesError;
-  }
-
-  const blockClassIds = (blockClasses ?? []).map((blockClass) => blockClass.id);
   let horseEntryQuery = client
     .from("entries")
     .select("id", { count: "exact", head: true })
     .eq("horse_id", input.horse_id)
-    .in("class_id", blockClassIds)
+    .eq("class_id", input.class_id)
     .not("status", "in", inactiveStatusFilter);
 
   if (input.entry_id) {
@@ -5153,7 +5132,7 @@ async function assertEntryProgramLimits(input: {
   }
 
   if ((horseEntryCount ?? 0) > 0) {
-    throw new Error("Un même cheval ne peut être inscrit qu'une fois par bloc.");
+    throw new Error("Ce cheval est déjà inscrit dans cette classe.");
   }
 
   const riderContactId = input.rider_contact_id ?? input.owner_contact_id;
