@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:contact-duplicates:browser": "node scripts/contact-duplicates.browser.mjs",
     "test:schedule:browser": "node scripts/schedule-eligibility.browser.mjs",
     "test:back-numbers:browser": "node scripts/back-number-workflow.browser.mjs",
     "test:client:mobile": "node scripts/mobile-client.browser.mjs",

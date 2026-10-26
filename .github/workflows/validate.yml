@@ -43,6 +43,7 @@ jobs:
       - run: node scripts/tests/directory-ui/run.mjs
       - run: npm run test:back-numbers:browser
       - run: npm run test:schedule:browser
+      - run: npm run test:contact-duplicates:browser
       - run: npm run test:horses:browser
       - run: npm run test:coggins
       - run: npm run test:identity

@@ -48,7 +48,7 @@ function CandidateShell({
   onCreateDistinct: () => void;
 }) {
   return (
-    <div className="identity-candidate-review">
+    <div className="identity-candidate-review" role="region" aria-label={uiText(locale, "Doublons possibles", "Possible duplicates")}>
       <div className="inline-form-header">
         <strong>
           <AlertTriangle size={18} />
