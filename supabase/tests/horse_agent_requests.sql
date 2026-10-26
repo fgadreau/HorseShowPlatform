@@ -10,6 +10,7 @@ declare
   agent_user uuid:=gen_random_uuid();agent_profile uuid;other_user uuid:=gen_random_uuid();other_profile uuid;
   request1 uuid;request2 uuid;request3 uuid;new_horse public.horses;created2 public.horses;agent_contact uuid;
   owner_request uuid;nrha_number text:='99'||floor(random()*100000000000000)::bigint::text;
+  private_owner uuid:=gen_random_uuid();private_request uuid;private_horse public.horses;outcome jsonb;
   e1 uuid; e2 uuid;rec public.organization_back_numbers;blocked boolean;options jsonb;
 begin
   if has_function_privilege('anon','public.entry_back_number_options(uuid,uuid,uuid[])','EXECUTE')
@@ -45,9 +46,13 @@ begin
     (other_user,other_user||'@example.test','{"first_name":"Other","last_name":"Pilot"}');
   select id into agent_profile from public.user_profiles where user_id=agent_user;
   select id into other_profile from public.user_profiles where user_id=other_user;
+  insert into public.contacts(id,type,first_name,last_name,linked_user_id,created_by_user_id,email)
+    values(private_owner,'owner','Other','Pilot',other_profile,other_profile,other_user||'@example.test');
   insert into public.contacts(type,first_name,last_name,linked_user_id,created_by_user_id) values('agent','Staff','Reviewer',staff_profile,staff_profile);
   insert into public.contact_external_identifiers(contact_id,external_credential_issuer_id,identifier_value,status)
     values(contact,(select id from public.external_credential_issuers where code='NRHA' limit 1),nrha_number,'active');
+  insert into public.contact_external_identifiers(contact_id,external_credential_issuer_id,identifier_value,status)
+    values(private_owner,(select id from public.external_credential_issuers where code='NRHA' limit 1),nrha_number||'7','active');
   perform set_config('request.jwt.claim.sub',agent_user::text,true);
   perform set_config('request.jwt.claims',json_build_object('sub',agent_user,'role','authenticated')::text,true);
   set local role authenticated;
@@ -107,9 +112,42 @@ begin
   if public.can_access_horse(h3) then raise exception 'Cancellation must not grant access';end if;
   request3:=public.request_horse_agent_access(org,h3,'Reject');
   if (select count(*) from public.find_horse_owner_by_nrha(org,nrha_number))<>1 then raise exception 'Exact NRHA lookup returns the existing owner';end if;
-  new_horse:=public.create_horse_for_nrha_owner(org,dir,nrha_number,jsonb_build_object('name','NRHA owner new horse '||token,'registration_number','TEST-'||token,'gender','G','birth_year',2020));
+  outcome:=public.create_horse_for_nrha_owner(org,dir,nrha_number,jsonb_build_object('name','NRHA owner new horse '||token,'registration_number','TEST-'||token,'gender','G','birth_year',2020));
+  if outcome->>'status'<>'created' then raise exception 'An already delegated owner may be reused directly';end if;
+  new_horse:=jsonb_populate_record(null::public.horses,outcome->'horse');
   if new_horse.primary_owner_contact_id<>contact then raise exception 'New horse must belong to designated NRHA owner';end if;
+  blocked:=false;begin update public.horses set created_by_user_id=owner_profile where id=new_horse.id;exception when insufficient_privilege then blocked:=true;end;
+  if not blocked then raise exception 'Creator cannot rewrite horse audit identity';end if;
+  -- Even after directory removal, a published horse cannot become creator-owned.
+  reset role;
+  delete from public.directory_horses where horse_id=new_horse.id;
+  set local role authenticated;
+  blocked:=false;begin update public.horses set primary_owner_contact_id=agent_contact where id=new_horse.id;exception when insufficient_privilege then blocked:=true;end;
+  if not blocked then raise exception 'Unlinking a published horse must not restore creator ownership authority';end if;
   if not exists(select 1 from public.horse_contacts where horse_id=new_horse.id and contact_id=agent_contact and role='agent' and can_book_stalls and not can_pay_invoices) then raise exception 'Creator must automatically become agent';end if;
+  if exists(select 1 from public.contacts where id=private_owner) then raise exception 'Unrelated owner must start private';end if;
+  if not (select requires_confirmation from public.find_horse_owner_by_nrha(org,nrha_number||'7')) then raise exception 'Private NRHA owner must require confirmation';end if;
+  outcome:=public.create_horse_for_nrha_owner(org,dir,nrha_number||'7',jsonb_build_object('name','Private owner proposed horse '||token));
+  if outcome->>'status'<>'pending_owner_confirmation' then raise exception 'A supplied NRHA number must not grant private-owner access by itself';end if;
+  private_request:=(outcome->>'request_id')::uuid;
+  if exists(select 1 from public.contacts where id=private_owner) then raise exception 'NRHA proposal must not expose private owner data';end if;
+  blocked:=false;begin perform public.decide_horse_owner_confirmation(private_request,'approve',private_owner);exception when insufficient_privilege then blocked:=true;end;
+  if not blocked then raise exception 'Requester cannot approve private NRHA-owner creation';end if;
+  reset role;
+  if exists(select 1 from public.horses where name='Private owner proposed horse '||token) then raise exception 'Private owner proposal must not create a horse before consent';end if;
+  perform set_config('request.jwt.claim.sub',other_user::text,true);
+  perform set_config('request.jwt.claims',json_build_object('sub',other_user,'role','authenticated')::text,true);
+  set local role authenticated;
+  if not exists(select 1 from jsonb_array_elements(public.list_horse_owner_confirmations(org)) r where r->>'id'=private_request::text and (r->>'can_review')::boolean) then raise exception 'Identified owner must see the consent request';end if;
+  perform public.decide_horse_owner_confirmation(private_request,'approve');
+  reset role;
+  select * into private_horse from public.horses where name='Private owner proposed horse '||token;
+  if private_horse.primary_owner_contact_id<>private_owner then raise exception 'Consent must preserve the identified owner';end if;
+  if exists(select 1 from public.horse_contacts hc join public.contacts c on c.id=hc.contact_id where hc.horse_id=private_horse.id and hc.role='agent' and c.linked_user_id=other_profile) then raise exception 'The approving owner must not become the requester agent';end if;
+  perform set_config('request.jwt.claim.sub',agent_user::text,true);
+  perform set_config('request.jwt.claims',json_build_object('sub',agent_user,'role','authenticated')::text,true);
+  set local role authenticated;
+  if not public.can_access_horse(private_horse.id) then raise exception 'Original requester gets agency after owner consent';end if;
   owner_request:=public.request_horse_owner_confirmation(org,dir,'Pilot','Participant',jsonb_build_object('name','Name owner new horse '||token,'gender','F'));
   if public.request_horse_owner_confirmation(org,dir,'Pilot','Participant',jsonb_build_object('name','Name owner new horse '||token,'gender','F'))<>owner_request then raise exception 'Name confirmation request must be idempotent';end if;
   blocked:=false;begin perform public.decide_horse_owner_confirmation(owner_request,'approve',contact);exception when insufficient_privilege then blocked:=true;end;
@@ -120,6 +158,9 @@ begin
   perform set_config('request.jwt.claims',json_build_object('sub',staff_user,'role','authenticated')::text,true);
   set local role authenticated;
   perform public.decide_horse_agent_request(request3,'reject');
+  blocked:=false;begin insert into public.horse_contacts(horse_id,contact_id,role)
+    select h1,id,'co-owner' from public.contacts where linked_user_id=staff_profile limit 1;exception when insufficient_privilege then blocked:=true;end;
+  if not blocked then raise exception 'Association staff cannot appoint itself co-owner';end if;
   perform public.decide_horse_owner_confirmation(owner_request,'approve',contact);
   perform public.decide_horse_owner_confirmation(owner_request,'approve',contact);
   reset role;

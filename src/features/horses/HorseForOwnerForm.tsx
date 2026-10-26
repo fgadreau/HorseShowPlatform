@@ -10,7 +10,7 @@ export function HorseForOwnerForm({ orgId, directories, disciplines, locale, onS
 }) {
   const [mode, setMode] = useState<"nrha" | "name">("nrha");
   const [number, setNumber] = useState("");
-  const [owner, setOwner] = useState<{ first_name: string; last_name: string } | null>(null);
+  const [owner, setOwner] = useState<{ first_name: string; last_name: string; requires_confirmation: boolean } | null>(null);
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
   const [name, setName] = useState("");
@@ -52,6 +52,7 @@ export function HorseForOwnerForm({ orgId, directories, disciplines, locale, onS
       <label>{uiText(locale, "Numéro NRHA du propriétaire", "Owner NRHA number")}<input required inputMode="numeric" pattern="[0-9]{1,20}" maxLength={20} value={number} onChange={event => { setNumber(event.target.value); setOwner(null); setLookupNotice(""); }} /></label>
       <div className="row-actions"><button className="ghost-button" type="button" disabled={busy || !/^[0-9]{1,20}$/.test(number.trim())} onClick={() => void lookup()}>{uiText(locale, "Rechercher le propriétaire", "Find owner")}</button></div>
       {owner ? <p role="status">{uiText(locale, "Propriétaire trouvé : ", "Owner found: ")}<strong>{owner.first_name} {owner.last_name}</strong></p> : null}
+      {owner?.requires_confirmation ? <p className="input-help">{uiText(locale, "Cette fiche est privée. Le propriétaire identifié ou le secrétariat devra approuver la création avant qu’un cheval ou un accès d’agent soit ajouté.", "This record is private. The identified owner or office must approve creation before a horse or agent access is added.")}</p> : null}
       {lookupNotice ? <p role="status">{lookupNotice}</p> : null}
     </div> : <div className="form-grid">
       <label>{uiText(locale, "Prénom du propriétaire", "Owner first name")}<input required maxLength={100} value={firstName} onChange={event => setFirstName(event.target.value)} /></label>
@@ -64,6 +65,6 @@ export function HorseForOwnerForm({ orgId, directories, disciplines, locale, onS
     <div className="form-grid"><label>{uiText(locale, "Sexe", "Sex")}<select value={gender} onChange={event => setGender(event.target.value)}><option value="">{uiText(locale, "À préciser", "Unspecified")}</option><option value="M">{uiText(locale, "Étalon", "Stallion")}</option><option value="F">{uiText(locale, "Jument", "Mare")}</option><option value="G">{uiText(locale, "Hongre", "Gelding")}</option></select></label>
       <label>{uiText(locale, "Année de naissance (facultative)", "Birth year (optional)")}<input type="number" min="1900" max={new Date().getFullYear() + 1} value={year} onChange={event => setYear(event.target.value)} /></label></div>
     {error ? <p role="alert">{error}</p> : null}
-    <div className="row-actions"><button className="primary-button" type="submit" disabled={busy || !directoryId || (mode === "nrha" && !owner)}>{mode === "nrha" ? uiText(locale, "Créer le cheval pour ce propriétaire", "Create horse for this owner") : uiText(locale, "Demander la confirmation du propriétaire", "Request owner confirmation")}</button></div>
+    <div className="row-actions"><button className="primary-button" type="submit" disabled={busy || !directoryId || (mode === "nrha" && !owner)}>{mode === "nrha" ? owner?.requires_confirmation ? uiText(locale, "Demander l’accord du propriétaire", "Request owner approval") : uiText(locale, "Créer le cheval pour ce propriétaire", "Create horse for this owner") : uiText(locale, "Demander la confirmation du propriétaire", "Request owner confirmation")}</button></div>
   </form>;
 }

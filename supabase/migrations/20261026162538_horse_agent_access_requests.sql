@@ -3,6 +3,16 @@ begin;
 -- must not accidentally become the horse's agent themselves.
 drop trigger if exists horses_assign_creator_agent on public.horses;
 revoke all on function public.assign_horse_creator_agent() from public,anon,authenticated,service_role;
+-- Publication is permanent history, not inferred from directory links an agent
+-- might later remove. Existing horses are established records, not fresh drafts.
+create table public.horse_ownership_publications (
+  horse_id uuid primary key references public.horses(id) on delete cascade,
+  published_at timestamptz not null default now()
+);
+insert into public.horse_ownership_publications(horse_id) select id from public.horses;
+alter table public.horse_ownership_publications enable row level security;
+revoke all on public.horse_ownership_publications from public,anon,authenticated,service_role;
+create policy "Publication history is internal only" on public.horse_ownership_publications for select to authenticated using(false);
 create function public.can_request_horse_access_in_org(p_org uuid) returns boolean
 language sql stable security definer set search_path='' as $$
   select auth.uid() is not null and (public.is_platform_admin() or public.is_org_member(p_org)
@@ -64,6 +74,7 @@ create function public.new_horse_agent_directory() returns trigger
 language plpgsql security definer set search_path='' as $$
 declare organization uuid;
 begin
+  insert into public.horse_ownership_publications(horse_id) values(new.horse_id) on conflict(horse_id) do nothing;
   select organization_id into organization from public.organization_disciplines where id=new.organization_discipline_id;
   insert into public.directory_contacts(organization_discipline_id,contact_id,source,created_by_user_id)
     select new.organization_discipline_id,hc.contact_id,'relationship',h.created_by_user_id from public.horses h
@@ -208,12 +219,16 @@ grant execute on function public.can_review_horse_agent_request(uuid,uuid),publi
 create function public.can_assign_horse_owner(p_horse uuid) returns boolean
 language sql stable security definer set search_path='' as $$
   select public.is_platform_admin() or exists(select 1 from public.horses h where h.id=p_horse and (
-    (h.created_by_user_id=public.current_profile_id() and not exists(select 1 from public.directory_horses where horse_id=h.id))
+    (h.created_by_user_id=public.current_profile_id() and not exists(select 1 from public.horse_ownership_publications where horse_id=h.id))
     or exists(select 1 from public.contacts c where c.id=h.primary_owner_contact_id and c.linked_user_id=public.current_profile_id())))
     or exists(select 1 from public.horse_contacts hc join public.contacts c on c.id=hc.contact_id
-      where hc.horse_id=p_horse and hc.role in ('owner','co-owner') and c.linked_user_id=public.current_profile_id())
-    or exists(select 1 from public.directory_horses dh join public.organization_disciplines od on od.id=dh.organization_discipline_id
-      where dh.horse_id=p_horse and public.is_org_member(od.organization_id,array['admin','secretary']));
+      where hc.horse_id=p_horse and hc.role in ('owner','co-owner') and c.linked_user_id=public.current_profile_id());
+$$;
+create function public.can_approve_horse_links(p_horse uuid) returns boolean
+language sql stable security definer set search_path='' as $$
+  select public.can_assign_horse_owner(p_horse) or exists(select 1 from public.directory_horses dh
+    join public.organization_disciplines od on od.id=dh.organization_discipline_id
+    where dh.horse_id=p_horse and public.is_org_member(od.organization_id,array['admin','secretary']));
 $$;
 create function public.horse_ownership_guard() returns trigger
 language plpgsql security definer set search_path='' as $$
@@ -221,14 +236,16 @@ declare target uuid; previous public.horse_contacts;
 begin
   if auth.uid() is null then if tg_op='DELETE' then return old;else return new;end if;end if;
   if tg_table_name='horses' then
+    if tg_op='UPDATE' and new.created_by_user_id is distinct from old.created_by_user_id and not public.is_platform_admin() then raise exception 'Le créateur initial du cheval ne peut pas être modifié.' using errcode='42501';end if;
     if tg_op='UPDATE' and new.primary_owner_contact_id is not distinct from old.primary_owner_contact_id then return new;end if;
     target:=old.id;
+    if not public.can_assign_horse_owner(target) then raise exception 'La propriété ou la suppression du cheval exige son propriétaire ou la plateforme.' using errcode='42501';end if;
   elsif tg_op='INSERT' then
     target:=new.horse_id;
     select * into previous from public.horse_contacts where horse_id=new.horse_id and contact_id=new.contact_id and role=new.role;
     if previous.id is not null and (new.can_create_entries,new.can_modify_entries,new.can_book_stalls,new.can_pay_invoices)
       is not distinct from (previous.can_create_entries,previous.can_modify_entries,previous.can_book_stalls,previous.can_pay_invoices) then return new;end if;
-    if new.role='owner' and exists(select 1 from public.horses h where h.id=target and h.created_by_user_id=public.current_profile_id()
+    if new.role='owner' and exists(select 1 from public.horses h where h.id=target and (h.created_by_user_id=public.current_profile_id() or public.can_approve_horse_links(h.id))
       and h.primary_owner_contact_id=new.contact_id and not exists(select 1 from public.horse_contacts hc where hc.horse_id=h.id and hc.role in ('owner','co-owner'))) then return new;end if;
   elsif tg_op='UPDATE' then
     target:=old.horse_id;
@@ -243,20 +260,25 @@ begin
     target:=old.horse_id;
     if old.role not in ('owner','co-owner') and exists(select 1 from public.contacts where id=old.contact_id and linked_user_id=public.current_profile_id()) then return old;end if;
   end if;
-  if not public.can_assign_horse_owner(target) then raise exception 'La propriété et les nouveaux accès du cheval doivent être approuvés par son propriétaire ou le secrétariat.' using errcode='42501';end if;
+  if tg_table_name='horse_contacts' then
+    if (tg_op<>'DELETE' and new.role in ('owner','co-owner')) or (tg_op<>'INSERT' and old.role in ('owner','co-owner')) then
+      if not public.can_assign_horse_owner(target) then raise exception 'Seul un propriétaire autorisé peut changer les liens de propriété.' using errcode='42501';end if;
+    elsif not public.can_approve_horse_links(target) then raise exception 'Les nouveaux accès doivent être approuvés par le propriétaire ou le secrétariat.' using errcode='42501';end if;
+  end if;
   if tg_op='DELETE' then return old;else return new;end if;
 end $$;
-create trigger horse_ownership_guard before update of primary_owner_contact_id or delete on public.horses for each row execute function public.horse_ownership_guard();
+create trigger horse_ownership_guard before update of primary_owner_contact_id,created_by_user_id or delete on public.horses for each row execute function public.horse_ownership_guard();
 create trigger horse_contact_ownership_guard before insert or update or delete on public.horse_contacts for each row execute function public.horse_ownership_guard();
-revoke all on function public.can_assign_horse_owner(uuid),public.horse_ownership_guard() from public,anon,authenticated,service_role;
+revoke all on function public.can_assign_horse_owner(uuid),public.can_approve_horse_links(uuid),public.horse_ownership_guard() from public,anon,authenticated,service_role;
 
 create function public.find_horse_owner_by_nrha(p_org uuid,p_number text)
-returns table(contact_id uuid,first_name text,last_name text)
+returns table(contact_id uuid,first_name text,last_name text,requires_confirmation boolean)
 language plpgsql stable security definer set search_path='' as $$
 begin
   if not public.can_request_horse_access_in_org(p_org) then raise exception 'Cette association n’est pas accessible depuis ton compte.' using errcode='42501';end if;
   if p_number is null or btrim(p_number) !~ '^[0-9]{1,20}$' or not exists(select 1 from public.organization_disciplines where organization_id=p_org and is_active) then return;end if;
-  return query select distinct c.id,c.first_name::text,c.last_name::text from public.contacts c
+  return query select distinct c.id,c.first_name::text,c.last_name::text,
+    not (public.can_access_contact(c.id) or public.can_read_managed_horse_owner(c.id,p_org)) from public.contacts c
     join public.contact_external_identifiers x on x.contact_id=c.id
     join public.external_credential_issuers i on i.id=x.external_credential_issuer_id and upper(i.code)='NRHA'
     where public.identity_search_key(x.identifier_value)=public.identity_search_key(p_number) order by c.id limit 3;
@@ -301,20 +323,27 @@ begin
   return result;
 end $$;
 
-create function public.create_horse_for_nrha_owner(p_org uuid,p_directory uuid,p_number text,p_details jsonb) returns public.horses
+create function public.create_horse_for_nrha_owner(p_org uuid,p_directory uuid,p_number text,p_details jsonb) returns jsonb
 language plpgsql security definer set search_path='' as $$
-declare owner uuid; matches integer;
+declare owner uuid; matches integer; first_name text; last_name text; horse public.horses; request_id uuid;
 begin
   if auth.uid() is null or public.current_profile_id() is null then raise exception 'Connecte-toi pour créer un cheval.' using errcode='42501';end if;
-  select count(*),min(c.contact_id::text)::uuid into matches,owner from public.find_horse_owner_by_nrha(p_org,p_number) c;
+  select count(*),min(c.contact_id::text)::uuid,min(c.first_name),min(c.last_name) into matches,owner,first_name,last_name
+    from public.find_horse_owner_by_nrha(p_org,p_number) c;
   if matches<>1 then raise exception 'Le numéro NRHA ne permet pas de choisir une fiche unique. Demande la confirmation du secrétariat avec le nom du propriétaire.';end if;
-  return public.create_horse_agent_record(p_org,p_directory,owner,public.current_profile_id(),p_details);
+  if not (public.can_access_contact(owner) or public.can_read_managed_horse_owner(owner,p_org)) then
+    request_id:=public.request_horse_owner_confirmation(p_org,p_directory,first_name,last_name,p_details,p_number);
+    return jsonb_build_object('status','pending_owner_confirmation','request_id',request_id);
+  end if;
+  horse:=public.create_horse_agent_record(p_org,p_directory,owner,public.current_profile_id(),p_details);
+  return jsonb_build_object('status','created','horse',to_jsonb(horse));
 end $$;
 
 create table public.horse_owner_creation_requests (
   id uuid primary key default gen_random_uuid(),organization_id uuid not null references public.organizations(id),
   organization_discipline_id uuid not null references public.organization_disciplines(id),
   requested_by uuid not null references public.user_profiles(id),owner_first_name text not null,owner_last_name text not null,
+  proposed_owner_contact_id uuid references public.contacts(id),owner_nrha_number text,
   details jsonb not null,status text not null default 'pending' check(status in ('pending','approved','rejected','cancelled')),
   created_horse_id uuid references public.horses(id) on delete set null,created_at timestamptz not null default now(),
   decided_at timestamptz,decided_by uuid references public.user_profiles(id)
@@ -324,25 +353,31 @@ create index horse_owner_request_author on public.horse_owner_creation_requests(
 alter table public.horse_owner_creation_requests enable row level security;
 revoke all on public.horse_owner_creation_requests from public,anon,authenticated;
 grant select on public.horse_owner_creation_requests to authenticated;
-create policy "Requester and staff read owner confirmation requests" on public.horse_owner_creation_requests for select to authenticated
-  using (requested_by=public.current_profile_id() or public.is_platform_admin() or public.is_org_member(organization_id,array['admin','secretary']));
+create policy "Requester owner and staff read owner confirmation requests" on public.horse_owner_creation_requests for select to authenticated
+  using (requested_by=public.current_profile_id() or public.is_platform_admin() or public.is_org_member(organization_id,array['admin','secretary'])
+    or exists(select 1 from public.contacts c where c.id=proposed_owner_contact_id and c.linked_user_id=public.current_profile_id()));
 
-create function public.request_horse_owner_confirmation(p_org uuid,p_directory uuid,p_first_name text,p_last_name text,p_details jsonb) returns uuid
+create function public.request_horse_owner_confirmation(p_org uuid,p_directory uuid,p_first_name text,p_last_name text,p_details jsonb,p_number text default null) returns uuid
 language plpgsql security definer set search_path='' as $$
-declare result uuid; actor uuid:=public.current_profile_id(); request_details jsonb;
+declare result uuid; actor uuid:=public.current_profile_id(); request_details jsonb; proposed_owner uuid; matches integer;
 begin
   if auth.uid() is null or actor is null then raise exception 'Connecte-toi pour demander la confirmation du propriétaire.' using errcode='42501';end if;
   if not public.can_request_horse_access_in_org(p_org) then raise exception 'Cette association n’est pas accessible depuis ton compte.' using errcode='42501';end if;
   if nullif(btrim(p_first_name),'') is null or nullif(btrim(p_last_name),'') is null or length(p_first_name)>100 or length(p_last_name)>100
     or nullif(btrim(p_details->>'name'),'') is null or length(p_details->>'name')>200 or pg_column_size(p_details)>8192 then raise exception 'Le nom du propriétaire et du cheval sont requis.';end if;
   if not exists(select 1 from public.organization_disciplines where id=p_directory and organization_id=p_org and is_active) then raise exception 'Répertoire invalide.' using errcode='42501';end if;
+  if p_number is not null then
+    select count(*),min(c.contact_id::text)::uuid,min(c.first_name),min(c.last_name) into matches,proposed_owner,p_first_name,p_last_name
+      from public.find_horse_owner_by_nrha(p_org,p_number) c;
+    if matches<>1 then raise exception 'Le numéro NRHA doit identifier une seule fiche pour demander sa confirmation.';end if;
+  end if;
   perform public.my_horse_agent_contact();
   request_details:=jsonb_build_object('name',btrim(p_details->>'name'),'registration_number',p_details->>'registration_number','gender',p_details->>'gender','birth_year',p_details->>'birth_year');
   perform pg_advisory_xact_lock(hashtextextended('horse-owner-request:'||actor||':'||p_org,0));
   select id into result from public.horse_owner_creation_requests where requested_by=actor and organization_id=p_org and organization_discipline_id=p_directory
-    and owner_first_name=btrim(p_first_name) and owner_last_name=btrim(p_last_name) and status='pending' and horse_owner_creation_requests.details=request_details limit 1;
-  if result is null then insert into public.horse_owner_creation_requests(organization_id,organization_discipline_id,requested_by,owner_first_name,owner_last_name,details)
-    values(p_org,p_directory,actor,btrim(p_first_name),btrim(p_last_name),request_details) returning id into result;end if;
+    and owner_first_name=btrim(p_first_name) and owner_last_name=btrim(p_last_name) and proposed_owner_contact_id is not distinct from proposed_owner and status='pending' and horse_owner_creation_requests.details=request_details limit 1;
+  if result is null then insert into public.horse_owner_creation_requests(organization_id,organization_discipline_id,requested_by,owner_first_name,owner_last_name,proposed_owner_contact_id,owner_nrha_number,details)
+    values(p_org,p_directory,actor,btrim(p_first_name),btrim(p_last_name),proposed_owner,p_number,request_details) returning id into result;end if;
   return result;
 end $$;
 
@@ -351,11 +386,13 @@ language plpgsql stable security definer set search_path='' as $$
 begin
   if auth.uid() is null then raise exception 'Connecte-toi pour consulter les demandes.' using errcode='42501';end if;
   return coalesce((select jsonb_agg(to_jsonb(r)) from (
-    select x.id,x.owner_first_name,x.owner_last_name,x.details,x.status,x.created_horse_id,x.created_at,
+    select x.id,x.owner_first_name,x.owner_last_name,x.proposed_owner_contact_id,x.details,x.status,x.created_horse_id,x.created_at,
       concat_ws(' ',p.first_name,p.last_name) as requester_name,x.requested_by=public.current_profile_id() as is_mine,
-      public.is_platform_admin() or public.is_org_member(p_org,array['admin','secretary']) as can_review
+      public.is_platform_admin() or public.is_org_member(p_org,array['admin','secretary'])
+        or exists(select 1 from public.contacts c where c.id=x.proposed_owner_contact_id and c.linked_user_id=public.current_profile_id()) as can_review
     from public.horse_owner_creation_requests x join public.user_profiles p on p.id=x.requested_by where x.organization_id=p_org
-      and (x.requested_by=public.current_profile_id() or public.is_platform_admin() or public.is_org_member(p_org,array['admin','secretary']))
+      and (x.requested_by=public.current_profile_id() or public.is_platform_admin() or public.is_org_member(p_org,array['admin','secretary'])
+        or exists(select 1 from public.contacts c where c.id=x.proposed_owner_contact_id and c.linked_user_id=public.current_profile_id()))
     order by (x.status='pending') desc,x.created_at desc limit 100) r),'[]'::jsonb);
 end $$;
 
@@ -370,13 +407,18 @@ begin
     if r.requested_by<>actor then raise exception 'Tu ne peux pas annuler cette demande.' using errcode='42501';end if;
     result:='cancelled';
   elsif p_action in ('approve','reject') then
-    if not (public.is_platform_admin() or public.is_org_member(r.organization_id,array['admin','secretary'])) then raise exception 'La confirmation du nom appartient au secrétariat.' using errcode='42501';end if;
+    if not (public.is_platform_admin() or public.is_org_member(r.organization_id,array['admin','secretary'])
+      or exists(select 1 from public.contacts c where c.id=r.proposed_owner_contact_id and c.linked_user_id=actor)) then raise exception 'Le propriétaire identifié ou le secrétariat doit confirmer cette création.' using errcode='42501';end if;
     result:=case when p_action='approve' then 'approved' else 'rejected' end;
   else raise exception 'Action invalide.';end if;
   if r.status=result then return result;end if;
   if r.status<>'pending' then raise exception 'Cette demande a déjà été traitée.';end if;
   if result='approved' then
-    if p_owner is null or not public.can_access_contact(p_owner) then raise exception 'Choisis la fiche du propriétaire confirmée.' using errcode='42501';end if;
+    if r.proposed_owner_contact_id is not null then
+      if p_owner is not null and p_owner<>r.proposed_owner_contact_id then raise exception 'La confirmation doit concerner le propriétaire identifié par le numéro NRHA.';end if;
+      p_owner:=r.proposed_owner_contact_id;
+      if not exists(select 1 from public.find_horse_owner_by_nrha(r.organization_id,r.owner_nrha_number) c where c.contact_id=p_owner) then raise exception 'La fiche NRHA a changé. Demande une nouvelle confirmation.';end if;
+    elsif p_owner is null or not public.can_access_contact(p_owner) then raise exception 'Choisis la fiche du propriétaire confirmée.' using errcode='42501';end if;
     horse:=public.create_horse_agent_record(r.organization_id,r.organization_discipline_id,p_owner,r.requested_by,r.details);
   end if;
   update public.horse_owner_creation_requests set status=result,created_horse_id=horse.id,decided_at=now(),decided_by=actor where id=r.id;
@@ -384,10 +426,10 @@ begin
 end $$;
 
 revoke all on function public.find_horse_owner_by_nrha(uuid,text),public.create_horse_agent_record(uuid,uuid,uuid,uuid,jsonb),
-  public.create_horse_for_nrha_owner(uuid,uuid,text,jsonb),public.request_horse_owner_confirmation(uuid,uuid,text,text,jsonb),
+  public.create_horse_for_nrha_owner(uuid,uuid,text,jsonb),public.request_horse_owner_confirmation(uuid,uuid,text,text,jsonb,text),
   public.list_horse_owner_confirmations(uuid),public.decide_horse_owner_confirmation(uuid,text,uuid) from public,anon,authenticated,service_role;
 grant execute on function public.find_horse_owner_by_nrha(uuid,text),public.create_horse_for_nrha_owner(uuid,uuid,text,jsonb),
-  public.request_horse_owner_confirmation(uuid,uuid,text,text,jsonb),public.list_horse_owner_confirmations(uuid),public.decide_horse_owner_confirmation(uuid,text,uuid) to authenticated;
+  public.request_horse_owner_confirmation(uuid,uuid,text,text,jsonb,text),public.list_horse_owner_confirmations(uuid),public.decide_horse_owner_confirmation(uuid,text,uuid) to authenticated;
 -- Preserve approved agents' existing right to enter their managed horse for its owner.
 create or replace function public.entry_back_number_workflow() returns trigger
 language plpgsql security definer set search_path=public as $$
