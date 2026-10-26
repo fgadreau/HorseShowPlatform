@@ -1,3 +1,4 @@
+import { GroupedEntryList } from "./GroupedEntryList";
 import { MyWarmupRequests } from "../warmups/MyWarmupRequests";
 import { useState } from "react";
 import { Plus } from "lucide-react";
@@ -182,14 +183,16 @@ function MyEntriesView({
             <p>{uiText(locale, "Inscriptions liées à mes chevaux ou contacts.", "Entries linked to my horses or contacts.")}</p>
           </div>
         </div>
-        <div className="table">
-          <div className="table-row table-head">
+        <GroupedEntryList entries={entries} horses={horses} contacts={contacts} classes={classes} blocks={blocks} locale={locale}
+          tableClassName=""
+          emptyLabel={uiText(locale, "Aucune inscription liée à ton profil pour l'instant.", "No entries linked to your profile yet.")}
+          header={<>
             <span>{uiText(locale, "Cheval", "Horse")}</span>
             <span>{uiText(locale, "Classe", "Class")}</span>
             <span>{uiText(locale, "Statut", "Status")}</span>
             <span>Action</span>
-          </div>
-          {entries.map((entry) => (
+          </>}
+          renderEntry={(entry) => (
             <div className="table-row" key={entry.id}>
               <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
               <div>
@@ -213,9 +216,8 @@ function MyEntriesView({
                 </button>
               </div>
             </div>
-          ))}
-          {!entries.length ? <EmptyState label={uiText(locale, "Aucune inscription liée à ton profil pour l'instant.", "No entries linked to your profile yet.")} /> : null}
-        </div>
+          )}
+        />
       </section>
     </div>
   );

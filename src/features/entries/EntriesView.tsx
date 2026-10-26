@@ -1,3 +1,4 @@
+import { GroupedEntryList } from "./GroupedEntryList";
 import { useState } from "react";
 import { Plus } from "lucide-react";
 import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
@@ -177,15 +178,17 @@ function EntriesView({
             <p>{entries.length ? uiText(locale, `${entries.length} inscription${entries.length === 1 ? "" : "s"} créée${entries.length === 1 ? "" : "s"}.`, `${entries.length} entr${entries.length === 1 ? "y" : "ies"} created.`) : uiText(locale, "Les brouillons d'inscription apparaissent ici avant paiement.", "Draft entries appear here before checkout.")}</p>
           </div>
         </div>
-        <div className="table association-entries-table">
-          <div className="table-row table-head">
+        <GroupedEntryList entries={entries} horses={horses} contacts={contacts} classes={classes} blocks={blocks} locale={locale}
+          tableClassName="association-entries-table"
+          emptyLabel={uiText(locale, "Crée un brouillon après avoir ajouté les contacts, chevaux, blocs et blocks.", "Create a draft after adding contacts, horses, schedule blocks and blocks.")}
+          header={<>
             <span>{uiText(locale, "Cheval", "Horse")}</span>
             <span>{uiText(locale, "Classe", "Class")}</span>
             <span>{uiText(locale, "Cavalier", "Rider")}</span>
             <span>{uiText(locale, "Propriétaire", "Owner")}</span>
             <span>Action</span>
-          </div>
-          {entries.map((entry) => (
+          </>}
+          renderEntry={(entry) => (
             <div className="table-row" key={entry.id}>
               <div>
                 <strong>{horseLabel(findById(horses, entry.horse_id))}</strong>
@@ -208,9 +211,8 @@ function EntriesView({
                 </button>
               </div>
             </div>
-          ))}
-          {!entries.length ? <EmptyState label={uiText(locale, "Crée un brouillon après avoir ajouté les contacts, chevaux, blocs et blocks.", "Create a draft after adding contacts, horses, schedule blocks and blocks.")} /> : null}
-        </div>
+          )}
+        />
       </section>
     </div>
   );
