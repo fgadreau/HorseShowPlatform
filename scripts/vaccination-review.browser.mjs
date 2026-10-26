@@ -8,8 +8,8 @@ const harness={name:'coggins-fixture',enforce:'pre',load(id){if(id.endsWith('/sr
 import React from '/node_modules/.vite/deps/react.js';import ReactDOM from '/node_modules/.vite/deps/react-dom_client.js';import {VaccinationReviewQueue} from '/src/features/health/VaccinationReviewQueue.tsx';import '/src/styles.css';
 const params=new URLSearchParams(location.search),locale=params.get('locale')??'fr';window.calls=[];window.refreshes=0;window.failReview=false;
 window.fakeSupabase={rpc:async(name,args)=>{window.calls.push({name,args});if(window.failReview)return {data:null,error:{message:'DEMO review failed'}};return {data:{id:'review',version:window.calls.length,status:args.p_status},error:null}},storage:{from:()=>({createSignedUrl:async()=>params.has('unreadable')?({data:null,error:{message:'DEMO unsupported preview'}}):({data:{signedUrl:'http://127.0.0.1:5195/certificate-preview'},error:null})})}};
-const doc={id:'document',horse_id:'horse',document_type:params.has('coggins')?'coggins_eia':'combo_vaccine',result:params.has('positive')?'Positive':'Negative',horse_name:'DEMO Horsse',document_url:params.has('missing')?null:'horse/DEMO.png',mime_type:params.has('pdf')?'application/pdf':'image/png',status:'pending_review',test_or_administered_on:params.has('no-date')?null:'2026-10-25',warnings:params.has('unsigned')?['NOT_SIGNED']:[],updated_at:'2026-10-25T00:00:00Z',created_at:'2026-10-25T00:00:00Z'};
-ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(VaccinationReviewQueue,{locale,organizationId:'association',kind:params.has('coggins')?'coggins':'vaccination',horses:[{id:'horse',name:'DEMO Horse',date_of_birth:'2015-04-03',gender:'F',breed:'Quarter Horse',color:'Bay',primary_owner_contact_id:'owner',registration_number:'DEMO-123'}],contacts:[{id:'owner',first_name:'DEMO',last_name:'Owner'}],identifiers:[{horse_id:'horse',external_credential_issuer_id:'nrha',identifier_value:'DEMO-NRHA'}],issuers:[{id:'nrha',code:'NRHA'}],documents:[doc],reviews:params.has('saved')?[{id:'saved',organization_id:'association',horse_document_id:'document',version:1,status:params.get('saved')==='rejected'?'rejected':'approved',review_method:params.get('saved')==='legacy'?null:'manual_coggins',coggins_document_updated_at:params.get('saved')==='stale'?'2026-10-24T00:00:00Z':doc.updated_at,reviewed_at:'2026-10-25T00:00:00Z',review_notes:'DEMO: document accepted by association'}]:[],onReviewed:async()=>{window.refreshes++}}));
+const doc={id:'document',horse_id:'horse',document_type:params.has('coggins')?'coggins_eia':'combo_vaccine',result:params.has('positive')?'Positive':'Negative',horse_name:'DEMO Horsse',document_url:params.has('missing')?null:'horse/DEMO.png',mime_type:params.has('pdf')?'application/pdf':'image/png',status:params.has('compliance')&&!params.has('unverified')?'verified':'pending_review',test_or_administered_on:params.has('no-date')?null:'2026-10-25',warnings:params.has('unsigned')?['NOT_SIGNED']:[],updated_at:'2026-10-25T00:00:00Z',created_at:'2026-10-25T00:00:00Z'};
+ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(VaccinationReviewQueue,{locale,organizationId:'association',kind:params.has('coggins')?'coggins':'vaccination',horses:[{id:'horse',name:'DEMO Horse',date_of_birth:'2015-04-03',gender:'F',breed:'Quarter Horse',color:'Bay',primary_owner_contact_id:'owner',registration_number:'DEMO-123'}],contacts:[{id:'owner',first_name:'DEMO',last_name:'Owner'}],identifiers:[{horse_id:'horse',external_credential_issuer_id:'nrha',identifier_value:'DEMO-NRHA'}],issuers:[{id:'nrha',code:'NRHA'}],documents:[doc],compliance:params.has('compliance')?[{organization_id:params.has('wrong-org')?'other-association':'association',horse_id:'horse',can_proceed:true,requirements:{coggins:{status:params.get('compliance'),document_id:params.has('wrong-document')?'other-document':'document'}}}]:[],reviews:params.has('saved')?[{id:'saved',organization_id:'association',horse_document_id:'document',version:1,status:params.get('saved')==='rejected'?'rejected':'approved',review_method:params.get('saved')==='legacy'?null:'manual_coggins',coggins_document_updated_at:params.get('saved')==='stale'?'2026-10-24T00:00:00Z':doc.updated_at,reviewed_at:'2026-10-25T00:00:00Z',review_notes:'DEMO: document accepted by association'}]:[],onReviewed:async()=>{window.refreshes++}}));
 
 </script></body></html>`;res.setHeader('Content-Type','text/html');res.end(await server.transformIndexHtml('/coggins-fixture',html));}catch(e){next(e);}});}};
 const server=await createServer({configFile:false,envDir:false,publicDir:false,plugins:[harness,react()],server:{host:'127.0.0.1',port:5195,strictPort:true,fs:{deny:['.env','.env.*','**/.tmp/**','**/.git/**']}}});let browser;
@@ -68,6 +68,31 @@ for(const locale of ['fr','en'])for(const viewport of [{width:320,height:568},{w
  assert.deepEqual(errors,[]);console.log('PASS persisted health decision',locale,viewport.width,saved);
  await page.close();
 }
+
+for(const locale of ['fr','en'])for(const viewport of [{width:390,height:844},{width:844,height:390}]){
+ const page=await browser.newPage({viewport});page.setDefaultTimeout(15000);
+ await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+ await page.goto('http://127.0.0.1:5195/coggins-fixture?coggins=true&compliance=valid&locale='+locale);
+ await page.getByRole('checkbox').waitFor();
+ assert.equal(await page.locator('.health-review-card').count(),0,'Policy-accepted verified Coggins needs no extra approval');
+ await page.getByRole('checkbox').check();await page.locator('.health-review-card').waitFor();
+ assert((await page.locator('.health-review-card').textContent()).includes(locale==='fr'?'Accepté automatiquement':'Automatically accepted'));
+ assert.equal(await page.getByRole('button',{name:locale==='fr'?'Approuver':'Approve',exact:true}).count(),0);
+ await page.getByRole('button',{name:locale==='fr'?'Ouvrir le document':'Open document',exact:true}).click();
+ const dialog=page.getByRole('dialog');await dialog.waitFor();
+ assert.equal(await dialog.getByRole('button',{name:locale==='fr'?'Confirmer l’approbation':'Confirm approval',exact:true}).count(),0);
+ assert.equal(await dialog.locator('textarea').count(),0);assert.equal(await page.evaluate(()=>window.calls.length),0);
+ await page.reload();await page.getByRole('checkbox').waitFor();assert.equal(await page.locator('.health-review-card').count(),0);
+ await page.close();
+}
+for(const query of ['review_pending','expired','identity_pending','review_rejected','valid&wrong-org=true','valid&wrong-document=true','valid&unverified=true']){
+ const page=await browser.newPage();page.setDefaultTimeout(15000);
+ await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+ await page.goto('http://127.0.0.1:5195/coggins-fixture?coggins=true&compliance='+query);
+ await page.locator('.health-review-card').waitFor();assert.equal(await page.getByRole('button',{name:'Approuver',exact:true}).count(),1,'Only the exact verified valid certificate in this association is automatically accepted');
+ await page.close();
+}
+console.log('PASS automatically accepted Coggins: policy-valid verified certificate hidden, read-only history, no extra approval/RPC; manual requirement, expired/identity/rejected/unverified and different association/document remain actionable.');
 console.log('PASS health queue: persisted legacy/current/rejected decisions hidden, stale certificate approvals pending; history and compact checkbox; FR/EN portrait, landscape and desktop.');
 console.log('PASS Coggins review FR/EN mobile/desktop: app/certificate identity comparison, required reason, scoped approval/rejection RPC, retry error, negative/signed/attached guards.');
 console.log('PASS vaccination review FR/EN mobile/desktop: inline document, manual approve/date/reject, audit RPC, refresh, saved decisions, failure retained, no-file guard, PDF preview; no external requests.');
