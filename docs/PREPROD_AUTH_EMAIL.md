@@ -9,6 +9,19 @@ validation par un nouveau courriel restent à effectuer.
 Projet concerné : **Horse Show Platform PREPROD** (`qaguotdproxamgudnnsd`).
 Site HSP : **https://preprod.horseshowplatform.com**.
 
+Vérifications effectuées le 26 octobre 2026 via les connecteurs :
+
+- Le projet Supabase PREPROD est accessible et `ACTIVE_HEALTHY`.
+- Le domaine Resend `horseshowplatform.com` est `verified`, avec l'envoi activé.
+- Les enregistrements DKIM et SPF demandés par Resend sont vérifiés.
+- Le suivi des ouvertures et des clics est désactivé pour ce domaine.
+
+Les outils du connecteur Supabase disponibles dans cette session n'exposent pas
+la lecture ou la modification de la configuration Auth/SMTP. Ces réglages
+restent à inspecter et à appliquer dans le tableau de bord, ou via la Management
+API avec une authentification dédiée. Aucune modification distante de la
+configuration Auth n'a été effectuée lors de ces vérifications.
+
 ## Retour après vérification
 
 Dans [Authentication → URL Configuration](https://supabase.com/dashboard/project/qaguotdproxamgudnnsd/auth/url-configuration) :
