@@ -163,7 +163,9 @@ function MyHorsesView({
             <p>{uiText(locale, "Ajoute ses infos, ses contacts et ses documents santé sans sortir de cette page.", "Add details, contacts and health documents without leaving this page.")}</p>
           </div>
           <button className="primary-button" disabled={!organization || !organizationDisciplines.length} type="button" onClick={() => {
-            const initial = organizationDisciplines.find((directory) => directory.is_default) ?? organizationDisciplines[0];
+            const reining = disciplines.find((discipline) => discipline.is_active && discipline.code.toLowerCase() === "reining");
+            const initial = organizationDisciplines.find((directory) => directory.is_active && directory.discipline_id === reining?.id)
+              ?? organizationDisciplines.find((directory) => directory.is_default) ?? organizationDisciplines[0];
             setHorseDirectoryIds(new Set(initial ? [initial.id] : []));
             setCreatingHorse(true);
           }}>

@@ -69,10 +69,14 @@ function buildOnboardingSteps(
 
 function ChecklistItem({
   step,
+  locale,
   onNavigate,
+  onEditProfile,
 }: {
   step: OnboardingStep;
+  locale: Locale;
   onNavigate: (view: ViewKey) => void;
+  onEditProfile: () => void;
 }) {
   const Icon = step.icon;
 
@@ -86,14 +90,14 @@ function ChecklistItem({
       </div>
       <div className="onboarding-step-content">
         <strong>
-          {step.label}
-          {step.optional ? <span className="onboarding-optional"> — optionnel</span> : null}
+          <button className="text-button onboarding-title-action" type="button" onClick={() => step.viewKey ? onNavigate(step.viewKey) : onEditProfile()}>{step.label}</button>
+          {step.optional ? <span className="onboarding-optional"> — {uiText(locale, "optionnel", "optional")}</span> : null}
         </strong>
         <p>{step.description}</p>
       </div>
       {!step.done && step.viewKey ? (
         <button className="text-button onboarding-step-cta" type="button" onClick={() => onNavigate(step.viewKey!)}>
-          Compléter <ChevronRight size={14} />
+          {uiText(locale, "Compléter", "Complete")} <ChevronRight size={14} />
         </button>
       ) : null}
     </div>
@@ -186,7 +190,10 @@ function ProfileView({
         </div>
         <div className="onboarding-steps">
           {steps.map((step) => (
-            <ChecklistItem key={step.key} step={step} onNavigate={onViewChange} />
+            <ChecklistItem key={step.key} locale={locale} step={step} onNavigate={onViewChange} onEditProfile={() => {
+              setEditingProfile(true);
+              requestAnimationFrame(() => document.getElementById("profile-first-name")?.focus());
+            }} />
           ))}
         </div>
       </section>
@@ -241,50 +248,50 @@ function ProfileView({
           <form className="form-grid profile-form" onSubmit={handleSubmitProfile}>
             <div className="form-row-2">
               <div className="form-field">
-                <label>{uiText(locale, "Prénom", "First name")}</label>
-                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
+                <label htmlFor="profile-first-name">{uiText(locale, "Prénom", "First name")}</label>
+                <input autoComplete="given-name" id="profile-first-name" type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)} />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Nom de famille", "Last name")}</label>
-                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
+                <label htmlFor="profile-last-name">{uiText(locale, "Nom de famille", "Last name")}</label>
+                <input autoComplete="family-name" id="profile-last-name" type="text" value={lastName} onChange={(e) => setLastName(e.target.value)} />
               </div>
             </div>
             <div className="form-row-2">
               <div className="form-field">
-                <label>{uiText(locale, "Téléphone", "Phone")}</label>
-                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
+                <label htmlFor="profile-phone">{uiText(locale, "Téléphone", "Phone")}</label>
+                <input autoComplete="tel" id="profile-phone" type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Date de naissance", "Date of birth")}</label>
-                <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
+                <label htmlFor="profile-birth-date">{uiText(locale, "Date de naissance", "Date of birth")}</label>
+                <input autoComplete="bday" id="profile-birth-date" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} />
               </div>
             </div>
             <div className="form-field">
-              <label>{uiText(locale, "Adresse", "Address")}</label>
-              <input type="text" value={address} placeholder={uiText(locale, "123 Rue principale", "123 Main Street")} onChange={(e) => setAddress(e.target.value)} />
+              <label htmlFor="profile-address">{uiText(locale, "Adresse", "Address")}</label>
+              <input autoComplete="address-line1" id="profile-address" type="text" value={address} placeholder={uiText(locale, "123 Rue principale", "123 Main Street")} onChange={(e) => setAddress(e.target.value)} />
             </div>
             <div className="form-field">
-              <label>{uiText(locale, "Appartement / suite (optionnel)", "Apartment / suite (optional)")}</label>
-              <input type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} />
+              <label htmlFor="profile-address-line2">{uiText(locale, "Appartement / suite (optionnel)", "Apartment / suite (optional)")}</label>
+              <input autoComplete="address-line2" id="profile-address-line2" type="text" value={addressLine2} onChange={(e) => setAddressLine2(e.target.value)} />
             </div>
             <div className="form-row-2">
               <div className="form-field">
-                <label>{uiText(locale, "Ville", "City")}</label>
-                <input type="text" value={city} onChange={(e) => setCity(e.target.value)} />
+                <label htmlFor="profile-city">{uiText(locale, "Ville", "City")}</label>
+                <input autoComplete="address-level2" id="profile-city" type="text" value={city} onChange={(e) => setCity(e.target.value)} />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Province / État", "Province / State")}</label>
-                <input type="text" value={state} onChange={(e) => setState(e.target.value)} />
+                <label htmlFor="profile-state">{uiText(locale, "Province / État", "Province / State")}</label>
+                <input autoComplete="address-level1" id="profile-state" type="text" value={state} onChange={(e) => setState(e.target.value)} />
               </div>
             </div>
             <div className="form-row-2">
               <div className="form-field">
-                <label>{uiText(locale, "Code postal", "Postal code")}</label>
-                <input type="text" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
+                <label htmlFor="profile-postal-code">{uiText(locale, "Code postal", "Postal code")}</label>
+                <input autoComplete="postal-code" id="profile-postal-code" type="text" value={zipCode} onChange={(e) => setZipCode(e.target.value)} />
               </div>
               <div className="form-field">
-                <label>{uiText(locale, "Pays", "Country")}</label>
-                <select value={country} onChange={(e) => setCountry(e.target.value)}>
+                <label htmlFor="profile-country">{uiText(locale, "Pays", "Country")}</label>
+                <select autoComplete="country" id="profile-country" value={country} onChange={(e) => setCountry(e.target.value)}>
                   <option value="CA">Canada</option>
                   <option value="US">États-Unis / United States</option>
                   <option value="FR">France</option>

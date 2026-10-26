@@ -1,4 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { useVisualViewportBounds } from "../lib/useVisualViewportBounds";
 import { Globe2, Lock, X } from "lucide-react";
 import type { ComponentType, FormEvent, ReactNode } from "react";
 import type { Locale } from "../lib/i18n";
@@ -44,11 +46,37 @@ export function ModalDialog({
   onClose: () => void;
 }) {
   const titleId = useMemo(() => `modal-${Math.random().toString(36).slice(2)}`, []);
+  const dialogRef = useRef<HTMLElement>(null);
+  const backdropRef = useRef<HTMLDivElement>(null);
+
+  useVisualViewportBounds(backdropRef);
+
+  useEffect(() => {
+    const previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    dialogRef.current?.querySelector<HTMLButtonElement>(".icon-button")?.focus({ preventScroll: true });
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      if (previousFocus?.isConnected) previousFocus.focus({ preventScroll: true });
+    };
+  }, []);
 
   useEffect(() => {
     function handleKeyDown(event: KeyboardEvent) {
+      const dialogs = document.querySelectorAll('[aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
       if (event.key === "Escape") {
+        event.preventDefault();
         onClose();
+      }
+      if (event.key === "Tab") {
+        const controls = Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? [])
+          .filter((element) => element.getClientRects().length > 0);
+        const first = controls[0];
+        const last = controls[controls.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); }
       }
     }
 
@@ -56,9 +84,9 @@ export function ModalDialog({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  return (
-    <div className="modal-backdrop">
-      <section aria-labelledby={titleId} aria-modal="true" className={`assistant-modal form-modal ${className}`.trim()} role="dialog">
+  return createPortal(
+    <div ref={backdropRef} className="modal-backdrop">
+      <section ref={dialogRef} aria-labelledby={titleId} aria-modal="true" className={`assistant-modal form-modal ${className}`.trim()} role="dialog">
         <div className="assistant-modal-header">
           <div>
             {eyebrow ? <p className="eyebrow">{eyebrow}</p> : null}
@@ -71,7 +99,7 @@ export function ModalDialog({
         </div>
         {children}
       </section>
-    </div>
+    </div>, document.body,
   );
 }
 

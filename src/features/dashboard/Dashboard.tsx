@@ -3,7 +3,8 @@ import { ReportsView } from "../reports/ReportsView";
 import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
 import {billingRpc} from '../../services/billingFolio';
 import { Brand } from "../../components/Brand";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useVisualViewportBounds } from "../../lib/useVisualViewportBounds";
 import type { FormEvent, MouseEvent } from "react";
 import {
   AlertCircle,
@@ -432,6 +433,8 @@ export function Dashboard({
   const rawEffectiveView = canManageAssociation || isPlatformAdmin || !associationViewKeys.has(activeView) ? activeView : "my-overview";
   const effectiveView: ViewKey = !canManageAssociation && profileIncomplete && rawEffectiveView === "my-overview" ? "my-profile" : rawEffectiveView;
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  const sidebarRef = useRef<HTMLElement>(null);
+  useVisualViewportBounds(sidebarRef, isMobileMenuOpen);
   const selectedOrganizationShows = selectedOrganization
     ? shows.filter((show) => show.organization_id === selectedOrganization.id)
     : [];
@@ -714,7 +717,7 @@ export function Dashboard({
   useEffect(() => {
     if (!isMobileMenuOpen) return;
 
-    const mediaQuery = window.matchMedia("(min-width: 641px)");
+    const mediaQuery = window.matchMedia("(min-width: 981px)");
     if (mediaQuery.matches) {
       setIsMobileMenuOpen(false);
       return;
@@ -748,7 +751,7 @@ export function Dashboard({
 
   return (
     <main className="app-shell">
-      <aside className={`sidebar${isMobileMenuOpen ? " open" : ""}`}>
+      <aside ref={sidebarRef} className={`sidebar${isMobileMenuOpen ? " open" : ""}`}>
         <div className="mobile-menu-bar">
           <a href="/" aria-label={locale === "fr" ? "HSP — Accueil" : "HSP — Home"} onClick={handleHomeNavigation}><Brand symbol /></a>
           <div className="mobile-menu-title">
@@ -797,7 +800,7 @@ export function Dashboard({
         </button>
       </aside>
 
-      <section className="workspace">
+      <section className="workspace" inert={isMobileMenuOpen}>
         <header className="workspace-header">
           <div>
             {effectiveView.startsWith("my-") ? (

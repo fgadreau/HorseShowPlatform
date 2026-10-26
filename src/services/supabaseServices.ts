@@ -314,6 +314,12 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     ? requestedOrganizationId
     : organizations[0]?.id ?? null;
 
+  if (loadedOrganizationId) {
+    const { error } = await client.rpc("ensure_default_reining_directory", { p_organization_id: loadedOrganizationId });
+    // Allow the frontend to be deployed before its companion migration.
+    if (error && !isMissingRpcError(error, "ensure_default_reining_directory")) throw error;
+  }
+
   const [showsResult, contactOrganizationLinksResult, horseOrganizationLinksResult] = await Promise.all([
     scopeQueryToOrganization(client.from("shows").select("*").order("start_date", { ascending: true }).returns<Show[]>(), loadedOrganizationId),
     loadedOrganizationId
