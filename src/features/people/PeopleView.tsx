@@ -15,6 +15,7 @@ import { HorseForm } from "../horses/HorseForm";
 import { HorseEditForm } from "../horses/HorseEditForm";
 import { DirectoryCreationPicker, DirectoryDisciplinePicker } from "./DirectoryDisciplinePicker";
 import { InsuranceEvidenceForm } from "./InsuranceEvidenceForm";
+import { HorseAccessPanel } from "../horses/HorseAccessPanel";
 
 function PeopleView({
   locale,
@@ -305,6 +306,7 @@ function PeopleView({
         </div>
       </section>
 
+      {organization ? <HorseAccessPanel key={organization.id} organization={organization} contacts={contacts} locale={locale} staff onRefresh={onRefresh} /> : null}
       {creatingContact ? (
         <ModalDialog description={organization ? organization.name : uiText(locale, "Crée une association d'abord.", "Create an organization first.")} eyebrow={uiText(locale, "Répertoire", "Directory")} title={uiText(locale, "Nouveau contact", "New contact")} onClose={() => setCreatingContact(false)}>
           <DirectoryCreationPicker

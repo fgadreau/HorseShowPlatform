@@ -12,7 +12,7 @@ window.serviceWrites=[];
 window.createHorseThroughService=createHorse;
 window.createContactThroughService=createContact;
 window.ensureHorseDirectoryLink=ensureHorseOrganizationLink;
-window.testClient={from(table){
+window.testClient={rpc:async()=>({data:[],error:null}),from(table){
  let payload;let requestedIds=[];
  const result=()=>({data:table==='organization_disciplines'?requestedIds.filter(id=>['dir1','dir2'].includes(id)).map(id=>({id})):table==='horses'?{...payload,id:'service-horse'}:payload,error:null});
  const chain={select(){return chain},eq(){return chain},in(column,ids){requestedIds=ids;return chain},
