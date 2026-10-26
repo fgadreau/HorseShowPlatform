@@ -1,12 +1,14 @@
 import {serverlessBrowser as chromium} from '../../server/vet/serverless-browser.mjs';
+import {chromium as desktopChromium} from 'playwright-core';
 import {createServer} from 'vite';
-import {mkdirSync,writeFileSync,readFileSync} from 'node:fs';
+import {mkdirSync,writeFileSync,readFileSync,existsSync} from 'node:fs';
 import assert from 'node:assert/strict';
 mkdirSync('.tmp/billing-ui',{recursive:true});
 writeFileSync('.tmp/billing-ui/results.json',JSON.stringify({complete:false,mode:'browser mocks',passed:[]}));
 writeFileSync('.tmp/billing-ui/index.html','<html lang="fr"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module" src="/scripts/billing/finance-harness.tsx"></script></body></html>');
-const vite=await createServer({configFile:false,define:{'import.meta.env.VITE_SUPABASE_URL':JSON.stringify('http://127.0.0.1:54321'),'import.meta.env.VITE_SUPABASE_ANON_KEY':JSON.stringify('test-only-public-placeholder')},server:{host:'127.0.0.1',port:5317,strictPort:true},plugins:[{name:'fixture-paths',configureServer(s){s.middlewares.use((req,res,next)=>{if(req.url?.startsWith('/me/')||req.url?.startsWith('/associations/'))req.url='/.tmp/billing-ui/index.html';next();});}}]});await vite.listen();
-const browser=await chromium.launch({headless:true});let complete=false;const passed=[];
+const vite=await createServer({configFile:false,envDir:false,define:{'import.meta.env.VITE_DEPLOY_ENV':JSON.stringify('local'),'import.meta.env.VITE_SUPABASE_URL':JSON.stringify('http://127.0.0.1:54321'),'import.meta.env.VITE_SUPABASE_ANON_KEY':JSON.stringify('test-only-public-placeholder')},server:{host:'127.0.0.1',port:5317,strictPort:true},plugins:[{name:'fixture-paths',configureServer(s){s.middlewares.use((req,res,next)=>{if(req.url?.startsWith('/me/')||req.url?.startsWith('/associations/'))req.url='/.tmp/billing-ui/index.html';next();});}}]});await vite.listen();
+const browser=process.platform==='linux'?await chromium.launch({headless:true}):await desktopChromium.launch({channel:'chrome',headless:true});let complete=false;const passed=[];
+if(!existsSync('.tmp/billing-pdf/invoice-fr.pdf')){mkdirSync('.tmp/billing-pdf',{recursive:true});const fixture=await browser.newPage();await fixture.setContent('<h1>DEMO invoice download fixture</h1><p>Synthetic document for mocked browser tests only.</p>');await fixture.pdf({path:'.tmp/billing-pdf/invoice-fr.pdf',format:'A4'});await fixture.close();}
 try{
  const page=await browser.newPage({viewport:{width:1365,height:900}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
  let injectError=false,lostSale=false,lostPayment=false;const paymentRequests=new Map(),stripeRequests=new Map();const commands=new Map();let seq=0,version=1,ready=false,closed=false,pending=null;const payments=[],documents=[],charges=[charge(100)];
@@ -24,9 +26,9 @@ try{
  case 'billing_navigation_scope':data={staff:true};break;
  case 'get_billing_hsp_fee_settings':data={platform_admin:false,settings:[{scope:'platform',amount:5}]};break;
  case 'get_billing_finance_overview':data={groups:[],has_data:false};break;
- case 'list_billing_contexts':data={total:1,items:[{id:'context-demo',show_id:'show-demo',name_fr:'Concours fictif',name_en:'Fictitious show'}]};break;
+ case 'list_billing_contexts':data={total:args.p_kind==='event'?1:0,items:args.p_kind==='event'?[{id:'context-demo',show_id:'show-demo',name_fr:'Concours fictif',name_en:'Fictitious show'}]:[]};break;
  case 'billing_ui_catalog':data={enabled:true,context_id:'context-demo',currency:'CAD',products:[{id:'product-demo',name:'Stalle simulée',price:50}]};break;
- case 'list_my_billing_accounts':case 'list_billing_accounts':data={total:1,items:[{id:'folio-demo',account_number:'DEMO-2026-00001',year:2026,currency:'CAD',state:closed?'closed':'open',payer:snapshot().payer,balance:balance()}]};break;
+ case 'list_my_billing_accounts':case 'list_billing_accounts':case 'list_billing_finance_accounts':data={total:1,items:[{id:'folio-demo',account_number:'DEMO-2026-00001',year:2026,currency:'CAD',state:closed?'closed':'open',payer:snapshot().payer,balance:balance()}]};break;
  case 'add_billing_sale':if(commands.has(args.p_request_id)){data=commands.get(args.p_request_id);break;}charges.push(charge(50));version++;ready=false;data={};commands.set(args.p_request_id,data);if(lostSale){lostSale=false;await route.abort();return;}break;
  case 'record_billing_payment':{
  if(paymentRequests.has(args.p_request_id)){assert.deepEqual(args,paymentRequests.get(args.p_request_id));data={};break;}
