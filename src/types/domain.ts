@@ -1,4 +1,6 @@
 export type Organization = {
+  back_number_auto_assign?: boolean;
+  back_number_request_fee?: number;
   id: string;
   name: string;
   short_name: string | null;
@@ -703,6 +705,7 @@ export type BackNumberAssignmentMode = OrganizationBackNumberAssignmentMode;
 export type BackNumberStatus = "available" | "assigned" | "reserved" | "lost" | "retired";
 
 export type OrganizationBackNumber = {
+  association_issued?: boolean;
   id: string;
   organization_id: string;
   number: number;
@@ -1190,6 +1193,8 @@ export type ClassTemplate = {
 };
 
 export type Block = {
+  requires_association_back_number?: boolean;
+  back_number_request_fee?: number | null;
   id: string;
   organization_id: string;
   show_id: string;
@@ -1702,6 +1707,8 @@ export type HorseUpdateInput = {
 };
 
 export type BlockInput = {
+  requires_association_back_number?: boolean;
+  back_number_request_fee?: number | null;
   organization_id: string;
   show_id: string;
   name: string;
@@ -1729,6 +1736,8 @@ export type BlockInput = {
 };
 
 export type BlockUpdateInput = {
+  requires_association_back_number?: boolean;
+  back_number_request_fee?: number | null;
   name?: string;
   block_template_id?: string | null;
   slate_id?: string | null;
@@ -1883,6 +1892,8 @@ export type ClassTemplateUpdateInput = {
 };
 
 export type EntryInput = {
+  back_number_choice?: "reuse" | "personal" | "request";
+  back_number_request_token?: string;
   organization_id: string;
   show_id: string;
   horse_id: string;

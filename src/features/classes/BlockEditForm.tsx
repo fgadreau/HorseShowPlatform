@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BlockBackNumberPolicy } from "../backNumbers/BlockBackNumberPolicy";
 import type { FormEvent } from "react";
 import { FormActions } from "../../components/ui";
 import type { Locale } from "../../lib/i18n";
@@ -45,6 +46,8 @@ function BlockEditForm({
   const [followsBlockId, setFollowsBlockId] = useState(block.follows_block_id ?? "");
   const [status, setStatus] = useState<Block["schedule_status"]>(block.schedule_status);
   const [busy, setBusy] = useState(false);
+  const [requiresAssociationNumber, setRequiresAssociationNumber] = useState(block.requires_association_back_number ?? false);
+  const [backNumberFee, setBackNumberFee] = useState(block.back_number_request_fee == null ? "" : String(block.back_number_request_fee));
   const selectedShowDays = showDays.filter((day) => day.show_id === block.show_id);
   const selectedShowSlates = slates.filter((slate) => slate.show_id === block.show_id);
   const concurrentBlockChoices = blocks.filter(
@@ -72,6 +75,8 @@ function BlockEditForm({
 
     try {
       await onUpdateBlock(block.id, {
+        requires_association_back_number: requiresAssociationNumber,
+        back_number_request_fee: backNumberFee === "" ? null : Number(backNumberFee),
         name,
         show_day_id: showDayId || null,
         slate_id: slateId || null,
@@ -205,6 +210,7 @@ function BlockEditForm({
             <option value="finished">{uiText(locale, "Terminé", "Finished")}</option>
           </select>
         </label>
+        <BlockBackNumberPolicy locale={locale} required={requiresAssociationNumber} fee={backNumberFee} onRequired={setRequiresAssociationNumber} onFee={setBackNumberFee} />
         <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>
