@@ -6,7 +6,7 @@ import { chromium } from '@playwright/test';
 
 // Isolate the UI review from accounts, payments, and every external service.
 const fakeClient = `
-export const supabase = { rpc: async(name,args) => { (window.mobileRpcCalls ??= []).push({name,args}); return {data: name === 'billing_navigation_scope' ? {staff:false} : name.startsWith('list_my_billing') ? {items:[],total:0} : [], error:null}; }, auth:{getSession:async()=>({data:{session:null}})} };
+export const supabase = { from(){const query={select(){return query},eq(){return query},order(){return query},then(resolve,reject){return Promise.resolve({data:[],error:null}).then(resolve,reject)}};return query;}, rpc: async(name,args) => { (window.mobileRpcCalls ??= []).push({name,args}); return {data: name === 'billing_navigation_scope' ? {staff:false} : name.startsWith('list_my_billing') ? {items:[],total:0} : [], error:null}; }, auth:{getSession:async()=>({data:{session:null}})} };
 export const requireSupabase = () => supabase;`;
 const server = await createServer({ configFile: false, envDir: false, publicDir: 'public',
   plugins: [{ name: 'isolated-mobile-client', enforce: 'pre', load(id) { if (id.endsWith('/src/lib/supabase.ts')) return fakeClient; } }, react()],

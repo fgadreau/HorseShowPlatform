@@ -15,6 +15,7 @@ import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthCompl
 import { HorseForm } from "../horses/HorseForm";
 import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type NrhaEligibilityMessage } from "./NrhaEligibilityCheck";
 import { entryClassLabel, entryPatternLabel } from "./entryDisplay";
+import { EntryBackNumberField, type EntryBackNumberSelection } from "../backNumbers/EntryBackNumberField";
 
 type ClassEvaluation = {
   canSelect: boolean;
@@ -115,6 +116,12 @@ function EntryForm({
   const [payerContactId, setPayerContactId] = useState("");
   const [riderContactId, setRiderContactId] = useState("");
   const [entryNumber, setEntryNumber] = useState("");
+  const [backNumberSelection, setBackNumberSelection] = useState<EntryBackNumberSelection>({ choice: "reuse", number: null, ready: false });
+  const backNumberRequestToken = useRef(crypto.randomUUID());
+  useEffect(() => {
+    backNumberRequestToken.current = crypto.randomUUID();
+    setBackNumberSelection({ choice: "reuse", number: null, ready: false });
+  }, [horseId]);
   const [activeDayId, setActiveDayId] = useState("");
   const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
   const [nrhaResults, setNrhaResults] = useState<Record<string, NrhaEligibilityMessage>>({});
@@ -226,6 +233,7 @@ function EntryForm({
     evaluations: selectedEvaluations,
     organization,
     show: selectedShow,
+    backNumberFee: organization?.back_number_policy === "horse" && selectedEvaluations.length ? backNumberSelection.requestFee ?? 0 : 0,
   });
   const judgeFeePreviewLines = buildJudgeFeePreviewLines(checkoutPreview.lines);
   const judgeFeeByBlockId = new Map(judgeFeePreviewLines.map((item) => [item.line.evaluation.block!.id, item]));
@@ -370,10 +378,12 @@ function EntryForm({
   }
 
   async function handleSubmit() {
+    if (organization?.back_number_policy === "horse" && !backNumberSelection.ready) return;
     if (!canCreate || !organization || !profileId || !selectedHorse || !selectedOwnerContact || !selectedRiderContact || !selectedShow || !selectedPayerId) {
       return;
     }
 
+    const submissionBackNumberToken = backNumberRequestToken.current;
     setBusy(true);
     setSubmitMessage(null);
 
@@ -412,7 +422,8 @@ function EntryForm({
         setNrhaResults((current) => ({ ...current, ...nextResults }));
       }
 
-      for (const evaluation of selectedEvaluations) {
+      const orderedEvaluations = [...selectedEvaluations].sort((left, right) => Number(right.block?.back_number_request_fee ?? organization.back_number_request_fee ?? 0) - Number(left.block?.back_number_request_fee ?? organization.back_number_request_fee ?? 0));
+      for (const evaluation of orderedEvaluations) {
         await onCreateEntry({
           organization_id: organization.id,
           show_id: selectedShow.id,
@@ -422,7 +433,9 @@ function EntryForm({
           owner_contact_id: selectedHorse.primary_owner_contact_id,
           rider_contact_id: selectedRiderContact.id,
           payer_contact_id: selectedPayerId,
-          entry_number: entryNumberValue(entryNumber) ?? undefined,
+          entry_number: organization.back_number_policy === "horse" ? backNumberSelection.number : entryNumberValue(entryNumber) ?? undefined,
+          back_number_choice: organization.back_number_policy === "horse" ? backNumberSelection.choice : undefined,
+          back_number_request_token: submissionBackNumberToken,
           base_fee: evaluation.fee ?? undefined,
         });
         createdCount += 1;
@@ -431,6 +444,7 @@ function EntryForm({
       }
 
       setEntryNumber("");
+      backNumberRequestToken.current = crypto.randomUUID();
       setRiderContactId("");
       setPayerContactId("");
       setSelectedClassIds([]);
@@ -557,13 +571,13 @@ function EntryForm({
               onCreateContact={onCreateContact}
             />
           </div>
-          <div className="form-grid">
+          {organization?.back_number_policy === "horse" ? <EntryBackNumberField key={horseId} orgId={organization.id} horseId={horseId} blockIds={[...selectedBlockIds]} currency={selectedShow?.default_currency ?? organization.currency ?? "CAD"} locale={locale} onChange={setBackNumberSelection} /> : <div className="form-grid">
             <label>
               {uiText(locale, "Numéro de dossard", "Back number")}
               <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
               <span className="input-help">{uiText(locale, "Le même dossard sera proposé pour les blocks sélectionnées.", "The same back number will be used for selected blocks.")}</span>
             </label>
-          </div>
+          </div>}
         </section>
 
         <section className="entry-flow-section">
@@ -742,6 +756,7 @@ function EntryForm({
                 <CheckoutFact label={uiText(locale, "Classes", "Classes")} value={formatCurrency(checkoutPreview.entryBaseSubtotal, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Frais tardifs", "Late fees")} value={formatCurrency(checkoutPreview.lateFeeTotal, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Frais juge", "Judge fees")} value={formatCurrency(checkoutPreview.judgeFeeTotal, checkoutPreview.currency)} />
+                <CheckoutFact label={uiText(locale, "Nouveau dossard", "New back number")} value={formatCurrency(checkoutPreview.backNumberFee, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Taxes estimées", "Estimated taxes")} value={formatCurrency(checkoutPreview.taxAmount, checkoutPreview.currency)} />
                 <CheckoutFact emphasized label={uiText(locale, "Total estimé", "Estimated total")} value={formatCurrency(checkoutPreview.invoiceTotal, checkoutPreview.currency)} />
                 <CheckoutFact
@@ -794,7 +809,7 @@ function EntryForm({
               }}
             />
           ) : null}
-          <button className="primary-button" disabled={busy || !canCreate} type="button" onClick={handleSubmit}>
+          <button className="primary-button" disabled={busy || !canCreate || (organization?.back_number_policy === "horse" && !backNumberSelection.ready)} type="button" onClick={handleSubmit}>
             <Plus size={18} />
             {busy
               ? nrhaVerifyBusy
@@ -1030,6 +1045,7 @@ type EntryCheckoutLine = {
 };
 
 type EntryCheckoutPreview = {
+  backNumberFee: number;
   currency: string;
   entryBaseSubtotal: number;
   entrySubtotal: number;
@@ -1048,10 +1064,12 @@ function buildEntryCheckoutPreview({
   evaluations,
   organization,
   show,
+  backNumberFee = 0,
 }: {
   evaluations: ClassEvaluation[];
   organization: Organization | null;
   show: Show | null;
+  backNumberFee?: number;
 }): EntryCheckoutPreview {
   const currency = show?.default_currency || organization?.currency || "CAD";
   const taxRate = show?.tax_rate ?? organization?.tax_rate ?? 0;
@@ -1063,7 +1081,7 @@ function buildEntryCheckoutPreview({
   const lateFeeTotal = roundMoney(lines.reduce((total, line) => total + line.fee.lateFee, 0));
   const entrySubtotal = roundMoney(lines.reduce((total, line) => total + line.fee.total, 0));
   const judgeFeeTotal = roundMoney(buildJudgeFeePreviewLines(lines).reduce((total, line) => total + line.amount, 0));
-  const invoiceSubtotal = roundMoney(entrySubtotal + judgeFeeTotal);
+  const invoiceSubtotal = roundMoney(entrySubtotal + judgeFeeTotal + backNumberFee);
   const taxAmount = roundMoney(invoiceSubtotal * (taxRate / 100));
   const invoiceTotal = roundMoney(invoiceSubtotal + taxAmount);
   const preauthRequired = show?.entry_payment_policy === "card_on_file_preauth";
@@ -1071,6 +1089,7 @@ function buildEntryCheckoutPreview({
   const preauthAmount = preauthRequired ? roundMoney(invoiceTotal * (1 + marginPercent / 100)) : 0;
 
   return {
+    backNumberFee,
     currency,
     entryBaseSubtotal,
     entrySubtotal,

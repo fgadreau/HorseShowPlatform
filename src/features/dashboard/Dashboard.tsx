@@ -1052,6 +1052,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "back-numbers" ? (
           <BackNumbersView
+            onRefresh={onRefresh}
             locale={locale}
             backNumbers={selectedOrganizationBackNumbers}
             contacts={selectedOrganizationContacts}

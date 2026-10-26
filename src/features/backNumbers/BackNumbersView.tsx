@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BackNumberRequestsPanel, MyPendingBackNumberRequests } from "./BackNumberRequestsPanel";
 import type { FormEvent } from "react";
 import { Plus, Search } from "lucide-react";
 import { EmptyState, SearchSelect, ViewIntro } from "../../components/ui";
@@ -9,6 +10,7 @@ import type { Contact, Horse, HorseContact, Organization, OrganizationBackNumber
 import { uiText, entryNumberValue, organizationBackNumberMode, backNumberModeNeedsHorse, backNumberModeNeedsRider, backNumberAssignmentMatchesTarget, backNumberAssigneeLabel, backNumberAssignmentMeta, backNumberModeLabel, backNumberStatusLabel, backNumberStatusBadgeClass, contactBackNumberDetail } from "../dashboard/shared";
 
 function BackNumbersView({
+  onRefresh,
   locale,
   backNumbers,
   contacts,
@@ -23,6 +25,7 @@ function BackNumbersView({
   onReleaseBackNumber,
   onUpdateBackNumberStatus,
 }: {
+  onRefresh: () => void | Promise<void>;
   locale: Locale;
   backNumbers: OrganizationBackNumber[];
   contacts: Contact[];
@@ -59,7 +62,7 @@ function BackNumbersView({
           backNumberAssignmentMatchesTarget(backNumber, assignmentMode, selectedHorseId, selectedRiderId),
       )
     : null;
-  const availableCount = backNumbers.filter((backNumber) => backNumber.status === "available").length;
+  const availableCount = backNumbers.filter((backNumber) => backNumber.status === "available" && (assignmentMode !== "horse" || backNumber.association_issued !== false)).length;
   const assignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned").length;
   const riderAssignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned" && backNumber.assignment_mode === "rider").length;
   const teamAssignedCount = backNumbers.filter((backNumber) => backNumber.status === "assigned" && backNumber.assignment_mode === "horse_rider_team").length;
@@ -182,6 +185,7 @@ function BackNumbersView({
         ]}
       />
 
+      {organization && assignmentMode === "horse" ? <BackNumberRequestsPanel key={organization.id} locale={locale} organization={organization} horses={horses} backNumbers={backNumbers} onAssigned={onRefresh} /> : null}
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -264,10 +268,10 @@ function BackNumbersView({
               <input min="1" step="1" type="number" value={number} onChange={(event) => setNumber(event.target.value)} />
               <span className="input-help">{selectedAssignment ? uiText(locale, `Dossard actuel: ${selectedAssignment.number}.`, `Current back number: ${selectedAssignment.number}.`) : uiText(locale, "Le numéro peut déjà être dans l'inventaire ou être créé à l'assignation.", "The number can already be in inventory or be created on assignment.")}</span>
             </label>
-            <label className="checkbox-card">
+            {assignmentMode !== "horse" ? <label className="checkbox-card">
               <input checked={forceTransfer} type="checkbox" onChange={(event) => setForceTransfer(event.target.checked)} />
               {uiText(locale, "Transférer si le dossard est déjà attribué", "Transfer if the back number is already assigned")}
-            </label>
+            </label> : null}
           </div>
           <div className="row-actions">
             <button className="primary-button" disabled={busy || !canAssign} type="submit">
@@ -299,6 +303,7 @@ function BackNumbersView({
               <div>
                 <strong>#{backNumber.number}</strong>
                 <span className="muted-line">{backNumberModeLabel(backNumber.assignment_mode, locale)}</span>
+                <span className="muted-line">{backNumber.association_issued === false ? uiText(locale, "Fourni par le membre", "Member-provided") : uiText(locale, "Fourni par l'association", "Association-issued")}</span>
               </div>
               <div>
                 <strong>{backNumberAssigneeLabel(backNumber, horses, contacts, locale)}</strong>
@@ -405,6 +410,7 @@ function MyBackNumbersView({
         ]}
       />
 
+      {organization && assignmentMode === "horse" ? <MyPendingBackNumberRequests key={organization.id} locale={locale} organization={organization} horses={horses} revision={backNumbers.map(row=>row.updated_at).join('|')} /> : null}
       <section className="panel span-2">
         <div className="panel-header">
           <div>

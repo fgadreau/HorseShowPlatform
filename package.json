@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:back-numbers:browser": "node scripts/back-number-workflow.browser.mjs",
     "test:client:mobile": "node scripts/mobile-client.browser.mjs",
     "test:reports": "tsc -p tsconfig.reports-test.json && cp scripts/draw-test-package.json .tmp/reports-tests/package.json && node .tmp/reports-tests/scripts/nrha-reports-test.js",
     "test:reports:browser": "npm run test:reports && node scripts/nrha-reports.browser.mjs",

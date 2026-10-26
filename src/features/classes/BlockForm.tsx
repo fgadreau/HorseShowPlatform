@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { BlockBackNumberPolicy } from "../backNumbers/BlockBackNumberPolicy";
 import type { FormEvent } from "react";
 import { Plus } from "lucide-react";
 import { SearchSelect } from "../../components/ui";
@@ -61,6 +62,8 @@ function BlockForm({
   const [scheduledTime, setScheduledTime] = useState("");
   const [followsBlockId, setFollowsBlockId] = useState("");
   const [busy, setBusy] = useState(false);
+  const [requiresAssociationNumber, setRequiresAssociationNumber] = useState(false);
+  const [backNumberFee, setBackNumberFee] = useState("");
   const selectedShowId = showId || shows[0]?.id || "";
   const selectedShowDays = showDays.filter((day) => day.show_id === selectedShowId);
   const selectedShowSlates = slates.filter((slate) => slate.show_id === selectedShowId);
@@ -135,6 +138,8 @@ function BlockForm({
     try {
       const patternForSave = patternForConcurrentClass(pattern, selectedConcurrentClass);
       const createdBlock = await onCreateBlock({
+        requires_association_back_number: requiresAssociationNumber,
+        back_number_request_fee: backNumberFee === "" ? null : Number(backNumberFee),
         organization_id: organization.id,
         show_id: selectedShowId,
         show_day_id: selectedShowDayId || undefined,
@@ -374,6 +379,7 @@ function BlockForm({
             onChange={handleConcurrentClassChange}
           />
         </label>
+        <BlockBackNumberPolicy locale={locale} required={requiresAssociationNumber} fee={backNumberFee} onRequired={setRequiresAssociationNumber} onFee={setBackNumberFee} />
         <button className="primary-button" disabled={busy || !organization || !shows.length} type="submit">
           <Plus size={18} />
           {selectedTemplate ? uiText(locale, `Créer le bloc + ${selectedTemplateClasses.length} classe${selectedTemplateClasses.length === 1 ? "" : "s"}`, `Create block + ${selectedTemplateClasses.length} class${selectedTemplateClasses.length === 1 ? "" : "es"}`) : uiText(locale, "Créer le bloc", "Create block")}

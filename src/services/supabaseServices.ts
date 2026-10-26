@@ -4097,6 +4097,8 @@ export async function createBlock(input: BlockInput) {
     .from("blocks")
     .insert({
       organization_id: input.organization_id,
+      requires_association_back_number: input.requires_association_back_number ?? false,
+      back_number_request_fee: input.back_number_request_fee ?? null,
       show_id: input.show_id,
       show_day_id: input.show_day_id || null,
       block_template_id: input.block_template_id || null,
@@ -4726,10 +4728,15 @@ export async function assignBackNumber(input: {
 }) {
   const client = requireSupabase();
   const number = normalizeBackNumber(input.number);
+  if (input.assignment_mode === "horse") {
+    const { data, error } = await client.rpc("assign_association_back_number", { p_org: input.organization_id, p_horse: input.horse_id, p_number: number }).single<OrganizationBackNumber>();
+    if (error) throw error;
+    return data;
+  }
   const horseId = input.assignment_mode === "rider" ? null : input.horse_id || null;
-  const riderContactId = input.assignment_mode === "horse" ? null : input.rider_contact_id || null;
+  const riderContactId = input.rider_contact_id || null;
 
-  if ((input.assignment_mode === "horse" || input.assignment_mode === "horse_rider_team") && !horseId) {
+  if (input.assignment_mode === "horse_rider_team" && !horseId) {
     throw new Error("Choisis un cheval avant d'assigner un dossard.");
   }
 
@@ -4802,6 +4809,11 @@ export async function assignNextBackNumber(input: {
   notes?: string | null;
 }) {
   const client = requireSupabase();
+  if (input.assignment_mode === "horse") {
+    const { data, error } = await client.rpc("assign_association_back_number", { p_org: input.organization_id, p_horse: input.horse_id, p_number: null }).single<OrganizationBackNumber>();
+    if (error) throw error;
+    return data;
+  }
   const { data, error } = await client
     .from("organization_back_numbers")
     .select("number")
@@ -5198,6 +5210,8 @@ export async function createEntry(input: EntryInput) {
 	      rider_contact_id: input.rider_contact_id || null,
 	      payer_contact_id: input.payer_contact_id,
 	      entry_number: resolvedEntryNumber ?? null,
+      back_number_choice: input.back_number_choice ?? "legacy",
+      back_number_request_token: input.back_number_request_token ?? null,
 	      base_fee: lateEntry.baseFee,
       total_fees: lateEntry.baseFee == null ? null : lateEntry.baseFee + lateEntry.lateFeeAmount,
       is_late: lateEntry.isLate,
@@ -5555,6 +5569,10 @@ export async function prepareShowScoreClassSetup(input: {
   contacts: Contact[];
 }) {
   const client = requireSupabase();
+  const blockClassIds = new Set(input.classes.filter((item) => item.block_id === input.classRecord.id).map((item) => item.id));
+  if (input.entries.some((entry) => blockClassIds.has(entry.class_id) && ["draft", "pending_checkout", "active"].includes(entry.status) && !entry.entry_number)) {
+    throw new Error("Ordre de passage impossible : des dossards sont en attente.");
+  }
   const closeDate = input.classRecord.entries_close_at ? new Date(input.classRecord.entries_close_at) : null;
 
   if (closeDate && !Number.isNaN(closeDate.getTime()) && Date.now() < closeDate.getTime()) {
