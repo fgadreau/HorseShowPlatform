@@ -49,11 +49,11 @@ try{
  await page.getByRole('button',{name:'Retry checks',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.checks.length)).toBe(4);
  assert.deepEqual(await page.evaluate(()=>window.checks.map(check=>check.id)),['class0','class1','class2','class1']);
- await open('exclusions');await page.getByRole('combobox',{name:'Exclude',exact:true}).selectOption('horse');
- await choose('Search for a rider or horse','Pilot Horse');await page.getByLabel('Internal reason (optional)').fill('Pilot rule');await page.getByRole('button',{name:'Add to list'}).click();
+ await open('exclusions');assert.equal(await page.getByRole('combobox',{name:'Exclude',exact:true}).count(),0);
+ await choose('Search for a rider','Pilot Rider');await page.getByLabel('Internal reason (optional)').fill('Pilot rule');await page.getByRole('button',{name:'Add to list'}).click();
  await expect(page.getByRole('button',{name:'Remove from list'})).toBeVisible();
- assert.deepEqual(await page.evaluate(()=>({horse:window.exclusions[0].horse_id,rider:window.exclusions[0].rider_contact_id})),{horse:'horse',rider:null});
+ assert.deepEqual(await page.evaluate(()=>({horse:window.exclusions[0].horse_id,rider:window.exclusions[0].rider_contact_id})),{horse:undefined,rider:'rider'});
  await page.getByRole('button',{name:'Remove from list'}).click();await expect(page.getByText('No exclusions for this class.')).toBeVisible();
  assert.deepEqual(errors,[]);
- console.log('PASS schedule: warm-up tracking has no request controls; shared button styles FR/EN mobile; all days checked sequentially without navigation, navigation preserves queue, imported ranking never overrides ReinerSuite, house exclusions disable selection, staff adds/removes horse exclusions. External traffic blocked.');
+ console.log('PASS schedule: warm-up tracking has no request controls; shared button styles FR/EN mobile; all days checked sequentially without navigation, navigation preserves queue, imported ranking never overrides ReinerSuite, house exclusions disable selection, staff adds/removes rider-only exclusions. External traffic blocked.');
 }finally{await browser?.close();await server.close();}

@@ -704,7 +704,7 @@ function ClassesView({
       ) : null}
 
       {editingHouseExclusions ? <ModalDialog className="class-program-modal" eyebrow={uiText(locale, "Classe maison récurrente", "Recurring house class")} title={uiText(locale, "Liste d’inéligibilité", "Ineligibility list")} description={editingHouseExclusions.name} onClose={() => setEditingHouseExclusions(null)}>
-        <HouseClassExclusions key={editingHouseExclusions.id} template={editingHouseExclusions} contacts={contacts} horses={horses} locale={locale} />
+        <HouseClassExclusions key={editingHouseExclusions.id} template={editingHouseExclusions} contacts={contacts} locale={locale} />
       </ModalDialog> : null}
       {creatingBlockTemplate ? (
         <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc récurrent", "New recurring block")} onClose={() => setCreatingBlockTemplate(false)}>

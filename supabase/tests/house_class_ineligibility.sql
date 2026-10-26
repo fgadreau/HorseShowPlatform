@@ -49,7 +49,7 @@ begin
     values(c6,org,sh2,blk2,dir,ct,'Recurring at second show',0,1);
   insert into public.organizations(id,name,slug) values(other_org,'Other exclusion org','other-exclusion-'||other_org);
   blocked:=false;
-  begin insert into public.house_class_exclusions(organization_id,class_template_id,horse_id) values(other_org,ct,h1);
+  begin insert into public.house_class_exclusions(organization_id,class_template_id,rider_contact_id) values(other_org,ct,contact);
     exception when others then blocked:=sqlerrm like '%classe maison%';end;
   if not blocked then raise exception 'Cross-association exclusions must fail';end if;
   if has_table_privilege('anon','public.house_class_exclusions','SELECT') or has_function_privilege('anon','public.house_class_entry_blocks(uuid,uuid,uuid,uuid)','EXECUTE') then raise exception 'Anonymous access must be denied';end if;
@@ -65,9 +65,10 @@ begin
   set local role authenticated;
   if (select count(*) from public.house_class_exclusions)<>0 then raise exception 'Participants must not see private lists';end if;
   blocked:=false;
-  begin insert into public.house_class_exclusions(organization_id,class_template_id,horse_id) values(org,ct,h2);exception when insufficient_privilege then blocked:=true;end;
+  begin insert into public.house_class_exclusions(organization_id,class_template_id,rider_contact_id) values(org,ct2,contact);exception when insufficient_privilege then blocked:=true;end;
   if not blocked then raise exception 'Participant cannot manage exclusion list';end if;
   if (select count(*) from public.house_class_entry_blocks(org,sh,h1,contact))<>2 then raise exception 'Exclusion applies to every occurrence of its recurring class';end if;
+  if (select count(*) from public.house_class_entry_blocks(org,sh,h2,contact))<>2 then raise exception 'Rider stays excluded when changing horses';end if;
   if (select count(*) from public.house_class_entry_blocks(org,sh2,h1,contact))<>1 then raise exception 'Exclusion persists across shows';end if;
   if exists(select 1 from public.house_class_entry_blocks(org,sh,h1,contact) where class_id=c3) then raise exception 'Different house class remains eligible';end if;
   blocked:=false;
@@ -84,17 +85,20 @@ begin
   perform set_config('request.jwt.claim.sub',staff_user::text,true);
   perform set_config('request.jwt.claims',json_build_object('sub',staff_user,'role','authenticated')::text,true);
   set local role authenticated;
+  blocked:=false;
+  begin insert into public.house_class_exclusions(organization_id,class_template_id,horse_id) values(org,ct,h2);
+    exception when check_violation then blocked:=true;end;
+  if not blocked then raise exception 'Even staff cannot exclude horses';end if;
   delete from public.house_class_exclusions where class_template_id=ct;
-  insert into public.house_class_exclusions(organization_id,class_template_id,horse_id) values(org,ct,h2);
   reset role;
   perform set_config('request.jwt.claim.sub',owner_user::text,true);
   perform set_config('request.jwt.claims',json_build_object('sub',owner_user,'role','authenticated')::text,true);
   set local role authenticated;
-  if exists(select 1 from public.house_class_entry_blocks(org,sh,h1,contact)) then raise exception 'Removing rider restores eligibility for unlisted horse';end if;
-  if (select count(*) from public.house_class_entry_blocks(org,sh,h2,contact))<>2 then raise exception 'Horse exclusion applies with same rider';end if;
+  if exists(select 1 from public.house_class_entry_blocks(org,sh,h1,contact)) then raise exception 'Removing rider restores eligibility';end if;
+  if exists(select 1 from public.house_class_entry_blocks(org,sh,h2,contact)) then raise exception 'Removal restores eligibility with every horse';end if;
   insert into public.entries(organization_id,show_id,horse_id,class_id,owner_contact_id,payer_contact_id,rider_contact_id,created_by_user_id,status)
     values(org,sh,h1,c1,contact,contact,contact,owner_profile,'draft');
   reset role;
-  raise notice 'PASS house exclusions: scope, staff RLS, privacy, recurring occurrences, rider/horse checks, server enforcement, cancellation and removal';
+  raise notice 'PASS house exclusions: scope, staff RLS, privacy, recurring occurrences, riders only across horses, server enforcement, cancellation and removal';
 end $$;
 rollback;
