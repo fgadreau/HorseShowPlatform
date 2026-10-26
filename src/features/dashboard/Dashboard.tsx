@@ -1258,7 +1258,7 @@ export function Dashboard({
             warmupHorses={personalHorses}
             locale={locale}
             blocks={selectedShowBlocks}
-            contacts={selectedOrganizationPersonalContacts}
+            contacts={selectedOrganizationPersonalHorseContacts}
             contactExternalIdentifiers={contactExternalIdentifiers}
             contactRoles={selectedOrganizationContactRoles}
             classes={selectedShowClasses}

@@ -100,7 +100,7 @@ function EntriesView({
             <h2>{uiText(locale, "Nouvelle inscription", "New entry")}</h2>
             <p>{uiText(locale, "Ouvre le formulaire et complète les contacts ou chevaux manquants sans changer de page.", "Open the form and complete missing contacts or horses without leaving the page.")}</p>
           </div>
-          <button className="primary-button" disabled={!organization || !shows.length || !classes.length} type="button" onClick={() => setCreatingEntry(true)}>
+          <button className="primary-button" disabled={!organization || !shows.length} type="button" onClick={() => setCreatingEntry(true)}>
             <Plus size={18} />
             {uiText(locale, "Inscription", "Entry")}
           </button>
