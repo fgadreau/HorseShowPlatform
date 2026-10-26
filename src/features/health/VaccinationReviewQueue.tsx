@@ -41,13 +41,17 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
   function decision(id: string) {
     const document = documents.find(item => item.id === id);
     const review = latestReview(id);
-    const current = !isCoggins || review?.status === "rejected" || (review?.review_method === "manual_coggins" && review.coggins_document_updated_at === document?.updated_at);
+    // Legacy association approvals remain effective in the compliance evaluator.
+    // Version-bound Coggins overrides must still match the current certificate.
+    const current = !isCoggins || review?.status === "rejected" || review?.review_method !== "manual_coggins" || review.coggins_document_updated_at === document?.updated_at;
     return (document ? localDecisions[decisionKey(document)] : undefined) ?? (current ? review?.status : undefined);
   }
   const vaccinationDocuments = documents.filter(document =>
     (isCoggins ? document.document_type === "coggins_eia" : ["combo_vaccine", "influenza_vaccine", "rhino_vaccine"].includes(document.document_type))
     && horses.some(horse => horse.id === document.horse_id));
   const visibleDocuments = vaccinationDocuments.filter(document => showDecisions || !decision(document.id));
+  const pendingCount = vaccinationDocuments.filter(document => !decision(document.id)).length;
+  const decidedCount = vaccinationDocuments.length - pendingCount;
   const selectedHorse = horses.find(horse => horse.id === selected?.horse_id);
   const reasonReady = reason.trim().length >= 10 && reason.length <= 2000;
   const cogginsCertificateReady = Boolean(selected?.document_url && selected.result?.trim().toLowerCase() === "negative"
@@ -80,24 +84,34 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
     finally { setBusy(false); }
   }
 
-  return <section className="panel span-2">
+  return <section className="panel span-2 health-review-queue">
     <div className="panel-header"><div>
-      <h2>{isCoggins ? uiText(locale,"Coggins : révision de concordance","Coggins: identity review") : uiText(locale, "Certificats de vaccination à approuver", "Vaccination certificates to review")}</h2>
+      <h2>{isCoggins ? uiText(locale,"Coggins à approuver","Coggins certificates to review") : uiText(locale, "Certificats de vaccination à approuver", "Vaccination certificates to review")}</h2>
       <p>{uiText(locale, "Ouvre le document soumis par le membre, puis approuve-le ou refuse-le.", "Open the document submitted by the member, then approve or reject it.")}</p>
     </div></div>
     {notice ? <div role="status" className={`notice ${notice.error ? "error" : "success"}`}>{notice.text}</div> : null}
-    <label className="checkbox-line"><input type="checkbox" checked={showDecisions} onChange={event => setShowDecisions(event.target.checked)} />{uiText(locale, "Afficher aussi les décisions enregistrées", "Also show saved decisions")}</label>
-    {!visibleDocuments.length ? <p>{isCoggins ? uiText(locale,"Aucun Coggins en attente.","No Coggins awaiting review.") : uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
+    <div className="health-review-toolbar">
+      <p className="muted-line">{uiText(locale, `${pendingCount} à traiter · ${decidedCount} ${decidedCount === 1 ? "décision enregistrée" : "décisions enregistrées"}`, `${pendingCount} awaiting review · ${decidedCount} saved ${decidedCount === 1 ? "decision" : "decisions"}`)}</p>
+      <label className="health-review-history"><input type="checkbox" checked={showDecisions} onChange={event => setShowDecisions(event.target.checked)} /><span>{uiText(locale, "Afficher aussi les décisions enregistrées", "Also show saved decisions")}</span></label>
+    </div>
+    {!visibleDocuments.length ? <p className="empty-state">{showDecisions ? uiText(locale, "Aucun document à afficher.", "No documents to display.") : isCoggins ? uiText(locale,"Aucun Coggins en attente.","No Coggins awaiting review.") : uiText(locale, "Aucun certificat de vaccination en attente.", "No vaccination certificates awaiting review.")}</p> : null}
     <div className="stack">{visibleDocuments.map(document => {
       const horse = horses.find(candidate => candidate.id === document.horse_id);
       const review = latestReview(document.id);
-      return <article className="health-document-summary" key={document.id}>
-        <strong>{horse?.name}</strong><span>{healthDocumentTypeLabel(document.document_type, locale)}</span>
-        <span>{reviewedDate(document) ? formatDate(reviewedDate(document)!) : isCoggins ? uiText(locale,"Date du prélèvement non fournie","Sample date not provided") : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
-        {decision(document.id) ? <span className={`badge ${decision(document.id)}`}>{decision(document.id) === "approved" ? uiText(locale, "Approuvé", "Approved") : uiText(locale, "Refusé", "Rejected")}{review ? ` · ${formatDate(review.reviewed_at)}` : ""}</span> : null}
-        {isCoggins && review?.review_notes ? <p>{review.review_notes}</p> : null}
+      const savedDecision = decision(document.id);
+      return <article className="health-document-summary health-review-card" key={document.id}>
+        <div className="health-review-card-header"><strong>{horse?.name}</strong>
+          <span className={`badge ${savedDecision ?? "pending_review"}`}>{savedDecision === "approved" ? uiText(locale, "Approuvé par l’association", "Approved by association") : savedDecision === "rejected" ? uiText(locale, "Refusé par l’association", "Rejected by association") : uiText(locale, "À approuver par l’association", "Awaiting association approval")}</span>
+        </div>
+        <div className="health-review-card-meta"><span>{healthDocumentTypeLabel(document.document_type, locale)}</span>
+          <span>{reviewedDate(document) ? `${isCoggins ? uiText(locale, "Prélèvement", "Sample") : uiText(locale, "Vaccination", "Vaccination")} : ${formatDate(reviewedDate(document)!)}` : isCoggins ? uiText(locale,"Date du prélèvement non fournie","Sample date not provided") : uiText(locale, "Date du vaccin non fournie", "Vaccination date not provided")}</span>
+          {isCoggins && document.status === "verified" ? <span>{uiText(locale, "Vérifié auprès de GVL", "Verified with GVL")}</span> : null}
+          {savedDecision && review ? <span>{uiText(locale, "Décision", "Decision")} : {formatDate(review.reviewed_at.slice(0, 10))}</span> : null}
+        </div>
+        {isCoggins && savedDecision && review?.review_notes ? <p>{review.review_notes}</p> : null}
+        {isCoggins && review?.status === "approved" && !savedDecision ? <p>{uiText(locale, "Le certificat a été mis à jour depuis la décision précédente. Une nouvelle approbation est nécessaire.", "The certificate has changed since the previous decision. A new approval is required.")}</p> : null}
         <div className="row-actions"><button type="button" className="primary-button" onClick={() => openReview(document)}>{uiText(locale, "Ouvrir le document", "Open document")}</button>
-          <button type="button" className="ghost-button" onClick={() => openReview(document)}>{uiText(locale, "Approuver", "Approve")}</button></div>
+          <button type="button" className="ghost-button" onClick={() => openReview(document)}>{savedDecision ? uiText(locale, "Modifier la décision", "Change decision") : uiText(locale, "Approuver", "Approve")}</button></div>
       </article>;
     })}</div>
     {selected ? <ModalDialog className="vaccination-review-modal" title={uiText(locale, "Vérifier le certificat", "Review certificate")} description={`${selectedHorse?.name ?? ""} · ${healthDocumentTypeLabel(selected.document_type, locale)}`} onClose={() => { if (!busy) setSelected(null); }}>
@@ -105,7 +119,7 @@ export function VaccinationReviewQueue({ locale, organizationId, horses, documen
       {isCoggins ? <>
         <p><strong>{uiText(locale,"Nom sur le certificat","Name on certificate")} :</strong> {selected.horse_name || "—"}</p>
         <p><strong>{uiText(locale,"Date du prélèvement","Sample date")} :</strong> {selected.test_or_administered_on ? formatDate(selected.test_or_administered_on) : "—"} · {selected.result || "—"}</p>
-        <p>{uiText(locale,"Cette dérogation accepte une différence d’identité pour cette association seulement. Elle ne modifie ni la fiche officielle du cheval, ni le certificat, ni sa date d’expiration. Vérifie les autres caractéristiques avant de confirmer.","This override accepts an identity difference for this association only. It does not change the official horse record, the certificate or its expiration. Check the other characteristics before confirming.")}</p>
+        <p>{uiText(locale,"Cette décision s’applique à cette association seulement. Vérifie que le certificat correspond au cheval avant de confirmer. Elle ne modifie ni la fiche du cheval, ni le certificat, ni sa date d’expiration.","This decision applies to this association only. Check that the certificate matches the horse before confirming. It does not change the horse record, the certificate or its expiration.")}</p>
         <label>{uiText(locale,"Motif de la décision","Reason for the decision")}<textarea required minLength={10} maxLength={2000} value={reason} disabled={busy} onChange={event => setReason(event.target.value)} /></label>
       </> : <label>{uiText(locale, "Date du vaccin indiquée sur le document", "Vaccination date shown on the document")}
         <input type="date" required min="1900-01-01" max={todayDateValue()} value={administeredOn} disabled={busy} onChange={event => setAdministeredOn(event.target.value)} />
