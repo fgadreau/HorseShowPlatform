@@ -4,7 +4,7 @@ import { errorMessage, formatCurrency } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { uiText } from "../dashboard/shared";
 
-export type EntryBackNumberSelection = { choice: "reuse" | "personal" | "request"; number: number | null; ready: boolean };
+export type EntryBackNumberSelection = { choice: "reuse" | "personal" | "request"; number: number | null; ready: boolean; requestFee?: number };
 type Options = { number: number | null; association_issued: boolean; requires_association: boolean; fee: number; auto_assign: boolean; pending: boolean };
 
 export function EntryBackNumberField({ orgId, horseId, blockIds, currency, locale, onChange }: {
@@ -36,7 +36,7 @@ export function EntryBackNumberField({ orgId, horseId, blockIds, currency, local
   useEffect(() => {
     const parsed = Number(number);
     const valid = choice !== "personal" || (Number.isInteger(parsed) && parsed > 0 && parsed <= 2147483647);
-    onChange({ choice, number: choice === "personal" ? parsed : choice === "reuse" ? options?.number ?? null : null, ready: Boolean(options) && valid });
+    onChange({ choice, number: choice === "personal" ? parsed : choice === "reuse" ? options?.number ?? null : null, ready: Boolean(options) && valid, requestFee: choice === "request" && options && !options.pending ? options.fee : 0 });
   }, [choice, number, options, onChange]);
   if (!horseId) return <p>{uiText(locale, "Choisis un cheval pour rechercher son dossard dans l'association.", "Choose a horse to look up its association back number.")}</p>;
   if (error) return <p role="alert">{error}</p>;

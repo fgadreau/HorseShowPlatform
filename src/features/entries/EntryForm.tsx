@@ -233,6 +233,7 @@ function EntryForm({
     evaluations: selectedEvaluations,
     organization,
     show: selectedShow,
+    backNumberFee: organization?.back_number_policy === "horse" && selectedEvaluations.length ? backNumberSelection.requestFee ?? 0 : 0,
   });
   const judgeFeePreviewLines = buildJudgeFeePreviewLines(checkoutPreview.lines);
   const judgeFeeByBlockId = new Map(judgeFeePreviewLines.map((item) => [item.line.evaluation.block!.id, item]));
@@ -755,6 +756,7 @@ function EntryForm({
                 <CheckoutFact label={uiText(locale, "Classes", "Classes")} value={formatCurrency(checkoutPreview.entryBaseSubtotal, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Frais tardifs", "Late fees")} value={formatCurrency(checkoutPreview.lateFeeTotal, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Frais juge", "Judge fees")} value={formatCurrency(checkoutPreview.judgeFeeTotal, checkoutPreview.currency)} />
+                <CheckoutFact label={uiText(locale, "Nouveau dossard", "New back number")} value={formatCurrency(checkoutPreview.backNumberFee, checkoutPreview.currency)} />
                 <CheckoutFact label={uiText(locale, "Taxes estimées", "Estimated taxes")} value={formatCurrency(checkoutPreview.taxAmount, checkoutPreview.currency)} />
                 <CheckoutFact emphasized label={uiText(locale, "Total estimé", "Estimated total")} value={formatCurrency(checkoutPreview.invoiceTotal, checkoutPreview.currency)} />
                 <CheckoutFact
@@ -1043,6 +1045,7 @@ type EntryCheckoutLine = {
 };
 
 type EntryCheckoutPreview = {
+  backNumberFee: number;
   currency: string;
   entryBaseSubtotal: number;
   entrySubtotal: number;
@@ -1061,10 +1064,12 @@ function buildEntryCheckoutPreview({
   evaluations,
   organization,
   show,
+  backNumberFee = 0,
 }: {
   evaluations: ClassEvaluation[];
   organization: Organization | null;
   show: Show | null;
+  backNumberFee?: number;
 }): EntryCheckoutPreview {
   const currency = show?.default_currency || organization?.currency || "CAD";
   const taxRate = show?.tax_rate ?? organization?.tax_rate ?? 0;
@@ -1076,7 +1081,7 @@ function buildEntryCheckoutPreview({
   const lateFeeTotal = roundMoney(lines.reduce((total, line) => total + line.fee.lateFee, 0));
   const entrySubtotal = roundMoney(lines.reduce((total, line) => total + line.fee.total, 0));
   const judgeFeeTotal = roundMoney(buildJudgeFeePreviewLines(lines).reduce((total, line) => total + line.amount, 0));
-  const invoiceSubtotal = roundMoney(entrySubtotal + judgeFeeTotal);
+  const invoiceSubtotal = roundMoney(entrySubtotal + judgeFeeTotal + backNumberFee);
   const taxAmount = roundMoney(invoiceSubtotal * (taxRate / 100));
   const invoiceTotal = roundMoney(invoiceSubtotal + taxAmount);
   const preauthRequired = show?.entry_payment_policy === "card_on_file_preauth";
@@ -1084,6 +1089,7 @@ function buildEntryCheckoutPreview({
   const preauthAmount = preauthRequired ? roundMoney(invoiceTotal * (1 + marginPercent / 100)) : 0;
 
   return {
+    backNumberFee,
     currency,
     entryBaseSubtotal,
     entrySubtotal,
