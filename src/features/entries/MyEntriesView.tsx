@@ -111,7 +111,7 @@ function MyEntriesView({
         </div>
       </section>
 
-      {organization ? <MyWarmupRequests key={organization.id} organizationId={organization.id} horses={warmupHorses ?? horses}/> : null}
+      {organization ? <MyWarmupRequests key={organization.id} locale={locale} organizationId={organization.id} horses={warmupHorses ?? horses}/> : null}
 
       {creatingEntry ? (
         <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Mon espace", "My space")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>

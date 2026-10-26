@@ -442,7 +442,7 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     scopeQueryToOrganization(client.from("contact_organization_memberships").select("*").order("created_at", { ascending: false }).returns<ContactOrganizationMembership[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("organization_products").select("*").order("category", { ascending: true }).order("name", { ascending: true }).returns<OrganizationProduct[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("manual_sales").select("*").order("created_at", { ascending: false }).returns<ManualSale[]>(), loadedOrganizationId),
-    client.from("nrha_rider_rankings").select("*").order("eligibility_year", { ascending: false }).order("list_type", { ascending: true }).order("rank", { ascending: true }).returns<NrhaRiderRanking[]>(),
+    Promise.resolve({ data: [] as NrhaRiderRanking[], error: null }), // ReinerSuite is authoritative; imported ranking lists are retired.
     scopeQueryToOrganization(client.from("organization_back_numbers").select("*").order("number", { ascending: true }).returns<OrganizationBackNumber[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("blocks").select("*").order("created_at", { ascending: false }).returns<Block[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("block_judge_assignments").select("*").order("sort_order", { ascending: true }).returns<BlockJudgeAssignment[]>(), loadedOrganizationId),

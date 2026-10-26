@@ -5,7 +5,7 @@ import type { Locale } from "../../lib/i18n";
 import type { ReadinessItem, ReadinessResult } from "../../lib/readiness";
 import { verifyNrhaEligibility } from "../../services/supabaseServices";
 import type { NrhaEligibilityVerification } from "../../services/supabaseServices";
-import type { Block, Contact, ContactExternalIdentifier, ClassRecord, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, NrhaRiderRanking, NrhaRiderRankingListType, Organization, Show } from "../../types/domain";
+import type { Block, Contact, ContactExternalIdentifier, ClassRecord, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, NrhaRiderRanking, Organization, Show } from "../../types/domain";
 import { findNrhaApprovedClass, hasGoverningBodyCode, nrhaClassTypeFromAssignments } from "../classes/classUtils";
 import { InlineHealthMessage, uiText } from "../dashboard/shared";
 
@@ -37,7 +37,6 @@ function NrhaEligibilityCheck({
   horse,
   horseExternalIdentifiers,
   locale = "fr",
-  nrhaRiderRankings,
   organization,
   onStatusChange,
   riderContact,
@@ -103,16 +102,7 @@ function NrhaEligibilityCheck({
     organization,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
-  const category26RankingGate = buildNrhaCategory26RankingGate({
-    block,
-    classRecord,
-    key: context.key,
-    locale,
-    nrhaRiderRankings,
-    riderContact,
-    show,
-  });
-  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip, category26RankingGate);
+  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip);
 
   useEffect(() => {
     onStatusChange?.(gate);
@@ -164,7 +154,6 @@ function buildNrhaEligibilityGateForEntry({
   horse,
   horseExternalIdentifiers,
   locale = "fr",
-  nrhaRiderRankings,
   organization,
   resultMessage,
   riderContact,
@@ -217,16 +206,7 @@ function buildNrhaEligibilityGateForEntry({
     organization,
   });
   const visibleResultMessage = resultMessage && resultMessage.key === context.key ? resultMessage : null;
-  const category26RankingGate = buildNrhaCategory26RankingGate({
-    block,
-    classRecord,
-    key: context.key,
-    locale,
-    nrhaRiderRankings,
-    riderContact,
-    show,
-  });
-  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip, category26RankingGate);
+  const gate = buildClassEligibilityGate(classRecord, context, visibleResultMessage, locale, skip);
 
   return {
     ...gate,
@@ -240,13 +220,12 @@ function buildClassEligibilityGate(
   resultMessage: NrhaEligibilityMessage | null,
   locale: Locale,
   skip: boolean,
-  category26RankingGate: NrhaCategory26RankingGate,
 ): NrhaEligibilityGate {
   if (skip) {
     return { applies: false, canProceed: true, eligible: null, key: nrhaContext.key, message: null, verified: false };
   }
 
-  const nrhaGate = buildNrhaEligibilityGate(nrhaContext, resultMessage, locale, false, category26RankingGate);
+  const nrhaGate = buildNrhaEligibilityGate(nrhaContext, resultMessage, locale, false);
   const nrhaAssignment = classRecord?.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA") ?? null;
   const evidence: GoverningBodyEligibilityEvidence[] = [];
 
@@ -291,7 +270,6 @@ function buildNrhaEligibilityGate(
   resultMessage: NrhaEligibilityMessage | null,
   locale: Locale,
   skip: boolean,
-  category26RankingGate: NrhaCategory26RankingGate,
 ): NrhaEligibilityGate {
   if (skip || !context.applies) {
     return {
@@ -311,17 +289,6 @@ function buildNrhaEligibilityGate(
       eligible: null,
       key: context.key,
       message: context.message ? { key: context.key, ...context.message } : null,
-      verified: false,
-    };
-  }
-
-  if (category26RankingGate.applies && !category26RankingGate.canProceed) {
-    return {
-      applies: true,
-      canProceed: false,
-      eligible: false,
-      key: context.key,
-      message: category26RankingGate.message,
       verified: false,
     };
   }
@@ -531,176 +498,12 @@ function buildNrhaEligibilityContext(input: {
   };
 }
 
-type NrhaCategory26RankingGate = {
-  applies: boolean;
-  canProceed: boolean;
-  message: NrhaEligibilityMessage | null;
-};
-
-const nrhaCategory26OpenClassLevels = new Map([
-  [2100, 4],
-  [6210, 4],
-  [2200, 3],
-  [6220, 3],
-  [2300, 2],
-  [6230, 2],
-  [2325, 1],
-  [6231, 1],
-]);
-
-const nrhaCategory26NonProClassLevels = new Map([
-  [2400, 4],
-  [6240, 4],
-  [2500, 3],
-  [6250, 3],
-  [2600, 2],
-  [6260, 2],
-  [2625, 1],
-  [6261, 1],
-]);
-
-function buildNrhaCategory26RankingGate(input: {
-  block: Block | null;
-  classRecord: ClassRecord | null;
-  key: string;
-  locale: Locale;
-  nrhaRiderRankings: NrhaRiderRanking[];
-  riderContact: Contact | null;
-  show: Show | null;
-}): NrhaCategory26RankingGate {
-  const classCode = nrhaClassCodeForEligibility(input.classRecord, input.block);
-  const classType = nrhaClassTypeForEligibility(input.classRecord, input.block, classCode);
-  const family = classCode && nrhaCategory26OpenClassLevels.has(classCode) ? "open" : classCode && nrhaCategory26NonProClassLevels.has(classCode) ? "non_pro" : null;
-  const classLevel = family === "open" && classCode ? nrhaCategory26OpenClassLevels.get(classCode) ?? null : family === "non_pro" && classCode ? nrhaCategory26NonProClassLevels.get(classCode) ?? null : null;
-  const applies = Boolean(classLevel && (classType === "category_2_aged_show" || classType === "category_6_closed_aged_show"));
-
-  if (!applies || !family || !classLevel || !input.show || !input.riderContact) {
-    return { applies, canProceed: true, message: null };
-  }
-
-  const eligibilityYear = eligibilityYearFromShow(input.show);
-  const riderMatchKeys = contactNrhaRiderNameMatchKeys(input.riderContact);
-
-  if (!eligibilityYear || !riderMatchKeys.length) {
-    return { applies, canProceed: true, message: null };
-  }
-
-  const sources: Array<{ listType: NrhaRiderRankingListType; rank: number }> = [];
-  let minimumLevel = 1;
-
-  if (family === "open") {
-    for (const listType of ["top_professional_riders", "top_200_lifetime_all_riders"] as const) {
-      const ranking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, listType, riderMatchKeys);
-
-      if (ranking) {
-        minimumLevel = Math.max(minimumLevel, nrhaCategory26RankLevel(ranking.rank));
-        sources.push({ listType, rank: ranking.rank });
-      }
-    }
-  } else {
-    const nonProRanking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, "top_200_non_pro_riders", riderMatchKeys);
-
-    if (nonProRanking) {
-      minimumLevel = Math.max(minimumLevel, nrhaCategory26RankLevel(nonProRanking.rank));
-      sources.push({ listType: "top_200_non_pro_riders", rank: nonProRanking.rank });
-    }
-
-    const lifetimeRanking = findNrhaRiderRanking(input.nrhaRiderRankings, eligibilityYear, "top_200_lifetime_all_riders", riderMatchKeys);
-
-    if (lifetimeRanking) {
-      minimumLevel = Math.max(minimumLevel, 2);
-      sources.push({ listType: "top_200_lifetime_all_riders", rank: lifetimeRanking.rank });
-    }
-  }
-
-  if (classLevel >= minimumLevel) {
-    return { applies, canProceed: true, message: null };
-  }
-
-  const sourceText = sources.length ? sources.map((source) => `${nrhaRankingListLabel(source.listType, input.locale)} #${source.rank}`).join(", ") : uiText(input.locale, "listes NRHA importées", "imported NRHA lists");
-  const minimumLevelText =
-    minimumLevel === 4
-      ? uiText(input.locale, "Level 4 seulement", "Level 4 only")
-      : uiText(input.locale, `Level ${minimumLevel} ou plus haut`, `Level ${minimumLevel} or higher`);
-
-  return {
-    applies,
-    canProceed: false,
-    message: {
-      key: input.key,
-      tone: "error",
-      message: uiText(
-        input.locale,
-        `NRHA Cat. 2/6: ${sourceText}. Niveau minimal déduit: ${minimumLevelText}; cette classe est Level ${classLevel}.`,
-        `NRHA Cat. 2/6: ${sourceText}. Deduced minimum level: ${minimumLevelText}; this class is Level ${classLevel}.`,
-      ),
-    },
-  };
-}
-
 function nrhaClassCodeForEligibility(classRecord: ClassRecord | null, _block: Block | null) {
   return integerFromExactReference(classRecord?.governing_body_assignments.find((assignment) => assignment.code.toUpperCase() === "NRHA")?.reporting_class_code);
 }
 
 function nrhaClassTypeForEligibility(classRecord: ClassRecord | null, _block: Block | null, classCode: number | null) {
   return nrhaClassTypeFromAssignments(classRecord?.governing_body_assignments) || findNrhaApprovedClass(String(classCode ?? ""))?.nrhaClassType || "";
-}
-
-function findNrhaRiderRanking(
-  rankings: NrhaRiderRanking[],
-  eligibilityYear: number,
-  listType: NrhaRiderRankingListType,
-  riderMatchKeys: string[],
-) {
-  const matchKeys = new Set(riderMatchKeys);
-
-  return rankings.find(
-    (ranking) =>
-      ranking.eligibility_year === eligibilityYear &&
-      ranking.list_type === listType &&
-      matchKeys.has(ranking.rider_name_match_key),
-  );
-}
-
-function nrhaCategory26RankLevel(rank: number) {
-  if (rank <= 35) return 4;
-  if (rank <= 90) return 3;
-  if (rank <= 200) return 2;
-  return 1;
-}
-
-function nrhaRankingListLabel(listType: NrhaRiderRankingListType, locale: Locale) {
-  switch (listType) {
-    case "top_professional_riders":
-      return uiText(locale, "Top Pro Riders", "Top Pro Riders");
-    case "top_200_non_pro_riders":
-      return uiText(locale, "Top 200 Non Pro Riders", "Top 200 Non Pro Riders");
-    case "top_200_lifetime_all_riders":
-    default:
-      return uiText(locale, "Top 200 Lifetime All Riders", "Top 200 Lifetime All Riders");
-  }
-}
-
-function eligibilityYearFromShow(show: Show) {
-  const year = Number(show.start_date.slice(0, 4));
-  return Number.isInteger(year) && year > 0 ? year : null;
-}
-
-function contactNrhaRiderNameMatchKeys(contact: Contact) {
-  const fullNameKey = normalizeNrhaRiderName([contact.first_name, contact.middle_name, contact.last_name].filter(Boolean).join(" "));
-  const firstGivenName = contact.first_name.trim().split(/\s+/).filter(Boolean)[0] ?? "";
-  const firstNameLastNameKey = normalizeNrhaRiderName([firstGivenName, contact.last_name].filter(Boolean).join(" "));
-
-  return [...new Set([fullNameKey, firstNameLastNameKey].filter(Boolean))];
-}
-
-function normalizeNrhaRiderName(value: string) {
-  return value
-    .normalize("NFKD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
 }
 
 function nrhaApplies(classRecord: ClassRecord | null, _block: Block | null, _classCode: number | null) {
