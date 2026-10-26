@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:horse-access:browser": "node scripts/horse-access.browser.mjs",
     "test:contact-duplicates:browser": "node scripts/contact-duplicates.browser.mjs",
     "test:schedule:browser": "node scripts/schedule-eligibility.browser.mjs",
     "test:back-numbers:browser": "node scripts/back-number-workflow.browser.mjs",

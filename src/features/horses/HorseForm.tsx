@@ -1,4 +1,6 @@
 import { useMemo, useState } from "react";
+import { billingRpc } from "../../services/billingFolio";
+import { requireSupabase } from "../../lib/supabase";
 import type { FormEvent } from "react";
 import { CheckCircle2, Plus, Search, ShieldCheck } from "lucide-react";
 import { ExternalImportDataPanel } from "../../components/ExternalImportDataPanel";
@@ -109,6 +111,10 @@ function HorseForm({
   const [importOwnerDateOfBirth, setImportOwnerDateOfBirth] = useState("");
   const [importOwnerMembershipNumbers, setImportOwnerMembershipNumbers] = useState<Record<string, string>>({});
   const [identityCandidates, setIdentityCandidates] = useState<HorseIdentityCandidate[]>([]);
+  const [accessCandidates, setAccessCandidates] = useState<Array<{ horse_id: string; name: string; registration_number: string | null; already_authorized: boolean }>>([]);
+  const [strongAccessMatch, setStrongAccessMatch] = useState(false);
+  const [accessNotice, setAccessNotice] = useState("");
+  const [accessError, setAccessError] = useState("");
   const [pendingHorseInput, setPendingHorseInput] = useState<Parameters<typeof createHorse>[0] | null>(null);
   const [busy, setBusy] = useState(false);
   const [healthMessage, setHealthMessage] = useState<InlineHealthMessage | null>(null);
@@ -205,6 +211,7 @@ function HorseForm({
 
   async function reviewOrCreateHorse(input: Parameters<typeof createHorse>[0]) {
     setBusy(true);
+    setAccessError(""); setAccessNotice("");
 
     try {
       if (onSearchIdentityCandidates) {
@@ -215,9 +222,22 @@ function HorseForm({
           setIdentityCandidates(candidates);
           return;
         }
+      } else {
+        const identifiers = [input.registration_number, input.external_memberships?.find(item => item.external_credential_issuer_id === nrhaOrganizationId)?.identifier_value].filter((value): value is string => Boolean(value?.trim() && value.trim().length >= 3));
+        const queries = [...new Set([...identifiers, input.name])];
+        const found = new Map<string, { horse_id: string; name: string; registration_number: string | null; already_authorized: boolean }>();
+        let strong = false;
+        for (const query of queries) {
+          const matches = await billingRpc("search_horse_agent_candidates", { p_org: input.organization_id, p_query: query });
+          if (identifiers.includes(query) && matches.length) strong = true;
+          for (const match of matches) found.set(match.horse_id, match);
+        }
+        if (found.size) { setAccessCandidates([...found.values()]); setStrongAccessMatch(strong); setPendingHorseInput(input); return; }
       }
 
       await finishHorseCreation(input);
+    } catch (error) {
+      setAccessError(errorMessage(error));
     } finally {
       setBusy(false);
     }
@@ -228,6 +248,23 @@ function HorseForm({
     await createInitialHealthDocuments(horse, input.name, input.date_of_birth || null);
     resetHorseCreationState();
     onCreated?.(horse);
+  }
+
+  async function useOrRequestExistingHorse(candidate: { horse_id: string; already_authorized: boolean }) {
+    if (!organization || busy) return;
+    setBusy(true); setAccessError("");
+    try {
+      if (candidate.already_authorized) {
+        const { data, error } = await requireSupabase().from("horses").select("*").eq("id", candidate.horse_id).single<Horse>();
+        if (error) throw error;
+        resetHorseCreationState(); setAccessCandidates([]); onCreated?.(data);
+      } else {
+        await billingRpc("request_horse_agent_access", { p_org: organization.id, p_horse: candidate.horse_id, p_message: "" });
+        setAccessCandidates([]); setPendingHorseInput(null);
+        setAccessNotice(uiText(locale, "Demande d’agent envoyée. Aucun nouveau cheval n’a été créé. Le propriétaire ou le secrétariat doit approuver l’accès.", "Agent request submitted. No new horse was created. The owner or office must approve access."));
+      }
+    } catch (error) { setAccessError(errorMessage(error)); }
+    finally { setBusy(false); }
   }
 
   async function handleUseExistingHorse(candidate: HorseIdentityCandidate) {
@@ -1232,7 +1269,15 @@ function HorseForm({
           </div>
         )}
 
-        {identityCandidates.length && pendingHorseInput ? (
+        {accessNotice ? <p role="status">{accessNotice}</p> : null}
+        {accessError ? <p role="alert">{accessError}</p> : null}
+        {accessCandidates.length && pendingHorseInput ? <div className="identity-candidate-review" role="region" aria-label={uiText(locale, "Cheval existant possible", "Possible existing horse")}>
+          <strong>{uiText(locale, "Une fiche de cheval correspond déjà à ces informations", "An existing horse record matches these details")}</strong>
+          <p>{uiText(locale, "Utilise la fiche si tu y es déjà lié, ou demande un accès comme agent. Une demande n’accorde aucun accès avant approbation.", "Use the record if already linked, or request agent access. A request grants no access before approval.")}</p>
+          {accessCandidates.map(candidate => <article className="identity-candidate-card" key={candidate.horse_id}><div><strong>{candidate.name}</strong>{candidate.registration_number ? <span>{candidate.registration_number}</span> : null}</div><button className="primary-button" disabled={busy} type="button" onClick={() => void useOrRequestExistingHorse(candidate)}>{candidate.already_authorized ? uiText(locale, "Utiliser ce cheval", "Use this horse") : uiText(locale, "Demander à devenir agent", "Request to become agent")}</button></article>)}
+          <div className="row-actions"><button className="ghost-button" disabled={busy} type="button" onClick={() => { setAccessCandidates([]); setPendingHorseInput(null); }}>{uiText(locale, "Corriger les informations", "Correct the details")}</button>
+          {!strongAccessMatch ? <button className="ghost-button" disabled={busy} type="button" onClick={async () => { setBusy(true); try { await finishHorseCreation(pendingHorseInput); setAccessCandidates([]); } catch (error) { setAccessError(errorMessage(error)); } finally { setBusy(false); } }}>{uiText(locale, "C’est un autre cheval du même nom — créer", "This is a different horse with the same name — create")}</button> : null}</div>
+        </div> : identityCandidates.length && pendingHorseInput ? (
           <HorseIdentityCandidateReview
             busy={busy}
             candidates={identityCandidates}
