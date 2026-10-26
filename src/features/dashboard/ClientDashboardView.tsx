@@ -223,16 +223,16 @@ function ClientDashboardView({
       {setupWarnings.length > 0 ? (
         <div className="client-setup-warnings span-2">
           {setupWarnings.map(({ key, icon: Icon, tone, title, message, cta, view }) => (
-            <div className={`client-setup-warning tone-${tone}`} key={key}>
+            <button className={`client-setup-warning tone-${tone}`} key={key} type="button" onClick={() => onViewChange(view)}>
               <Icon size={20} className="client-warning-icon" />
-              <div className="client-warning-content">
+              <span className="client-warning-content">
                 <strong>{title}</strong>
-                <p>{message}</p>
-              </div>
-              <button className="client-warning-cta" type="button" onClick={() => onViewChange(view)}>
+                <span className="client-warning-message">{message}</span>
+              </span>
+              <span className="client-warning-cta">
                 {cta} <ChevronRight size={14} />
-              </button>
-            </div>
+              </span>
+            </button>
           ))}
         </div>
       ) : null}

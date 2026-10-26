@@ -24,7 +24,10 @@ try{
  const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(10000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
  await page.goto('http://127.0.0.1:5182/scripts/tests/directory-ui/index.html');
- await page.getByRole('button',{name:'Ranch — Choisir',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Répertoire',exact:true})).toHaveValue('dir1');
+ expect(await page.evaluate(()=>window.enrollments)).toEqual([]);
+ await page.getByRole('combobox',{name:'Répertoire',exact:true}).selectOption('dir2');
+ await page.getByRole('button',{name:'Confirmer mon répertoire',exact:true}).click();
  await expect(page.getByRole('button',{name:'Ranch — Ajouté',exact:true})).toBeDisabled();
  await page.getByRole('button',{name:'Reining — Choisir',exact:true}).click();
  expect(await page.evaluate(()=>window.enrollments)).toEqual(['dir2','dir1']);
@@ -43,11 +46,12 @@ try{
  expect(await page.evaluate(()=>window.createdHorses[0].organization_discipline_ids)).toEqual(['dir2']);
  console.log('PASS: real horse form submits only the selected nondefault directory; the last selection cannot be cleared.');
  await page.goto('http://127.0.0.1:5182/scripts/tests/directory-ui/index.html?failure');
- await page.getByRole('button',{name:'Ranch — Choisir',exact:true}).click();
+ await page.getByRole('combobox',{name:'Répertoire',exact:true}).selectOption('dir2');
+ await page.getByRole('button',{name:'Confirmer mon répertoire',exact:true}).click();
  await expect(page.getByRole('status').filter({hasText:'Inscription refusée'})).toBeVisible();
- await expect(page.getByRole('button',{name:'Ranch — Choisir',exact:true})).toBeEnabled();
+ await expect(page.getByRole('button',{name:'Confirmer mon répertoire',exact:true})).toBeEnabled();
  await page.evaluate(()=>{window.failEnrollment=false});
- await page.getByRole('button',{name:'Ranch — Choisir',exact:true}).click();
+ await page.getByRole('button',{name:'Confirmer mon répertoire',exact:true}).click();
  await expect(page.getByRole('button',{name:'Ranch — Ajouté',exact:true})).toBeDisabled();
  const serviceResult=await page.evaluate(async()=>{
   const input={organization_id:'org',name:'Service horse',primary_owner_contact_id:'owner',created_by_user_id:'profile'};
