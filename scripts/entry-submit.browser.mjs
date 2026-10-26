@@ -10,7 +10,7 @@ const fixture={
  block:{id:'block',organization_id:'org',show_id:'show',show_day_id:'day',name:'Open / Omnium',block_type:'competition',sort_order:1,schedule_start_mode:'fixed',scheduled_time:'08:00',entries_close_at:null},
  horse:{id:'horse',name:'TEST Horse',primary_owner_contact_id:'owner',date_of_birth:'2020-01-01'},
  contacts:[{id:'owner',first_name:'TEST',last_name:'Owner',type:'owner'},{id:'rider',first_name:'TEST',last_name:'Rider',type:'rider',date_of_birth:'1980-01-01'}],
- classes:[['c1','1100','Open'],['c2','1200','Intermediate Open']].map(([id,code,name],i)=>({id,code,name,organization_id:'org',show_id:'show',block_id:'block',entry_fee:25,judge_fee:10,sort_order:i,eligibility_rules:{},governing_body_assignments:[{governing_body_id:'nrha',code:'NRHA',name:'NRHA',reporting_class_code:code,eligibility_profile_code:'category_1_ancillary_year_end',sanction_metadata:{}}]})),
+ classes:[['c1','1100','Open'],['c2','1200','Intermediate Open']].map(([id,code,name],i)=>({id,code,name,organization_id:'org',show_id:'show',block_id:'block',entry_fee:i===0?25:30,judge_fee:i===0?10:15,sort_order:i,eligibility_rules:{},governing_body_assignments:[{governing_body_id:'nrha',code:'NRHA',name:'NRHA',reporting_class_code:code,eligibility_profile_code:'category_1_ancillary_year_end',sanction_metadata:{}}]})),
 };
 const plugin={name:'entry-submit-fixture',enforce:'pre',transform(code,id){
  const replace=(name,body)=>{const ast=ts.createSourceFile(id,code,ts.ScriptTarget.Latest,true),n=ast.statements.find(n=>ts.isFunctionDeclaration(n)&&n.name?.text===name);return code.slice(0,n.body.pos)+' {'+body+'}'+code.slice(n.body.end);};
@@ -19,7 +19,7 @@ const plugin={name:'entry-submit-fixture',enforce:'pre',transform(code,id){
  if(id.endsWith('/src/services/supabaseServices.ts'))return replace('listHorseHealthCompliance',"return [{horse_id:'horse',can_proceed:true,compliance_status:'compliant',reasons:[]}];")+'\nexport {assertEntryProgramLimits};';
 },configureServer(server){server.middlewares.use('/entry-submit-fixture',async(req,res,next)=>{try{res.setHeader('Content-Type','text/html');res.end(await server.transformIndexHtml('/entry-submit-fixture',`<!doctype html><html><head><meta charset="UTF-8"></head><body><div id="root"></div><script type="module">
 import React,{useState} from 'react';import {createRoot} from 'react-dom/client';import {EntryForm} from '/src/features/entries/EntryForm.tsx';import {assertEntryProgramLimits} from '/src/services/supabaseServices.ts';import '/src/styles.css';
-const f=${JSON.stringify(fixture)},mode=new URLSearchParams(location.search).get('mode');
+const f=${JSON.stringify(fixture)},mode=new URLSearchParams(location.search).get('mode');if(mode==='same-judge')f.classes[1].judge_fee=10;
 window.checks={};window.created=[];window.failedOnce=false;window.calls=[];
 const initial=mode==='existing'?[{id:'existing',horse_id:'horse',class_id:'c1',rider_contact_id:'rider',owner_contact_id:'owner',status:'draft'}]:[];
 window.fixtureEntries=initial;
@@ -39,7 +39,15 @@ try{await server.listen();browser=await chromium.launch({executablePath:await bu
  const classButton=id=>page.locator('.entry-showbill-class').filter({hasText:id==='c1'?'1100 - Open':'1200 - Intermediate Open'});
  async function prepare(mode){await page.goto('http://127.0.0.1:5197/entry-submit-fixture?mode='+mode);await page.getByRole('combobox').nth(1).click();await page.getByRole('option').filter({hasText:'TEST Horse'}).click();await page.getByRole('combobox').nth(2).click();await page.getByRole('option').filter({hasText:'TEST Rider'}).click();await expect(classButton('c2')).toBeEnabled();}
  const submit=()=>page.getByRole('button',{name:/Créer les? brouillons? et la facture/});
- await prepare('success');await classButton('c1').click();await classButton('c2').click();await submit().click();await expect.poll(()=>page.evaluate(()=>window.created.length)).toBe(2);expect(await page.evaluate(()=>window.checks)).toEqual({c1:2,c2:2});expect(await page.evaluate(()=>window.completed)).toBe(true);
+ await prepare('success');
+ await expect(classButton('c1').locator('.entry-judge-fee')).toContainText('$10.00');
+ await classButton('c1').click();await expect(page.locator('.entry-block-judge-fee')).toContainText('$10.00');
+ await expect(classButton('c2')).toContainText('Frais du bloc si sélectionnée : $15.00');
+ await classButton('c2').click();await expect(classButton('c1').locator('s')).toHaveText('$10.00');await expect(classButton('c2').locator('s')).toHaveCount(0);
+ await expect(page.locator('.entry-checkout-judge-line')).toHaveCount(1);await expect(page.locator('.entry-checkout-judge-line')).toContainText('$15.00');
+ await expect(page.locator('.entry-checkout-judge-line')).toContainText('1200 - Intermediate Open');
+ await classButton('c2').click();await expect(classButton('c1').locator('s')).toHaveCount(0);await expect(page.locator('.entry-checkout-judge-line')).toContainText('$10.00');
+ await classButton('c2').click();await submit().click();await expect.poll(()=>page.evaluate(()=>window.created.length)).toBe(2);expect(await page.evaluate(()=>window.checks)).toEqual({c1:2,c2:2});expect(await page.evaluate(()=>window.completed)).toBe(true);
  console.log('PASS: two NRHA classes in one block submit; each has its final NRHA verification.');
  await prepare('partial');await classButton('c1').click();await classButton('c2').click();await submit().click();await expect(page.getByText(/1 inscription créée.*TEST temporary failure/)).toBeVisible();await expect(classButton('c1')).not.toHaveClass(/selected/);await expect(classButton('c2')).toHaveClass(/selected/);await expect(submit()).toBeEnabled();await submit().click();await expect.poll(()=>page.evaluate(()=>window.created.length)).toBe(2);expect(await page.evaluate(()=>window.calls)).toEqual(['c1','c2','c2']);
  console.log('PASS: interrupted submission retains only unsaved classes; retry never resubmits the saved entry.');
@@ -52,5 +60,8 @@ try{await server.listen();browser=await chromium.launch({executablePath:await bu
  const riderLimit=await page.evaluate(async()=>{window.fixtureEntries=Array.from({length:3},(_,i)=>({id:'other-'+i,horse_id:'other-horse-'+i,class_id:'c2',rider_contact_id:'rider',owner_contact_id:'owner',status:'draft'}));try{await window.checkProgramLimits({class_id:'c2',horse_id:'new-horse',rider_contact_id:'rider',owner_contact_id:'owner'});return null;}catch(e){return e.message;}});
  expect(riderLimit).toContain('trois fois dans une même classe');
  console.log('PASS: the rider limit of three entries in one class remains enforced.');
+ await prepare('same-judge');await classButton('c1').click();await expect(classButton('c2').locator('s')).toHaveText('$10.00');await expect(classButton('c2')).toContainText('Aucun frais de juge supplémentaire');await classButton('c2').click();await expect(page.locator('.entry-checkout-judge-line')).toHaveCount(1);await expect(page.locator('.entry-checkout-judge-line')).toContainText('$10.00');
+ console.log('PASS: judge fees show per class, strike included fees, update when selecting/removing a higher-fee class, and appear once per block in the summary.');
+
 
 }finally{if(browser)await browser.close();await server.close();}
