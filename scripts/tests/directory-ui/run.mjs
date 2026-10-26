@@ -2,7 +2,7 @@
 import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 import ts from 'typescript';
-import fs from 'node:fs';
+import bundledChromium from '@sparticuz/chromium';
 import {chromium,expect} from '@playwright/test';
 const server=await createServer({configFile:false,plugins:[{name:'directory-fixture',enforce:'pre',transform(code,id){
  if(id.endsWith('/src/lib/supabase.ts')){
@@ -15,11 +15,11 @@ const server=await createServer({configFile:false,plugins:[{name:'directory-fixt
  const edits=[];
  for(const n of ast.statements){if(ts.isFunctionDeclaration(n)&&['joinPublicDirectory','listHorseHealthCompliance'].includes(n.name?.text))edits.push({start:n.body.pos,end:n.body.end,value:n.name.text==='joinPublicDirectory'?" {if(window.failEnrollment)throw new Error('Inscription refusée');window.enrollments.push(directoryId);return 'owner';}":' {return [];}'});}
  for(const e of edits.reverse())code=code.slice(0,e.start)+e.value+code.slice(e.end);
- return code;
+ return code+'\nexport {ensureHorseOrganizationLink};';
 }},react()],server:{host:'127.0.0.1',port:5182,strictPort:true}});
 await server.listen();
-const executablePath=process.env.CHROMIUM_EXECUTABLE_PATH ?? (fs.existsSync('/usr/bin/chromium')?'/usr/bin/chromium':undefined);
-const browser=await chromium.launch({executablePath,args:['--no-sandbox']});
+const executablePath=process.env.CHROMIUM_EXECUTABLE_PATH ?? await bundledChromium.executablePath();
+const browser=await chromium.launch({executablePath,args:bundledChromium.args});
 try{
  const page=await browser.newPage({viewport:{width:390,height:844}});page.setDefaultTimeout(10000);
  const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -98,6 +98,16 @@ try{
  });
  expect(contactResult).toEqual({identifierBeforeLink:true,directoryWrites:1});
  console.log('PASS: imported owner identifiers are initialized before directory authority changes; horse creation reuses the existing link without a forbidden update.');
+ const horseLinkResult=await page.evaluate(async()=>{
+  let existing=true;const writes=[];
+  window.testClient={from(table){if(table!=='directory_horses')throw Error('Unexpected table');const chain={select(){return chain},eq(){return chain},maybeSingle(){return Promise.resolve({data:existing?{id:'existing-link'}:null,error:null})},upsert(value){writes.push(value);if(existing)throw Error('RLS: agent cannot update directory identity');return Promise.resolve({error:null})}};return chain;}};
+  const input={organization_id:'org',organization_discipline_id:'dir1',horse_id:'horse',source:'reservation',created_by_user_id:'booker'};
+  await window.ensureHorseDirectoryLink(input);const existingWrites=writes.length;
+  existing=false;await window.ensureHorseDirectoryLink(input);
+  return {existingWrites,createdLinks:writes.length,directory:writes[0].organization_discipline_id,horse:writes[0].horse_id};
+ });
+ expect(horseLinkResult).toEqual({existingWrites:0,createdLinks:1,directory:'dir1',horse:'horse'});
+ console.log('PASS: a booking agent reuses an existing horse directory link without an identity update; missing links still use the authorized insert path.');
  expect(errors).toEqual([]);
  console.log('PASS: failed enrollment displays its error, allows a retry and produces no browser exception.');
 }finally{await browser.close();await server.close();}

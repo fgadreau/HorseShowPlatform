@@ -5920,6 +5920,11 @@ async function ensureHorseOrganizationLink(input: {
 }) {
   const client = requireSupabase();
   const organizationDisciplineId = input.organization_discipline_id ?? await findDefaultOrganizationDisciplineId(input.organization_id);
+  // Booking permission does not imply permission to update directory identity.
+  const { data: existingLink, error: linkReadError } = await client.from("directory_horses")
+    .select("id").eq("organization_discipline_id", organizationDisciplineId).eq("horse_id", input.horse_id).maybeSingle();
+  if (linkReadError) throw linkReadError;
+  if (existingLink) return;
   const { error } = await client.from("directory_horses").upsert(
     {
       organization_discipline_id: organizationDisciplineId,
