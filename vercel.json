@@ -10,6 +10,10 @@
     "api/billing-documents.js": {
       "maxDuration": 240,
       "includeFiles": "{node_modules/@sparticuz/chromium/bin/**,public/branding/hsp-logo-aubergine.svg}"
+    },
+    "api/billing-pdf.js": {
+      "maxDuration": 90,
+      "includeFiles": "{node_modules/@sparticuz/chromium/bin/**,src/features/finance/billingDocument.css}"
     }
   },
   "routes": [
