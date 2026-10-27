@@ -5,6 +5,8 @@ import {createServer} from 'vite';
 import react from '@vitejs/plugin-react';
 import {chromium,expect} from '@playwright/test';
 import executable from '@sparticuz/chromium';
+import {renderInvoicePdf} from '../../server/billing/invoice-pdf.mjs';
+import {getDocument} from 'pdfjs-dist/legacy/build/pdf.mjs';
 const output='.tmp/billing-document-review';
 const plugin={name:'invoice-fixture',enforce:'pre',load(id){if(id.endsWith('/src/lib/supabase.ts'))return 'export function requireSupabase(){return window.fakeSupabase;}';},configureServer(server){server.middlewares.use('/invoice-test',async(req,res,next)=>{try{
  const html=`<html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="root" class="finance"></main><script type="module">
@@ -28,6 +30,7 @@ try{
  await context.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
  await context.route('**/api/billing-documents/**',route=>route.fulfill({json:{state:'unavailable'}}));
  const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+ await context.route('**/api/billing-pdf',async route=>{const body=route.request().postDataJSON();const doc=await page.evaluate(({id,lang})=>JSON.parse(sessionStorage.getItem('invoice-fixture-'+lang)).documents.find(d=>d.id===id),{id:body.documentId,lang:body.locale});const bytes=await renderInvoicePdf(doc,body.locale,{browser:{launch:()=>browser.newContext()}});await route.fulfill({contentType:'application/pdf',body:bytes});});
  for(const locale of ['fr','en']){
   await page.goto('http://127.0.0.1:5198/invoice-test?lang='+locale);const fr=locale==='fr';
   await page.getByRole('button',{name:fr?'Émettre une facture':'Issue an invoice',exact:true}).click();
@@ -40,11 +43,12 @@ try{
   await expect(invoice.locator('.billing-document-due')).toContainText('428');
   await expect(invoice.locator('.billing-document-tax-ids').first()).toContainText('No'+(fr?'':' .').trim());
   assert.equal(await invoice.locator('.billing-document-tax-ids dd').count(),4,'Separate registration number for each supplier and tax');
-  const popupPromise=page.waitForEvent('popup');await page.getByRole('button',{name:fr?'Imprimer / enregistrer en PDF':'Print / save as PDF',exact:true}).click();const popup=await popupPromise;
-  await expect.poll(()=>popup.evaluate(()=>window.printRequested)).toBe(true);
-  assert.equal(await popup.locator('button').count(),0);assert.equal(await popup.locator('.billing-document-notice').count(),0);
-  await popup.emulateMedia({media:'print'});await popup.pdf({path:output+'/invoice-'+locale+'.pdf',preferCSSPageSize:true,printBackground:true,displayHeaderFooter:false});
-  await popup.screenshot({path:output+'/invoice-'+locale+'.png',fullPage:true});await popup.close();
+  const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:fr?'Télécharger le PDF':'Download PDF',exact:true}).click();const download=await downloadPromise;
+  const pdfPath=output+'/invoice-'+locale+'.pdf';await download.saveAs(pdfPath);
+  const bytes=await (await import('node:fs/promises')).readFile(pdfPath);const pdf=await getDocument({data:new Uint8Array(bytes)}).promise;
+  let pdfText='';for(let i=1;i<=pdf.numPages;i++)pdfText+=(await(await pdf.getPage(i)).getTextContent()).items.map(x=>x.str).join(' ');
+  assert(!pdfText.includes('about:blank'));assert(!/14[.,]975/.test(pdfText));assert(pdfText.includes('9,975')||pdfText.includes('9.975'));assert(!pdfText.includes('DEMO-ASSO-TPS-NON-VALIDE'));assert.equal(await invoice.locator('button').count(),0);
+  await invoice.screenshot({path:output+'/invoice-'+locale+'.png'});
   await page.getByLabel(fr?'Montant partiel ou solde':'Partial amount or balance').fill('100');
   await page.getByRole('button',{name:fr?'Confirmer le paiement reçu':'Confirm received payment',exact:true}).click();
   await expect(page.locator('.billing-document').getByRole('heading',{name:fr?'Reçu de paiement':'Payment receipt',exact:true})).toBeVisible();
@@ -56,5 +60,11 @@ try{
   await page.reload();await expect(page.locator('.billing-document-number')).toHaveText('CP2026-F-000001');
   await page.setViewportSize({width:390,height:844});await page.screenshot({path:output+'/mobile-'+locale+'.png',fullPage:true});assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));await page.setViewportSize({width:1280,height:900});
  }
- assert.deepEqual(errors,[]);console.log('PASS: unpaid numbered invoice, separate supplier tax IDs, isolated print layout, immutable invoice, partial/full offline payments, reload, FR/EN, mobile');
+ const longDocument=await page.evaluate(()=>JSON.parse(sessionStorage.getItem('invoice-fixture-en')).documents.find(d=>d.kind==='invoice'));
+ longDocument.number='LONG-INV-001';const source=longDocument.snapshot.charges[0];longDocument.snapshot.charges=Array.from({length:45},(_,i)=>({...source,id:'long-'+i,description:'Longline_'+String(i).padStart(3,'0')}));
+ Object.assign(longDocument.snapshot,{subtotal:9000,tax_amount:1347.75,total:10347.75,received:0,balance:10347.75,payments:[]});
+ const longBytes=await renderInvoicePdf(longDocument,'en',{browser:{launch:()=>browser.newContext()}});await writeFile(output+'/long-invoice.pdf',longBytes);
+ const longPdf=await getDocument({data:new Uint8Array(longBytes)}).promise;assert(longPdf.numPages>1);let longText='';for(let i=1;i<=longPdf.numPages;i++)longText+=(await(await longPdf.getPage(i)).getTextContent()).items.map(x=>x.str).join(' ');
+ for(let i=0;i<45;i++)assert(longText.includes('Longline_'+String(i).padStart(3,'0')),'Every line survives pagination');
+ assert(!longText.includes('about:blank'));assert.deepEqual(errors,[]);console.log('PASS: numbered invoice, separate taxes, direct PDF download, secure shared renderer, immutable invoice, partial/full offline payments, FR/EN, mobile and long-document pagination');
 }finally{await browser?.close();await server.close();}
