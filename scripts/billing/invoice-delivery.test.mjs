@@ -26,6 +26,21 @@ const document={id,kind:'invoice',number:'INV-001',created_at:'2026-10-26T12:00:
 test('shared invoice template escapes every supplied identity and description and removes the combined rate',()=>{
  const html=invoiceBody(document,'fr');assert(!html.includes('<script>'));assert(!html.includes('<img'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('14.975'));assert(!html.includes('14,975'));assert(html.includes('TPS (5 %)'));assert(html.includes('TVQ (9,975 %)'));assert(html.includes('INV-001'));
 });
+test('partial and final receipts show account balances without exposing or changing internal allocations',()=>{
+ const previous={id:'first',method:'cash',amount:100,received_at:'2026-10-26T12:00:00Z',allocations:[{charge_id:'c',amount:100}]};
+ for(const locale of ['fr','en'])for(const [amount,balance] of [[100,328.48],[328.48,0]]){
+  const payment={id:'current',method:'etransfer',amount,received_at:'2026-10-26T13:00:00Z',reference:'REF-123',allocations:[{charge_id:'c',amount}],supplier_allocations:{association:amount,hsp:0}};
+  const receipt={...structuredClone(document),kind:'receipt',payment_id:payment.id,number:'R-001'};
+  Object.assign(receipt.snapshot,{charges:[{...charge(372.67,55.81),id:'c',description:'INTERNAL_ITEM_DO_NOT_PRINT',quantity:1,unit_price:372.67,tax_amount:55.81,total:428.48}],subtotal:372.67,tax_amount:55.81,total:428.48,received:428.48-balance,balance,receipt_payment:payment,payments:balance?[payment]:[previous,payment]});
+  const original=structuredClone(receipt);const html=invoiceBody(receipt,locale);
+  assert.deepEqual(receipt,original,'Rendering must preserve allocations and saved financial data');
+  assert(!html.includes('INTERNAL_ITEM_DO_NOT_PRINT'));assert(!html.includes('Allocations of this payment'));assert(!html.includes('Affectations de ce paiement'));assert(!html.includes('finance-charge-groups'));assert(!html.includes('Total taxes'));
+  assert(html.includes('REF-123'));assert(html.includes(locale==='fr'?'Solde avant ce paiement':'Balance before this payment'));assert(html.includes(locale==='fr'?'Solde restant après ce paiement':'Balance remaining after this payment'));
+  const money=n=>new Intl.NumberFormat(locale==='fr'?'fr-CA':'en-CA',{style:'currency',currency:'CAD'}).format(n);
+  assert(html.includes(money(balance+amount)));assert(html.includes(money(amount)));assert(html.includes(money(balance)));
+  assert(html.includes(balance?(locale==='fr'?'Compte partiellement payé':'Account partially paid'):(locale==='fr'?'Compte acquitté':'Account paid in full')));
+ }
+});
 async function request(handler,{body={documentId:id,locale:'fr',personal:false},headers={},method='POST'}={}){
  const req=Readable.from([Buffer.from(JSON.stringify(body))]);req.method=method;req.headers={origin:PREPROD_ORIGIN,authorization:'Bearer user-token',...headers};
  const res={statusCode:200,headers:{},setHeader(k,v){this.headers[k]=v;},end(value){this.body=value;}};await handler(req,res);return res;
