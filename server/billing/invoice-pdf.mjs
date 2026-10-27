@@ -3,6 +3,7 @@ import {createClient} from '@supabase/supabase-js';
 import {invoiceBody,escapeHtml} from './invoice-html.mjs';
 import {serverlessBrowser} from '../vet/serverless-browser.mjs';
 import {rawBody,UUID,PREPROD_REF,PREPROD_ORIGIN} from './hosted-core.mjs';
+import {documentTaxes} from '../../src/features/finance/documentPresentation.mjs';
 const css=readFileSync(new URL('../../src/features/finance/billingDocument.css',import.meta.url),'utf8');
 
 export async function renderInvoicePdf(document,locale,{browser=serverlessBrowser}={}){
@@ -12,7 +13,9 @@ export async function renderInvoicePdf(document,locale,{browser=serverlessBrowse
  try{
   page=await instance.newPage({javaScriptEnabled:false});await page.route('**/*',route=>route.abort());
   await page.setContent(`<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><title>${escapeHtml(document.number??document.snapshot.account_number)}</title><style>${css}</style></head><body><article class="billing-document">${body}</article></body></html>`,{timeout:10000});
-  const footer=`<div style="font:8px Arial,sans-serif;color:#746770;width:100%;margin:0 12mm;display:flex;justify-content:space-between"><span>${escapeHtml(document.number??document.snapshot.account_number)}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
+  const derived=document.snapshot.charges.some(c=>documentTaxes(c,locale).some(t=>t.derived));
+  const note=derived?(locale==='fr'?'Taxes historiques ventilées; total inchangé.':'Historical taxes itemized; original total unchanged.'):'';
+  const footer=`<div style="font:8px Arial,sans-serif;color:#746770;width:100%;margin:0 12mm;display:flex;justify-content:space-between"><span>${escapeHtml(document.number??document.snapshot.account_number)}</span><span>${note}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
   return await page.pdf({preferCSSPageSize:true,printBackground:true,displayHeaderFooter:true,headerTemplate:'<span></span>',footerTemplate:footer});
  }finally{clearTimeout(timer);await page?.close().catch(()=>{});await instance.close();}
 }
