@@ -8,3 +8,4 @@
 .billing-document .finance-charge-groups h3,.billing-document th,.billing-document td{white-space:pre-line}
 @media print{@page{size:letter;margin:12mm}.billing-document-summary{font-size:10px}.billing-document-footer{margin-top:8px}.billing-document-test{padding:5px 8px!important;margin:6px 0!important}.billing-document-tax-ids>div{grid-template-columns:78px 1fr!important}}
 @media print{.billing-document-footer{display:none}}
+@media print{.billing-document-tax-note{display:none}}
