@@ -22,7 +22,19 @@ export function invoiceBody(document,locale='fr',{invoicePreview=false}={}){
   const i=key==='association'?{...s.seller,...v}:v;
   html+=`<section><h4>${key==='association'?tr('Fournisseur — association','Supplier — association'):tr('Fournisseur — HSP','Supplier — HSP')}</h4><strong>${esc(i.billing_name??i.name)}</strong>${i.billing_name&&i.name!==i.billing_name?`<p>${esc(i.name)}</p>`:''}<p>${esc(address(i))}</p>${i.email||i.phone?`<p>${esc([i.email,i.phone].filter(Boolean).join(' · '))}</p>`:''}<dl class="billing-document-tax-ids">${[1,2].map(index=>row(registrationLabel(i,index,locale),registrationValue(i,index,locale))).join('')}</dl>${key==='hsp'?`<p class="billing-document-caption">${tr('Facturé et encaissé par l’association comme mandataire.','Billed and collected by the association as agent.')}</p>`:''}</section>`;
  }
- html+='</div><div class="finance-charge-groups">';
+ html+='</div>';
+ if(document.kind==='receipt'){
+  const p=s.receipt_payment??s.payments.find(p=>p.id===document.payment_id);
+  if(!p)throw Error('BILLING_PDF_INVALID_RECEIPT');
+  const after=displayCents(s.balance),amount=displayCents(p.amount);
+  const method=({cash:tr('Comptant','Cash'),etransfer:tr('Virement Interac','Interac transfer'),cheque:tr('Chèque','Cheque'),other:tr('Autre','Other'),stripe_test:tr('Carte bancaire (test)','Card (test)'),stripe_checkout:tr('Carte bancaire','Card'),stripe_terminal:tr('Carte au terminal','Terminal card')})[p.method]??p.method;
+  const received=new Intl.DateTimeFormat(fr?'fr-CA':'en-CA',{dateStyle:'medium',timeStyle:'short',timeZone:s.context.timezone??'America/Toronto'}).format(new Date(p.received_at));
+  html+=`<section class="billing-document-receipt"><h4>${tr('Paiement reçu','Payment received')}</h4><strong>${esc(money(p.amount))}</strong><p>${esc(method)} · ${esc(received)}</p>${p.reference?`<p>${tr('Référence','Reference')} : ${esc(p.reference)}</p>`:''}</section>`;
+  html+=`<section class="billing-document-summary billing-receipt-summary"><dl>${row(tr('Solde avant ce paiement','Balance before this payment'),money((after+amount)/100))}${row(tr('Paiement reçu','Payment received'),money(amount/100))}${row(tr('Solde restant après ce paiement','Balance remaining after this payment'),money(after/100),'billing-document-due')}</dl></section>`;
+  const status=after===0?tr('Compte acquitté à la date de ce paiement.','Account paid in full at the time of this payment.'):after>0?tr('Compte partiellement payé. Le solde restant est dû au compte.','Account partially paid. The remaining balance is due on the account.'):tr('Un crédit demeure au compte.','A credit remains on the account.');
+  return html+`<p class="billing-receipt-status">${status}</p><footer class="billing-document-footer"><span>${title} ${esc(document.number??'')} · ${esc(s.account_number)}</span><span>${tr('Conservez ce document pour vos dossiers.','Keep this document for your records.')}</span></footer>`;
+ }
+ html+='<div class="finance-charge-groups">';
  const blocks=s.presentation_version>=5?entryBlocksV5(s.charges,locale,s.currency):s.presentation_version>=4?entryBlocks(s.charges,locale,s.currency):[];
  for(const block of blocks)html+=`<section><h3>${esc(block.label)}</h3><table class="finance-charge-table"><thead><tr>${block.columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${block.rows.map((r,n)=>`<tr>${r.map((c,index)=>`<td data-label="${esc(block.columns[index])}">${n===block.rows.length-1?`<strong>${esc(c)}</strong>`:esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></section>`;
  const groups=new Map();
@@ -41,10 +53,6 @@ export function invoiceBody(document,locale='fr',{invoicePreview=false}={}){
  html+='</div>';
  const method=m=>({cash:tr('Comptant','Cash'),etransfer:tr('Virement Interac','Interac transfer'),cheque:tr('Chèque','Cheque'),other:tr('Autre','Other'),stripe_test:tr('Carte bancaire (test)','Card (test)')})[m]??m;
  const paymentDate=v=>new Intl.DateTimeFormat(fr?'fr-CA':'en-CA',{dateStyle:'medium',timeStyle:'short',timeZone:s.context.timezone??'America/Toronto'}).format(new Date(v));
- if(document.kind==='receipt'&&s.receipt_payment){
-  const p=s.receipt_payment;
-  html+=`<section class="billing-document-receipt"><h4>${tr('Paiement reçu','Payment received')}</h4><strong>${esc(money(p.amount))}</strong><p>${esc(method(p.method))} · ${esc(paymentDate(p.received_at))}</p>${p.reference?`<p>${tr('Référence','Reference')} : ${esc(p.reference)}</p>`:''}</section><section><h4>${tr('Affectations de ce paiement','Allocations of this payment')}</h4><table><thead><tr><th>${tr('Frais / bénéficiaire','Charge / beneficiary')}</th><th>${tr('Total du frais','Full charge amount')}</th><th>${tr('Portion réglée','Portion paid')}</th></tr></thead><tbody>${p.allocations.map(a=>{const c=s.charges.find(c=>c.id===a.charge_id);return `<tr><td>${esc(c?.description)}<small>${esc([c?.beneficiary?.display_name,c?.horse?.name].filter(Boolean).join(' · '))}</small></td><td>${esc(money(c?.total))}</td><td>${esc(money(a.amount))}</td></tr>`;}).join('')}</tbody></table></section>`;
- }
  const taxes=new Map();let derived=false;
  for(const c of s.charges)for(const t of documentTaxes(c,locale)){
   derived||=Boolean(t.derived);const key=JSON.stringify([c.supplier??'association',t.code,t.name,t.rate]);

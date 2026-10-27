@@ -13,7 +13,7 @@ export async function renderInvoicePdf(document,locale,{browser=serverlessBrowse
  try{
   page=await instance.newPage({javaScriptEnabled:false});await page.route('**/*',route=>route.abort());
   await page.setContent(`<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><title>${escapeHtml(document.number??document.snapshot.account_number)}</title><style>${css}</style></head><body><article class="billing-document">${body}</article></body></html>`,{timeout:10000});
-  const derived=document.snapshot.charges.some(c=>documentTaxes(c,locale).some(t=>t.derived));
+  const derived=document.kind!=='receipt'&&document.snapshot.charges.some(c=>documentTaxes(c,locale).some(t=>t.derived));
   const note=derived?(locale==='fr'?'Taxes historiques ventilées; total inchangé.':'Historical taxes itemized; original total unchanged.'):'';
   const footer=`<div style="font:8px Arial,sans-serif;color:#746770;width:100%;margin:0 12mm;display:flex;justify-content:space-between"><span>${escapeHtml(document.number??document.snapshot.account_number)}</span><span>${note}</span><span><span class="pageNumber"></span> / <span class="totalPages"></span></span></div>`;
   return await page.pdf({preferCSSPageSize:true,printBackground:true,displayHeaderFooter:true,headerTemplate:'<span></span>',footerTemplate:footer});
