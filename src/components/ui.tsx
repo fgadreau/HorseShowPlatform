@@ -514,16 +514,6 @@ export function ContactPicker({
                 />
               </label>
               <label>
-                {uiText(locale, "Deuxième prénom", "Middle name")}
-                <input
-                  value={middleName}
-                  onChange={(event) => {
-                    setMiddleName(event.target.value);
-                    setErrorMessage("");
-                  }}
-                />
-              </label>
-              <label>
                 {uiText(locale, "Nom", "Last name")}
                 <input
                   required

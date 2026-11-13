@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - preprod
+      # Run the updated robot against isolated PREPROD fixtures before merging.
+      - fix/preprod-pilot-robot
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:

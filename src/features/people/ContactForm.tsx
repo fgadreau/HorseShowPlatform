@@ -584,17 +584,7 @@ function ContactForm({
                   }}
                 />
               </label>
-              <label>
-                {uiText(locale, "Deuxième prénom", "Middle name")}
-                <input
-                  disabled={!organization}
-                  value={middleName}
-                  onChange={(event) => {
-                    setMiddleName(event.target.value);
-                    clearNrhaMemberValidation();
-                  }}
-                />
-              </label>
+              
               <label>
                 {uiText(locale, "Nom", "Last name")}
                 <input

@@ -142,6 +142,9 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
       await test.step(`contact ${index + 1}/${contacts.length}: ${contact.firstName} ${contact.lastName}`, async () => {
         await page.getByTestId("create-contact-button").click();
         const form = page.getByTestId("contact-create-form");
+        await expect(form).toBeVisible();
+        await form.getByRole("button", { name: "Création manuelle", exact: true }).click();
+        await expect(form.getByRole("button", { name: "Création manuelle", exact: true })).toHaveAttribute("aria-pressed", "true");
         await form.getByLabel("Prénom", { exact: true }).fill(contact.firstName);
         await form.getByLabel("Nom", { exact: true }).fill(contact.lastName);
         await form.getByLabel("Courriel", { exact: true }).fill(contact.email);
@@ -180,8 +183,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
   });
 
   await test.step("configuration complète du bloc et de la classe", async () => {
-    await navigateTo(page, "blocks");
-    await page.getByRole("button", { name: state.showName }).click();
+    await navigateToShow(page, "schedule");
     await page.getByRole("button", { name: "Bloc libre", exact: true }).first().click();
 
     const blockForm = page.getByRole("dialog").getByTestId("block-create-form");
@@ -237,7 +239,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     await page.reload();
     await expect(page.getByRole("button", { name: "Déconnexion" })).toBeVisible();
-    await navigateTo(page, "scoring");
+    await navigateToShow(page, "scoring");
     const scoringGroup = page.locator(".scoring-class-group").filter({ hasText: blockName });
     await expect(scoringGroup).toContainText(String(participantCount));
     await scoringGroup.getByRole("button", { name: "Sortir ordre", exact: true }).click();
@@ -567,7 +569,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     if (!crossAppFixture) throw new Error("Résultats HSP absents.");
     await page.reload();
     await expect(page.getByRole("button", { name: "Déconnexion" })).toBeVisible();
-    await navigateTo(page, "results");
+    await navigateToShow(page, "results");
     await expect(page.getByRole("heading", { name: "Résultats officiels et bourses", exact: true })).toBeVisible();
 
     const resultBlock = page.locator(".results-block").filter({ hasText: blockName });
@@ -640,6 +642,17 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 async function navigateTo(page: Page, view: string) {
   await page.locator(`#primary-navigation [data-view="${view}"]`).click();
   await expect(page.locator(`#primary-navigation [data-view="${view}"]`)).toHaveClass(/active/);
+}
+
+async function navigateToShow(page: Page, section: "schedule" | "scoring" | "results") {
+  const state = readRunState();
+  const admin = createE2EAdminClient();
+  const { data: show, error } = await admin.from("shows").select("id")
+    .eq("organization_id", state.organizationId).eq("slug", state.showSlug).single<{id: string}>();
+  if (error) throw error;
+  await page.goto(`/associations/${state.organizationId}/shows/${show.id}/${section}`);
+  await expect(page.getByRole("navigation", { name: "Concours sélectionné", exact: true })).toBeVisible();
+  await expect(page.getByLabel("Show actuel", { exact: true })).toHaveValue(show.id);
 }
 
 async function selectSearchOption(locator: Locator, value: string) {
