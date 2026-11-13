@@ -1,5 +1,5 @@
 import { expect } from "@playwright/test";
-import { createE2EAdminClient } from "./admin";
+import { createE2EAdminClient, createE2EUserClient } from "./admin";
 import { buildContactScenarios } from "./data-factory";
 import type { E2ERunState } from "./run-state";
 
@@ -223,27 +223,41 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
   );
   if (healthValidationError) throw healthValidationError;
 
-  const { error: entryError } = await admin.from("entries").insert(
-    entryIds.map((id, index) => ({
-      id,
-      organization_id: state.organizationId,
-      show_id: show.id,
-      horse_id: horseIds[index],
-      class_id: classRecord.id,
-      created_by_user_id: state.profileId,
-      owner_contact_id: orderedContacts[index].id,
-      rider_contact_id: orderedContacts[index].id,
-      payer_contact_id: orderedContacts[index].id,
-      status: "active",
-      entry_number: 101 + index,
-      base_fee: FULL_CLASS_CONFIG.entryFee,
-      total_fees: FULL_CLASS_CONFIG.entryFee,
-      is_late: false,
-      late_fee_percent: 0,
-      late_fee_amount: 0,
-    })),
-  );
-  if (entryError) throw entryError;
+  // Entry/back-number triggers require a real actor, including for test fixtures.
+  // Keep service-role privileges out of this part of the participant workflow.
+  const actor = createE2EUserClient();
+  const { error: signInError } = await actor.auth.signInWithPassword({ email: state.email, password: state.password });
+  if (signInError) throw new Error(`E2E entry actor sign-in failed: ${signInError.message}`);
+  try {
+    const { data: createdEntries, error: entryError } = await actor.from("entries").insert(
+      entryIds.map((id, index) => ({
+        id,
+        organization_id: state.organizationId,
+        show_id: show.id,
+        horse_id: horseIds[index],
+        class_id: classRecord.id,
+        created_by_user_id: state.profileId,
+        owner_contact_id: orderedContacts[index].id,
+        rider_contact_id: orderedContacts[index].id,
+        payer_contact_id: orderedContacts[index].id,
+        status: "active",
+        entry_number: 101 + index,
+        back_number_choice: "personal",
+        base_fee: FULL_CLASS_CONFIG.entryFee,
+        total_fees: FULL_CLASS_CONFIG.entryFee,
+        is_late: false,
+        late_fee_percent: 0,
+        late_fee_amount: 0,
+      })),
+    ).select("id,entry_number");
+    if (entryError) throw entryError;
+    expect(createdEntries).toHaveLength(entryIds.length);
+    expect(createdEntries?.map(entry => entry.id).sort()).toEqual([...entryIds].sort());
+    expect(createdEntries?.every(entry => Number(entry.entry_number) > 0)).toBe(true);
+  } finally {
+    // Revoke only this fixture session, preserving the browser session under test.
+    await actor.auth.signOut({ scope: "local" });
+  }
 
   return {
     blockId: block.id,
