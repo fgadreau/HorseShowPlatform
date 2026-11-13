@@ -584,7 +584,7 @@ function ContactForm({
                   }}
                 />
               </label>
-              
+
               <label>
                 {uiText(locale, "Nom", "Last name")}
                 <input
