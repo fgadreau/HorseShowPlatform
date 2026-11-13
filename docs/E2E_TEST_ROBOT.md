@@ -2,9 +2,42 @@
 
 Le robot Playwright crée un utilisateur et une association jetables, utilise les
 vrais formulaires HSP et ShowScore, puis supprime uniquement les données de son
-exécution. Il couvre le parcours métier complet : création du concours, contacts,
-bloc et classe, inscriptions, ordre de passage, saisie annonceur, approbation du
+exécution. Son parcours inter-apps couvre : création du concours, contacts,
+bloc et classe, préparation des inscriptions, ordre de passage, saisie annonceur, approbation du
 secrétariat, championnat, calcul des bourses et publication des résultats.
+
+## Revue du parcours — 13 novembre 2026
+
+Le formulaire contact démarre sur l'import NRHA. Le robot choisit explicitement
+« Création manuelle » avant de remplir le prénom et le nom. Le deuxième prénom
+n'est plus saisi manuellement; les valeurs existantes et importées sont conservées.
+La navigation horaire / ShowScore / résultats utilise les URL du concours et
+vérifie l'association et le concours de la fixture, plutôt que d'anciens boutons
+de la navigation principale.
+
+La couverture doit être lue étape par étape : un succès de ce robot ne signifie
+pas encore que tous les parcours client du show pilote ont été exécutés.
+
+| Parcours | Transport / preuve du robot inter-apps |
+| --- | --- |
+| Connexion, concours, ouverture, annonce | Formulaires réels HSP |
+| Contacts manuels et recherche | Formulaires réels HSP, réponse de création et auteur vérifiés |
+| Bloc, classe, admissibilité configurée, grille de bourses | Formulaires réels HSP, valeurs relues en base |
+| Chevaux, documents santé et inscriptions | Fixtures écrites par le processus Node de test; aucune preuve de création par les formulaires client |
+| Ordre de passage et transfert vers ShowScore | Interface HSP et données sauvegardées ShowScore |
+| Annonceur, NS, scratch, écrans publics, chrono warm-up | Interfaces réelles ShowScore; NS/scratch seulement si au moins cinq participants |
+| Approbation, publication, retour HSP, championnat | Interfaces réelles et vérifications en base |
+| Calcul, révision, publication des bourses | Interface HSP et montants relus en base |
+| Réservations, adhésions, facturation, paiements Stripe et remboursements | Hors du robot inter-apps actuel; les suites ciblées ne remplacent pas une répétition réelle de ces parcours sur le même show |
+
+Les tests ciblés existants (`test:reservations:browser`,
+`test:memberships:browser`, `scripts/billing/finance-browser.mjs`,
+`scripts/billing/invoice-print.browser.mjs`) complètent la régression des écrans.
+Leurs fixtures et transports simulés restent distincts de l'exécution du robot
+contre les services PREPROD. Un show pilote réellement A à Z doit encore réunir
+ces parcours avec les inscriptions client, puis les paiements sandbox et la
+clôture financière dans un même scénario isolé. Aucune couverture manquante
+n'est remplacée par un test ignoré ou par un assouplissement des assertions.
 
 La classe testée est configurée comme une vraie classe sanctionnée : frais
 d'inscription et de juge, argent ajouté, trophée, retenue de l'organisateur,
