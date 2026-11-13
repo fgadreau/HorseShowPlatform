@@ -653,6 +653,12 @@ async function navigateToShow(page: Page, section: "schedule" | "scoring" | "res
   await page.goto(`/associations/${state.organizationId}/shows/${show.id}/${section}`);
   await expect(page.getByRole("navigation", { name: "Concours sélectionné", exact: true })).toBeVisible();
   await expect(page.getByLabel("Show actuel", { exact: true })).toHaveValue(show.id);
+  if (section === "schedule") {
+    const showSchedule = page.locator(".show-schedule-trigger").filter({ hasText: state.showName });
+    await expect(showSchedule).toBeVisible();
+    if (await showSchedule.getAttribute("aria-expanded") !== "true") await showSchedule.click();
+    await expect(showSchedule).toHaveAttribute("aria-expanded", "true");
+  }
 }
 
 async function selectSearchOption(locator: Locator, value: string) {
