@@ -55,6 +55,12 @@ try{
  await expect(page.getByRole('button',{name:'Remove from list'})).toBeVisible();
  assert.deepEqual(await page.evaluate(()=>({horse:window.exclusions[0].horse_id,rider:window.exclusions[0].rider_contact_id})),{horse:undefined,rider:'rider'});
  await page.getByRole('button',{name:'Remove from list'}).click();await expect(page.getByText('No exclusions for this class.')).toBeVisible();
+ await open('judges','fr');await page.getByLabel('Nombre de juges').selectOption('3');
+ await expect(page.getByLabel('Juge 1')).toBeVisible();await expect(page.getByLabel('Juge 2')).toBeVisible();await expect(page.getByLabel('Juge 3')).toBeVisible();
+ await page.getByLabel('Juge 1').fill('Lyle Jackson');await page.getByLabel('Juge 2').fill('Jane Doe');await page.getByLabel('Juge 3').fill('Alex Smith');
+ assert.deepEqual(await page.evaluate(()=>window.judgeNames),['Lyle Jackson','Jane Doe','Alex Smith']);
+ await page.getByLabel('Nombre de juges').selectOption('2');await expect(page.getByLabel('Juge 3')).toHaveCount(0);
+ assert.deepEqual(await page.evaluate(()=>window.judgeNames),['Lyle Jackson','Jane Doe']);
  assert.deepEqual(errors,[]);
- console.log('PASS schedule: warm-up tracking has no request controls; shared button styles FR/EN mobile; all days checked sequentially without navigation, navigation preserves queue, imported ranking never overrides ReinerSuite, house exclusions disable selection, staff adds/removes rider-only exclusions. External traffic blocked.');
+ console.log('PASS schedule: warm-up tracking has no request controls; shared button styles FR/EN mobile; all days checked sequentially without navigation, navigation preserves queue, imported ranking never overrides ReinerSuite, house exclusions disable selection, staff adds/removes rider-only exclusions, block judge count controls separate judge names. External traffic blocked.');
 }finally{await browser?.close();await server.close();}

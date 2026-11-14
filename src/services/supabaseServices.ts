@@ -4208,23 +4208,43 @@ async function syncBlockJudgeAssignments(block: Block, judgeDisplayName: string 
     .map((name) => name.trim())
     .filter(Boolean);
 
-  if (!judgeNames.length) {
-    return;
+  let assignments: BlockJudgeAssignment[] = [];
+
+  if (judgeNames.length) {
+    const { data, error: insertError } = await client
+      .from("block_judge_assignments")
+      .insert(
+        judgeNames.map((displayName, index) => ({
+          organization_id: block.organization_id,
+          show_id: block.show_id,
+          block_id: block.id,
+          display_name: displayName,
+          assignment_role: "judge",
+          sort_order: index + 1,
+        })),
+      )
+      .select("*")
+      .returns<BlockJudgeAssignment[]>();
+
+    if (insertError) {
+      throw insertError;
+    }
+
+    assignments = data ?? [];
   }
 
-  const { error: insertError } = await client.from("block_judge_assignments").insert(
-    judgeNames.map((displayName, index) => ({
-      organization_id: block.organization_id,
-      show_id: block.show_id,
-      block_id: block.id,
-      display_name: displayName,
-      assignment_role: "judge",
-      sort_order: index + 1,
-    })),
-  );
+  const judges = assignments.length
+    ? assignments
+        .sort((left, right) => left.sort_order - right.sort_order || left.display_name.localeCompare(right.display_name))
+        .map((assignment, index) => ({ id: assignment.id, name: assignment.display_name, order: index + 1 }))
+    : [{ id: "judge-1", name: "", order: 1 }];
+  const { error: showScoreError } = await client
+    .from("show_score_block_setups")
+    .update({ judges })
+    .eq("block_id", block.id);
 
-  if (insertError) {
-    throw insertError;
+  if (showScoreError && !isMissingShowScoreSchemaError(showScoreError)) {
+    throw showScoreError;
   }
 }
 

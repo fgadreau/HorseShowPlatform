@@ -6501,7 +6501,13 @@ input::placeholder,textarea::placeholder {color:var(--text-muted);opacity:1}
 .entry-checkout-judge-line { background: var(--surface); }
 
 /* Poste de contrôle: l'horaire reste la structure principale, enrichie des actions live. */
-.control-room { --control-ok: #23724a; --control-live: #23688f; --control-warning: #9a5b0a; }
+.control-room {
+  --control-ok: #23724a;
+  --control-live: #23688f;
+  --control-warning: #9a5b0a;
+  grid-template-columns: minmax(0, 1fr);
+}
+.control-room > .span-2 { grid-column: 1; }
 .control-room-toolbar,
 .control-schedule-heading,
 .control-block-main,

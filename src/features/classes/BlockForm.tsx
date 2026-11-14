@@ -11,6 +11,7 @@ import { uiText } from "../dashboard/shared";
 import { scheduleStartModeLabel, showDayLabel, datetimeLocalToIso, defaultEntriesCloseAtForShowDay } from "./classUtils";
 import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
 import { patternForConcurrentClass, showScorePatternLabel, showScorePatternSelectValue } from "./showScorePatterns";
+import { BlockJudgesField, serializeBlockJudgeNames } from "./BlockJudgesField";
 
 function BlockForm({
   locale = "fr",
@@ -54,7 +55,7 @@ function BlockForm({
   const [name, setName] = useState(initialTemplate?.name ?? "");
   const [blockLabel, setBlockLabel] = useState(initialTemplate?.block_label ?? "");
   const [arena, setArena] = useState("");
-  const [judgeDisplayName, setJudgeDisplayName] = useState("");
+  const [judgeNames, setJudgeNames] = useState<string[]>([]);
   const [pattern, setPattern] = useState(showScorePatternSelectValue(initialTemplate?.pattern));
   const [entriesCloseAt, setEntriesCloseAt] = useState("");
   const [concurrentClassId, setConcurrentClassId] = useState("");
@@ -154,7 +155,7 @@ function BlockForm({
         schedule_start_mode: scheduleStartMode,
         scheduled_time: scheduleStartMode === "fixed" ? scheduledTime || null : null,
         follows_block_id: scheduleStartMode === "after_previous" ? followsBlockId || null : null,
-        judge_display_name: judgeDisplayName.trim() || undefined,
+        judge_display_name: serializeBlockJudgeNames(judgeNames) || undefined,
         sort_order: nextSortOrder,
       });
 
@@ -201,7 +202,7 @@ function BlockForm({
       setName("");
       setBlockLabel("");
       setArena("");
-      setJudgeDisplayName("");
+      setJudgeNames([]);
       setPattern("");
       setEntriesCloseAt("");
       setSlateId("");
@@ -272,11 +273,7 @@ function BlockForm({
             <input disabled={!organization || !shows.length || patternLockedToConcurrent} value={arena} onChange={(event) => { setArena(event.target.value); setFollowsBlockId(""); }} />
             {patternLockedToConcurrent ? <span className="input-help">{uiText(locale, "Synchronisé avec le bloc concurrent.", "Synced with the concurrent block.")}</span> : null}
           </label>
-          <label>
-            {uiText(locale, "Juge(s)", "Judge(s)")}
-            <input disabled={!organization || !shows.length} placeholder={uiText(locale, "Ex.: Lyle Jackson; Jane Doe", "Example: Lyle Jackson; Jane Doe")} value={judgeDisplayName} onChange={(event) => setJudgeDisplayName(event.target.value)} />
-            <span className="input-help">{uiText(locale, "Sépare les juges par un point-virgule. Tous les juges s'appliquent au bloc.", "Separate judges with a semicolon. Every judge applies to the block.")}</span>
-          </label>
+          <BlockJudgesField disabled={!organization || !shows.length} locale={locale} names={judgeNames} onChange={setJudgeNames} />
         </div>
         <fieldset className="stack nested-fieldset">
           <legend>{uiText(locale, "Départ du bloc", "Block start")}</legend>

@@ -37,6 +37,14 @@ try {
   await expect(page.getByRole('heading', { name: 'Poste de contrôle' })).toBeVisible();
   await expect(page.getByRole('button', { name: /Republier le draw/ })).toBeVisible();
   await expect(page.getByText('v2 · à publier', { exact: true })).toBeVisible();
+  const rootBox = await page.locator('.control-room').boundingBox();
+  const toolbarBox = await page.locator('.control-room-toolbar').boundingBox();
+  const scheduleBox = await page.locator('.control-schedule').boundingBox();
+  assert.ok(rootBox && toolbarBox && scheduleBox);
+  assert.ok(toolbarBox.width >= rootBox.width * 0.95, 'The desktop toolbar must use the full control-room width.');
+  assert.ok(scheduleBox.width >= rootBox.width * 0.95, 'The desktop schedule must use the full control-room width.');
+  assert.ok(scheduleBox.y >= toolbarBox.y + toolbarBox.height, 'The desktop schedule must appear below the toolbar.');
+  await page.screenshot({ path: '.tmp/control-room-ui/desktop-layout.png', fullPage: true });
   await page.getByRole('button', { name: /Novice Horse/ }).click();
   await expect(page.getByRole('button', { name: /PDF v1/ })).toBeVisible();
   await expect(page.getByRole('button', { name: /Publier les classes terminées/ })).toBeVisible();
