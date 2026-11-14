@@ -6,10 +6,10 @@ const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 export async function renderDocument(d,locale,{browser:provided}={}){
  return renderV5Layout(d,locale,{browser:provided,renderVersion:5,brandedFooter:false});
 }
-export async function renderV5Layout(d,locale,{browser:provided,renderVersion=5,brandedFooter=false}={}){
+export async function renderV5Layout(d,locale,{browser:provided,renderVersion=5,brandedFooter=false,modelBuilder=documentModel,compatibleVersion=5}={}){
  if(d.snapshot.render_version!==renderVersion)throw Error('BILLING_PDF_RENDER_VERSION');
- const compatible=renderVersion===5?d:{...d,snapshot:{...d.snapshot,render_version:5}};
- const model=documentModel(compatible,locale),s=d.snapshot,fr=locale==='fr',browser=provided??await serverlessBrowser.launch();let page;
+ const compatible=renderVersion===compatibleVersion?d:{...d,snapshot:{...d.snapshot,render_version:compatibleVersion}};
+ const model=modelBuilder(compatible,locale),s=d.snapshot,fr=locale==='fr',browser=provided??await serverlessBrowser.launch();let page;
  try{
   page=await browser.newPage({javaScriptEnabled:false});await page.route('**/*',r=>r.abort());
   // Measure with print media and an explicit A4 content width (210 - 24 mm).
