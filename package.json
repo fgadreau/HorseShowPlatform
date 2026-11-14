@@ -11,6 +11,7 @@
     "test:show-settings:browser": "node scripts/show-settings.browser.mjs",
     "test:entry-lifecycle:sql": "node scripts/entry-lifecycle-sql.mjs",
     "test:entry-lifecycle:browser": "node scripts/entry-lifecycle.browser.mjs",
+    "test:control-room:browser": "node scripts/control-room.browser.mjs",
     "test:horse-access:browser": "node scripts/horse-access.browser.mjs",
     "test:contact-duplicates:browser": "node scripts/contact-duplicates.browser.mjs",
     "test:schedule:browser": "node scripts/schedule-eligibility.browser.mjs",

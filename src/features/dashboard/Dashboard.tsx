@@ -164,6 +164,7 @@ import { ClassesView } from "../classes/ClassesView";
 import { EntriesView } from "../entries/EntriesView";
 import { MyEntriesView } from "../entries/MyEntriesView";
 import { ScoringView } from "../scoring/ScoringView";
+import { ControlRoomView } from "../controlRoom/ControlRoomView";
 import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { BillingView } from "../billing/BillingView";
@@ -176,6 +177,7 @@ import { PlatformAdminView } from "../platformAdmin/PlatformAdminView";
 
 const SHOW_CONTEXT_VIEW_KEYS = new Set<ViewKey>([
   "blocks",
+  "control-room",
   "entries",
   "stalls",
   "scoring",
@@ -236,6 +238,7 @@ export function Dashboard({
   onDeleteStallBooking,
   onLocaleChange,
   onPrepareShowScoreClass,
+  onPublishBlockDraw,
   onSaveShowScorePaidWarmup,
   onShowScorePaidWarmupSaveError,
   onDeleteShowScorePaidWarmup,
@@ -319,6 +322,7 @@ export function Dashboard({
   onDeleteStallBooking: (id: Parameters<typeof deleteStallBooking>[0]) => Promise<void>;
   onLocaleChange: (locale: Locale) => void;
   onPrepareShowScoreClass: (block: Block) => Promise<void>;
+  onPublishBlockDraw: (block: Block) => Promise<void>;
   onSaveShowScorePaidWarmup: (input: Parameters<typeof saveShowScorePaidWarmup>[0]) => Promise<void>;
   onShowScorePaidWarmupSaveError: (error: unknown) => void;
   onDeleteShowScorePaidWarmup: (id: Parameters<typeof deleteShowScorePaidWarmup>[0]) => Promise<void>;
@@ -824,7 +828,7 @@ export function Dashboard({
           </div>
         </header>
 
-        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance">{selectedShow && <ShowContextHeader key={selectedShow.id} show={selectedShow} locale={locale} canEdit={canManageAssociation || isPlatformAdmin} onUpdateShow={onUpdateShow} />}<nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
+        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance">{selectedShow && <ShowContextHeader key={selectedShow.id} show={selectedShow} locale={locale} canEdit={canManageAssociation || isPlatformAdmin} onUpdateShow={onUpdateShow} />}<nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['control-room',locale==='fr'?'Poste de contrôle':'Show control'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
         {notice ? <NoticeBanner notice={notice} /> : null}
         {showRouteUnavailable && <p role="alert">{locale==='fr'?'Concours indisponible ou non autorisé. Sélectionnez un concours accessible.':'Show unavailable or unauthorized. Select an accessible show.'}</p>}
 
@@ -941,6 +945,44 @@ export function Dashboard({
             onUpdateHorse={onUpdateHorse}
             onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
             onVerifyNrhaHorse={onVerifyNrhaHorse}
+          />
+        ) : null}
+
+        {!showRouteUnavailable && effectiveView === "control-room" ? (
+          <ControlRoomView
+            locale={locale}
+            blocks={selectedShowBlocks}
+            blockJudgeAssignments={selectedShowBlockJudgeAssignments}
+            classes={selectedShowClasses}
+            contacts={selectedOrganizationContacts}
+            contactExternalIdentifiers={contactExternalIdentifiers}
+            contactRoles={selectedOrganizationContactRoles}
+            entries={selectedShowEntries}
+            entryResults={selectedShowEntryResults}
+            externalCredentialIssuers={externalCredentialIssuers}
+            horseExternalIdentifiers={horseExternalIdentifiers}
+            horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
+            horses={selectedOrganizationHorses}
+            membershipRequirements={selectedOrganizationMembershipRequirements}
+            nrhaRiderRankings={nrhaRiderRankings}
+            organization={selectedOrganization}
+            payoutCalculations={selectedShowPayoutCalculations}
+            profileId={context?.profile.id ?? ""}
+            show={selectedShow}
+            showDays={selectedShowShowDays}
+            showScoreClassSetups={selectedShowShowScoreSetups}
+            showScorePaidWarmups={selectedShowShowScorePaidWarmups}
+            onCreateContact={onCreateContact}
+            onCreateEntry={onCreateEntry}
+            onCreateHorse={onCreateHorse}
+            onCreateHorseHealthDocument={onCreateHorseHealthDocument}
+            onPrepareShowScoreClass={onPrepareShowScoreClass}
+            onPublishBlockDraw={onPublishBlockDraw}
+            onUpdatePayoutCalculationStatus={onUpdatePayoutCalculationStatus}
+            onVerifyGvlCogginsDocument={onVerifyGvlCogginsDocument}
+            onVerifyNrhaEligibility={onVerifyNrhaEligibility}
+            onVerifyNrhaHorse={onVerifyNrhaHorse}
+            onViewChange={handleViewChange}
           />
         ) : null}
 

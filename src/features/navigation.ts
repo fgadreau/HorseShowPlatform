@@ -25,4 +25,4 @@ export const personalNavigation: NavItem[] = [
   { key: "my-invoices", labelKey: "myInvoices", icon: CircleDollarSign },
 ];
 
-export const associationViewKeys = new Set<ViewKey>([...associationNavigation.map((item) => item.key), "blocks", "entries", "stalls", "scoring", "results", "show-accounts"] as ViewKey[]);
+export const associationViewKeys = new Set<ViewKey>([...associationNavigation.map((item) => item.key), "blocks", "control-room", "entries", "stalls", "scoring", "results", "show-accounts"] as ViewKey[]);

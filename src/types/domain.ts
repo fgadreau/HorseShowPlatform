@@ -1211,6 +1211,10 @@ export type Block = {
   custom_pattern: Record<string, unknown> | null;
   entries_close_at: string | null;
   draw_prepared_at: string | null;
+  draw_version?: number;
+  draw_published_version?: number | null;
+  draw_published_at?: string | null;
+  draw_published_by_user_id?: string | null;
   judge_display_name: string | null;
   schedule_start_mode: ScheduleStartMode;
   scheduled_time: string | null;
@@ -1223,6 +1227,19 @@ export type Block = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type BlockDrawPublication = {
+  id: string;
+  organization_id: string;
+  show_id: string;
+  block_id: string;
+  version: number;
+  runs: Array<Record<string, unknown>>;
+  judges: Array<Record<string, unknown>>;
+  published_by_user_id: string;
+  published_at: string;
+  superseded_at: string | null;
 };
 
 export type ShowDay = {
@@ -1412,6 +1429,7 @@ export type Entry = {
   is_late: boolean;
   late_fee_percent: number;
   late_fee_amount: number;
+  late_draw_placement?: "negative" | "end";
   created_at: string;
 };
 
@@ -1911,6 +1929,8 @@ export type EntryInput = {
   is_late?: boolean;
   late_fee_percent?: number;
   late_fee_amount?: number;
+  late_draw_placement?: "negative" | "end";
+  staff_override?: boolean;
 };
 
 export type EntryUpdateInput = {
@@ -1926,6 +1946,7 @@ export type EntryUpdateInput = {
   total_fees?: number | null;
   is_late?: boolean;
   late_fee_percent?: number;
+  late_draw_placement?: "negative" | "end";
   late_fee_amount?: number;
 };
 

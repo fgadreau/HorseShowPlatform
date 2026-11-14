@@ -78,6 +78,7 @@ export type ShowScoreRun = {
   divisionNames: string[];
   isLate: boolean;
   drawGroup: "late" | "regular";
+  latePlacement: "negative" | "end" | null;
 };
 
 type EntryRunGroup = {
@@ -89,6 +90,7 @@ type EntryRunGroup = {
   owner_contact_id: string;
   payer_contact_id: string;
   is_late: boolean;
+  late_draw_placement: "negative" | "end";
 };
 
 export type ShowScoreContext = {
@@ -198,21 +200,24 @@ export function buildShowScoreRunsForClass(
   );
   const eligibleEntries = entries.filter((entry) => blockClassIds.has(entry.class_id) && drawEligibleEntryStatuses.has(entry.status));
   const eligibleRunGroups = groupEntriesForPhysicalRuns(eligibleEntries);
-  const lateRunGroups = stableShuffle(
-    eligibleRunGroups.filter((group) => group.is_late),
+  const negativeLateRunGroups = stableShuffle(
+    eligibleRunGroups.filter((group) => group.is_late && group.late_draw_placement !== "end"),
     `${classId}:late`,
   );
+  const endLateRunGroups = eligibleRunGroups
+    .filter((group) => group.is_late && group.late_draw_placement === "end")
+    .sort((left, right) => left.created_at.localeCompare(right.created_at) || left.id.localeCompare(right.id));
   const regularEntries = buildSpacedDrawOrder(
     eligibleRunGroups.filter((group) => !group.is_late),
     classId,
-    lateRunGroups,
+    negativeLateRunGroups,
   );
-  const orderedRunGroups = [...lateRunGroups, ...regularEntries];
-  const lateRunCount = lateRunGroups.length;
+  const orderedRunGroups = [...negativeLateRunGroups, ...regularEntries, ...endLateRunGroups];
+  const negativeLateRunCount = negativeLateRunGroups.length;
 
   return orderedRunGroups
     .map((group, index) => {
-      const draw = index < lateRunCount ? index - lateRunCount : index - lateRunCount + 1;
+      const draw = index < negativeLateRunCount ? index - negativeLateRunCount : index - negativeLateRunCount + 1;
       return toShowScoreRun(group, draw, classesById, relations);
     })
     .filter((run): run is ShowScoreRun => Boolean(run));
@@ -272,6 +277,7 @@ function toShowScoreRun(
       .map(classDisplayName),
     isLate: group.is_late,
     drawGroup: group.is_late ? "late" : "regular",
+    latePlacement: group.is_late ? group.late_draw_placement : null,
   };
 }
 
@@ -307,7 +313,7 @@ function formatDateLabel(date: string) {
   return date;
 }
 
-function groupEntriesForPhysicalRuns(entries: Entry[]) {
+function groupEntriesForPhysicalRuns(entries: Entry[]): EntryRunGroup[] {
   const groupsByKey = new Map<string, Entry[]>();
 
   entries.forEach((entry) => {
@@ -330,6 +336,7 @@ function groupEntriesForPhysicalRuns(entries: Entry[]) {
       owner_contact_id: representative.owner_contact_id,
       payer_contact_id: representative.payer_contact_id,
       is_late: sortedEntries.some((entry) => entry.is_late),
+      late_draw_placement: sortedEntries.some((entry) => entry.late_draw_placement === "end") ? "end" : "negative",
     };
   });
 }

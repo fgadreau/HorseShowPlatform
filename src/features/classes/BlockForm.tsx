@@ -274,7 +274,8 @@ function BlockForm({
           </label>
           <label>
             {uiText(locale, "Juge(s)", "Judge(s)")}
-            <input disabled={!organization || !shows.length} placeholder={uiText(locale, "Ex.: Lyle Jackson", "Example: Lyle Jackson")} value={judgeDisplayName} onChange={(event) => setJudgeDisplayName(event.target.value)} />
+            <input disabled={!organization || !shows.length} placeholder={uiText(locale, "Ex.: Lyle Jackson; Jane Doe", "Example: Lyle Jackson; Jane Doe")} value={judgeDisplayName} onChange={(event) => setJudgeDisplayName(event.target.value)} />
+            <span className="input-help">{uiText(locale, "Sépare les juges par un point-virgule. Tous les juges s'appliquent au bloc.", "Separate judges with a semicolon. Every judge applies to the block.")}</span>
           </label>
         </div>
         <fieldset className="stack nested-fieldset">

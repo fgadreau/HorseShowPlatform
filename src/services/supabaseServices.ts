@@ -5,6 +5,7 @@ import { requireSupabase } from "../lib/supabase";
 import type {
   BlockInput,
   Block,
+  BlockDrawPublication,
   BlockConcurrencyGroup,
   BlockConcurrencyGroupMember,
   BlockJudgeAssignment,
@@ -5100,11 +5101,15 @@ async function resolveLateEntryFee(input: EntryInput) {
   const baseFee = input.base_fee ?? classRecord.entry_fee ?? null;
   const isLate = Boolean(block.draw_prepared_at || (block.entries_close_at && Date.now() > new Date(block.entries_close_at).getTime()));
 
-  if (isLate && !show.late_entries_allowed) {
+  if (isLate && !show.late_entries_allowed && !input.staff_override) {
     throw new Error("Les inscriptions sont fermées pour ce bloc.");
   }
 
-  const lateFeePercent = isLate ? show.late_entry_fee_percent ?? 50 : 0;
+  const lateFeePercent = isLate
+    ? input.staff_override
+      ? Math.max(0, input.late_fee_percent ?? 0)
+      : show.late_entry_fee_percent ?? 50
+    : 0;
   const lateFeeAmount = isLate && baseFee != null ? Math.round(baseFee * (lateFeePercent / 100) * 100) / 100 : 0;
 
   return {
@@ -5201,25 +5206,27 @@ export async function createEntry(input: EntryInput) {
   const lateEntry = await resolveLateEntryFee(input);
   const resolvedEntryNumber = input.entry_number === undefined ? await resolveEntryBackNumber(input) : input.entry_number;
 
+  const entryPayload = {
+    organization_id: input.organization_id,
+    show_id: input.show_id,
+    horse_id: input.horse_id,
+    class_id: input.class_id,
+    created_by_user_id: input.created_by_user_id,
+    owner_contact_id: input.owner_contact_id,
+    rider_contact_id: input.rider_contact_id || null,
+    payer_contact_id: input.payer_contact_id,
+    entry_number: resolvedEntryNumber ?? null,
+    back_number_choice: input.back_number_choice ?? "legacy",
+    back_number_request_token: input.back_number_request_token ?? null,
+    base_fee: lateEntry.baseFee,
+    total_fees: lateEntry.baseFee == null ? null : lateEntry.baseFee + lateEntry.lateFeeAmount,
+    is_late: lateEntry.isLate,
+    late_fee_percent: lateEntry.lateFeePercent,
+    late_fee_amount: lateEntry.lateFeeAmount,
+    late_draw_placement: input.late_draw_placement ?? "negative",
+  };
   const { data, error } = await client
-    .rpc("submit_entry", { p_entry: {
-      organization_id: input.organization_id,
-	      show_id: input.show_id,
-	      horse_id: input.horse_id,
-	      class_id: input.class_id,
-	      created_by_user_id: input.created_by_user_id,
-	      owner_contact_id: input.owner_contact_id,
-	      rider_contact_id: input.rider_contact_id || null,
-	      payer_contact_id: input.payer_contact_id,
-	      entry_number: resolvedEntryNumber ?? null,
-      back_number_choice: input.back_number_choice ?? "legacy",
-      back_number_request_token: input.back_number_request_token ?? null,
-	      base_fee: lateEntry.baseFee,
-      total_fees: lateEntry.baseFee == null ? null : lateEntry.baseFee + lateEntry.lateFeeAmount,
-      is_late: lateEntry.isLate,
-      late_fee_percent: lateEntry.lateFeePercent,
-      late_fee_amount: lateEntry.lateFeeAmount,
-    } })
+    .rpc(input.staff_override ? "submit_staff_late_entry" : "submit_entry", { p_entry: entryPayload })
     .select("*")
     .single<Entry>();
 
@@ -5564,6 +5571,7 @@ function attachGoverningBodyAssignments<T extends { id: string }>(
 
 export async function prepareShowScoreClassSetup(input: {
   classRecord: Block;
+  blockJudgeAssignments?: BlockJudgeAssignment[];
   entries: Entry[];
   classes: ClassRecord[];
   horses: Horse[];
@@ -5592,9 +5600,18 @@ export async function prepareShowScoreClassSetup(input: {
 
   await saveShowScoreRunLinks(input.classRecord, runs);
 
-  const judges = input.classRecord.judge_display_name
-    ? [{ id: "judge-1", name: input.classRecord.judge_display_name, order: 1 }]
-    : [{ id: "judge-1", name: "", order: 1 }];
+  const assignedJudges = (input.blockJudgeAssignments ?? [])
+    .filter((assignment) => assignment.block_id === input.classRecord.id)
+    .sort((left, right) => left.sort_order - right.sort_order || left.display_name.localeCompare(right.display_name));
+  const judges = assignedJudges.length
+    ? assignedJudges.map((assignment, index) => ({ id: assignment.id, name: assignment.display_name, order: index + 1 }))
+    : input.classRecord.judge_display_name
+      ? input.classRecord.judge_display_name
+          .split(/[;\n]+/)
+          .map((name) => name.trim())
+          .filter(Boolean)
+          .map((name, index) => ({ id: `judge-${index + 1}`, name, order: index + 1 }))
+      : [{ id: "judge-1", name: "", order: 1 }];
   const blockClasses = input.classes
     .filter((classRecord) => classRecord.block_id === input.classRecord.id)
     .sort((left, right) => left.sort_order - right.sort_order || left.name.localeCompare(right.name))
@@ -5607,8 +5624,6 @@ export async function prepareShowScoreClassSetup(input: {
       name: classRecord.name,
       classNumber: classRecord.code || String(classRecord.sort_order),
     }));
-  const preparedAt = new Date().toISOString();
-
   const { data, error } = await client
     .from("show_score_block_setups")
     .upsert(
@@ -5633,10 +5648,39 @@ export async function prepareShowScoreClassSetup(input: {
     throw error;
   }
 
-  const { error: classError } = await client.from("blocks").update({ draw_prepared_at: preparedAt }).eq("id", input.classRecord.id);
+  const { error: classError } = await client.rpc("mark_block_draw_generated", { p_block: input.classRecord.id });
 
   if (classError) {
     throw classError;
+  }
+
+  return data;
+}
+
+export async function publishBlockDraw(blockId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .rpc("publish_block_draw", { p_block: blockId })
+    .single<BlockDrawPublication>();
+
+  if (error) {
+    throw error;
+  }
+
+  return data;
+}
+
+export async function loadCurrentBlockDrawPublication(blockId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .from("block_draw_publications")
+    .select("*")
+    .eq("block_id", blockId)
+    .is("superseded_at", null)
+    .single<BlockDrawPublication>();
+
+  if (error) {
+    throw error;
   }
 
   return data;
