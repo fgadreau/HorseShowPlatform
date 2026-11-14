@@ -1,7 +1,7 @@
 import { Download, Printer } from "lucide-react";
 import { formatCurrency } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { Block, ClassRecord, Organization, Show, ShowDay } from "../../types/domain";
+import type { Block, ClassRecord, Organization, Show, ShowDay, ShowScorePaidWarmup } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { classScheduleStartLabel, sortScheduleBlocks } from "./classUtils";
 import { showScorePatternLabel } from "./showScorePatterns";
@@ -13,21 +13,25 @@ type ShowbillExportProps = {
   organization: Organization | null;
   show: Show;
   showDays: ShowDay[];
+  showScorePaidWarmups?: ShowScorePaidWarmup[];
 };
 
-function ShowbillExport({ blocks, classes, locale, organization, show, showDays }: ShowbillExportProps) {
+function ShowbillExport({ blocks, classes, locale, organization, show, showDays, showScorePaidWarmups = [] }: ShowbillExportProps) {
   const showBlocks = blocks.filter((block) => block.show_id === show.id);
   const sortedDays = [...showDays]
     .filter((day) => day.show_id === show.id)
     .sort((first, second) => first.sort_order - second.sort_order || first.day_date.localeCompare(second.day_date));
   const currency = show.default_currency || "CAD";
   const showClasses = classes.filter((classRecord) => classRecord.show_id === show.id);
+  const showPaidWarmups = showScorePaidWarmups.filter((warmup) => warmup.show_id === show.id);
+  const paidWarmupByBlockId = new Map(showPaidWarmups.map((warmup) => [warmup.block_id, warmup]));
   const isJackpot = (record: ClassRecord) => Number(record.added_money) === 0 && record.payout_schedule_type === "jackpot_100";
   const showAddedMoney = showClasses.some((record) => Number(record.added_money) > 0 || isJackpot(record));
   const label = (fr: string, en: string) => locale === "fr" && fr !== en ? `${fr} / ${en}` : en;
   const arenaLabel = (arena: string) => `${label("Manège", "Arena")} ${arena}`;
   const scheduleLabel = (block: Block) => label(classScheduleStartLabel(block, "fr", showBlocks), classScheduleStartLabel(block, "en", showBlocks));
-  const showEntryFees = showClasses.some((classRecord) => Number(classRecord.entry_fee) > 0);
+  const showEntryFees = showClasses.some((classRecord) => Number(classRecord.entry_fee) > 0)
+    || showPaidWarmups.some((warmup) => Number(warmup.entry_fee) > 0);
   const showJudgeFees = showClasses.some((classRecord) => Number(classRecord.judge_fee) > 0);
   const tableColumnCount = 2 + Number(showAddedMoney) + Number(showEntryFees) + Number(showJudgeFees);
 
@@ -53,6 +57,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
       const dayBlocks = sortScheduleBlocks(showBlocks.filter((block) => block.show_day_id === day.id));
 
       for (const block of dayBlocks) {
+        const paidWarmup = paidWarmupByBlockId.get(block.id);
         const blockClasses = classes
           .filter((classRecord) => classRecord.block_id === block.id)
           .sort((first, second) => first.sort_order - second.sort_order || (first.code ?? "").localeCompare(second.code ?? "") || first.name.localeCompare(second.name));
@@ -66,7 +71,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
         ];
 
         if (!blockClasses.length) {
-          rows.push([...common, "", "", block.pattern || "", "", "", "", block.notes || ""]);
+          rows.push([...common, "", "", block.pattern || "", "", paidWarmup?.entry_fee ?? "", "", block.notes || ""]);
           continue;
         }
 
@@ -203,6 +208,8 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                           );
 
                           if (!blockClasses.length) {
+                            const paidWarmup = paidWarmupByBlockId.get(block.id);
+
                             return [
                               <tr className="showbill-event-row" key={`${block.id}-event`}>
                                 <td>
@@ -211,7 +218,7 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
                                 </td>
                                 <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
                                 {showAddedMoney ? <td>—</td> : null}
-                                {showEntryFees ? <td>—</td> : null}
+                                {showEntryFees ? <td>{moneyCell(paidWarmup?.entry_fee, currency)}</td> : null}
                                 {showJudgeFees ? <td>—</td> : null}
                               </tr>,
                             ];
@@ -219,10 +226,14 @@ function ShowbillExport({ blocks, classes, locale, organization, show, showDays 
 
                           return [
                             heading,
-                            ...blockClasses.map((classRecord) => (
+                            ...blockClasses.map((classRecord, classIndex) => (
                               <tr key={classRecord.id}>
                                 <td>{[classRecord.code, classRecord.name].filter(Boolean).join(" · ")}</td>
-                                <td>{block.pattern ? showScorePatternLabel(block.pattern) : "—"}</td>
+                                {classIndex === 0 ? (
+                                  <td className="showbill-block-pattern" rowSpan={blockClasses.length}>
+                                    {block.pattern ? showScorePatternLabel(block.pattern) : "—"}
+                                  </td>
+                                ) : null}
                                 {showAddedMoney ? <td>{isJackpot(classRecord) ? "Jackpot" : moneyCell(classRecord.added_money, currency)}</td> : null}
                                 {showEntryFees ? <td>{moneyCell(classRecord.entry_fee, currency)}</td> : null}
                                 {showJudgeFees ? <td>{moneyCell(classRecord.judge_fee, currency)}</td> : null}

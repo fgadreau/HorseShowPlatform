@@ -699,6 +699,7 @@ function ClassesView({
             organization={organization}
             show={showbillShow}
             showDays={showDays}
+            showScorePaidWarmups={showScorePaidWarmups}
           />
         </ModalDialog>
       ) : null}

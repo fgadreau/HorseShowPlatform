@@ -244,8 +244,9 @@ function ClassForm({
           </label>
         ) : null}
         <label>
-          {uiText(locale, "Critères d'éligibilité", "Eligibility criteria")}
+          {uiText(locale, "Critères d'éligibilité Maison", "House eligibility criteria")}
           <textarea disabled={!organization || !blocks.length} rows={3} value={eligibilityNotes} onChange={(event) => setEligibilityNotes(event.target.value)} />
+          <small>{uiText(locale, "Règles propres à l'association, affichées aux compétiteurs et validées manuellement.", "Association-specific rules shown to competitors and checked manually.")}</small>
         </label>
         <button className="primary-button" disabled={busy || !organization || !blocks.length || !organizationDisciplineId} type="submit">
           <Plus size={18} />

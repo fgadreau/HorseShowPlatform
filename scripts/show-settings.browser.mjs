@@ -47,6 +47,7 @@ try {
   await page.goto('http://127.0.0.1:5201/show-settings-test?readonly=1');
   await expect(page.getByRole('button')).toHaveCount(0);
   await page.goto('http://127.0.0.1:5201/show-settings-test?list=1');
+  await expect(page.getByRole('button', { name: 'Préparation du concours', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Paramètres du concours', exact: true }).click();
   await expect(page.getByRole('dialog').getByLabel('Gestion des inscriptions')).toBeVisible();
   await page.goto('http://127.0.0.1:5201/show-settings-test?fail=1');
