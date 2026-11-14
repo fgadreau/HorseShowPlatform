@@ -10,6 +10,7 @@
 - Les inscriptions en attente de confirmation financière et les demandes d’annulation en attente bloquent le draw du bloc concerné. Les autres blocs restent disponibles.
 - Le bloc est l’unité de draw : une demande pour une classe touche cette classe; une demande de bloc touche les classes de cette équipe cheval/cavalier/payeur dans le bloc.
 - Une demande ne change pas le statut de l’inscription. Le participant peut la retirer; la secrétaire peut la refuser ou l’approuver individuellement.
+- Le secrétariat peut aussi annuler directement une classe ou un bloc, avec choix du crédit et des frais. L’aperçu ne crée aucune demande en attente; la confirmation applique l’annulation et ses ajustements dans une seule transaction. Une demande du participant déjà en attente reste à traiter individuellement.
 - Dès la génération du draw, même non publié, il faut un scratch. Les nouveaux ajouts suivent les règles et les frais d’ajout tardif existants.
 
 ## Ajustements financiers

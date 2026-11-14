@@ -16,13 +16,13 @@ const organizations=[{id:'org1',name:'Association de reining du Québec'},{id:'o
 const shows=[{id:'show1',organization_id:'org1',name:'Concours pilote — automne',start_date:'2026-11-13',end_date:'2026-11-15',location:'Saint-Hyacinthe',status:'open'},{id:'show2',organization_id:'org1',name:'Finale régionale',start_date:'2026-10-01',end_date:'2026-10-03',location:'Québec',status:'closed'},{id:'show3',organization_id:'org2',name:'Ontario Classic',start_date:'2026-12-01',end_date:'2026-12-02',location:'Ottawa',status:'open'}];
 const classes=[{id:'c1',name:'Open',block_id:'block'},{id:'c2',name:'Intermediate Open',block_id:'block'}];
 let entries=[{created_at:'2026-11-13',id:'e1',class_id:'c1',show_id:'show1',status:'active'},{created_at:'2026-11-13',id:'e2',class_id:'c2',show_id:'show1',status:'active'}];
-let requests=(staff||query.get('queue')==='cancel')?[{id:'r1',block_id:'block',entry_ids:['e2'],scope:'class',status:'pending',requested_by:'participant',reason:'Changement de programme',decision_note:'',created_at:'2026-11-13'}]:[];
+let requests=((staff&&!query.has('direct'))||query.get('queue')==='cancel')?[{id:'r1',block_id:'block',entry_ids:['e2'],scope:'class',status:'pending',requested_by:'participant',reason:'Changement de programme',decision_note:'',created_at:'2026-11-13'}]:[];
 window.calls=[];window.fixtureClient={from(name){if(name!=='entry_cancellation_requests')throw Error('Unexpected table');const q={select(){return q},eq(){return q},order:async()=>({data:requests,error:null})};return q;},rpc:async(name,args)=>{window.calls.push({name,args});let data=null;
- if(name==='entry_cancellation_quote')data={version:5,signature:'fixture',currency:'CAD',subtotal:205,tax_amount:30.70,total:235.70,fee_tax_rules:[{rate:14.975}]};
- else if(name==='preview_entry_cancellation'){const d=args.p_decision;data={credit:{total:d.credit_mode==='full'?235.70:d.credit_mode==='none'?0:d.credit_tax_mode==='inclusive'?d.credit_amount:Math.round(d.credit_amount*1.14975*100)/100},fee:{total:d.fee_tax_mode==='inclusive'?d.fee_amount:Math.round(d.fee_amount*1.14975*100)/100}};}
+ if(name==='entry_cancellation_quote'||name==='staff_entry_cancellation_quote')data={version:5,signature:'fixture',currency:'CAD',subtotal:205,tax_amount:30.70,total:235.70,entry_ids:args.p_scope==='block'?['e1','e2']:['e2'],fee_tax_rules:[{rate:14.975}]};
+ else if(name==='preview_entry_cancellation'||name==='preview_staff_entry_cancellation'){const d=args.p_decision;data={credit:{total:d.credit_mode==='full'?235.70:d.credit_mode==='none'?0:d.credit_tax_mode==='inclusive'?d.credit_amount:Math.round(d.credit_amount*1.14975*100)/100},fee:{total:d.fee_tax_mode==='inclusive'?d.fee_amount:Math.round(d.fee_amount*1.14975*100)/100}};}
  else if(name==='request_entry_cancellation')requests=[...requests,{id:args.p_request,block_id:'block',entry_ids:args.p_scope==='block'?['e1','e2']:['e2'],scope:args.p_scope,status:'pending',requested_by:'participant',reason:args.p_reason,created_at:'2026-11-13'}];
  else if(name==='withdraw_entry_cancellation')requests=requests.map(r=>r.id===args.p_request?{...r,status:'withdrawn'}:r);
- else if(name==='decide_entry_cancellation'){requests=requests.map(r=>r.id===args.p_request?{...r,status:args.p_approve?'approved':'rejected',decision_note:args.p_decision.note}:r);if(args.p_approve)entries=entries.map(e=>e.id==='e2'?{...e,status:'cancelled'}:e);}
+ else if(name==='cancel_entry_as_staff'){requests=[...requests,{id:args.p_operation,block_id:'block',entry_ids:args.p_scope==='block'?['e1','e2']:['e2'],scope:args.p_scope,status:'approved',origin:'staff_direct',requested_by:'secretary',created_at:'2026-11-13'}];entries=entries.map(e=>args.p_scope==='block'||e.id==='e2'?{...e,status:'cancelled'}:e);} else if(name==='decide_entry_cancellation'){requests=requests.map(r=>r.id===args.p_request?{...r,status:args.p_approve?'approved':'rejected',decision_note:args.p_decision.note}:r);if(args.p_approve)entries=entries.map(e=>e.id==='e2'?{...e,status:'cancelled'}:e);}
  else throw Error('Unexpected RPC '+name);return {data,error:null};}};
 function Harness(){if(query.has('queue')){const queueEntries=[...entries.map((e,i)=>({...e,horse_id:'horse',rider_contact_id:'rider',owner_contact_id:'owner',entry_number:101,is_late:false,status:query.get('queue')==='finance'&&i===1?'pending_checkout':'active'})),{...entries[0],id:'e3',class_id:'c3',horse_id:'horse',owner_contact_id:'owner',rider_contact_id:'rider',entry_number:101}];window.prepared=[];return React.createElement(ScoringView,{locale:'fr',blocks:[{id:'block',name:'Bloc concerné',show_id:'show1',entries_close_at:'2020-01-01'},{id:'other',name:'Bloc indépendant',show_id:'show1',entries_close_at:'2020-01-01'}],classes:[...classes,{id:'c3',name:'Other class',block_id:'other'}],entries:queueEntries,horses:[{id:'horse',name:'Pilot horse'}],contacts:[{id:'rider',first_name:'Pilot',last_name:'Rider'},{id:'owner',first_name:'Pilot',last_name:'Owner'}],showDays:[],showScoreClassSetups:[],showScorePaidWarmups:[],shows:[shows[0]],onDeleteShowScorePaidWarmup:async()=>{},onPrepareShowScoreClass:async block=>window.prepared.push(block.id)});}const [org,setOrg]=useState('org1'),[show,setShow]=useState('show1'),[revision,setRevision]=useState(0);return React.createElement(React.Fragment,null,
 React.createElement(WorkspaceContext,{organizations,shows,organization:organizations.find(o=>o.id===org),show:shows.find(s=>s.id===show),showContext:true,loading:false,locale:'fr',onOrganizationChange:id=>{setOrg(id);setShow('')},onShowChange:setShow}),
@@ -58,7 +58,7 @@ try {
   await page.locator('[data-show-id="show3"]').click();
   await expect(page.getByTestId('active-show-context')).toHaveText('Ontario Classic');
   passed.push('visible active context, search, organization isolation and show change');
-  await go(''); await page.getByRole('button', { name: 'Demander l’annulation', exact: true }).click();
+  await go(''); await expect(page.getByRole('button', { name: 'Annuler l’inscription', exact: true })).toHaveCount(0); await page.getByRole('button', { name: 'Demander l’annulation', exact: true }).click();
   await page.getByLabel('Portée').selectOption('block');
   await page.getByRole('button', { name: 'Envoyer la demande' }).click();
   await expect(page.getByText('Annulation en attente · draw bloqué pour ce bloc')).toBeVisible();
@@ -89,6 +89,26 @@ try {
   await page.getByRole('button', { name: 'Refuser · maintenir l’inscription' }).click();
   await expect(page.getByText(/Dernière demande : refusée/)).toBeVisible();
   passed.push('individual refusal retains entry');
+  await go('?role=staff&direct=1');
+  await expect(page.getByRole('button',{name:'Demander l’annulation',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Annuler l’inscription',exact:true}).click();
+  await expect(page.getByRole('dialog',{name:'Annuler une inscription',exact:true})).toBeVisible();
+  await expect(page.getByRole('button',{name:'Envoyer la demande',exact:true})).toHaveCount(0);
+  await page.getByRole('button',{name:'Retour',exact:true}).click();
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>['request_entry_cancellation','cancel_entry_as_staff'].includes(c.name)).length),0,'Closing staff cancellation must not create a request or cancel the entry');
+  await page.getByRole('button',{name:'Annuler l’inscription',exact:true}).click();
+  await page.getByLabel('Portée de l’annulation',{exact:true}).selectOption('block');
+  await expect(page.getByRole('dialog').locator('li')).toHaveCount(2);
+  await expect(page.getByRole('button',{name:'Confirmer l’annulation',exact:true})).toBeEnabled();
+  await page.screenshot({path:'.tmp/entry-lifecycle-ui/staff-direct-cancellation.png'});
+  await page.getByRole('button',{name:'Confirmer l’annulation',exact:true}).click();
+  await expect(page.getByText('Annulation effectuée par le secrétariat',{exact:true})).toBeVisible();
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.name==='request_entry_cancellation').length),0);
+  assert.equal(await page.evaluate(()=>window.calls.filter(c=>c.name==='cancel_entry_as_staff').length),1);
+  passed.push('staff cancels directly with financial preview; no participant request, no pending state on close');
+  await go('?role=staff&direct=1&draw=1');
+  await expect(page.getByRole('button',{name:'Annuler l’inscription',exact:true})).toHaveCount(0);
+  await expect(page.getByText('Draw généré : procédure de scratch requise.')).toBeVisible();
   for(const queue of ['finance','cancel']){
     await go('?queue='+queue);
     const affected=page.locator('.scoring-class-group').filter({hasText:'Bloc concerné'}),other=page.locator('.scoring-class-group').filter({hasText:'Bloc indépendant'});

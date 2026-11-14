@@ -1235,6 +1235,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "my-entries" ? (
           <MyEntriesView
+            canManageCancellations={canManageAssociation || isPlatformAdmin}
             onRefresh={onRefresh}
             warmupHorses={personalHorses}
             locale={locale}
