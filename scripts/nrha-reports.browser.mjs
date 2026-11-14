@@ -17,15 +17,21 @@ const harness = { name: 'nrha-reports-test-page', configureServer(server) {
 server.middlewares.use('/reports-test', async (req, res, next) => {
   try {
     const locale = req.url.startsWith('/en') ? 'en' : 'fr';
+    const pageData = structuredClone(data);
+    if (req.url.includes('usd')) {
+      pageData.organization.currency = 'USD';
+      pageData.shows[0].default_currency = 'USD';
+      pageData.payoutCalculations[0].currency = 'USD';
+    }
     const html = `<!doctype html><html lang="${locale}"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="root"></div><script type="module">
 import React from 'react';
 import {createRoot} from 'react-dom/client';
 import {ReportsView} from '/src/features/reports/ReportsView.tsx';
 import '/src/styles.css';
-createRoot(document.getElementById('root')).render(React.createElement(ReportsView,{data:${JSON.stringify(data)},locale:'${locale}'}));
+createRoot(document.getElementById('root')).render(React.createElement(ReportsView,{data:${JSON.stringify(pageData)},locale:'${locale}'}));
 </script></body></html>`;
     res.setHeader('Content-Type', 'text/html');
-    res.end(await server.transformIndexHtml(`/reports-test/${locale}`, html));
+    res.end(await server.transformIndexHtml(`/reports-test${req.url}`, html));
   } catch (error) { next(error); }
 });
 } };
@@ -41,15 +47,23 @@ try {
   page.on('pageerror', (error) => { errors.push(error.message); console.error('Browser error:', error.message); });
   page.on('console', (message) => { if (message.type() === 'error') console.error('Browser console:', message.text()); });
   await page.goto('http://127.0.0.1:5197/reports-test/fr');
-  const button = page.getByRole('button', { name: 'Télécharger le CSV NRHA en USD' });
-  await button.waitFor();
-  assert.equal(await button.isDisabled(), true);
   await page.getByRole('combobox').first().selectOption('show');
+  const convertedButton = page.getByRole('button', { name: 'Télécharger avec conversion en USD' });
+  await convertedButton.waitFor();
+  assert.equal(await convertedButton.isDisabled(), true);
+  const sourceButton = page.getByRole('button', { name: 'Télécharger sans conversion (CAD)' });
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].find((button) => button.textContent.includes('sans conversion')).disabled);
+  const sourceDownloading = page.waitForEvent('download');
+  await sourceButton.click();
+  const sourceDownload = await sourceDownloading;
+  assert.equal(sourceDownload.suggestedFilename(), '000123-sans-conversion-CAD.csv');
+  const sourceCsv = await readFile(await sourceDownload.path(), 'utf8');
+  assert.ok(sourceCsv.includes(';200.00\r\n'));
   await page.getByLabel('Taux de change').fill('0,73');
-  await page.waitForFunction(() => !document.querySelector('button.primary-button').disabled);
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].find((button) => button.textContent.includes('avec conversion')).disabled);
   assert.equal(await page.locator('tbody tr').count(), 3);
   const downloading = page.waitForEvent('download');
-  await button.click();
+  await convertedButton.click();
   const download = await downloading;
   assert.equal(download.suggestedFilename(), '000123.csv');
   const csv = await readFile(await download.path(), 'utf8');
@@ -58,9 +72,21 @@ try {
   assert.ok(csv.includes('"Test; ""CSV"", Éloïse"'));
   await page.getByLabel('Taux de change').fill('0');
   await page.getByRole('alert').waitFor();
-  assert.equal(await button.isDisabled(), true);
+  assert.equal(await convertedButton.isDisabled(), true);
+  assert.equal(await sourceButton.isDisabled(), false);
+  await page.goto('http://127.0.0.1:5197/reports-test/fr?usd');
+  await page.getByRole('combobox').first().selectOption('show');
+  assert.equal(await page.getByLabel('Taux de change').count(), 0);
+  const usdButton = page.getByRole('button', { name: 'Télécharger le CSV NRHA en USD' });
+  await page.waitForFunction(() => ![...document.querySelectorAll('button')].find((button) => button.textContent.includes('CSV NRHA en USD')).disabled);
+  assert.equal(await usdButton.isDisabled(), false);
+  assert.equal(await page.getByRole('heading', { name: 'Rapport NRHA avec taux de change' }).count(), 0);
   await page.setViewportSize({ width: 390, height: 844 });
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true);
+  const mobileLayout = await page.evaluate(() => ({
+    fits: document.documentElement.scrollWidth <= window.innerWidth,
+    overflow: [...document.querySelectorAll('*')].map((element) => ({ element, right: element.getBoundingClientRect().right, width: element.getBoundingClientRect().width, scrollWidth: element.scrollWidth })).filter((row) => row.right > window.innerWidth + 1).sort((a, b) => b.right - a.right).slice(0, 10).map((row) => `${row.element.tagName}.${row.element.className}[right=${row.right},width=${row.width},scroll=${row.scrollWidth}]`),
+  }));
+  assert.equal(mobileLayout.fits, true, `Mobile overflow: ${mobileLayout.overflow.join(', ')}`);
   await page.goto('http://127.0.0.1:5197/reports-test/en');
   await page.getByRole('heading', { name: 'Reports', exact: true }).waitFor();
   assert.equal(errors.length, 0, errors.join('\n'));
