@@ -28,6 +28,7 @@ try{
  assert.deepEqual(await page.evaluate(()=>window.checks.map(check=>check.id)),['class0','class1','class2']);
  assert.equal(await page.evaluate(()=>window.maxActiveChecks),1);
  await expect(page.getByRole('button',{name:/House class/})).toBeDisabled();
+ await expect(page.locator('.entry-house-eligibility')).toContainText('Cavalier admissible selon les règles Maison.');
  assert.equal(await page.getByRole('button',{name:/Request a spot/}).count(),1);
  await expect(page.getByRole('button',{name:/Request a spot/})).toHaveClass(/primary-button/);
  await page.locator('.entry-day-nav button').last().click();

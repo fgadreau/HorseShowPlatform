@@ -5,9 +5,9 @@ import {chromium} from 'playwright-core';import executable from '@sparticuz/chro
 import {readFile} from 'node:fs/promises';
 const show={id:'show',name:'DEMO warmup',start_date:'2026-10-25',end_date:'2026-10-25',default_currency:'CAD'};
 const day={id:'day',show_id:'show',day_date:'2026-10-25',day_number:1,sort_order:1};
-const blocks=[{id:'first',show_id:'show',show_day_id:'day',name:'DEMO précédent',display_label:null,arena:'101',sort_order:1,block_type:'competition',schedule_start_mode:'fixed',scheduled_time:'08:00',pattern:'R1'},{id:'second',show_id:'show',show_day_id:'day',name:'DEMO suite',arena:'101',sort_order:2,block_type:'competition',schedule_start_mode:'after_previous',follows_block_id:'first',pattern:'R2'}];
-const classes=blocks.map((b,i)=>({id:'class'+i,show_id:'show',block_id:b.id,name:'DEMO class',sort_order:1,added_money:0,entry_fee:25,judge_fee:0,payout_schedule_type:'jackpot_100'}));
-const warmup={id:'warm',name:'DEMO warmup',arena:'101',registration_state:'drawn',duration_minutes_per_rider:5,drag_interval:2,drag_duration_minutes:8,schedule_start_mode:'fixed',schedule_start_time:'08:00'};
+const blocks=[{id:'first',show_id:'show',show_day_id:'day',name:'DEMO précédent',display_label:null,arena:'101',sort_order:1,block_type:'competition',schedule_start_mode:'fixed',scheduled_time:'08:00',pattern:'R1'},{id:'second',show_id:'show',show_day_id:'day',name:'DEMO suite',arena:'101',sort_order:2,block_type:'competition',schedule_start_mode:'after_previous',follows_block_id:'first',pattern:'R2'},{id:'warm-block',show_id:'show',show_day_id:'day',name:'DEMO warmup',arena:'101',sort_order:3,block_type:'paid_warmup',schedule_start_mode:'fixed',scheduled_time:'12:00',pattern:null}];
+const classes=[{id:'class1',show_id:'show',block_id:'first',code:'100',name:'DEMO class A',sort_order:1,added_money:0,entry_fee:25,judge_fee:0,payout_schedule_type:'jackpot_100'},{id:'class2',show_id:'show',block_id:'first',code:'101',name:'DEMO class B',sort_order:2,added_money:0,entry_fee:30,judge_fee:0,payout_schedule_type:'jackpot_100'},{id:'class3',show_id:'show',block_id:'second',code:'200',name:'DEMO class C',sort_order:1,added_money:0,entry_fee:35,judge_fee:0,payout_schedule_type:'jackpot_100'}];
+const warmup={id:'warm',organization_id:'org',show_id:'show',show_day_id:'day',block_id:'warm-block',name:'DEMO warmup',arena:'101',entry_fee:25,registration_state:'drawn',duration_minutes_per_rider:5,drag_interval:2,drag_duration_minutes:8,schedule_start_mode:'fixed',schedule_start_time:'08:00'};
 const fixture=JSON.stringify({show,day,blocks,classes,warmup});
 const harness={name:'warmup-fixture',configureServer(server){server.middlewares.use('/warmup-test',async(req,res,next)=>{try{const html=`<!doctype html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script type="module">
 import React from 'react';import {createRoot} from 'react-dom/client';
@@ -17,14 +17,17 @@ import {PaidWarmupForm} from '/src/features/classes/PaidWarmupForm.tsx';
 import '/src/styles.css';
 const f=${fixture};const org={id:'org',name:'DEMO association'};
 createRoot(document.getElementById('root')).render(React.createElement(React.Fragment,null,
- React.createElement(ShowbillExport,{blocks:f.blocks,classes:f.classes,locale:'fr',organization:org,show:f.show,showDays:[f.day]}),
+ React.createElement(ShowbillExport,{blocks:f.blocks,classes:f.classes,locale:'fr',organization:org,show:f.show,showDays:[f.day],showScorePaidWarmups:[f.warmup]}),
  React.createElement(WarmupScheduleExport,{warmup:f.warmup,labels:['DEMO Owner — Horse A','DEMO Owner — Horse B','DEMO Owner — Horse C']}),
  React.createElement(PaidWarmupForm,{blocks:[],contacts:[],classes:[],entries:[],horses:[],locale:'fr',organization:org,showDays:[f.day],showScorePaidWarmups:[],shows:[f.show],onSaveError:e=>{window.fixtureError=e.message},onSaveShowScorePaidWarmup:async input=>{window.fixtureSave=input}})
 ));</script></body></html>`;res.setHeader('Content-Type','text/html');res.end(await server.transformIndexHtml('/warmup-test',html));}catch(e){next(e);}});}};
 const server=await createServer({configFile:false,envDir:false,publicDir:false,plugins:[react(),harness],server:{host:'127.0.0.1',port:5198,strictPort:true,fs:{deny:['.env','.env.*','**/.tmp/**','**/.git/**']}}});let browser;
 try{await server.listen();browser=await chromium.launch({executablePath:await executable.executablePath(),headless:true,args:executable.args.filter(a=>!['--single-process','--disable-web-security','--disable-site-isolation-trials'].includes(a)&&!a.startsWith('--disable-features='))});const page=await browser.newPage();page.setDefaultTimeout(15000);const errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());await page.goto('http://127.0.0.1:5198/warmup-test');
 await page.getByRole('heading',{name:'Manège / Arena 101',exact:true}).waitFor();
-assert.equal(await page.locator('.showbill-print-root').getByText('Jackpot',{exact:true}).count(),2,'Jackpot column remains visible even when all added money is zero');
+assert.equal(await page.locator('.showbill-print-root').getByText('Jackpot',{exact:true}).count(),3,'Jackpot column remains visible even when all added money is zero');
+assert.equal(await page.locator('.showbill-block-pattern').count(),2,'The showbill prints one pattern cell per competition block');
+assert.equal(await page.locator('.showbill-block-pattern').first().getAttribute('rowspan'),'2','A shared block pattern spans all of its class rows');
+assert.match(await page.locator('.showbill-event-row').filter({hasText:'DEMO warmup'}).innerText(),/25/,'Paid warm-up price is printed in the showbill');
 assert.ok(await page.locator('.showbill-print-root').getByText(/À la suite de.*After/).count());
 const downloading=page.waitForEvent('download');await page.getByRole('button',{name:'CSV pour Google Sheets',exact:true}).click();const download=await downloading;const csv=await readFile(await download.path(),'utf8');assert.ok(csv.includes('08:18'));assert.ok(csv.includes('Préparation de piste / Arena drag'));assert.ok(csv.includes('DEMO Owner — Horse C'));
 const popupPromise=page.waitForEvent('popup');await page.getByRole('button',{name:'Imprimer / PDF',exact:true}).last().click();const popup=await popupPromise;await popup.waitForLoadState();assert.ok((await popup.locator('body').innerText()).includes('08:18'));await popup.close();

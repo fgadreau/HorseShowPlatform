@@ -9,7 +9,7 @@ import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
 import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
 import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
-import { classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, showDayLabel } from "../classes/classUtils";
+import { classScheduleStartLabel, buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, compareScheduleClasses, eligibilityNotesFromRules, showDayLabel } from "../classes/classUtils";
 import { uiText, entryNumberValue, InlineHealthMessage, ReadinessChecklist, birthYearFromDateValue } from "../dashboard/shared";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { HorseForm } from "../horses/HorseForm";
@@ -673,6 +673,7 @@ function EntryForm({
                     const judgeFeeIncluded = nominalJudgeFee > 0 && blockHasSelection && (selected
                       ? retainedJudgeFee?.line.evaluation.classRecord.id !== evaluation.classRecord.id
                       : nextJudgeAmount === currentJudgeAmount);
+                    const houseEligibility = eligibilityNotesFromRules(evaluation.classRecord.eligibility_rules);
                     const pendingNrha = evaluation.nrhaPending;
                     const Icon = pendingNrha ? ShieldCheck : evaluation.canSelect ? CheckCircle2 : AlertCircle;
 
@@ -694,6 +695,12 @@ function EntryForm({
                             {selected && retainedJudgeFee?.line.evaluation.classRecord.id === evaluation.classRecord.id ? <span> · {uiText(locale, "Une seule fois pour le bloc", "Once for the block")}</span> : null}
                             {!selected && blockHasSelection && nextJudgeAmount !== currentJudgeAmount ? <span> · {uiText(locale, `Frais du bloc si sélectionnée : ${formatCurrency(nextJudgeAmount, checkoutPreview.currency)}`, `Block fee if selected: ${formatCurrency(nextJudgeAmount, checkoutPreview.currency)}`)}</span> : null}
                           </small>
+                          {houseEligibility ? (
+                            <small className="entry-house-eligibility">
+                              <strong>{uiText(locale, "Éligibilité Maison", "House eligibility")}:</strong>{" "}
+                              {houseEligibility}
+                            </small>
+                          ) : null}
                         </span>
                         {evaluation.nrhaResult && !evaluation.message ? <small className={`entry-class-status ${evaluation.nrhaResult.tone}`}>{evaluation.nrhaResult.message}</small> : null}
                         {!evaluation.nrhaResult && pendingNrha ? <small className="entry-class-status info">{uiText(locale, "Validation NRHA de la journée en cours...", "Checking this day's NRHA blocks...")}</small> : null}

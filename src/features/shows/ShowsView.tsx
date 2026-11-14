@@ -151,7 +151,7 @@ function ShowsView({
                 </div>
                 <div className="row-actions">
                   <button className="text-button" type="button" onClick={() => openAssistant(show)}>
-                    {show.status === "draft" ? uiText(locale, "Continuer", "Continue") : uiText(locale, "Checklist", "Checklist")}
+                    {show.status === "draft" ? uiText(locale, "Continuer", "Continue") : uiText(locale, "Préparation du concours", "Show readiness")}
                   </button>
                   <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
                     {uiText(locale, "Paramètres du concours", "Show settings")}

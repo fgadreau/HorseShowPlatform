@@ -219,7 +219,7 @@ function ShowAssistant({
           </button>
           <button className={step === "readiness" ? "active" : ""} disabled={!activeShow} type="button" onClick={() => setStep("readiness")}>
             <ClipboardList size={16} />
-            {uiText(locale, "Checklist", "Checklist")}
+            {uiText(locale, "Préparation", "Readiness")}
           </button>
         </div>
 
