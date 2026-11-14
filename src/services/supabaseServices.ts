@@ -2441,6 +2441,7 @@ export async function updateOrganizationProduct(
 
 function normalizeManualSaleInput(input: ManualSaleInput) {
   return {
+    unit_price_tax_mode: input.unit_price_tax_mode ?? "exclusive",
     organization_id: input.organization_id,
     product_id: input.product_id ?? null,
     show_id: input.show_id ?? null,
@@ -5076,9 +5077,9 @@ async function resolveLateEntryFee(input: EntryInput) {
 
   const { data: block, error: blockError } = await client
     .from("blocks")
-    .select("entries_close_at")
+    .select("entries_close_at,draw_prepared_at")
     .eq("id", classRecord.block_id)
-    .single<Pick<Block, "entries_close_at">>();
+    .single<Pick<Block, "entries_close_at" | "draw_prepared_at">>();
 
   if (blockError) {
     throw blockError;
@@ -5095,7 +5096,7 @@ async function resolveLateEntryFee(input: EntryInput) {
   }
 
   const baseFee = input.base_fee ?? classRecord.entry_fee ?? null;
-  const isLate = Boolean(block.entries_close_at && Date.now() > new Date(block.entries_close_at).getTime());
+  const isLate = Boolean(block.draw_prepared_at || (block.entries_close_at && Date.now() > new Date(block.entries_close_at).getTime()));
 
   if (isLate && !show.late_entries_allowed) {
     throw new Error("Les inscriptions sont fermées pour ce bloc.");
@@ -5199,8 +5200,7 @@ export async function createEntry(input: EntryInput) {
   const resolvedEntryNumber = input.entry_number === undefined ? await resolveEntryBackNumber(input) : input.entry_number;
 
   const { data, error } = await client
-    .from("entries")
-    .insert({
+    .rpc("submit_entry", { p_entry: {
       organization_id: input.organization_id,
 	      show_id: input.show_id,
 	      horse_id: input.horse_id,
@@ -5217,8 +5217,7 @@ export async function createEntry(input: EntryInput) {
       is_late: lateEntry.isLate,
       late_fee_percent: lateEntry.lateFeePercent,
       late_fee_amount: lateEntry.lateFeeAmount,
-      status: "draft",
-    })
+    } })
     .select("*")
     .single<Entry>();
 
@@ -5570,7 +5569,7 @@ export async function prepareShowScoreClassSetup(input: {
 }) {
   const client = requireSupabase();
   const blockClassIds = new Set(input.classes.filter((item) => item.block_id === input.classRecord.id).map((item) => item.id));
-  if (input.entries.some((entry) => blockClassIds.has(entry.class_id) && ["draft", "pending_checkout", "active"].includes(entry.status) && !entry.entry_number)) {
+  if (input.entries.some((entry) => blockClassIds.has(entry.class_id) && ["active", "completed"].includes(entry.status) && !entry.entry_number)) {
     throw new Error("Ordre de passage impossible : des dossards sont en attente.");
   }
   const closeDate = input.classRecord.entries_close_at ? new Date(input.classRecord.entries_close_at) : null;

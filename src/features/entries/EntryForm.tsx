@@ -250,7 +250,12 @@ function EntryForm({
   const judgeFeePreviewLines = buildJudgeFeePreviewLines(checkoutPreview.lines);
   const judgeFeeByBlockId = new Map(judgeFeePreviewLines.map((item) => [item.line.evaluation.block!.id, item]));
   const selectedBlockIds = new Set(selectedEvaluations.flatMap((evaluation) => evaluation.block ? [evaluation.block.id] : []));
-  const requiresPreauthAcceptance = checkoutPreview.preauthRequired && selectedClassIds.length > 0;
+  const requiresPreauthAcceptance = checkoutPreview.preauthRequired && checkoutPreview.invoiceTotal > 0 && selectedClassIds.length > 0;
+  const confirmationMessage = !checkoutPreview.preauthRequired
+    ? uiText(locale, "La confirmation active immédiatement l’inscription. Le paiement est suivi séparément par l’association.", "Confirmation activates the entry immediately. The association tracks payment separately.")
+    : checkoutPreview.invoiceTotal === 0
+      ? uiText(locale, "Si aucun autre frais n’est à régler dans le compte, cette inscription gratuite sera active dès sa confirmation.", "If no other account charges are due, this free entry becomes active upon confirmation.")
+      : uiText(locale, "L’inscription sera active après une préautorisation ou un paiement confirmé. La préautorisation suit le déclenchement prévu par l’association.", "Your entry becomes active after confirmed authorization or payment. Authorization follows the association’s configured timing.");
   const canCreate = Boolean(
     organization &&
       profileId &&
@@ -695,7 +700,7 @@ function EntryForm({
             <span>4</span>
             <div>
               <strong>{uiText(locale, "Confirmer", "Confirm")}</strong>
-              <p>{uiText(locale, "Révise la facture estimée et accepte la préautorisation avant de créer les brouillons.", "Review the estimated invoice and accept preauthorization before creating draft entries.")}</p>
+              <p>{confirmationMessage}</p>
             </div>
           </div>
           {selectedEvaluations.length ? (
@@ -740,11 +745,11 @@ function EntryForm({
                 />
               </div>
               <div className="entry-preauth-consent">
-                {checkoutPreview.preauthRequired ? (
+                {checkoutPreview.preauthRequired && checkoutPreview.invoiceTotal > 0 ? (
                   <label className="checkbox-row">
                     <input checked={preauthAccepted} type="checkbox" onChange={(event) => setPreauthAccepted(event.target.checked)} />
                     <span>
-                      <strong>{uiText(locale, "J'accepte la préautorisation de la carte au dossier.", "I accept the card-on-file preauthorization.")}</strong>
+                      <strong>{uiText(locale, "J’accepte la préautorisation selon les modalités du concours.", "I accept authorization under the show’s payment terms.")}</strong>
                       <small>{preauthorizationDetail(checkoutPreview, selectedShow, locale)}</small>
                     </span>
                   </label>
@@ -752,7 +757,7 @@ function EntryForm({
                   <InlineHealthMessage
                     value={{
                       tone: "info",
-                      message: uiText(locale, "Ce concours utilise un paiement manuel pour les inscriptions.", "This show uses manual payment for entries."),
+                      message: checkoutPreview.preauthRequired ? uiText(locale, "Si aucun autre frais n’est à régler dans le compte, cette inscription gratuite sera active dès sa confirmation.", "If no other account charges are due, this free entry becomes active upon confirmation.") : uiText(locale, "Ce concours utilise un paiement manuel pour les inscriptions.", "This show uses manual payment for entries."),
                     }}
                   />
                 )}
@@ -789,7 +794,7 @@ function EntryForm({
               ? nrhaVerifyBusy
                 ? uiText(locale, "Validation NRHA...", "Checking NRHA...")
                 : uiText(locale, "Création...", "Creating...")
-              : uiText(locale, selectedClassIds.length > 1 ? "Créer les brouillons et la facture" : "Créer le brouillon et la facture", selectedClassIds.length > 1 ? "Create draft entries and invoice" : "Create draft entry and invoice")}
+              : uiText(locale, selectedClassIds.length > 1 ? "Confirmer les inscriptions" : "Confirmer l’inscription", selectedClassIds.length > 1 ? "Confirm entries" : "Confirm entry")}
           </button>
         </section>
       </div>
@@ -1146,8 +1151,8 @@ function preauthorizationDetail(preview: EntryCheckoutPreview, show: Show | null
 
   return uiText(
     locale,
-    `${formatCurrency(preview.preauthAmount, preview.currency)} sera préautorisé vers ${preauthTime}; capture prévue vers ${settlementTime}. ${marginLabel}`,
-    `${formatCurrency(preview.preauthAmount, preview.currency)} will be preauthorized around ${preauthTime}; capture is planned around ${settlementTime}. ${marginLabel}`,
+    `${formatCurrency(preview.preauthAmount, preview.currency)} à préautoriser à partir de ${preauthTime}; encaissement distinct prévu vers ${settlementTime}. ${marginLabel}`,
+    `${formatCurrency(preview.preauthAmount, preview.currency)} to authorize from ${preauthTime}; separate capture is planned around ${settlementTime}. ${marginLabel}`,
   );
 }
 

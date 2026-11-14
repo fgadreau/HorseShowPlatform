@@ -1,3 +1,5 @@
+import { entryStatusLabel } from "./entryLifecycleText";
+import { CancellationActions, CancellationProvider } from "./CancellationActions";
 import { GroupedEntryList } from "./GroupedEntryList";
 import { useState } from "react";
 import { Plus } from "lucide-react";
@@ -13,6 +15,7 @@ import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from 
 import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function EntriesView({
+  onRefresh,
   locale,
   blocks,
   contacts,
@@ -40,6 +43,7 @@ function EntriesView({
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
 }: {
+  onRefresh: () => void;
   locale: Locale;
   blocks: Block[];
   contacts: Contact[];
@@ -84,7 +88,7 @@ function EntriesView({
   }
 
   return (
-    <div className="content-grid">
+    <CancellationProvider showId={entries[0]?.show_id ?? shows[0]?.id}><div className="content-grid">
       <ViewIntro
         eyebrow={uiText(locale, "Inscriptions", "Entries")}
         title={uiText(locale, "Gestion des inscriptions", "Entry management")}
@@ -143,6 +147,7 @@ function EntriesView({
       {editingEntry ? (
         <ModalDialog className="entry-form-modal" description={horseLabel(findById(horses, editingEntry.horse_id))} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Modifier l'inscription", "Edit entry")} onClose={() => setEditingEntry(null)}>
           <EntryEditForm
+            allowPriceAdjustment
             locale={locale}
             blocks={blocks}
             contacts={contacts}
@@ -195,7 +200,7 @@ function EntriesView({
                 <span className="muted-line">{uiText(locale, "Dossard", "Back number")}: {entry.entry_number ?? uiText(locale, "à assigner", "to assign")}</span>
               </div>
               <div>
-                <span>{entryClassLabel(findById(classes, entry.class_id), locale)}</span>
+                <span>{entryClassLabel(findById(classes, entry.class_id), locale)}</span><span className={`badge ${entry.status}`}>{entryStatusLabel(entry.status, locale)}</span>
                 <span className="muted-line">{entryClassBlockDetail(findById(classes, entry.class_id), blocks, locale)}</span>
                 <span className="muted-line">{entryClassPatternDetail(findById(classes, entry.class_id), blocks, locale)}</span>
               </div>
@@ -206,15 +211,16 @@ function EntriesView({
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
                   {uiText(locale, "Modifier", "Edit")}
                 </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
+                {entry.status === "draft" && <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
                   {uiText(locale, "Supprimer", "Delete")}
-                </button>
+                </button>}
+                <CancellationActions entries={entries} entry={entry} block={blocks.find(b => b.id === classes.find(c => c.id === entry.class_id)?.block_id)} classes={classes} profileId={profileId} locale={locale} staff onRefresh={onRefresh} />
               </div>
             </div>
           )}
         />
       </section>
-    </div>
+    </div></CancellationProvider>
   );
 }
 

@@ -1,3 +1,5 @@
+import { ShowContextHeader } from "../shows/ShowContextHeader";
+import { WorkspaceContext } from './WorkspaceContext';
 import {FinanceView} from '../finance/FinanceView';
 import { ReportsView } from "../reports/ReportsView";
 import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
@@ -813,40 +815,16 @@ export function Dashboard({
             )}
           </div>
           <div className="header-actions">
-            {organizations.length > 1 ? (
-              <label>
-                Association
-                <select aria-label="Association" value={selectedOrganization?.id ?? ""} onChange={(event) => {onChangeOrganization(event.target.value);if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling(`/associations/${event.target.value}/finance`);else if(financeRoute())navigateBilling(`/associations/${event.target.value}/shows`);}}>
-                  {organizations.map((organization) => (
-                    <option key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {shouldShowShowContext ? (
-              <select
-                aria-label={locale === "fr" ? "Show actuel" : "Current show"}
-                title={locale === "fr" ? "Show actuel" : "Current show"}
-                value={activeShowId}
-                onChange={(event) => {setSelectedShowId(event.target.value);if(!effectiveView.startsWith('my-'))navigateBilling(`/associations/${selectedOrganization?.id}/shows/${event.target.value}/${Object.keys(showSections).find(k=>showSections[k]===effectiveView)??'overview'}`);}}
-              >
-                <option value="" disabled>{locale==='fr'?'Choisir un concours':'Select a show'}</option>
-                {selectedOrganizationShows.map((show) => (
-                  <option key={show.id} value={show.id}>
-                    {showLabel(show)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+            <WorkspaceContext organizations={organizations} shows={shows} organization={selectedOrganization} show={selectedShow} showContext={SHOW_CONTEXT_VIEW_KEYS.has(effectiveView)} loading={loading} locale={locale}
+              onOrganizationChange={id=>{setSelectedShowId('');onChangeOrganization(id);if(effectiveView.startsWith('my-'))return;if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling('/associations/'+id+'/finance');else if(financeRoute())navigateBilling('/associations/'+id+'/shows');}}
+              onShowChange={id=>{setSelectedShowId(id);if(!effectiveView.startsWith('my-'))navigateBilling('/associations/'+selectedOrganization?.id+'/shows/'+id+'/'+(Object.keys(showSections).find(k=>showSections[k]===effectiveView)??'overview'));}}/>
             <button className="icon-button" title={t.common.refresh} type="button" onClick={onRefresh}>
               <RefreshCw className={loading ? "spin" : ""} size={18} />
             </button>
           </div>
         </header>
 
-        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance"><p>{selectedShow?.name} · {selectedShow?.start_date} — {selectedShow?.end_date} · {selectedShow?.status}</p><nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
+        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance">{selectedShow && <ShowContextHeader key={selectedShow.id} show={selectedShow} locale={locale} canEdit={canManageAssociation || isPlatformAdmin} onUpdateShow={onUpdateShow} />}<nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
         {notice ? <NoticeBanner notice={notice} /> : null}
         {showRouteUnavailable && <p role="alert">{locale==='fr'?'Concours indisponible ou non autorisé. Sélectionnez un concours accessible.':'Show unavailable or unauthorized. Select an accessible show.'}</p>}
 
@@ -1018,6 +996,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "entries" ? (
           <EntriesView
+            onRefresh={onRefresh}
             locale={locale}
             blocks={selectedShowBlocks}
             contacts={selectedOrganizationContacts}
@@ -1256,6 +1235,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "my-entries" ? (
           <MyEntriesView
+            onRefresh={onRefresh}
             warmupHorses={personalHorses}
             locale={locale}
             blocks={selectedShowBlocks}

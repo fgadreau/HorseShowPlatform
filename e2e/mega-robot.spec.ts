@@ -652,7 +652,7 @@ async function navigateToShow(page: Page, section: "schedule" | "scoring" | "res
   if (error) throw error;
   await page.goto(`/associations/${state.organizationId}/shows/${show.id}/${section}`);
   await expect(page.getByRole("navigation", { name: "Concours sélectionné", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Show actuel", { exact: true })).toHaveValue(show.id);
+  await expect(page.getByTestId("active-show-context")).toHaveAttribute("data-show-id", show.id);
   if (section === "schedule") {
     const showSchedule = page.locator(".show-schedule-trigger").filter({ hasText: state.showName });
     await expect(showSchedule).toBeVisible();

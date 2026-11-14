@@ -3,17 +3,21 @@ import type { FormEvent } from "react";
 import { FormActions } from "../../components/ui";
 import type { Locale } from "../../lib/i18n";
 import { slugify, updateShow } from "../../services/supabaseServices";
-import { numericValue } from "../../lib/display";
+import { errorMessage, numericValue } from "../../lib/display";
 import type { Show } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showTimeInputValue } from "../classes/classUtils";
 
 function ShowEditForm({
+  embedded = false,
+  paymentsFirst = false,
   locale = "fr",
   show,
   onCancel,
   onUpdateShow,
 }: {
+  embedded?: boolean;
+  paymentsFirst?: boolean;
   locale?: Locale;
   show: Show;
   onCancel: () => void;
@@ -35,10 +39,12 @@ function ShowEditForm({
   const [entryPreauthAmountStrategy, setEntryPreauthAmountStrategy] = useState<Show["entry_preauth_amount_strategy"]>(show.entry_preauth_amount_strategy ?? "entry_balance");
   const [entryPreauthMarginPercent, setEntryPreauthMarginPercent] = useState(String(show.entry_preauth_margin_percent ?? 0));
   const [busy, setBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setBusy(true);
+    setSubmitError("");
 
     try {
       await onUpdateShow(show.id, {
@@ -58,20 +64,14 @@ function ShowEditForm({
         entry_preauth_amount_strategy: entryPreauthAmountStrategy,
         entry_preauth_margin_percent: numericValue(entryPreauthMarginPercent) ?? 0,
       });
+    } catch (error) {
+      setSubmitError(errorMessage(error));
     } finally {
       setBusy(false);
     }
   }
 
-  return (
-    <section className="panel edit-panel">
-      <div className="panel-header">
-        <div>
-          <h2>{uiText(locale, "Modifier le concours", "Edit show")}</h2>
-          <p>{show.name}</p>
-        </div>
-      </div>
-      <form className="stack" onSubmit={handleSubmit}>
+  const generalFields = (<div className="show-settings-general"><h3>{uiText(locale, "Informations générales", "General information")}</h3>
         <label>
           {uiText(locale, "Nom", "Name")}
           <input required value={name} onChange={(event) => setName(event.target.value)} />
@@ -105,9 +105,18 @@ function ShowEditForm({
             <input value={location} onChange={(event) => setLocation(event.target.value)} />
           </label>
         </div>
-        <div className="field-group">
-          <span className="contact-picker-label">{uiText(locale, "Paiements du concours", "Show payments")}</span>
+  </div>);
+  const paymentFields = (
+        <div className="show-settings-payments">
+          <h3>{uiText(locale, "Inscriptions et paiements", "Entries and payments")}</h3><p className="show-settings-help">{entryPaymentPolicy === "manual" ? uiText(locale, "Gestion manuelle : les inscriptions sont actives dès leur confirmation. L’association suit les paiements séparément.", "Manual handling: entries become active upon confirmation. The association tracks payments separately.") : uiText(locale, "Mode carte : une préautorisation ou un paiement confirmé active l’inscription.", "Card mode: confirmed authorization or payment activates the entry.")}</p>
           <div className="form-grid">
+            <label>
+              {uiText(locale, "Gestion des inscriptions", "Entry handling")}
+              <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
+                <option value="card_on_file_preauth">{uiText(locale, "Carte + préautorisation", "Card on file + preauthorization")}</option>
+                <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
+              </select>
+            </label>
             <label>
               {uiText(locale, "Réservations", "Reservations")}
               <select value={reservationPaymentPolicy} onChange={(event) => setReservationPaymentPolicy(event.target.value as Show["reservation_payment_policy"])}>
@@ -115,58 +124,66 @@ function ShowEditForm({
                 <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
               </select>
             </label>
-            <label>
-              {uiText(locale, "Inscriptions", "Entries")}
-              <select value={entryPaymentPolicy} onChange={(event) => setEntryPaymentPolicy(event.target.value as Show["entry_payment_policy"])}>
-                <option value="card_on_file_preauth">{uiText(locale, "Carte + préautorisation", "Card on file + preauthorization")}</option>
-                <option value="manual">{uiText(locale, "Gestion manuelle", "Manual handling")}</option>
-              </select>
-            </label>
           </div>
+          {entryPaymentPolicy !== "manual" && <details className="show-settings-advanced"><summary>{uiText(locale, "Préautorisation et encaissement", "Authorization and capture")}</summary>
           <div className="form-grid">
             <label>
               {uiText(locale, "Préautorisation", "Preauthorization")}
-              <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
+              <select value={entryPreauthTiming} onChange={(event) => setEntryPreauthTiming(event.target.value as Show["entry_preauth_timing"])}>
                 <option value="show_start">{uiText(locale, "Première journée du concours", "First show day")}</option>
                 <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
               </select>
             </label>
             <label>
               {uiText(locale, "Heure", "Time")}
-              <input disabled={entryPaymentPolicy === "manual" || entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
+              <input disabled={entryPreauthTiming === "manual"} type="time" value={entryPreauthTime} onChange={(event) => setEntryPreauthTime(event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
               {uiText(locale, "Échéance", "Due date")}
-              <select disabled={entryPaymentPolicy === "manual"} value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
+              <select value={entrySettlementTiming} onChange={(event) => setEntrySettlementTiming(event.target.value as Show["entry_settlement_timing"])}>
                 <option value="show_end">{uiText(locale, "Dernière journée du concours", "Last show day")}</option>
                 <option value="manual">{uiText(locale, "Manuelle", "Manual")}</option>
               </select>
             </label>
             <label>
               {uiText(locale, "Heure limite", "Due time")}
-              <input disabled={entryPaymentPolicy === "manual" || entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
+              <input disabled={entrySettlementTiming === "manual"} type="time" value={entrySettlementDueTime} onChange={(event) => setEntrySettlementDueTime(event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
             <label>
               {uiText(locale, "Montant préautorisé", "Preauthorized amount")}
-              <select disabled={entryPaymentPolicy === "manual"} value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
+              <select value={entryPreauthAmountStrategy} onChange={(event) => setEntryPreauthAmountStrategy(event.target.value as Show["entry_preauth_amount_strategy"])}>
                 <option value="entry_balance">{uiText(locale, "Solde des inscriptions", "Entry balance")}</option>
                 <option value="entry_balance_with_margin">{uiText(locale, "Solde + marge", "Balance + margin")}</option>
               </select>
             </label>
             <label>
               {uiText(locale, "Marge %", "Margin %")}
-              <input disabled={entryPaymentPolicy === "manual" || entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
+              <input disabled={entryPreauthAmountStrategy !== "entry_balance_with_margin"} min="0" step="0.01" type="number" value={entryPreauthMarginPercent} onChange={(event) => setEntryPreauthMarginPercent(event.target.value)} />
             </label>
           </div>
           <label className="check-row">
-            <input checked={entryAutoCaptureEnabled} disabled={entryPaymentPolicy === "manual"} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
+            <input checked={entryAutoCaptureEnabled} type="checkbox" onChange={(event) => setEntryAutoCaptureEnabled(event.target.checked)} />
             <span>{uiText(locale, "Capture automatique à l'échéance", "Auto-capture at due date")}</span>
           </label>
+          </details>}
         </div>
+  );
+
+  return (
+    <section className={embedded ? "show-settings-editor" : "panel edit-panel"}>
+      {!embedded && <div className="panel-header">
+        <div>
+          <h2>{uiText(locale, "Modifier le concours", "Edit show")}</h2>
+          <p>{show.name}</p>
+        </div>
+      </div>}
+      <form className="stack" onSubmit={handleSubmit}>
+        {paymentsFirst ? <>{paymentFields}{generalFields}</> : <>{generalFields}{paymentFields}</>}
+        {submitError && <p role="alert">{submitError}</p>}
         <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
     </section>

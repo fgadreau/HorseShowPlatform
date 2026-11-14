@@ -1,3 +1,5 @@
+import { entryStatusLabel } from "./entryLifecycleText";
+import { CancellationActions, CancellationProvider } from "./CancellationActions";
 import { GroupedEntryList } from "./GroupedEntryList";
 import { MyWarmupRequests } from "../warmups/MyWarmupRequests";
 import { useState } from "react";
@@ -15,6 +17,7 @@ import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryE
 
 function MyEntriesView({
   warmupHorses,
+  onRefresh,
   locale,
   blocks,
   contacts,
@@ -43,6 +46,7 @@ function MyEntriesView({
   onVerifyNrhaHorse,
 }: {
   warmupHorses?: Horse[];
+  onRefresh: () => void;
   locale: Locale;
   blocks: Block[];
   contacts: Contact[];
@@ -87,7 +91,7 @@ function MyEntriesView({
   }
 
   return (
-    <div className="content-grid">
+    <CancellationProvider showId={entries[0]?.show_id ?? shows[0]?.id}><div className="content-grid">
       <ViewIntro
         eyebrow={uiText(locale, "Mon espace", "My space")}
         title={uiText(locale, "Mes inscriptions", "My entries")}
@@ -205,21 +209,22 @@ function MyEntriesView({
                   </span>
                 ) : null}
               </div>
-              <span className={`badge ${entry.status}`}>{entry.status.replace("_", " ")}</span>
+              <span className={`badge ${entry.status}`}>{entryStatusLabel(entry.status, locale)}</span>
               <div className="row-actions">
                 <EntryEligibilityStatus assessment={eligibilityAssessments[entry.id]} locale={locale} />
                 <button className="text-button" type="button" onClick={() => setEditingEntry(entry)}>
                   {uiText(locale, "Modifier", "Edit")}
                 </button>
-                <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
+                {entry.status === "draft" && <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
                   {uiText(locale, "Supprimer", "Delete")}
-                </button>
+                </button>}
+                <CancellationActions entries={entries} entry={entry} block={blocks.find(b => b.id === classes.find(c => c.id === entry.class_id)?.block_id)} classes={classes} profileId={profileId} locale={locale} onRefresh={onRefresh} />
               </div>
             </div>
           )}
         />
       </section>
-    </div>
+    </div></CancellationProvider>
   );
 }
 

@@ -9,6 +9,9 @@ export function billingError(message:string,locale:string,data?:Json){
  if(data?.state==='closed'&&/BILLING_(NOT_ADMISSIBLE|FOLIO_CLOSED|STALE_RECAP|STALE_VERSION)/.test(message))return closedLabel(locale);
  if(message==='BILLING_NOT_ADMISSIBLE'&&data){const reasons=(data.checkout?.reasons??[]).filter((r:string)=>r!=='RECAP_REQUIRED');if(reasons.length)return reasons.map((r:string)=>reasonText[r]?.[fr?0:1]??(fr?'Contactez l’association pour vérifier ce compte.':'Contact the association to review this account.')).join(' ');}
  const messages:Record<string,[string,string]>={
+ BILLING_PREAUTH_NOT_DUE:['La préautorisation n’est pas encore due selon les paramètres du concours.','Authorization is not yet due under the show settings.'],
+ BILLING_PREAUTH_FULL_BALANCE_REQUIRED:['Le montant à préautoriser a changé. Actualisez le compte.','The authorization amount changed. Refresh the account.'],
+ BILLING_PREAUTH_CAPTURE_BALANCE:['Le solde ne peut pas être encaissé sur cette préautorisation. Vérifiez le compte avant de poursuivre.','This balance cannot be captured from the authorization. Review the account before continuing.'],
  BILLING_FOLIO_CLOSED:['Ce compte est fermé. Contactez l’association pour ajuster les frais.','This account is closed. Contact the association to adjust charges.'],
  BILLING_PAYMENT_PENDING:reasonText.PAYMENT_PENDING,
  BILLING_CONTEXT_UNAVAILABLE:['Les réservations de ce concours sont temporairement indisponibles. Contactez l’association.','Reservations for this show are temporarily unavailable. Contact the association.'],
@@ -29,5 +32,29 @@ export function chargeGroups(charges:Json[],locale:string){
 
 export function sourceBillingError(error:unknown,locale:string){
  const message=error&&typeof error==='object'&&'message' in error?String(error.message):'';
+ if(message.startsWith('ENTRY_'))return cancellationError(error,locale==='fr');
  return /^(BILLING|RESERVATION|EVENT)_/.test(message)?billingError(message,locale):message||billingError('',locale);
+}
+
+export function cancellationError(error: unknown, fr: boolean) {
+  const code = error && typeof error === "object" && "message" in error ? String(error.message) : "";
+  const messages: Record<string, [string, string]> = {
+    ENTRY_DRAW_PENDING_FINANCIAL_CONFIRMATION: ["Des inscriptions attendent un paiement ou une préautorisation confirmée. Le draw de ce bloc est bloqué.", "Entries await confirmed payment or authorization. This block’s draw is blocked."],
+    ENTRY_INVALID_AMOUNT: ["Saisissez un montant positif ou nul, avec au maximum deux décimales, et choisissez le traitement des taxes.", "Enter a nonnegative amount with at most two decimal places and choose tax treatment."],
+    ENTRY_PAYMENT_OR_AUTHORIZATION_REQUIRED: ["Une préautorisation ou un paiement confirmé est requis pour activer cette inscription.", "Confirmed authorization or payment is required to activate this entry."],
+    ENTRY_DRAW_GENERATED_USE_LATE_ENTRY: ["Le draw est déjà généré. Utilisez la procédure d’ajout tardif pour ce bloc.", "The draw has been generated. Use this block’s late-entry procedure."],
+    ENTRY_USE_CANCELLATION_REQUEST: ["Avant le draw, envoyez une demande d’annulation. Après sa génération, utilisez un scratch.", "Before the draw, submit a cancellation request. After generation, use a scratch."],
+    ENTRY_CONTEXT_CHANGED: ["Le contexte de l’inscription a changé. Actualisez la liste avant de réessayer.", "The entry context changed. Refresh the list before retrying."],
+    ENTRY_FORBIDDEN: ["Vous n’avez pas accès à cette opération pour cette inscription.", "You cannot perform this action on this entry."],
+    ENTRY_ACCOUNT_CLOSED: ["Le compte est fermé. Les ajustements d’annulation sont réservés aux comptes ouverts.", "The account is closed. Cancellation adjustments require an open account."],
+    ENTRY_ACCOUNT_CONFIGURATION_REQUIRED: ["Le compte du concours doit être configuré avant de traiter cet ajustement.", "Configure the show account before processing this adjustment."],
+    ENTRY_DRAW_GENERATED_USE_SCRATCH: ["Le draw est déjà généré. Il faut passer par un scratch.", "The draw has been generated. Use the scratch procedure."],
+    ENTRY_CANCELLATION_ALREADY_PENDING: ["Une demande est déjà en attente pour cette inscription.", "A request is already pending for this entry."],
+    ENTRY_CANCELLATION_ALREADY_DECIDED: ["Cette demande a déjà été traitée. Actualisez la liste.", "This request has already been processed. Refresh the list."],
+    ENTRY_CREDIT_EXCEEDS_CANCELLED_FEES: ["Le crédit dépasse les frais annulés.", "The credit exceeds the cancelled charges."],
+    BILLING_STALE_VERSION: ["Le compte a changé. Actualisez le calcul avant de confirmer.", "The account changed. Refresh the calculation before confirming."],
+    ENTRY_PENDING_CANCELLATION_LOCKED: ["Traitez ou retirez la demande d’annulation avant de modifier cette inscription.", "Process or withdraw the cancellation request before editing this entry."],
+    ENTRY_DRAW_PENDING_CANCELLATIONS: ["Des demandes d’annulation attendent une réponse pour ce bloc. Son draw est bloqué.", "Cancellation requests are pending for this block. Its draw is blocked."],
+  };
+  return messages[code]?.[fr ? 0 : 1] ?? (fr ? "L’opération n’a pas été confirmée. Actualisez pour vérifier son état avant de réessayer." : "The operation was not confirmed. Refresh to check its status before retrying.");
 }
