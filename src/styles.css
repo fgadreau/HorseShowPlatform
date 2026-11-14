@@ -6131,31 +6131,73 @@ summary:focus-visible,
 }
 
 .showbill-print-root {
-  background: white;
-  color: #101817;
-  padding: 8px;
+  background: #fffdfc;
+  border: 1px solid #e7dfe5;
+  border-radius: 12px;
+  box-shadow: 0 12px 34px rgba(69, 43, 61, 0.08);
+  color: #28262d;
+  padding: 20px;
 }
 
 .showbill-title {
-  border-bottom: 4px solid var(--brand);
+  align-items: center;
+  border-bottom: 1px solid #d8c8d3;
   display: grid;
-  gap: 4px;
-  padding: 4px 2px 14px;
-  text-align: center;
+  gap: 18px;
+  grid-template-columns: 180px minmax(0, 1fr) auto;
+  padding: 2px 2px 16px;
 }
 
-.showbill-title span,
+.showbill-organization-brand {
+  align-items: center;
+  display: flex;
+  justify-content: flex-start;
+  min-height: 76px;
+}
+
+.showbill-organization-logo {
+  display: block;
+  height: 76px;
+  max-width: 170px;
+  object-fit: contain;
+  object-position: left center;
+  width: auto;
+}
+
+.showbill-organization-brand > span {
+  color: var(--brand);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1.05;
+}
+
+.showbill-title-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.showbill-title-copy span,
 .showbill-title strong {
   color: var(--brand);
   font-size: 12px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
+  font-weight: 800;
+  letter-spacing: 0.05em;
   text-transform: uppercase;
 }
 
-.showbill-title h1,
-.showbill-title p {
+.showbill-title-copy h1,
+.showbill-title-copy p {
   margin: 0;
+}
+
+.showbill-title-copy h1 { color: #292731; }
+.showbill-title-copy p { color: #6d6670; }
+.showbill-title > strong {
+  background: #f5eff3;
+  border: 1px solid #e3d6df;
+  border-radius: 999px;
+  padding: 7px 10px;
+  white-space: nowrap;
 }
 
 .showbill-day {
@@ -6165,8 +6207,10 @@ summary:focus-visible,
 
 .showbill-day-heading {
   align-items: baseline;
-  background: #10221f;
-  color: white;
+  background: #f2e9ef;
+  border-left: 3px solid var(--brand);
+  border-radius: 7px;
+  color: #4d3045;
   display: flex;
   justify-content: space-between;
   padding: 9px 12px;
@@ -6184,15 +6228,17 @@ summary:focus-visible,
 }
 
 .showbill-arena {
-  border: 1px solid #aebbb7;
+  border: 1px solid #ddd4da;
+  border-radius: 8px;
   break-inside: avoid;
   min-width: 0;
+  overflow: hidden;
 }
 
 .showbill-arena h3 {
-  background: #dcefeb;
-  border-bottom: 1px solid #aebbb7;
-  color: var(--brand-active);
+  background: #f7f3f6;
+  border-bottom: 1px solid #e1d9df;
+  color: var(--brand);
   font-size: 14px;
   margin: 0;
   padding: 7px 9px;
@@ -6207,11 +6253,21 @@ summary:focus-visible,
 
 .showbill-arena th,
 .showbill-arena td {
-  border-bottom: 1px solid #d7dfdc;
+  border-bottom: 1px solid #e9e4e7;
   padding: 5px 7px;
   text-align: left;
   vertical-align: top;
 }
+
+.showbill-arena thead th {
+  background: #fcfafb;
+  color: #6b626a;
+  font-size: 10px;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.showbill-arena tbody tr:last-child td { border-bottom: 0; }
 
 .showbill-arena thead th:not(:first-child),
 .showbill-arena tbody td:not(:first-child) {
@@ -6220,8 +6276,8 @@ summary:focus-visible,
 }
 
 .showbill-block-row th {
-  background: #f1f4f3;
-  color: #182724;
+  background: #f8f5f7;
+  color: #3c343b;
   padding: 7px;
 }
 
@@ -6231,7 +6287,7 @@ summary:focus-visible,
 }
 
 .showbill-block-row small {
-  color: #4e615b;
+  color: #746a72;
   display: block;
   font-weight: 600;
   margin-top: 2px;
@@ -6260,10 +6316,28 @@ summary:focus-visible,
 }
 
 .showbill-event-row small {
-  color: #4e615b;
+  color: #746a72;
   font-size: 0.88em;
   font-weight: 600;
   margin-top: 2px;
+}
+
+.showbill-footer {
+  align-items: center;
+  border-top: 1px solid #e2d8df;
+  color: #746a72;
+  display: flex;
+  font-size: 10px;
+  gap: 7px;
+  justify-content: center;
+  letter-spacing: 0.025em;
+  margin-top: 2px;
+  padding-top: 10px;
+}
+
+.showbill-footer img {
+  height: 18px;
+  width: 18px;
 }
 
 @media (max-width: 720px) {
@@ -6275,11 +6349,20 @@ summary:focus-visible,
   .showbill-arena-grid {
     grid-template-columns: minmax(0, 1fr);
   }
+
+  .showbill-title {
+    grid-template-columns: 110px minmax(0, 1fr);
+  }
+
+  .showbill-title > strong {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
 }
 
 @media print {
   @page {
-    margin: 6mm;
+    margin: 7mm 7mm 13mm;
     size: portrait;
   }
 
@@ -6297,6 +6380,9 @@ summary:focus-visible,
   }
 
   .showbill-print-root {
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
     display: block;
     padding: 0;
     position: static;
@@ -6304,26 +6390,40 @@ summary:focus-visible,
   }
 
   .showbill-title {
-    border-bottom-width: 2px;
-    gap: 1px;
+    display: grid;
+    gap: 3mm;
+    grid-template-columns: 32mm minmax(0, 1fr) auto;
     margin-bottom: 5px;
-    padding: 0 0 5px;
+    padding: 0 0 3mm;
   }
 
-  .showbill-title span,
+  .showbill-organization-brand { min-height: 16mm; }
+
+  .showbill-organization-logo {
+    height: 16mm;
+    max-width: 30mm;
+  }
+
+  .showbill-title-copy { gap: 0.5mm; }
+
+  .showbill-title-copy span,
   .showbill-title strong {
     font-size: 8px;
     letter-spacing: 0.06em;
   }
 
-  .showbill-title h1 {
+  .showbill-title-copy h1 {
     font-size: 20px;
     line-height: 1.05;
   }
 
-  .showbill-title p {
+  .showbill-title-copy p {
     font-size: 9px;
     line-height: 1.15;
+  }
+
+  .showbill-title > strong {
+    padding: 1.5mm 2mm;
   }
 
   .showbill-day {
@@ -6334,9 +6434,11 @@ summary:focus-visible,
   }
 
   .showbill-day-heading {
-    background: var(--surface);
-    border-bottom: 1.5px solid var(--brand);
-    color: var(--brand-active);
+    background: #f5eff3;
+    border-bottom: 0;
+    border-left-width: 1.5px;
+    border-radius: 2px;
+    color: #4d3045;
     padding: 2px 4px;
   }
 
@@ -6357,13 +6459,14 @@ summary:focus-visible,
 
   .showbill-arena {
     align-self: start;
-    background: var(--surface);
-    border-color: #8da09a;
+    background: white;
+    border-color: #d5cbd2;
+    border-radius: 2px;
     break-inside: auto;
   }
 
   .showbill-arena h3 {
-    background: #eef7f5;
+    background: #f7f3f6;
     font-size: 9px;
     line-height: 1.15;
     padding: 2px 4px;
@@ -6417,6 +6520,21 @@ summary:focus-visible,
 
   .showbill-event-row small::before {
     content: "· ";
+  }
+
+  .showbill-footer {
+    bottom: -9mm;
+    font-size: 7px;
+    left: 0;
+    margin: 0;
+    padding-top: 1.5mm;
+    position: fixed;
+    right: 0;
+  }
+
+  .showbill-footer img {
+    height: 4mm;
+    width: 4mm;
   }
 }
 
