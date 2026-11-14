@@ -241,7 +241,7 @@ export type OrganizationMember = {
   id: string;
   organization_id: string;
   user_id: string;
-  role: "admin" | "secretary" | "user";
+  role: "admin" | "secretary" | "user" | "scribe" | "announcer";
   created_at: string;
 };
 
@@ -483,6 +483,7 @@ export type OrganizationMembershipType = {
   valid_from: string;
   valid_until: string;
   is_active: boolean;
+  is_public: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -496,6 +497,7 @@ export type ContactOrganizationMembership = {
   payer_contact_id: string | null;
   season_year: number;
   membership_number: string | null;
+  acquisition_source?: "platform" | "external_purchase" | "complimentary";
   status: "draft" | "active" | "expired" | "cancelled";
   valid_from: string;
   valid_until: string;
@@ -1610,6 +1612,7 @@ export type OrganizationMembershipTypeInput = {
   valid_from: string;
   valid_until: string;
   is_active?: boolean;
+  is_public?: boolean;
 };
 
 export type OrganizationMembershipTypeUpdateInput = Partial<

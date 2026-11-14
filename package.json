@@ -4,6 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:membership-import:browser": "node scripts/membership-import.browser.mjs",
+    "test:membership-csv": "node --test scripts/membership-csv.test.mjs",
+    "test:association-settings:browser": "node scripts/association-settings.browser.mjs",
+    "test:association-team:browser": "node scripts/association-team.browser.mjs",
     "test:show-settings:browser": "node scripts/show-settings.browser.mjs",
     "test:entry-lifecycle:sql": "node scripts/entry-lifecycle-sql.mjs",
     "test:entry-lifecycle:browser": "node scripts/entry-lifecycle.browser.mjs",

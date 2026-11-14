@@ -513,6 +513,7 @@ function PeopleView({
                       <span className="horse-status-chip success" key={membership.id}>
                         <span>{uiText(locale, "Carte", "Membership")}</span>
                         <strong>{membershipType ? `${membershipType.code ?? membershipType.name} ${membership.season_year}` : membership.season_year}</strong>
+                        {membership.acquisition_source === 'external_purchase' ? <span>{uiText(locale, "Achetée hors application", "Purchased outside the app")}</span> : membership.acquisition_source === 'complimentary' ? <span>{uiText(locale, "Carte offerte", "Complimentary membership")}</span> : null}
                       </span>
                     );
                   })}

@@ -27,7 +27,7 @@ export function MembershipBillingSetup({organization,types,locale}:{organization
   await billingRpc('membership_billing_reconcile',{p_membership:m.id,p_total:Number(q.total),p_payer:payer});setMessage(fr?'Carte reprise : un seul frais dans le nouveau compte.':'Membership transferred: one charge in the new account.');
  }
  return <section className="stack"><h3>{fr?'Relier les cartes à la facturation':'Connect memberships to billing'}</h3>
- <p>{fr?'Enregistre d’abord la carte ci-dessus et son choix de taxes. Les cartes sont sans taxes par défaut. Une carte payante sera active après réception et affectation du paiement.':'First save the membership above and its tax choice. New memberships default to no tax. A paid membership activates after payment is received and allocated.'}</p>
+ <p>{fr?'Enregistre d’abord le type de carte et son choix de taxes dans « Cartes de membre ». Les cartes sont sans taxes par défaut. Une carte payante sera active après réception et affectation du paiement.':'First save the membership type and its tax choice in “Memberships”. New memberships default to no tax. A paid membership activates after payment is received and allocated.'}</p>
  {error?<p role="alert">{error}</p>:null}{message?<p role="status">{message}</p>:null}
  {!data?<p>{fr?'Chargement…':'Loading…'}</p>:<>
  <label>{fr?'Carte à relier':'Membership to connect'}<select value={selected} disabled={busy} onChange={e=>{setSelected(e.target.value);setRate1('');setRate2('');setName1('');setName2('');}}><option value="">{fr?'Choisir une carte':'Choose a membership'}</option>{data.types.map((t:Json)=><option key={t.id} value={t.id}>{t.name} — {t.season_year}{t.context_id?' ✓':''}</option>)}</select></label>

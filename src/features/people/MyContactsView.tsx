@@ -54,7 +54,7 @@ function MyContactsView({
   const [buyingMembershipTypeId, setBuyingMembershipTypeId] = useState("");
   const canCreateLinkedContact = Boolean(organization && profileId);
   const defaultContactType: Contact["type"] = contacts.length ? "rider" : "owner";
-  const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active);
+  const activeMembershipTypes = organizationMembershipTypes.filter((type) => type.is_active && type.is_public !== false);
 
   function membershipsForContact(contactId: string) {
     return contactOrganizationMemberships.filter((membership) => membership.contact_id === contactId && membership.status !== "cancelled");
@@ -317,6 +317,7 @@ function MyContactsView({
                         </strong>
                         <span>{membership.status === "draft" ? uiText(locale, "En attente de paiement", "Awaiting payment") : membership.status === "active" ? uiText(locale, "Active", "Active") : membership.status}</span>
                         <span>{formatDate(membership.valid_until)}</span>
+                        {membership.acquisition_source === 'external_purchase' ? <span>{uiText(locale, "Achetée hors application", "Purchased outside the app")}</span> : membership.acquisition_source === 'complimentary' ? <span>{uiText(locale, "Carte offerte", "Complimentary membership")}</span> : null}
                       </span>
                     );
                   })}

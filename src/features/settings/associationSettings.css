@@ -1,0 +1,71 @@
+.association-settings { gap:14px; }
+.association-settings > .view-intro { order:-3; }
+.association-settings-navigation { grid-column:1/-1; order:-2; background:linear-gradient(120deg,#fff,#faf6fb); }
+.settings-navigation-heading { display:flex; gap:14px; align-items:center; }
+.settings-navigation-heading h2 { font-size:1.15rem; margin:0; }
+.settings-navigation-heading p { margin:6px 0 0; color:var(--muted,#60716a); font-size:.92rem; line-height:1.5; }
+.settings-search { margin-top:20px; }
+.settings-search label { display:grid; gap:7px; font-size:.85rem; font-weight:600; }
+.settings-search-field { display:flex; align-items:center; gap:10px; background:white; border:1px solid #d7cbdc; border-radius:11px; padding:0 12px; color:var(--brand); margin-top:7px; }
+.settings-search-field:focus-within { outline:2px solid var(--brand); outline-offset:2px; }
+.settings-search-field input[type=search] { flex:1; min-width:0; width:100%; border:0; box-shadow:none; outline:none; background:transparent; padding:12px 0; }
+.settings-search-field input::-webkit-search-cancel-button { -webkit-appearance:none; }
+.settings-search-field button { display:flex; align-items:center; justify-content:center; border:0; border-radius:8px; background:#f3edf4; color:var(--brand); min-width:32px; min-height:32px; cursor:pointer; }
+.settings-search small { display:block; color:#63716a; font-size:.78rem; margin-top:7px; }
+.settings-search-empty { grid-column:1/-1; text-align:center; }
+.settings-search-empty > svg { color:var(--brand); }
+.settings-search-empty h2 { font-size:1.1rem; }
+.settings-search-empty p { color:#63716a; }
+.settings-navigation-icon,.settings-card-icon { display:flex; justify-content:center; align-items:center; background:#f1e8f2; color:var(--brand); width:48px; height:48px; border-radius:14px; flex-shrink:0; }
+.settings-category-options { display:flex; flex-wrap:wrap; gap:8px; margin:22px 0; }
+.settings-category-options button { display:flex; gap:10px; align-items:center; padding:10px 14px; border:1px solid #e2d9e6; border-radius:24px; background:white; color:#4a4350; font:inherit; font-size:.9rem; cursor:pointer; }
+.settings-category-options button span { font-size:.75rem; background:#f3edf4; border-radius:20px; padding:2px 7px; }
+.settings-category-options button[aria-pressed=true] { background:var(--brand); color:white; border-color:var(--brand); }
+.settings-category-options button[aria-pressed=true] span { background:#ffffff25; }
+.settings-jump-row { display:flex; align-items:end; flex-wrap:wrap; gap:14px; }
+.settings-jump-row label { display:grid; gap:6px; flex:1; max-width:520px; min-width:200px; font-size:.85rem; font-weight:600; }
+.settings-jump-row > span { align-self:center; margin-top:20px; color:#65716b; font-size:.8rem; }
+.settings-jump-row > button:disabled { opacity:.45; cursor:not-allowed; }
+.association-settings .settings-section { padding:0; overflow:hidden; grid-column:1/-1; border:1px solid #e4dce8; border-radius:16px; box-shadow:0 3px 12px #3b214706; }
+.settings-card-heading { margin:0; font-size:1rem; }
+.settings-card-heading > button { display:flex; align-items:center; gap:16px; width:100%; border:0; background:white; padding:22px; text-align:left; font:inherit; color:inherit; cursor:pointer; }
+.settings-card-heading > button:hover { background:#fcf9fd; }
+.settings-card-heading > button:focus-visible { outline:3px solid var(--brand); outline-offset:-4px; border-radius:16px; }
+.settings-card-copy { display:grid; gap:5px; flex:1; min-width:0; }
+.settings-card-category { color:var(--brand); font-size:.67rem; text-transform:uppercase; letter-spacing:.07em; font-weight:700; }
+.settings-card-copy strong { font-size:1.05rem; }
+.settings-card-description { color:#63716a; font-size:.88rem; line-height:1.45; font-weight:400; }
+.settings-card-action { display:flex; align-items:center; gap:6px; font-size:.8rem; color:var(--brand); }
+.association-settings .settings-section.is-open { border-color:#c4accb; }
+.association-settings .settings-section-body { border-top:1px solid #ece5ee; padding:24px; background:#fff; gap:20px; }
+.association-settings [hidden] { display:none!important; }
+.association-settings .settings-section-body > .panel { padding:0; border:0; box-shadow:none; background:none; }
+.association-settings .settings-section-body > .panel > .panel-header { display:none; }
+.association-settings .settings-section-body .form-grid { background:#fcfafc; border:1px solid #eee7ef; border-radius:12px; padding:18px; }
+.association-settings .settings-section-body .nested-fieldset { border-radius:12px; border-color:#e4dce8; }
+.association-settings .settings-section-body .requirement-row { border-radius:10px; }
+.association-settings .settings-section-body .secondary-button { background:white; border:1px solid #d7cbdc; color:var(--brand); border-radius:9px; padding:10px 14px; font:inherit; font-size:.88rem; cursor:pointer; }
+.association-settings .settings-section-body .secondary-button:hover:not(:disabled) { background:#f6f1f7; }
+.association-settings .settings-section-body .secondary-button:disabled { opacity:.5; cursor:not-allowed; }
+.settings-form-heading { margin:10px 0 0; font-size:.95rem; }
+.membership-import-rows { display:grid; gap:12px; }
+.membership-import-row { border:1px solid #e4dce8; border-radius:12px; padding:16px; background:#fcfafc; overflow-wrap:anywhere; }
+.membership-import-row select { width:100%; min-width:0; }
+.membership-import > p { margin:0; line-height:1.5; }
+.association-settings [data-settings-card=identity] .settings-section-body > .stack { gap:10px; }
+.association-settings [data-settings-card=identity] .form-grid { gap:10px 14px; padding:12px; }
+.association-settings [data-settings-card=identity] .form-grid label { gap:4px; }
+.association-settings [data-settings-card=identity] .settings-form-heading { margin:4px 0 0; }
+@media(max-width:650px) {
+ .settings-navigation-heading { align-items:flex-start; }
+ .settings-category-options { gap:6px; margin:18px 0; }
+ .settings-category-options button { padding:9px 11px; font-size:.8rem; }
+ .settings-jump-row label { min-width:100%; }
+ .settings-jump-row > span { margin-top:0; }
+ .settings-card-heading > button { padding:16px; gap:10px; align-items:flex-start; }
+ .settings-card-icon { width:38px; height:38px; border-radius:11px; }
+ .settings-card-action { font-size:0; align-self:center; }
+ .settings-card-action svg { width:20px; }
+ .association-settings .settings-section-body { padding:16px; }
+ .association-settings .settings-section-body .form-grid { padding:12px; }
+}

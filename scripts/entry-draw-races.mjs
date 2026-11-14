@@ -38,4 +38,15 @@ export async function runEntryDrawRaces({ sql, container, variables }) {
   assert.equal(generated.code, 0, generated.err);
   assert.notEqual(rejected.code, 0); assert.match(rejected.err, /ENTRY_DRAW_GENERATED_USE_SCRATCH/);
   console.log('PASS: concurrent request blocks draw; concurrent generated draw rejects cancellation');
+  // The same association lock serializes changes from either application's API.
+  const org = '30000000-0000-0000-0000-000000000001';
+  sql(`begin;${actor}select public.set_association_team_role('${org}','phase1.org-a-secretary@example.test','admin','secretary');commit;`);
+  const firstRole = connection(`select public.set_association_team_role('${org}','phase1.org-a-admin@example.test','scribe','admin');select 'RACE_READY';select pg_sleep(0.7);`);
+  await firstRole.ready;
+  const secondRole = connection(`select public.set_association_team_role('${org}','phase1.org-a-secretary@example.test','announcer','admin');`);
+  const [changed, protectedAdmin] = await Promise.all([firstRole.result, secondRole.result]);
+  assert.equal(changed.code, 0, changed.err);
+  assert.notEqual(protectedAdmin.code, 0); assert.match(protectedAdmin.err, /LAST_ASSOCIATION_ADMIN/);
+  assert.equal(sql(`select count(*) from public.organization_members where organization_id='${org}' and role='admin';`).trim(), '1');
+  console.log('PASS: simultaneous role changes cannot remove the last association administrator');
 }
