@@ -1,7 +1,13 @@
+.reports-view, .reports-view > * { min-width: 0; }
 .reports-fields { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin: 20px 0; }
 .reports-fields label { display: flex; flex-direction: column; gap: 8px; }
 .reports-fields small { color: var(--muted, #666); }
-.reports-preview { overflow-x: auto; margin-bottom: 20px; }
+.reports-export-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: 16px; margin: 20px 0; }
+.reports-export-card { display: flex; flex-direction: column; align-items: flex-start; gap: 16px; min-width: 0; padding: 18px; border: 1px solid var(--border, #ddd); border-radius: 12px; background: var(--surface-subtle, #faf8fa); }
+.reports-export-card h3 { margin: 0 0 6px; }
+.reports-export-card p { margin: 0; color: var(--muted, #666); }
+.reports-export-card button { margin-top: auto; }
+.reports-preview { min-width: 0; max-width: 100%; overflow-x: auto; margin-bottom: 20px; }
 .reports-preview table { width: 100%; border-collapse: collapse; }
 .reports-preview th, .reports-preview td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
 .reports-preview caption { text-align: left; padding: 10px 0; }

@@ -12,14 +12,14 @@ function throws(action: () => unknown, label: string) {
   try { action(); } catch { rejected = true; }
   equal(rejected, true, label);
 }
-const options = { showId: "show", fallbackShowNumber: "", usdPerCad: "0.73", goType: "1", goNum: "1" };
+const options = { showId: "show", fallbackShowNumber: "", moneyMode: "convert_to_usd" as const, usdPerSource: "0.73", goType: "1", goNum: "1" };
 export function fixture() {
   const data: NrhaReportData = {
     organization: { id: "org", currency: "CAD" } as Organization,
     shows: [{ id: "show", organization_id: "org", name: "DEMO", default_currency: "CAD" } as Show],
     slates: [{ id: "slate", show_id: "show", organization_id: "org", technical_number: "000123", name: "DEMO 1" } as Slate],
     blocks: [{ id: "block", organization_id: "org", show_id: "show", slate_id: "slate", pattern: "R16", sort_order: 1 } as Block],
-    classes: [{ id: "class", name: "DEMO NRHA", organization_id: "org", show_id: "show", block_id: "block", sort_order: 1, entry_fee: 100, payout_schedule_type: "jackpot_100", added_money: 0, payout_rules: {}, governing_body_assignments: [{ code: "NRHA", reporting_class_code: "1700" }] } as ClassRecord],
+    classes: [{ id: "class", name: "DEMO NRHA", organization_id: "org", show_id: "show", block_id: "block", sort_order: 1, entry_fee: 100, payout_schedule_type: "jackpot_100", added_money: 0, payout_rules: { custom_brackets: [{ min_entries: 1, percentages: [60, 40] }] }, governing_body_assignments: [{ code: "NRHA", reporting_class_code: "1700" }] } as unknown as ClassRecord],
     entries: [1, 2, 3, 4].map((index) => ({ id: `e${index}`, organization_id: "org", show_id: "show", class_id: "class", horse_id: "horse", owner_contact_id: "rider", rider_contact_id: "rider", status: "active", entry_number: index, base_fee: 100 } as Entry)),
     entryResults: [1, 2, 3, 4].map((index) => ({ entry_id: `e${index}`, show_id: "show", class_id: "class", final_score: index <= 2 ? 70.5 : index === 3 ? 0 : null, status: index <= 3 ? "scored" : "scratch", updated_at: "2026-10-23" } as EntryResult)),
     contacts: [{ id: "rider", first_name: "Éloïse", last_name: 'Test; "CSV"', middle_name: null } as Contact],
@@ -53,7 +53,14 @@ equal(report.rows[0].ShowNum, "000123", "technical slate number preserved");
 equal(report.rows[0].MemberNrha, "00123", "membership leading zeros");
 equal(report.rows[0].HorseNrha, "00678", "license leading zeros");
 equal(JSON.stringify(data), original, "export never mutates CAD data");
-equal(report.totalUsd, (report.rows.reduce((sum, row) => sum + Math.round(Number(row.MoneyWon) * 100), 0) / 100).toFixed(2), "USD total sums rounded rows");
+equal(report.totalOutput, (report.rows.reduce((sum, row) => sum + Math.round(Number(row.MoneyWon) * 100), 0) / 100).toFixed(2), "USD total sums rounded rows");
+equal(report.sourceCurrency, "CAD", "show currency is the report source currency");
+equal(report.outputCurrency, "USD", "converted report outputs USD");
+const sourceReport = buildNrhaResultsReport(data, { ...options, moneyMode: "source_currency", usdPerSource: undefined });
+equal(sourceReport.errors, [], "source-currency report does not require an exchange rate");
+equal(sourceReport.rows.map((row) => row.MoneyWon), ["200.00", "200.00", "0.00"], "source-currency report preserves published awards");
+equal(sourceReport.totalOutput, "400.00", "source-currency total is not converted");
+equal(sourceReport.outputCurrency, "CAD", "source-currency report identifies CAD output");
 const csv = serializeNrhaResultsCsv(report.rows);
 equal(csv.split("\r\n")[0], nrhaResultsHeaders.join(";"), "17 reference headers, no index");
 equal(csv.includes('"Test; ""CSV"", Éloïse"'), true, "CSV quotes accents and delimiter");
@@ -78,4 +85,12 @@ for (const [label, mutate] of [
 const fallback = fixture(); fallback.slates[0].technical_number = null;
 equal(buildNrhaResultsReport(fallback, { ...options, fallbackShowNumber: "987" }).rows[0].ShowNum, "987", "manual fallback show number");
 equal(buildNrhaResultsReport(data, { ...options, slateId: "unrelated" }).rows.length, 0, "slate scope");
+const usdData = fixture();
+usdData.organization.currency = "USD";
+usdData.shows[0].default_currency = "USD";
+usdData.payoutCalculations[0].currency = "USD";
+const usdReport = buildNrhaResultsReport(usdData, { ...options, moneyMode: "source_currency", usdPerSource: undefined });
+equal(usdReport.errors, [], "USD association exports without an exchange rate");
+equal(usdReport.outputCurrency, "USD", "USD association keeps USD output");
+equal(usdReport.rows.map((row) => row.MoneyWon), ["200.00", "200.00", "0.00"], "USD awards are not converted");
 console.log(`NRHA reports: ${checks} checks passed`);

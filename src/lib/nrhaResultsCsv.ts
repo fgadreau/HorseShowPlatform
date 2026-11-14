@@ -26,16 +26,27 @@ export type NrhaReportOptions = {
   showId: string;
   slateId?: string;
   fallbackShowNumber: string;
-  usdPerCad: string;
+  moneyMode: "convert_to_usd" | "source_currency";
+  usdPerSource?: string;
   goType: string;
   goNum: string;
+};
+
+export type NrhaResultsReport = {
+  rows: NrhaResultsRow[];
+  errors: string[];
+  classCount: number;
+  totalSource: number;
+  totalOutput: string;
+  sourceCurrency: string;
+  outputCurrency: string;
 };
 
 export function nrhaClassCode(record: ClassRecord) {
   return record.governing_body_assignments.find((assignment) => assignment.code.trim().toUpperCase() === "NRHA")?.reporting_class_code?.trim() ?? "";
 }
 
-// Decimal arithmetic: CAD cents × a manually supplied decimal rate, rounded half up.
+// Decimal arithmetic: source-currency cents × a manually supplied USD rate, rounded half up.
 export function cadToUsd(amount: number, rate: string): string {
   const normalized = rate.trim().replace(",", ".");
   if (!/^\d{1,6}(\.\d{1,8})?$/.test(normalized)) throw new Error("Taux invalide : indiquez le montant USD pour 1 CAD (8 décimales maximum).");
@@ -48,14 +59,24 @@ export function cadToUsd(amount: number, rate: string): string {
   return `${cents / 100n}.${String(cents % 100n).padStart(2, "0")}`;
 }
 
-export function buildNrhaResultsReport(data: NrhaReportData, options: NrhaReportOptions) {
+function sourceMoney(amount: number): string {
+  if (!Number.isFinite(amount) || amount < 0 || !Number.isSafeInteger(Math.round(amount * 100))) throw new Error("Gain source invalide.");
+  return (Math.round(amount * 100) / 100).toFixed(2);
+}
+
+export function buildNrhaResultsReport(data: NrhaReportData, options: NrhaReportOptions): NrhaResultsReport {
   const errors: string[] = [];
   const rows: NrhaResultsRow[] = [];
   const fail = (message: string) => { if (!errors.includes(message)) errors.push(message); };
-  try { cadToUsd(0, options.usdPerCad); } catch (error) { fail((error as Error).message); }
+  if (options.moneyMode === "convert_to_usd") {
+    try { cadToUsd(0, options.usdPerSource ?? ""); } catch (error) { fail((error as Error).message); }
+  }
   if (!/^[1-9]\d*$/.test(options.goType) || !/^[1-9]\d*$/.test(options.goNum)) fail("GoType et GoNum doivent être des entiers positifs.");
   const show = data.shows.find((candidate) => candidate.id === options.showId && candidate.organization_id === data.organization.id);
-  if (!show) return { rows, errors: ["Sélectionnez un concours de cette association."], classCount: 0, totalCad: 0, totalUsd: "0.00" };
+  const organizationCurrency = data.organization.currency?.trim().toUpperCase() || "CAD";
+  const sourceCurrency = show?.default_currency?.trim().toUpperCase() || organizationCurrency;
+  const outputCurrency = options.moneyMode === "convert_to_usd" ? "USD" : sourceCurrency;
+  if (!show) return { rows, errors: ["Sélectionnez un concours de cette association."], classCount: 0, totalSource: 0, totalOutput: "0.00", sourceCurrency, outputCurrency };
   const blocks = new Map(data.blocks.filter((block) => block.show_id === show.id && block.organization_id === data.organization.id).map((block) => [block.id, block]));
   const slates = new Map(data.slates.filter((slate) => slate.show_id === show.id && slate.organization_id === data.organization.id).map((slate) => [slate.id, slate]));
   const classes = data.classes.filter((record) => record.organization_id === data.organization.id && record.show_id === show.id && nrhaClassCode(record) && (!options.slateId || blocks.get(record.block_id)?.slate_id === options.slateId))
@@ -66,7 +87,7 @@ export function buildNrhaResultsReport(data: NrhaReportData, options: NrhaReport
     const values = [...new Set(records.filter((record) => issuerIds.has(record.external_credential_issuer_id) && !["revoked", "inactive"].includes(record.status)).map((record) => record.identifier_value.trim()).filter(Boolean))];
     return values.length === 1 ? values[0] : "";
   }
-  let totalCadCents = 0;
+  let totalSourceCents = 0;
   for (const record of classes) {
     const label = record.name;
     const block = blocks.get(record.block_id);
@@ -78,7 +99,7 @@ export function buildNrhaResultsReport(data: NrhaReportData, options: NrhaReport
     if (!/^\d+$/.test(nrhaClassCode(record))) fail(`${label} : code de classe NRHA non numérique.`);
     const calculation = data.payoutCalculations.filter((candidate) => candidate.class_id === record.id && candidate.show_id === show.id).sort((a, b) => b.calculated_at.localeCompare(a.calculated_at) || b.id.localeCompare(a.id))[0];
     if (!calculation || calculation.status !== "published") { fail(`${label} : publiez les résultats et les bourses avant l’export.`); continue; }
-    if (calculation.currency !== "CAD") { fail(`${label} : les gains source doivent être en CAD.`); continue; }
+    if (calculation.currency.trim().toUpperCase() !== sourceCurrency) { fail(`${label} : les gains publiés doivent être en ${sourceCurrency}.`); continue; }
     const entries = data.entries.filter((entry) => entry.organization_id === data.organization.id && entry.show_id === show.id && entry.class_id === record.id);
     const draft = buildPayoutDraft({ classRecord: record, entries, entryResults: data.entryResults.filter((result) => result.show_id === show.id && result.class_id === record.id), contacts: data.contacts, horses: data.horses, organization: data.organization, show, existingAwards: data.payoutAwards.filter((award) => award.calculation_id === calculation.id), payoutSchedules: data.payoutSchedules, payoutScheduleBrackets: data.payoutScheduleBrackets });
     if (!payoutDraftMatchesCalculation(draft, calculation)) fail(`${label} : les données ont changé depuis le calcul publié. Recalculez et republiez les bourses.`);
@@ -103,15 +124,19 @@ export function buildNrhaResultsReport(data: NrhaReportData, options: NrhaReport
       const placed = result.status === "scored" && (result.final_score ?? 0) > 0;
       if (placed && (!result.rank || result.rank < 1)) fail(`${label} / ${result.horse_name} : classement manquant.`);
       let money = "0.00";
-      try { money = cadToUsd(result.payout_amount, options.usdPerCad); } catch (error) { fail((error as Error).message); }
-      totalCadCents += Math.round(result.payout_amount * 100);
+      try {
+        money = options.moneyMode === "convert_to_usd"
+          ? cadToUsd(result.payout_amount, options.usdPerSource ?? "")
+          : sourceMoney(result.payout_amount);
+      } catch (error) { fail((error as Error).message); }
+      totalSourceCents += Math.round(result.payout_amount * 100);
       rows.push({ ShowNum: showNumber, ShowName: slate?.name ?? show.name, ClassName: record.name, ClassCode: nrhaClassCode(record), PatternNum: pattern, EntryCount: String(snapshot.length), ShownCount: String(shown.length), GoType: options.goType, GoNum: options.goNum, Horse: result.horse_name, HorseNrha: horseNrha, Member: rider ? `${rider.last_name}, ${rider.first_name}${rider.middle_name ? ` ${rider.middle_name}` : ""}` : result.rider_name, MemberNrha: memberNrha, BackNum: result.back_number ?? "", PlaceNum: placed ? String(result.rank) : "9999", TotalScore: placed ? String(result.final_score) : "0", MoneyWon: money });
     }
   }
   if (!rows.length && !errors.length) fail("Aucune performance à exporter.");
-  // Sum the individually rounded USD rows, as they appear in the file.
-  const usdCents = rows.reduce((sum, row) => sum + Math.round(Number(row.MoneyWon) * 100), 0);
-  return { rows, errors, classCount: classes.length, totalCad: totalCadCents / 100, totalUsd: (usdCents / 100).toFixed(2) };
+  // Sum the individually rounded output rows exactly as they appear in the file.
+  const outputCents = rows.reduce((sum, row) => sum + Math.round(Number(row.MoneyWon) * 100), 0);
+  return { rows, errors, classCount: classes.length, totalSource: totalSourceCents / 100, totalOutput: (outputCents / 100).toFixed(2), sourceCurrency, outputCurrency };
 }
 
 export function serializeNrhaResultsCsv(rows: NrhaResultsRow[]) {
