@@ -1,6 +1,6 @@
 begin;
 
--- Creating a horse for another owner must start with the horse's verified NRHA
+-- Agent creation for another owner must start with the horse's verified NRHA
 -- record. A manually declared registration number remains unverified.
 create or replace function public.create_horse_agent_record(
   p_org uuid,
