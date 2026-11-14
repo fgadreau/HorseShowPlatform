@@ -1,5 +1,6 @@
 import {DocumentPdf} from './DocumentPdf';
 import {PdfDownload} from './PdfDownload';
+import {InvoiceEmail} from './InvoiceEmail';
 import {invoiceBody} from '../../../server/billing/invoice-html.mjs';
 import documentStyles from './billingDocument.css?inline';
 import type {Json} from '../../services/billingFolio';
@@ -10,6 +11,7 @@ export function DocumentView({document,locale,personal=true,invoicePreview=false
   <article className="billing-document" dangerouslySetInnerHTML={{__html:invoiceBody(document,locale,{invoicePreview})}}/>
   {!invoicePreview&&showPdfControls&&<>
    <PdfDownload document={document} personal={personal} locale={locale}/>
+   {!personal&&<InvoiceEmail document={document} locale={locale}/>}
    <details className="finance-pdf-archive"><summary>{locale==='fr'?'Version PDF archivée':'Archived PDF version'}</summary><DocumentPdf documentId={document.id} personal={personal} locale={locale}/></details>
   </>}
  </>;

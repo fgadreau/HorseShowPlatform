@@ -26,6 +26,13 @@ const document={id,kind:'invoice',number:'INV-001',created_at:'2026-10-26T12:00:
 test('shared invoice template escapes every supplied identity and description and removes the combined rate',()=>{
  const html=invoiceBody(document,'fr');assert(!html.includes('<script>'));assert(!html.includes('<img'));assert(html.includes('&lt;script&gt;'));assert(!html.includes('14.975'));assert(!html.includes('14,975'));assert(html.includes('TPS (5 %)'));assert(html.includes('TVQ (9,975 %)'));assert(html.includes('INV-001'));
 });
+test('multi-supplier invoice identifies direct HSP billing and collection without an association mandate',()=>{
+ const value=structuredClone(document);value.snapshot.suppliers.hsp={name:'Horse Show Platform',email:'facturation@horseshowplatform.com'};
+ const fr=invoiceBody(value,'fr'),en=invoiceBody(value,'en');
+ assert.match(fr,/Facture consolidée — plusieurs fournisseurs/);assert.match(en,/Consolidated invoice — multiple suppliers/);
+ assert.match(fr,/Frais de service facturés et encaissés directement par Horse Show Platform/);assert.match(en,/Service fees billed and collected directly by Horse Show Platform/);
+ assert.doesNotMatch(fr,/mandataire/);assert.doesNotMatch(en,/as agent/);
+});
 test('partial and final receipts retain invoice details and show balances without exposing or changing internal allocations',()=>{
  const previous={id:'first',method:'cash',amount:100,received_at:'2026-10-26T12:00:00Z',allocations:[{charge_id:'c',amount:100}]};
  for(const locale of ['fr','en'])for(const [amount,balance] of [[100,328.48],[328.48,0]]){
