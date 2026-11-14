@@ -25,9 +25,9 @@ export function billingError(message:string,locale:string,data?:Json){
 }
 export function chargeGroups(charges:Json[],locale:string){
  const fr=locale==='fr',groups=new Map<string,{key:string;label:string;entry:boolean;charges:Json[]}>();
- for(const c of charges){const p=c.presentation;const entry=p?.section==='entry'&&c.supplier!=='hsp';const key=c.supplier==='hsp'?'hsp':entry?JSON.stringify([c.horse?.id,p.block_id,p.occurrence_id]):p?.section==='reservation'?'reservation':'other';
- if(!groups.has(key))groups.set(key,{key,entry,label:key==='hsp'?(fr?'Service HSP':'HSP service'):entry?`${fr?'Inscriptions':'Entries'} · ${c.horse?.name??''} · ${p.block_label} · ${p.occurrence_id}`:key==='reservation'?(fr?'Réservations':'Reservations'):(fr?'Autres achats et services':'Other purchases and services'),charges:[]});groups.get(key)!.charges.push(c);}
- return [...groups.values()].sort((a,b)=>(a.entry?0:a.key==='reservation'?1:a.key==='other'?2:3)-(b.entry?0:b.key==='reservation'?1:b.key==='other'?2:3));
+ for(const c of charges){const p=c.presentation;const entry=p?.section==='entry'&&c.supplier!=='hsp';const key=c.supplier==='hsp'?'hsp':entry?JSON.stringify([c.horse?.id,p.block_id,p.occurrence_id]):p?.section==='reservation'?'reservation':c.category==='horse_fee'?'horse_fee':'other';
+ if(!groups.has(key))groups.set(key,{key,entry,label:key==='hsp'?(fr?'Service HSP':'HSP service'):entry?`${fr?'Inscriptions':'Entries'} · ${c.horse?.name??''} · ${p.block_label} · ${p.occurrence_id}`:key==='reservation'?(fr?'Réservations':'Reservations'):key==='horse_fee'?(fr?'Frais par cheval':'Per-horse fees'):(fr?'Autres achats et services':'Other purchases and services'),charges:[]});groups.get(key)!.charges.push(c);}
+ return [...groups.values()].sort((a,b)=>(a.entry?0:a.key==='horse_fee'?1:a.key==='reservation'?2:a.key==='other'?3:4)-(b.entry?0:b.key==='horse_fee'?1:b.key==='reservation'?2:b.key==='other'?3:4));
 }
 
 export function sourceBillingError(error:unknown,locale:string){

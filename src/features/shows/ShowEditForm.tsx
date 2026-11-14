@@ -7,6 +7,7 @@ import { errorMessage, numericValue } from "../../lib/display";
 import type { Show } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { showTimeInputValue } from "../classes/classUtils";
+import { ShowHorseFeesSettings } from "./ShowHorseFeesSettings";
 
 function ShowEditForm({
   embedded = false,
@@ -183,6 +184,7 @@ function ShowEditForm({
       </div>}
       <form className="stack" onSubmit={handleSubmit}>
         {paymentsFirst ? <>{paymentFields}{generalFields}</> : <>{generalFields}{paymentFields}</>}
+        <ShowHorseFeesSettings showId={show.id} locale={locale} />
         {submitError && <p role="alert">{submitError}</p>}
         <FormActions busy={busy} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />
       </form>
