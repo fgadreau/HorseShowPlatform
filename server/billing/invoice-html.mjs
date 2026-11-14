@@ -1,4 +1,5 @@
 import {entryBlocksV5} from '../../src/features/finance/entryBlocksV5.mjs';
+import {entryBlocksV6} from '../../src/features/finance/entryBlocksV6.mjs';
 import {entryBlocks,displayCents} from '../../src/features/finance/entryGroups.mjs';
 import {documentTaxes,taxText,registrationLabel,registrationValue,isTestDocument} from '../../src/features/finance/documentPresentation.mjs';
 export const escapeHtml=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -36,7 +37,7 @@ export function invoiceBody(document,locale='fr',{invoicePreview=false}={}){
  }
  if(document.kind==='receipt')html+=`<h4>${tr('Détail de la facture','Invoice details')}</h4>`;
  html+='<div class="finance-charge-groups">';
- const blocks=s.presentation_version>=5?entryBlocksV5(s.charges,locale,s.currency):s.presentation_version>=4?entryBlocks(s.charges,locale,s.currency):[];
+ const blocks=s.presentation_version>=6?entryBlocksV6(s.charges,locale,s.currency):s.presentation_version>=5?entryBlocksV5(s.charges,locale,s.currency):s.presentation_version>=4?entryBlocks(s.charges,locale,s.currency):[];
  for(const block of blocks)html+=`<section><h3>${esc(block.label)}</h3><table class="finance-charge-table"><thead><tr>${block.columns.map(c=>`<th>${esc(c)}</th>`).join('')}</tr></thead><tbody>${block.rows.map((r,n)=>`<tr>${r.map((c,index)=>`<td data-label="${esc(block.columns[index])}">${n===block.rows.length-1?`<strong>${esc(c)}</strong>`:esc(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></section>`;
  const groups=new Map();
  for(const c of s.charges){
