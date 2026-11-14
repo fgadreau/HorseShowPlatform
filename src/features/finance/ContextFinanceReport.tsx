@@ -1,6 +1,7 @@
 import { Download, Printer } from "lucide-react";
 import type { Json } from "../../services/billingFolio";
 import { financeReportCsv, paymentMethodLabels, revenueCategoryLabels } from "./financeReport";
+import { AccountingExports } from "./AccountingExports";
 
 export function ContextFinanceReport({ report, locale }: { report: Json; locale: string }) {
   const fr = locale === "fr", t = report.totals, currency = report.context.currency;
@@ -26,6 +27,7 @@ export function ContextFinanceReport({ report, locale }: { report: Json; locale:
       <section className="finance-panel"><h3>{fr ? "Suivi des comptes" : "Account status"}</h3><dl className="finance-breakdown">{[[fr ? "Comptes clients" : "Customer accounts", report.accounts.accounts], [fr ? "Encore ouverts" : "Still open", report.accounts.open_accounts], [fr ? "Fermés" : "Closed", report.accounts.closed_accounts], [fr ? "Avec un solde à recevoir" : "With an outstanding balance", report.accounts.owing_accounts]].map(([label, count]) => <div key={label}><dt>{label}</dt><dd>{count}</dd></div>)}</dl><p className="finance-fine-print">{fr ? `Frais de traitement connus : ${money(t.association_processing_fees)}. ${t.unknown_processing_fees} paiement(s) sans frais renseignés.` : `Known processing fees: ${money(t.association_processing_fees)}. ${t.unknown_processing_fees} payment(s) with unrecorded fees.`}</p></section>
     </div>
     <p className="finance-fine-print">{fr ? "Rapport provisoire basé sur les comptes de cette section. Les anciennes factures conservées en archives n’y sont pas ajoutées. Ce rapport ne remplace pas les factures ou les registres comptables." : "Provisional report based on accounts in this section. Archived historical invoices are not added. This report does not replace invoices or accounting records."}</p>
+    <AccountingExports context={report.context.id} locale={locale} />
   </section>;
 }
 
