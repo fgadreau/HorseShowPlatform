@@ -177,7 +177,7 @@ function MyHorsesView({
       </section>
       {!organizationDisciplines.length ? <p role="status">{uiText(locale, "Aucun répertoire actif accessible pour cette association. Choisis une autre association en haut de la page ou demande à son personnel d’activer le répertoire.", "No active directory is accessible for this association. Choose another association at the top of the page or ask its staff to activate the directory.")}</p> : null}
 
-      {organization ? <HorseAccessPanel organization={organization} contacts={contacts} directories={organizationDisciplines.filter(directory => directory.is_active)} disciplines={disciplines} locale={locale} onRefresh={onRefresh} /> : null}
+      {organization ? <HorseAccessPanel organization={organization} contacts={contacts} directories={organizationDisciplines.filter(directory => directory.is_active)} disciplines={disciplines} locale={locale} onVerifyNrhaHorse={onVerifyNrhaHorse} onRefresh={onRefresh} /> : null}
       {activePrograms.length ? <section className="panel span-2">
         <div className="panel-header"><div><h2>{uiText(locale, "Acheter une nomination", "Buy a nomination")}</h2><p>{uiText(locale, "Choisis un programme facultatif pour l’un de tes chevaux. Une nomination payante crée une facture brouillon.", "Choose an optional program for one of your horses. A paid nomination creates a draft invoice.")}</p></div></div>
         {purchaseNotice ? <NoticeBanner notice={purchaseNotice} /> : null}

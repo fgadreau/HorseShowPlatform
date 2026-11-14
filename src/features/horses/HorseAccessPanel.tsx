@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ModalDialog, SearchSelect } from "../../components/ui";
 import { billingRpc } from "../../services/billingFolio";
+import type { verifyNrhaHorse } from "../../services/supabaseServices";
 import { contactLabel, errorMessage } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import type { Contact, Discipline, Organization, OrganizationDiscipline } from "../../types/domain";
@@ -11,8 +12,8 @@ type AgentCandidate = { horse_id: string; name: string; registration_number: str
 type AccessRequest = { id: string; horse_name: string; status: string; requester_name: string; message: string; is_mine: boolean; can_review: boolean };
 type OwnerRequest = { id: string; owner_first_name: string; owner_last_name: string; proposed_owner_contact_id?: string | null; details: { name: string }; status: string; requester_name: string; is_mine: boolean; can_review: boolean };
 
-export function HorseAccessPanel({ organization, contacts, directories = [], disciplines = [], locale, staff = false, onRefresh }: {
-  organization: Organization; contacts: Contact[]; directories?: OrganizationDiscipline[]; disciplines?: Discipline[]; locale: Locale; staff?: boolean; onRefresh?: () => void | Promise<void>;
+export function HorseAccessPanel({ organization, contacts, directories = [], disciplines = [], locale, staff = false, onVerifyNrhaHorse, onRefresh }: {
+  organization: Organization; contacts: Contact[]; directories?: OrganizationDiscipline[]; disciplines?: Discipline[]; locale: Locale; staff?: boolean; onVerifyNrhaHorse?: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>; onRefresh?: () => void | Promise<void>;
 }) {
   const [searching, setSearching] = useState(false);
   const [creating, setCreating] = useState(false);
@@ -50,7 +51,7 @@ export function HorseAccessPanel({ organization, contacts, directories = [], dis
     <div className="row-actions"><button className="ghost-button" type="button" disabled={busy} onClick={() => void run(async () => {}, uiText(locale, "Demandes actualisées.", "Requests refreshed."))}>{uiText(locale, "Actualiser les demandes", "Refresh requests")}</button></div>
     {error ? <p role="alert">{error}</p> : null}{notice ? <p role="status">{notice}</p> : null}
     {creating ? <ModalDialog className="horse-form-modal" eyebrow={uiText(locale, "Propriété du cheval", "Horse ownership")} title={uiText(locale, "Créer pour un autre propriétaire", "Create for another owner")} onClose={() => setCreating(false)}>
-      <HorseForOwnerForm key={organization.id} orgId={organization.id} directories={directories} disciplines={disciplines} locale={locale} onSaved={async () => { setCreating(false); setNotice(uiText(locale, "Création ou demande de confirmation enregistrée. Consulte le suivi ci-dessous.", "Creation or confirmation request saved. Check its status below.")); await changed(); }} />
+      {onVerifyNrhaHorse ? <HorseForOwnerForm key={organization.id} orgId={organization.id} directories={directories} disciplines={disciplines} locale={locale} onVerifyNrhaHorse={onVerifyNrhaHorse} onSaved={async () => { setCreating(false); setNotice(uiText(locale, "Création ou demande de confirmation enregistrée. Consulte le suivi ci-dessous.", "Creation or confirmation request saved. Check its status below.")); await changed(); }} /> : <p role="alert">{uiText(locale, "La validation NRHA n’est pas disponible dans cet espace.", "NRHA validation is not available in this workspace.")}</p>}
     </ModalDialog> : null}
     {searching ? <ModalDialog className="horse-form-modal" eyebrow={uiText(locale, "Cheval existant", "Existing horse")} title={uiText(locale, "Demander un accès comme agent", "Request agent access")} onClose={() => setSearching(false)}>
       <form className="stack" onSubmit={async event => { event.preventDefault(); setBusy(true); setError(""); try { setCandidates(await billingRpc("search_horse_agent_candidates", { p_org: organization.id, p_query: query.trim() })); setSearched(true); } catch (error) { setError(errorMessage(error)); } finally { setBusy(false); } }}>
