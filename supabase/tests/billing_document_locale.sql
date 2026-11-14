@@ -39,6 +39,7 @@ begin
  inv:=public.finalize_billing_folio(gen_random_uuid(),f,(st#>>'{account,version}')::bigint,(st->>'document_id')::uuid);
  insert into public.billing_document_proof_cases values(scenario||'-invoice',(inv->>'document_id')::uuid);
  old:=inv#>'{document,snapshot}';
+ perform public.billing_test_assert(old->>'render_version'='6','future archived documents use the branded PDF renderer');
  perform public.billing_test_assert(old#>>'{context,kind}'='event','persisted proof is an actual show account');
  perform public.billing_test_assert(old#>>'{context,timezone}'='America/Toronto','timezone frozen in invoice');
  perform public.billing_test_assert(old#>>'{charges,0,description_i18n,en}'='DEMO entry and stall','English description frozen');

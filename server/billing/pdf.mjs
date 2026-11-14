@@ -7,8 +7,9 @@ import {renderDocument as renderV4} from './pdf-v4.mjs';
 import {documentModel as modelV4} from './pdf-model-v4.mjs';
 import {renderDocument as renderV5} from './pdf-v5.mjs';
 import {documentModel as modelV5} from './pdf-model-v5.mjs';
+import {renderDocument as renderV6} from './pdf-v6.mjs';
 export {cents} from './pdf-v2.mjs';
-export const renderVersions=[1,2,3,4,5];
+export const renderVersions=[1,2,3,4,5,6];
 function version(d){const v=d.snapshot.render_version??1;if(!renderVersions.includes(v))throw Error('BILLING_PDF_RENDER_VERSION');return v;}
-export function documentModel(d,locale){const v=version(d);if(d.snapshot.supplier_invoices)return consolidatedModel(d,locale);return v===5?modelV5(d,locale):v===4?modelV4(d,locale):v===1?v1.documentModel(d,locale):v2.documentModel(v===2?d:{...d,snapshot:{...d.snapshot,render_version:2}},locale);}
-export function renderDocument(d,locale,options){const v=version(d);if(d.snapshot.supplier_invoices)return renderConsolidated(d,locale,options);return (v===1?v1.renderDocument:v===2?v2.renderDocument:v===3?renderV3:v===4?renderV4:renderV5)(d,locale,options);}
+export function documentModel(d,locale){const v=version(d);if(d.snapshot.supplier_invoices)return consolidatedModel(d,locale);return v===6?modelV5({...d,snapshot:{...d.snapshot,render_version:5}},locale):v===5?modelV5(d,locale):v===4?modelV4(d,locale):v===1?v1.documentModel(d,locale):v2.documentModel(v===2?d:{...d,snapshot:{...d.snapshot,render_version:2}},locale);}
+export function renderDocument(d,locale,options){const v=version(d);if(d.snapshot.supplier_invoices)return renderConsolidated(d,locale,options);return (v===1?v1.renderDocument:v===2?v2.renderDocument:v===3?renderV3:v===4?renderV4:v===5?renderV5:renderV6)(d,locale,options);}
