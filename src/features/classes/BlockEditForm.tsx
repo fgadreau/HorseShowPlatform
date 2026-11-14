@@ -4,16 +4,18 @@ import type { FormEvent } from "react";
 import { FormActions } from "../../components/ui";
 import type { Locale } from "../../lib/i18n";
 import { updateBlock } from "../../services/supabaseServices";
-import type { Block, BlockConcurrencyGroupMember, ScheduleStartMode, ShowDay, Slate } from "../../types/domain";
+import type { Block, BlockConcurrencyGroupMember, BlockJudgeAssignment, ScheduleStartMode, ShowDay, Slate } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { scheduleStartModeForClass, scheduleStartModeLabel, showDayLabel, datetimeLocalToIso, datetimeLocalInputValue, timeInputValue } from "./classUtils";
 import { ShowScorePatternSelect } from "./ShowScorePatternSelect";
+import { BlockJudgesField, blockJudgeNames, serializeBlockJudgeNames } from "./BlockJudgesField";
 
 function BlockEditForm({
   locale = "fr",
   block,
   blocks,
   blockConcurrencyGroupMembers,
+  blockJudgeAssignments,
   showDays,
   slates,
   onCancel,
@@ -23,6 +25,7 @@ function BlockEditForm({
   block: Block;
   blocks: Block[];
   blockConcurrencyGroupMembers: BlockConcurrencyGroupMember[];
+  blockJudgeAssignments: BlockJudgeAssignment[];
   showDays: ShowDay[];
   slates: Slate[];
   onCancel: () => void;
@@ -38,7 +41,7 @@ function BlockEditForm({
   const [concurrentBlockId, setConcurrentBlockId] = useState(currentConcurrentBlockId);
   const [blockLabel, setBlockLabel] = useState(block.display_label ?? "");
   const [arena, setArena] = useState(block.arena ?? "");
-  const [judgeDisplayName, setJudgeDisplayName] = useState(block.judge_display_name ?? "");
+  const [judgeNames, setJudgeNames] = useState(() => blockJudgeNames(blockJudgeAssignments, block.judge_display_name));
   const [pattern, setPattern] = useState(block.pattern ?? "");
   const [entriesCloseAt, setEntriesCloseAt] = useState(datetimeLocalInputValue(block.entries_close_at));
   const [scheduleStartMode, setScheduleStartMode] = useState<ScheduleStartMode>(scheduleStartModeForClass(block));
@@ -83,7 +86,7 @@ function BlockEditForm({
         concurrent_block_id: concurrentBlockId || null,
         display_label: blockLabel || null,
         arena: arena.trim() || null,
-        judge_display_name: judgeDisplayName.trim() || null,
+        judge_display_name: serializeBlockJudgeNames(judgeNames) || null,
         pattern: pattern || null,
         entries_close_at: datetimeLocalToIso(entriesCloseAt),
         schedule_start_mode: scheduleStartMode,
@@ -176,11 +179,7 @@ function BlockEditForm({
             {uiText(locale, "Manège / arène", "Arena")}
             <input value={arena} onChange={(event) => { setArena(event.target.value); setConcurrentBlockId(""); setFollowsBlockId(""); }} />
           </label>
-          <label>
-            {uiText(locale, "Juge(s)", "Judge(s)")}
-            <input placeholder={uiText(locale, "Ex.: Lyle Jackson; Jane Doe", "Example: Lyle Jackson; Jane Doe")} value={judgeDisplayName} onChange={(event) => setJudgeDisplayName(event.target.value)} />
-            <span className="input-help">{uiText(locale, "Sépare les juges par un point-virgule. Tous les juges s'appliquent au bloc.", "Separate judges with a semicolon. Every judge applies to the block.")}</span>
-          </label>
+          <BlockJudgesField locale={locale} names={judgeNames} onChange={setJudgeNames} />
         </div>
         <label>
           {uiText(locale, "Bloc concurrent", "Concurrent block")}

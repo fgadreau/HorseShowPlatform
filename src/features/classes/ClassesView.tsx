@@ -858,6 +858,7 @@ function ClassesView({
             block={editingBlock}
             blocks={blocks}
             blockConcurrencyGroupMembers={blockConcurrencyGroupMembers}
+            blockJudgeAssignments={blockJudgeAssignments.filter((assignment) => assignment.block_id === editingBlock.id)}
             showDays={showDays}
             slates={slates}
             onCancel={() => setEditingBlock(null)}
