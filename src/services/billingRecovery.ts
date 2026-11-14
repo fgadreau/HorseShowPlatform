@@ -48,10 +48,10 @@ export function replayCommand(identity:string,name:string,rpc:(name:string,args:
 }
 // A timeout, changed account version or changed amount never renews a Stripe key.
 export function pendingStripe(identity:string,folio:string){return JSON.parse(localStorage.getItem(`hsp-stripe:${identity}:${folio}`)??'null');}
-export function stripeKey(identity:string,folio:string,amount:string){
+export function stripeKey(identity:string,folio:string,amount:string,action='begin'){
  const scope=`hsp-stripe:${identity}:${folio}`,pending=JSON.parse(localStorage.getItem(scope)??'null');
- if(pending&&pending.amount!==amount)throw Error('BILLING_PREVIOUS_COMMAND_UNRESOLVED');
- const command=pending??{id:crypto.randomUUID(),amount};localStorage.setItem(scope,JSON.stringify(command));return command.id;
+ if(pending&&(pending.amount!==amount||(pending.action??'begin')!==action))throw Error('BILLING_PREVIOUS_COMMAND_UNRESOLVED');
+ const command=pending??{id:crypto.randomUUID(),amount,...(action==='begin'?{}:{action})};localStorage.setItem(scope,JSON.stringify(command));return command.id;
 }
 export function observeStripe(identity:string,folio:string,result:Args){
  const scope=`hsp-stripe:${identity}:${folio}`,pending=JSON.parse(localStorage.getItem(scope)??'null');

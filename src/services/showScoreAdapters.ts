@@ -111,7 +111,7 @@ type ShowScoreAdapterContext = {
   blocks: Block[];
 };
 
-const inactiveEntryStatuses = new Set<Entry["status"]>(["cancelled", "scratched", "scratched_pending_refund"]);
+const drawEligibleEntryStatuses = new Set<Entry["status"]>(["active", "completed"]);
 const minimumRiderDrawSpacing = 9;
 
 export function toShowScoreAssociation(organization: Organization): ShowScoreAssociation {
@@ -196,7 +196,7 @@ export function buildShowScoreRunsForClass(
       .filter((classRecord) => classRecord.block_id === classId)
       .map((classRecord) => classRecord.id),
   );
-  const eligibleEntries = entries.filter((entry) => blockClassIds.has(entry.class_id) && !inactiveEntryStatuses.has(entry.status));
+  const eligibleEntries = entries.filter((entry) => blockClassIds.has(entry.class_id) && drawEligibleEntryStatuses.has(entry.status));
   const eligibleRunGroups = groupEntriesForPhysicalRuns(eligibleEntries);
   const lateRunGroups = stableShuffle(
     eligibleRunGroups.filter((group) => group.is_late),

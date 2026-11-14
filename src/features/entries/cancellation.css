@@ -1,0 +1,15 @@
+.entry-cancellation-actions { display:flex;flex-direction:column;align-items:flex-start;gap:6px;max-width:100%; }
+.entry-cancellation-actions .badge { white-space:normal;line-height:1.5; }
+.assistant-modal.form-modal.entry-cancellation-modal { max-width:680px; }
+.entry-cancellation-modal form { display:grid;gap:16px; }
+.entry-cancellation-modal form>p { margin:0;color:var(--text-muted,#726875);font-size:14px;line-height:1.6; }
+.entry-cancellation-modal label { display:grid;gap:7px;font-size:14px;font-weight:600; }
+.entry-cancellation-modal input,.entry-cancellation-modal select,.entry-cancellation-modal textarea { min-height:44px;width:100%;font:inherit; }
+.entry-cancellation-modal textarea { min-height:76px;resize:vertical; }
+.entry-cancellation-modal ul { margin:0;padding:14px 14px 14px 32px;border-radius:12px;background:#f7f3f6; }
+.cancellation-preview { display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;margin:0;padding:18px;border:1px solid #cde0d5;border-radius:14px;background:#f0f7f3; }
+.cancellation-preview dt { font-size:13px; }
+.cancellation-preview dd { margin:0;font-variant-numeric:tabular-nums;font-weight:700;text-align:right; }
+.cancellation-preview dt:nth-last-of-type(1),.cancellation-preview dd:last-child { padding-top:10px;border-top:1px solid #cde0d5; }
+.entry-cancellation-modal .row-actions { justify-content:flex-end;gap:12px;flex-wrap:wrap; }
+@media(max-width:640px) { .entry-cancellation-modal input,.entry-cancellation-modal select,.entry-cancellation-modal textarea { font-size:16px; } .entry-cancellation-modal .row-actions>button { width:100%; } }

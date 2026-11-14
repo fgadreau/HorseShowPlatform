@@ -3,6 +3,37 @@ import assert from 'node:assert/strict';
 import {createHmac} from 'node:crypto';
 import {testConfig,verifyEvent,stripeClient,createPaymentService} from '../../server/billing/stripe.mjs';
 const config={secret:'sk_test_mock',publishable:'pk_test_mock',webhook:'whsec_mock'};
+test('manual authorization uses manual capture and never creates a receipt or capture call',async()=>{
+ const calls=[];const a={id:'auth',capture_method:'manual',platform_account:'acct_platform',connected_account:'acct_connected',amount:120,currency:'CAD',created_at:new Date().toISOString()};
+ const admin={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:args.p_object.status}:{}};}};
+ const user={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='begin_entry_preauthorization'?{attempt_id:a.id}:a.id};}};
+ const stripe=async(path,params,key)=>{
+  calls.push({path,params,key});if(path==='/account')return {id:'acct_platform'};
+  if(path.startsWith('/accounts/'))return {id:'acct_connected',type:'express',charges_enabled:true};
+  assert.equal(path,'/payment_intents');assert.equal(params.capture_method,'manual');
+  assert.equal(params['automatic_payment_methods[enabled]'],'true');assert.equal(params['payment_method_types[]'],undefined);
+  return {id:'pi_auth',status:'requires_capture',amount_capturable:12000};
+ };
+ const result=await createPaymentService({admin,stripe,config}).action(user,{action:'begin_authorization',folio_id:'folio',amount:120,request_id:'request'});
+ assert.equal(result.state,'requires_capture');assert.equal(result.client_secret,undefined);
+ assert.equal(calls.filter(c=>c.n==='begin_entry_preauthorization').length,1);
+ assert.equal(calls.filter(c=>c.path?.endsWith('/capture')).length,0);
+});
+test('explicit capture freezes server amount and retries the same provider key',async()=>{
+ const calls=[];const a={id:'auth',capture_method:'manual',provider_id:'pi_auth',platform_account:'acct_platform',connected_account:'acct_connected',amount:120,planned_capture_amount:108,currency:'CAD',created_at:new Date().toISOString()};
+ const admin={rpc:async(n,args)=>({data:n==='billing_stripe_attempt_private'?a:n==='billing_stripe_observe'?{state:args.p_object.status}:{}})};
+ const user={rpc:async(n,args)=>{calls.push({n,args});return {data:n==='prepare_entry_authorization_capture'?108:a.id};}};
+ const stripe=async(path,params,key)=>{
+  calls.push({path,params,key});if(path==='/account')return {id:'acct_platform'};
+  if(path.startsWith('/accounts/'))return {id:'acct_connected',type:'express',charges_enabled:true};
+  if(path==='/payment_intents/pi_auth')return {id:'pi_auth',status:'requires_capture'};
+  assert.equal(path,'/payment_intents/pi_auth/capture');assert.equal(params.amount_to_capture,'10800');assert.equal(key,'hsp-test-capture-auth');
+  return {id:'pi_auth',status:'succeeded',amount_received:10800};
+ };
+ const service=createPaymentService({admin,stripe,config});await service.action(user,{action:'capture',attempt_id:a.id});await service.action(user,{action:'capture',attempt_id:a.id});
+ assert(calls.findIndex(c=>c.n==='prepare_entry_authorization_capture')<calls.findIndex(c=>c.path?.endsWith('/capture')));
+ assert.equal(calls.filter(c=>c.path?.endsWith('/capture')).length,2);
+});
 const raw=Buffer.from(JSON.stringify({id:'evt_mock',type:'payment_intent.succeeded',livemode:false,data:{object:{id:'pi_mock',livemode:false}}}));
 const sig=(b,t)=>`t=${t},v1=${createHmac('sha256',config.webhook).update(`${t}.`).update(b).digest('hex')}`;
 test('valid raw webhook signature',()=>assert.equal(verifyEvent(raw,sig(raw,1000),config.webhook,1000000).id,'evt_mock'));

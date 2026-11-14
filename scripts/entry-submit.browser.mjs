@@ -35,10 +35,10 @@ function Harness(){const [entries,setEntries]=useState(initial);return React.cre
 createRoot(document.getElementById('root')).render(React.createElement(Harness));
 </script></body></html>`));}catch(e){next(e);}});}};
 const server=await createServer({configFile:false,root:process.cwd(),plugins:[plugin,react()],server:{host:'127.0.0.1',port:5197,strictPort:true}});let browser;
-try{await server.listen();browser=await chromium.launch({executablePath:await bundled.executablePath(),args:bundled.args});const page=await browser.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>console.error(e.message));await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
+try{await server.listen();browser=await chromium.launch(process.platform==='win32'?{channel:'chrome',headless:true}:{executablePath:await bundled.executablePath(),args:bundled.args});const page=await browser.newPage();page.setDefaultTimeout(10000);page.on('pageerror',e=>console.error(e.message));await page.route('**/*',r=>new URL(r.request().url()).hostname==='127.0.0.1'?r.continue():r.abort());
  const classButton=id=>page.locator('.entry-showbill-class').filter({hasText:id==='c1'?'1100 - Open':'1200 - Intermediate Open'});
  async function prepare(mode){await page.goto('http://127.0.0.1:5197/entry-submit-fixture?mode='+mode);await page.getByRole('combobox').nth(1).click();await page.getByRole('option').filter({hasText:'TEST Horse'}).click();await page.getByRole('combobox').nth(2).click();await page.getByRole('option').filter({hasText:'TEST Rider'}).click();if(mode!=='different-rider')await expect(classButton('c2')).toBeEnabled();}
- const submit=()=>page.getByRole('button',{name:/Créer les? brouillons? et la facture/});
+ const submit=()=>page.getByRole('button',{name:/Confirmer (les inscriptions|l’inscription)/});
  await prepare('success');
  await expect(classButton('c1').locator('.entry-judge-fee')).toContainText('$10.00');
  await classButton('c1').click();await expect(page.locator('.entry-block-judge-fee')).toContainText('$10.00');

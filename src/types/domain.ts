@@ -1645,6 +1645,7 @@ export type OrganizationProductUpdateInput = Partial<
 >;
 
 export type ManualSaleInput = {
+  unit_price_tax_mode?: "exclusive" | "inclusive";
   organization_id: string;
   product_id?: string | null;
   show_id?: string | null;
@@ -1910,6 +1911,7 @@ export type EntryInput = {
 };
 
 export type EntryUpdateInput = {
+  base_fee_tax_mode?: "exclusive" | "inclusive";
   horse_id?: string;
   class_id?: string;
   owner_contact_id?: string;

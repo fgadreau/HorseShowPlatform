@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { cancellationError, loadCancellations, type CancellationRequest } from "../entries/cancellationService";
 import { Trash2 } from "lucide-react";
 import { EmptyState, Metric, SearchSelect, ViewIntro } from "../../components/ui";
 import { classLabel, findById, formatDate, showLabel } from "../../lib/display";
@@ -42,6 +43,14 @@ function ScoringView({
   const [expandedDrawClassIds, setExpandedDrawClassIds] = useState<string[]>([]);
   const [expandedWarmupIds, setExpandedWarmupIds] = useState<string[]>([]);
   const selectedShowId = showId || shows[0]?.id || "";
+  const [cancellations, setCancellations] = useState<CancellationRequest[]>([]);
+  const [cancellationsLoaded, setCancellationsLoaded] = useState(false);
+  const [drawError, setDrawError] = useState("");
+  useEffect(() => {
+    let live = true; setCancellationsLoaded(false);
+    if (selectedShowId) loadCancellations(selectedShowId).then(rows => { if (live) { setCancellations(rows); setCancellationsLoaded(true); } }).catch(error => { if (live) setDrawError(cancellationError(error, locale === "fr")); });
+    return () => { live = false; };
+  }, [selectedShowId, entries, locale]);
   const visibleClasses = selectedShowId ? blocks.filter((block) => block.show_id === selectedShowId) : blocks;
   const visiblePaidWarmups = selectedShowId ? showScorePaidWarmups.filter((warmup) => warmup.show_id === selectedShowId) : showScorePaidWarmups;
   const sortedVisiblePaidWarmups = [...visiblePaidWarmups].sort(compareShowScorePaidWarmups);
@@ -62,6 +71,8 @@ function ScoringView({
 
     try {
       await onPrepareShowScoreClass(block);
+    } catch (error) {
+      setDrawError(cancellationError(error, locale === "fr"));
     } finally {
       setBusyClassId("");
     }
@@ -143,7 +154,10 @@ function ScoringView({
             const entriesClosed = classEntriesAreClosed(block);
             const status = !entriesClosed ? uiText(locale, "Inscriptions ouvertes", "Entries open") : setup?.finalized ? uiText(locale, "Finalisé", "Finalized") : setup ? uiText(locale, "Ordre sorti", "Draw created") : runs.length ? uiText(locale, "Prêt à sortir", "Ready to draw") : uiText(locale, "Aucune inscription", "No entries");
             const statusClass = !entriesClosed ? "warning" : setup?.finalized ? "closed" : setup ? "info" : runs.length ? "open" : "draft";
-            const canPrepare = entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
+            const pendingCount = cancellations.filter(r => r.block_id === block.id && r.status === "pending").length;
+            const blockClassIds = new Set(classes.filter(c => c.block_id === block.id).map(c => c.id));
+            const pendingFinanceCount = entries.filter(e => blockClassIds.has(e.class_id) && e.status === "pending_checkout").length;
+            const canPrepare = cancellationsLoaded && pendingCount === 0 && pendingFinanceCount === 0 && entriesClosed && runs.length > 0 && !setup?.locked_at && !setup?.finalized;
             const prepareLabel = !entriesClosed ? uiText(locale, "Sortie après cutoff", "Draw after cutoff") : busyClassId === block.id ? uiText(locale, "Préparation", "Preparing") : setup ? uiText(locale, "Rafraîchir ordre", "Refresh draw") : uiText(locale, "Sortir ordre", "Create draw");
 
             const drawRuns = setup?.runs.length ? normalizeShowScoreRuns(setup.runs) : runs;
@@ -158,6 +172,9 @@ function ScoringView({
                 <div className="table-row">
                   <div>
                     <strong>{block.name}</strong>
+                    {pendingCount > 0 && <span role="status" className="muted-line">{uiText(locale, `${pendingCount} demande(s) d’annulation à traiter : draw bloqué pour ce bloc.`, `${pendingCount} cancellation request(s) to review: this block’s draw is blocked.`)}</span>}
+                    {pendingFinanceCount > 0 && <span role="status" className="muted-line">{uiText(locale, `${pendingFinanceCount} inscription(s) attendent un paiement ou une préautorisation : draw bloqué pour ce bloc.`, `${pendingFinanceCount} entry/entries await payment or authorization: this block’s draw is blocked.`)}</span>}
+                    {drawError && <span role="alert">{drawError}</span>}
                     <span className="muted-line">{block.display_label || block.name}</span>
                   </div>
                   <div>

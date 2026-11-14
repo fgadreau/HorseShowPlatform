@@ -1,4 +1,6 @@
+import { entryStatusLabel } from "./entryLifecycleText";
 import { sourceBillingError } from "../finance/presentation";
+import { TaxModeField } from "../../components/TaxModeField";
 import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { ContactPicker, FormActions, SearchSelect } from "../../components/ui";
@@ -14,6 +16,7 @@ import { ClassEligibilityCheck, sameClassEligibilityGate, withClassEligibilityRe
 import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
 
 function EntryEditForm({
+  allowPriceAdjustment = false,
   locale = "fr",
   blocks,
   contacts,
@@ -36,6 +39,7 @@ function EntryEditForm({
   onUpdateEntry,
   onVerifyNrhaEligibility,
 }: {
+  allowPriceAdjustment?: boolean;
   locale?: Locale;
   blocks: Block[];
   contacts: Contact[];
@@ -65,6 +69,8 @@ function EntryEditForm({
   const [entryNumber, setEntryNumber] = useState(entry.entry_number == null ? "" : String(entry.entry_number));
   const [status, setStatus] = useState<Entry["status"]>(entry.status);
   const [baseFee, setBaseFee] = useState(entry.base_fee == null ? "" : String(entry.base_fee));
+  const [feeTaxMode, setFeeTaxMode] = useState<"exclusive" | "inclusive" | "">("");
+  const priceChanged = baseFee !== (entry.base_fee == null ? "" : String(entry.base_fee));
   const [nrhaEligibilityGate, setNrhaEligibilityGate] = useState<ClassEligibilityGate | null>(null);
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
@@ -149,8 +155,7 @@ function EntryEditForm({
         payer_contact_id: payerContactId,
         entry_number: entryNumberValue(entryNumber),
         status,
-        base_fee: effectiveFee,
-        total_fees: effectiveFee,
+        ...(allowPriceAdjustment && priceChanged ? { base_fee: effectiveFee, base_fee_tax_mode: feeTaxMode || "exclusive" as const } : {}),
       });
     } catch (error) {
       setSubmitError(sourceBillingError(error, locale));
@@ -280,23 +285,21 @@ function EntryEditForm({
           <label>
             {uiText(locale, "Statut", "Status")}
             <select value={status} onChange={(event) => setStatus(event.target.value as Entry["status"])}>
-              <option value="draft">{uiText(locale, "Brouillon", "Draft")}</option>
-              <option value="pending_checkout">{uiText(locale, "Paiement en attente", "Pending checkout")}</option>
-              <option value="active">{uiText(locale, "Active", "Active")}</option>
-              <option value="scratched_pending_refund">{uiText(locale, "Scratch avec remboursement en attente", "Scratch pending refund")}</option>
-              <option value="scratched">{uiText(locale, "Scratch", "Scratched")}</option>
-              <option value="completed">{uiText(locale, "Terminée", "Completed")}</option>
-              <option value="cancelled">{uiText(locale, "Annulée", "Cancelled")}</option>
+              <option value={entry.status}>{entryStatusLabel(entry.status, locale)}</option>
+              {selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="scratched_pending_refund">{uiText(locale, "Scratch — ajustement à vérifier", "Scratch — adjustment to review")}</option>}
+              {allowPriceAdjustment && selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="scratched">{uiText(locale, "Scratch", "Scratched")}</option>}
+              {allowPriceAdjustment && selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="completed">{uiText(locale, "Terminée", "Completed")}</option>}
             </select>
           </label>
           <label>
             {uiText(locale, "Numéro de dossard", "Back number")}
             <input min="1" step="1" type="number" value={entryNumber} onChange={(event) => setEntryNumber(event.target.value)} />
           </label>
-          <label>
+          {allowPriceAdjustment && <label>
             {uiText(locale, "Frais de base", "Base fee")}
             <input min="0" step="0.01" type="number" value={baseFee} onChange={(event) => setBaseFee(event.target.value)} />
-          </label>
+          </label>}
+          {allowPriceAdjustment && priceChanged && <TaxModeField locale={locale} value={feeTaxMode} onChange={setFeeTaxMode} />}
         </div>
         {submitError ? <p className="inline-error" role="alert">{submitError}</p> : null}
         <FormActions busy={busy || !canUpdate} cancelLabel={uiText(locale, "Annuler", "Cancel")} saveLabel={uiText(locale, "Sauvegarder", "Save changes")} onCancel={onCancel} />

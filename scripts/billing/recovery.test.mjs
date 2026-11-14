@@ -2,6 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {submitCommand,replayCommand,pendingCommands,stripeKey,observeStripe} from '../../src/services/billingRecovery.ts';
 function reset(){const storage={};Object.defineProperties(storage,{getItem:{value:k=>storage[k]??null},setItem:{value:(k,v)=>storage[k]=v},removeItem:{value:k=>delete storage[k]}});globalThis.localStorage=storage;globalThis.window=new EventTarget();}
+test('authorization retry keeps its action and cannot become an immediate payment',()=>{
+ reset();const key=stripeKey('payer','folio','120','begin_authorization');
+ assert.equal(stripeKey('payer','folio','120','begin_authorization'),key);
+ assert.throws(()=>stripeKey('payer','folio','120'),/UNRESOLVED/);
+ observeStripe('payer','folio',{attempt_id:'auth',state:'requires_capture'});
+ const pending=JSON.parse(localStorage.getItem('hsp-stripe:payer:folio'));
+ assert.equal(pending.action,'begin_authorization');assert.equal(pending.attempt,'auth');
+ observeStripe('payer','folio',{attempt_id:'auth',state:'succeeded'});
+ assert.notEqual(stripeKey('payer','folio','120'),key);
+});
 test('Stripe timeout and account refresh keep key; confirmed cancellation permits same amount with new key',()=>{
  reset();const key=stripeKey('payer','folio','25');
  assert.equal(stripeKey('payer','folio','25'),key);

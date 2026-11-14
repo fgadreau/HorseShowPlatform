@@ -18,6 +18,8 @@ type DrawFixture = {
 function main() {
   const largeFixture = buildLargeDrawFixture();
   const largeRuns = buildShowScoreRunsForClass(largeFixture.block.id, largeFixture.entries, largeFixture);
+  const waiting = largeFixture.entries.map(entry => ({ ...entry, status: "pending_checkout" as const }));
+  assertEqual(buildShowScoreRunsForClass(largeFixture.block.id, waiting, largeFixture).length, 0, "unconfirmed financial entries must never be silently included in the draw");
   const repeatedLargeRuns = buildShowScoreRunsForClass(largeFixture.block.id, largeFixture.entries, largeFixture);
 
   assertEqual(largeRuns.length, 45, "large fixture should produce 45 scoring runs");

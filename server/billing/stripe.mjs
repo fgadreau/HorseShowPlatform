@@ -34,7 +34,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   if(connected.id!==a.connected_account||(a.charge_mode==='direct'?(connected.controller?.fees?.payer!=='account'||connected.controller?.losses?.payments!=='stripe') : connected.type!=='express'))throw Error('BILLING_PROVIDER_ACCOUNT');
   return connected;
  }
- async function sync(id,{cancel=false}={}) {
+ async function sync(id,{cancel=false,capture=false}={}) {
   const a=await attempt(id);
   const connected=await checkAccount(a);
   const scoped=(path,params,key)=>stripe(path,params,key,a.charge_mode==='direct'?a.connected_account:undefined);
@@ -57,11 +57,15 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
     if(!intent)throw Error('BILLING_RECONCILIATION_REQUIRED');
    }
    if(!intent&&!connected.charges_enabled)throw Error('BILLING_PROVIDER_ACCOUNT');
-   if(!intent)intent=await scoped('/payment_intents',{amount:String(Math.round(Number(a.amount)*100)),currency:a.currency.toLowerCase(),capture_method:'automatic','payment_method_types[]':'card',...(a.charge_mode==='direct'?{application_fee_amount:String(Math.round(Number(a.application_fee_amount)*100))}:{'transfer_data[destination]':a.connected_account}),'metadata[hsp_attempt_id]':a.id,description:'HSP — DEMO / FICTITIOUS'},`hsp-test-${a.id}`);
+   if(!intent)intent=await scoped('/payment_intents',{amount:String(Math.round(Number(a.amount)*100)),currency:a.currency.toLowerCase(),capture_method:a.capture_method??'automatic','automatic_payment_methods[enabled]':'true','automatic_payment_methods[allow_redirects]':'never',...(a.charge_mode==='direct'?{application_fee_amount:String(Math.round(Number(a.application_fee_amount)*100))}:{'transfer_data[destination]':a.connected_account}),'metadata[hsp_attempt_id]':a.id,description:'HSP — DEMO / FICTITIOUS'},`hsp-test-${a.id}`);
   }
   if(cancel&&!['succeeded','canceled'].includes(intent.status)) {
    try {intent=await scoped(`/payment_intents/${intent.id}/cancel`,{},`hsp-test-cancel-${a.id}`);}
    catch {intent=await scoped(`/payment_intents/${intent.id}`);}
+  }
+  if(capture&&intent.status==='requires_capture') {
+   if(a.capture_method!=='manual'||!(Number(a.planned_capture_amount)>0))throw Error('BILLING_PREAUTH_CAPTURE_REQUIRED');
+   intent=await scoped(`/payment_intents/${intent.id}/capture`,{amount_to_capture:String(Math.round(Number(a.planned_capture_amount)*100))},`hsp-test-capture-${a.id}`);
   }
   const result=await rpc(admin,'billing_stripe_observe',{p_attempt:a.id,p_platform:a.platform_account,p_object:a.charge_mode==='direct'?{...intent,hsp_verified_account:a.connected_account}:intent});
   if(a.charge_mode==='direct'&&result.state==='succeeded'){
@@ -76,7 +80,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
     await rpc(admin,'billing_hsp_confirm_fee',{p_attempt:a.id,p_fee:fee});
    }
   }
-  return {...result,...(a.charge_mode==='direct'?{connected_account:a.connected_account,charge_mode:'direct'}:{}),attempt_id:a.id,client_secret:!['succeeded','canceled','anomaly'].includes(result.state)?intent.client_secret:undefined,publishable_key:config.publishable};
+  return {...result,capture_method:a.capture_method??'automatic',...(a.charge_mode==='direct'?{connected_account:a.connected_account,charge_mode:'direct'}:{}),attempt_id:a.id,client_secret:!['succeeded','canceled','anomaly','requires_capture'].includes(result.state)?intent.client_secret:undefined,publishable_key:config.publishable};
  }
  async function processEvent(event) {
   let query=admin.from('billing_stripe_attempts').select('id').eq('provider_id',event.provider_id);
@@ -91,11 +95,14 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   if(!body||Object.keys(body).some(k=>!['action','request_id','folio_id','amount','attempt_id'].includes(k)))throw Error('BILLING_UNEXPECTED_FIELD');
   let id=body.attempt_id;
   if(body.action==='begin')id=(await rpc(user,'begin_billing_stripe_attempt',{p_request:body.request_id,p_folio:body.folio_id,p_amount:body.amount})).attempt_id;
-  else if(!['resume','cancel'].includes(body.action))throw Error('BILLING_INVALID_REQUEST');
-  await rpc(user,'authorize_billing_stripe_attempt',{p_attempt:id});
-  const result=await sync(id,{cancel:body.action==='cancel'});
+  else if(body.action==='begin_authorization')id=(await rpc(user,'begin_entry_preauthorization',{p_request:body.request_id,p_folio:body.folio_id,p_amount:body.amount})).attempt_id;
+  else if(!['resume','cancel','capture','cancel_authorization'].includes(body.action))throw Error('BILLING_INVALID_REQUEST');
+  const authorize=['capture','cancel_authorization'].includes(body.action)?'authorize_entry_authorization_settlement':'authorize_billing_stripe_attempt';
+  await rpc(user,authorize,{p_attempt:id});
+  if(body.action==='capture')await rpc(user,'prepare_entry_authorization_capture',{p_attempt:id});
+  const result=await sync(id,{cancel:['cancel','cancel_authorization'].includes(body.action),capture:body.action==='capture'});
   // Recheck linked payer after the external call before returning a client secret.
-  await rpc(user,'authorize_billing_stripe_attempt',{p_attempt:id});
+  await rpc(user,authorize,{p_attempt:id});
   return result;
  },async receive(raw,signature){
   const event=verifyEvent(raw,signature,config.webhook,Date.now(),true);

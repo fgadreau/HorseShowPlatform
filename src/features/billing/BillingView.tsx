@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { TaxModeField } from "../../components/TaxModeField";
 import type { FormEvent, ReactNode } from "react";
 import { ChevronDown, ChevronRight, Download, FileText, Plus, Search, X } from "lucide-react";
 import { EmptyState, Metric, ViewIntro } from "../../components/ui";
@@ -94,6 +95,7 @@ function BillingView({
   const [saleDescription, setSaleDescription] = useState("");
   const [saleQuantity, setSaleQuantity] = useState("1");
   const [saleUnitPrice, setSaleUnitPrice] = useState("");
+  const [saleTaxMode, setSaleTaxMode] = useState<"exclusive" | "inclusive" | "">("");
   const [saleTaxApplicable, setSaleTaxApplicable] = useState(true);
   const normalizedInvoiceSearch = normalizeSearchText(invoiceSearch);
   const activeProducts = useMemo(() => products.filter((product) => product.is_active), [products]);
@@ -169,6 +171,7 @@ function BillingView({
         description: saleDescription.trim() || selectedSaleProduct.name,
         quantity: Math.max(0.01, numericValue(saleQuantity) ?? 1),
         unit_price: numericValue(saleUnitPrice) ?? selectedSaleProduct.default_price,
+        unit_price_tax_mode: saleTaxMode || "exclusive",
         tax_applicable: saleTaxApplicable,
         source_payload: {
           productCategory: selectedSaleProduct.category,
@@ -179,6 +182,7 @@ function BillingView({
       setSaleDescription("");
       setSaleQuantity("1");
       setSaleUnitPrice("");
+      setSaleTaxMode("");
       setSaleShowId("");
     } finally {
       setSaleBusyId("");
@@ -273,6 +277,7 @@ function BillingView({
                 {uiText(locale, "Prix unitaire", "Unit price")}
                 <input disabled={!organization || saleBusyId === "new"} min="0" step="0.01" type="number" value={saleUnitPrice} placeholder={selectedSaleProduct ? String(selectedSaleProduct.default_price) : ""} onChange={(event) => setSaleUnitPrice(event.target.value)} />
               </label>
+              <TaxModeField locale={locale} value={saleTaxMode} onChange={setSaleTaxMode} disabled={!organization || saleBusyId === "new"} />
             </div>
             <label className="requirement-row">
               <input checked={saleTaxApplicable} disabled={!organization || saleBusyId === "new"} type="checkbox" onChange={(event) => setSaleTaxApplicable(event.target.checked)} />

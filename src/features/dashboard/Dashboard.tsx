@@ -1,3 +1,4 @@
+import { WorkspaceContext } from './WorkspaceContext';
 import {FinanceView} from '../finance/FinanceView';
 import { ReportsView } from "../reports/ReportsView";
 import {financeRoute,navigateBilling,showSections} from '../finance/navigation';
@@ -813,33 +814,9 @@ export function Dashboard({
             )}
           </div>
           <div className="header-actions">
-            {organizations.length > 1 ? (
-              <label>
-                Association
-                <select aria-label="Association" value={selectedOrganization?.id ?? ""} onChange={(event) => {onChangeOrganization(event.target.value);if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling(`/associations/${event.target.value}/finance`);else if(financeRoute())navigateBilling(`/associations/${event.target.value}/shows`);}}>
-                  {organizations.map((organization) => (
-                    <option key={organization.id} value={organization.id}>
-                      {organization.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ) : null}
-            {shouldShowShowContext ? (
-              <select
-                aria-label={locale === "fr" ? "Show actuel" : "Current show"}
-                title={locale === "fr" ? "Show actuel" : "Current show"}
-                value={activeShowId}
-                onChange={(event) => {setSelectedShowId(event.target.value);if(!effectiveView.startsWith('my-'))navigateBilling(`/associations/${selectedOrganization?.id}/shows/${event.target.value}/${Object.keys(showSections).find(k=>showSections[k]===effectiveView)??'overview'}`);}}
-              >
-                <option value="" disabled>{locale==='fr'?'Choisir un concours':'Select a show'}</option>
-                {selectedOrganizationShows.map((show) => (
-                  <option key={show.id} value={show.id}>
-                    {showLabel(show)}
-                  </option>
-                ))}
-              </select>
-            ) : null}
+            <WorkspaceContext organizations={organizations} shows={shows} organization={selectedOrganization} show={selectedShow} showContext={SHOW_CONTEXT_VIEW_KEYS.has(effectiveView)} loading={loading} locale={locale}
+              onOrganizationChange={id=>{setSelectedShowId('');onChangeOrganization(id);if(effectiveView.startsWith('my-'))return;if(effectiveView==='billing'||effectiveView==='show-accounts')navigateBilling('/associations/'+id+'/finance');else if(financeRoute())navigateBilling('/associations/'+id+'/shows');}}
+              onShowChange={id=>{setSelectedShowId(id);if(!effectiveView.startsWith('my-'))navigateBilling('/associations/'+selectedOrganization?.id+'/shows/'+id+'/'+(Object.keys(showSections).find(k=>showSections[k]===effectiveView)??'overview'));}}/>
             <button className="icon-button" title={t.common.refresh} type="button" onClick={onRefresh}>
               <RefreshCw className={loading ? "spin" : ""} size={18} />
             </button>
@@ -1018,6 +995,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "entries" ? (
           <EntriesView
+            onRefresh={onRefresh}
             locale={locale}
             blocks={selectedShowBlocks}
             contacts={selectedOrganizationContacts}
@@ -1256,6 +1234,7 @@ export function Dashboard({
 
         {!showRouteUnavailable && effectiveView === "my-entries" ? (
           <MyEntriesView
+            onRefresh={onRefresh}
             warmupHorses={personalHorses}
             locale={locale}
             blocks={selectedShowBlocks}
