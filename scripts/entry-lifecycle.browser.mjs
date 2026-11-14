@@ -1,6 +1,7 @@
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { chromium, expect } from '@playwright/test';
+import { serverlessBrowser } from '../server/vet/serverless-browser.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync, writeFileSync } from 'node:fs';
 
@@ -34,7 +35,7 @@ let browser;
 const passed = [];
 let complete = false;
 try {
-  await server.listen(); browser = await chromium.launch(process.platform === 'win32' ? { channel: 'chrome', headless: true } : { headless: true });
+  await server.listen(); browser = process.platform === 'linux' ? await serverlessBrowser.launch({ headless: true }) : await chromium.launch(process.platform === 'win32' ? { channel: 'chrome', headless: true } : { headless: true });
   const page = await browser.newPage({ viewport: { width: 1365, height: 1000 } });
   page.setDefaultTimeout(10000);
   const errors = []; page.on('pageerror', error => errors.push(error.message));

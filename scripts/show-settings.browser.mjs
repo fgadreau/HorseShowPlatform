@@ -1,6 +1,7 @@
 import { createServer } from 'vite';
 import react from '@vitejs/plugin-react';
 import { chromium, expect } from '@playwright/test';
+import { serverlessBrowser } from '../server/vet/serverless-browser.mjs';
 import assert from 'node:assert/strict';
 import { mkdirSync } from 'node:fs';
 
@@ -15,7 +16,7 @@ createRoot(document.getElementById('root')).render(React.createElement(Harness))
 const server = await createServer({ configFile: false, envDir: false, plugins: [react(), { name: 'show-settings-test', configureServer(server) { server.middlewares.use('/show-settings-test', async (_req, res, next) => { try { res.setHeader('Content-Type', 'text/html'); res.end(await server.transformIndexHtml('/show-settings-test', html)); } catch (error) { next(error); } }); } }], server: { host: '127.0.0.1', port: 5201, strictPort: true } });
 let browser;
 try {
-  await server.listen(); browser = await chromium.launch(process.platform === 'win32' ? { channel: 'chrome', headless: true } : { headless: true });
+  await server.listen(); browser = process.platform === 'linux' ? await serverlessBrowser.launch({ headless: true }) : await chromium.launch(process.platform === 'win32' ? { channel: 'chrome', headless: true } : { headless: true });
   const page = await browser.newPage({ viewport: { width: 1365, height: 1000 } });
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.route('**/*', route => new URL(route.request().url()).hostname === '127.0.0.1' ? route.continue() : route.abort());
