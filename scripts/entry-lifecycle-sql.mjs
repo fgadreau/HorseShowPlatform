@@ -46,6 +46,10 @@ try {
   sql('begin;\n' + readFileSync('supabase/seed.sql', 'utf8').split('insert into public.entries (')[0] + '\ncommit;');
   const variables = ['-v', 'org_id=30000000-0000-0000-0000-000000000001', '-v', 'show_id=40000000-0000-0000-0000-000000000001', '-v', 'staff_uid=10000000-0000-0000-0000-000000000001'];
   sql(readFileSync('supabase/tests/entry_lifecycle.sql', 'utf8'), variables);
+  sql(readFileSync('supabase/tests/association_roles.sql', 'utf8'));
+  sql(readFileSync('supabase/tests/membership_import.sql', 'utf8'));
+  console.log('PASS: external memberships, contact matching, hidden/free cards, ownership and financial isolation');
+  console.log('PASS: association roles, shared ShowScore access, admin authorization and last-admin protection');
   await runEntryDrawRaces({ sql, container, variables });
   report.passed = true;
   console.log('PASS: fresh migrations, activation, cancellation accounting and draw guards');

@@ -1,7 +1,9 @@
 import {MembershipBillingSetup} from "./MembershipBillingSetup";
+import { AssociationTeamSettings } from "./AssociationTeamSettings";
+import { MembershipImportSettings } from './MembershipImportSettings';
 import { useEffect, useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import type { FormEvent } from "react";
+import { AssociationSettingsLayout, SettingsSection } from './AssociationSettingsLayout';
 import { EmptyState, ViewIntro } from "../../components/ui";
 import { canadianProvinceOptions, countryOptions, currencyOptions, taxPresetById, taxPresetForLocation, taxPresetIdForValues, taxPresetsForLocation, type TaxPreset } from "../../lib/billingSettings";
 import { errorMessage, formatCurrency, formatDate, numericValue } from "../../lib/display";
@@ -48,6 +50,7 @@ type MembershipTypeFormState = {
   validFrom: string;
   validUntil: string;
   isActive: boolean;
+  isPublic: boolean;
 };
 
 type ProductFormState = {
@@ -103,6 +106,7 @@ function membershipTypeFormState(type?: OrganizationMembershipType | null): Memb
     validFrom: type?.valid_from ?? seasonStartDate(seasonYear),
     validUntil: type?.valid_until ?? seasonEndDate(seasonYear),
     isActive: type?.is_active ?? true,
+    isPublic: type?.is_public ?? true,
   };
 }
 
@@ -192,47 +196,6 @@ function taxRateNumber(value: string) {
   return Number.isFinite(parsed) ? Math.max(0, parsed) : 0;
 }
 
-function SettingsSection({
-  children,
-  className = "panel span-2",
-  collapseLabel,
-  defaultOpen = false,
-  description,
-  expandLabel,
-  title,
-}: {
-  children: ReactNode;
-  className?: string;
-  collapseLabel: string;
-  defaultOpen?: boolean;
-  description?: ReactNode;
-  expandLabel: string;
-  title: string;
-}) {
-  const [isOpen, setIsOpen] = useState(defaultOpen);
-
-  return (
-    <section className={`${className} settings-section ${isOpen ? "is-open" : "is-collapsed"}`}>
-      <div className="panel-header settings-section-header">
-        <div>
-          <h2>{title}</h2>
-          {description ? <p>{description}</p> : null}
-        </div>
-        <button
-          aria-expanded={isOpen}
-          aria-label={`${isOpen ? collapseLabel : expandLabel} ${title}`}
-          className="icon-button settings-section-toggle"
-          type="button"
-          onClick={() => setIsOpen((current) => !current)}
-        >
-          {isOpen ? <ChevronDown size={20} /> : <ChevronRight size={20} />}
-        </button>
-      </div>
-      {isOpen ? <div className="settings-section-body">{children}</div> : null}
-    </section>
-  );
-}
-
 function SettingsView({
   locale = "fr",
   context,
@@ -300,10 +263,6 @@ function SettingsView({
     }
     return left.name.localeCompare(right.name);
   });
-  const sectionToggleLabels = {
-    collapseLabel: uiText(locale, "Replier", "Collapse"),
-    expandLabel: uiText(locale, "Ouvrir", "Open"),
-  };
 
   useEffect(() => {
     setBillingForm(organizationBillingFormState(organization));
@@ -373,6 +332,7 @@ function SettingsView({
       valid_from: membershipTypeForm.validFrom || seasonStartDate(seasonYear),
       valid_until: membershipTypeForm.validUntil || seasonEndDate(seasonYear),
       is_active: membershipTypeForm.isActive,
+      is_public: membershipTypeForm.isPublic,
     };
 
     setMembershipBusyId(membershipTypeForm.id || "new");
@@ -553,24 +513,24 @@ function SettingsView({
   }
 
   return (
-    <div className="content-grid">
+    <AssociationSettingsLayout key={organization?.id ?? 'none'} locale={locale}>
       <ViewIntro
         eyebrow={uiText(locale, "Paramètres", "Settings")}
-        title={uiText(locale, "Profil et association", "Profile and association")}
-        description={uiText(locale, "Vérifie le profil connecté, le rôle, la devise, les taxes et les règles de l'association.", "Review the signed-in profile, role, currency, taxes and association rules.")}
+        title={organization?.name ?? uiText(locale, "Gérer l’association", "Manage association")}
+        description={uiText(locale, "L’équipe, les adhésions et les règles de votre association, au même endroit.", "Your association’s team, memberships and rules in one place.")}
       />
 
-      {context && organization ? <DisciplineRequirementsSettings context={context} organization={organization} onRefresh={onRefresh} /> : null}
+      {context && organization ? <SettingsSection id="team"><AssociationTeamSettings key={organization.id} organizationId={organization.id} locale={locale} currentProfileId={context.profile.id} canAdminister={context.isPlatformAdmin || context.organizationMembers.some(member => member.organization_id === organization.id && member.user_id === context.profile.id && member.role === 'admin')} onRefresh={onRefresh} /></SettingsSection> : null}
+
+      {context && organization ? <SettingsSection id="disciplines"><DisciplineRequirementsSettings context={context} organization={organization} onRefresh={onRefresh} /></SettingsSection> : null}
 
       <SettingsSection
-        {...sectionToggleLabels}
-        className="panel"
-        title={uiText(locale, "Profil", "Profile")}
+        id="profile"
         description={context?.profile ? `${context.profile.first_name ?? ""} ${context.profile.last_name ?? ""}`.trim() || uiText(locale, "Utilisateur connecté", "Signed-in user") : uiText(locale, "Chargement", "Loading")}
       >
         <dl className="detail-list">
           <div>
-            <dt>{uiText(locale, "Type de rôle", "Role type")}</dt>
+            <dt>{uiText(locale, "Type de profil personnel", "Personal profile type")}</dt>
             <dd>{context?.profile.type_user ?? uiText(locale, "Non défini", "Unset")}</dd>
           </div>
           <div>
@@ -581,8 +541,7 @@ function SettingsView({
       </SettingsSection>
 
       <SettingsSection
-        {...sectionToggleLabels}
-        title={uiText(locale, "Produits association", "Association products")}
+        id="products"
         description={uiText(locale, "Catalogue utilisé pour les ventes manuelles et, au besoin, les extras de réservation.", "Catalog used for manual sales and, when needed, reservation extras.")}
       >
         <div className="requirement-list">
@@ -670,8 +629,7 @@ function SettingsView({
       </SettingsSection>
 
       <SettingsSection
-        {...sectionToggleLabels}
-        title={uiText(locale, "Cartes de membre internes", "Internal memberships")}
+        id="memberships"
         description={uiText(locale, "Types de cartes vendues directement par cette association, par saison.", "Membership cards sold directly by this association, by season.")}
       >
         <div className="requirement-list">
@@ -682,7 +640,7 @@ function SettingsView({
                 {`${type.season_year} · ${formatCurrency(type.price, organization?.currency ?? "CAD")} · ${formatDate(type.valid_from)} - ${formatDate(type.valid_until)}`}
               </span>
               <div className="membership-type-actions">
-                <small>{type.is_active ? uiText(locale, "Active", "Active") : uiText(locale, "Inactive", "Inactive")}</small>
+                <small>{type.is_active ? uiText(locale, "Active", "Active") : uiText(locale, "Inactive", "Inactive")} · {type.is_public !== false ? uiText(locale, "Catalogue public", "Public catalog") : uiText(locale, "Attribution interne", "Internal assignment")}</small>
                 <div className="row-actions">
                   <button
                     className="secondary-button"
@@ -750,9 +708,13 @@ function SettingsView({
           <label className="requirement-row">
             <input checked={membershipTypeForm.isActive} disabled={!organization || Boolean(membershipBusyId)} type="checkbox" onChange={(event) => handleMembershipTypeFieldChange("isActive", event.target.checked)} />
             <span>
-              <strong>{uiText(locale, "Disponible à la vente", "Available for sale")}</strong>
+              <strong>{uiText(locale, "Type de carte actif", "Active membership type")}</strong>
               {uiText(locale, "Une carte inactive reste dans l'historique mais ne sera pas offerte pour les nouvelles ventes.", "An inactive membership stays in history but will not be offered for new sales.")}
             </span>
+          </label>
+          <label className="requirement-row">
+            <input checked={membershipTypeForm.isPublic} disabled={!organization || Boolean(membershipBusyId)} type="checkbox" onChange={(event) => handleMembershipTypeFieldChange("isPublic", event.target.checked)} />
+            <span><strong>{uiText(locale, "Visible dans le catalogue public", "Visible in the public catalog")}</strong>{uiText(locale, "Décochez pour une carte attribuée seulement par le secrétariat, par exemple une carte gratuite pour le CA. Les cartes déjà attribuées restent visibles à leur titulaire.", "Uncheck for staff-only assignment, such as a complimentary board membership. Assigned cards remain visible to their holders.")}</span>
           </label>
           <div className="row-actions">
             <button className="primary-button" disabled={!organization || Boolean(membershipBusyId) || !membershipTypeForm.name.trim()} type="submit">
@@ -771,16 +733,18 @@ function SettingsView({
         </form>
       </SettingsSection>
 
-      <SettingsSection {...sectionToggleLabels} title={uiText(locale, "Facturation des cartes", "Membership billing")}>
+      <SettingsSection id="membership-billing">
         <MembershipBillingSetup organization={organization} types={membershipTypes} locale={locale}/>
+      </SettingsSection>
+      <SettingsSection id="membership-import">
+        {organization && context ? <MembershipImportSettings key={organization.id} organizationId={organization.id} types={membershipTypes} contacts={context.contacts ?? []} locale={locale} onRefresh={onRefresh} /> : null}
       </SettingsSection>
 
       <SettingsSection
-        {...sectionToggleLabels}
-        title={uiText(locale, "Informations de facturation", "Billing information")}
-        description={organization?.slug ?? uiText(locale, "Aucune association sélectionnée", "No association selected")}
+        id="identity"
       >
         <form className="stack" onSubmit={handleBillingSettingsSubmit}>
+          <h3 className="settings-form-heading">{uiText(locale, "Identité de l’association", "Association identity")}</h3>
           <div className="form-grid">
             <label>
               {uiText(locale, "Nom de l'association", "Association name")}
@@ -805,6 +769,7 @@ function SettingsView({
               <input disabled={!organization || billingBusy} value={billingForm.primaryContactPhone} onChange={(event) => handleBillingFieldChange("primaryContactPhone", event.target.value)} />
             </label>
           </div>
+          <h3 className="settings-form-heading">{uiText(locale, "Coordonnées de facturation", "Billing contact details")}</h3>
           <div className="form-grid">
             <label>
               {uiText(locale, "Nom légal sur facture", "Legal billing name")}
@@ -819,6 +784,7 @@ function SettingsView({
               <input disabled={!organization || billingBusy} value={billingForm.billingPhone} onChange={(event) => handleBillingFieldChange("billingPhone", event.target.value)} />
             </label>
           </div>
+          <h3 className="settings-form-heading">{uiText(locale, "Adresse de l’association", "Association address")}</h3>
           <div className="form-grid">
             <label>
               {uiText(locale, "Adresse", "Address")}
@@ -915,8 +881,7 @@ function SettingsView({
       </SettingsSection>
 
       <SettingsSection
-        {...sectionToggleLabels}
-        title={uiText(locale, "Numéros externes obligatoires", "Required external numbers")}
+        id="credentials"
         description={uiText(locale, "Exigences appliquées aux fiches de cavalier de cette association.", "Requirements applied to rider records for this association.")}
       >
         <div className="requirement-list">
@@ -947,8 +912,7 @@ function SettingsView({
       </SettingsSection>
 
       <SettingsSection
-        {...sectionToggleLabels}
-        title={uiText(locale, "Dossards et statut santé", "Back numbers and health status")}
+        id="health"
         description={uiText(locale, "Règles utilisées pour les dossards, les inscriptions et les réservations de stalls.", "Rules used for back numbers, entries and stall reservations.")}
       >
         <form className="stack" onSubmit={handleHealthSettingsSubmit}>
@@ -1127,7 +1091,7 @@ function SettingsView({
           ) : null}
         </form>
       </SettingsSection>
-    </div>
+    </AssociationSettingsLayout>
   );
 }
 

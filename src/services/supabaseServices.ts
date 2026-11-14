@@ -2286,6 +2286,7 @@ function normalizeOrganizationMembershipTypeInput(
     valid_from: input.valid_from,
     valid_until: input.valid_until,
     is_active: input.is_active ?? true,
+    is_public: input.is_public ?? true,
   };
 }
 
@@ -2305,6 +2306,7 @@ function normalizeOrganizationMembershipTypeUpdateInput(
   if (input.valid_from !== undefined) row.valid_from = input.valid_from;
   if (input.valid_until !== undefined) row.valid_until = input.valid_until;
   if (input.is_active !== undefined) row.is_active = input.is_active;
+  if (input.is_public !== undefined) row.is_public = input.is_public;
 
   return row;
 }

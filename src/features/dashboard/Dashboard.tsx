@@ -356,7 +356,7 @@ export function Dashboard({
 }) {
   const [selectedShowId, setSelectedShowId] = useState(()=>financeRoute()?.show??'');
   const [navigationStaff,setNavigationStaff]=useState(false);
-  useEffect(()=>{let live=true;setNavigationStaff(false);if(selectedOrganizationId)void billingRpc('billing_navigation_scope',{p_org:selectedOrganizationId}).then(r=>{if(live)setNavigationStaff(r.staff);}).catch(()=>{});return()=>{live=false;};},[selectedOrganizationId]);
+  useEffect(()=>{let live=true;setNavigationStaff(false);if(selectedOrganizationId)void billingRpc('billing_navigation_scope',{p_org:selectedOrganizationId}).then(r=>{if(live)setNavigationStaff(r.staff);}).catch(()=>{});return()=>{live=false;};},[selectedOrganizationId,context?.profile.id,context?.organizationMembers,context?.isPlatformAdmin]);
   useEffect(()=>{const read=()=>{const r=financeRoute();if(r?.show)setSelectedShowId(r.show);};window.addEventListener('popstate',read);return()=>window.removeEventListener('popstate',read);},[]);
   const organizations = context?.organizations ?? [];
   const organizationMembers = context?.organizationMembers ?? [];
