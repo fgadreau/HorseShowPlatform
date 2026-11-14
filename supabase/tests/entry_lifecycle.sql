@@ -274,4 +274,138 @@ do $$declare f uuid;r uuid:=gen_random_uuid();q jsonb;result jsonb;snap jsonb;sn
  end if;
  if not public.showscore_public_class_exists(late_block) then raise exception 'TEST published draw must become visible to ShowScore';end if;
 end $$;
+
+-- Per-horse show fees are account-scoped: many classes produce one charge,
+-- another horse produces another charge, and a scratch keeps the charge.
+select set_config('request.jwt.claim.sub', current_setting('test.staff_uid'), true);
+do $$
+declare
+  fee public.show_horse_fees;
+  second_horse uuid;
+  second_class uuid;
+  second_payer uuid;
+  payer_class uuid;
+  second_entry public.entries;
+  payload jsonb;
+  before_scratch uuid;
+begin
+  begin
+    fee := public.save_show_horse_fee(
+      current_setting('test.show')::uuid,
+      null,
+      'Frais de secrétariat',
+      'Office fee',
+      20,
+      true,
+      true,
+      1
+    );
+
+    if (select count(*) from public.event_billing_lines
+        where line_key like 'horse-fee:' || fee.id || ':%'
+          and show_id = current_setting('test.show')::uuid) <> 1 then
+      raise exception 'TEST several classes for one horse must create one per-horse charge';
+    end if;
+
+    insert into public.horses(name, primary_owner_contact_id)
+    values('Second per-horse fee test horse', current_setting('test.payer')::uuid)
+    returning id into second_horse;
+    insert into public.horse_contacts(horse_id, contact_id, role, can_create_entries, can_modify_entries, can_pay_invoices)
+    values(second_horse, current_setting('test.payer')::uuid, 'owner', true, true, true);
+    insert into public.directory_horses(organization_discipline_id, horse_id)
+    select organization_discipline_id, second_horse
+    from public.directory_horses
+    where horse_id = current_setting('test.horse')::uuid
+    limit 1;
+    perform public.assign_association_back_number(current_setting('test.org')::uuid, second_horse, 9877);
+    insert into public.classes(
+      organization_id, show_id, block_id, organization_discipline_id,
+      name, entry_fee, judge_fee, sort_order
+    )
+    select organization_id, show_id, block_id, organization_discipline_id,
+      'Second horse fee class', 10, 0, 99
+    from public.classes where id = current_setting('test.class1')::uuid
+    returning id into second_class;
+
+    payload := jsonb_build_object(
+      'organization_id', current_setting('test.org'),
+      'show_id', current_setting('test.show'),
+      'horse_id', second_horse,
+      'class_id', second_class,
+      'created_by_user_id', public.current_profile_id(),
+      'owner_contact_id', current_setting('test.payer'),
+      'payer_contact_id', current_setting('test.payer'),
+      'back_number_choice', 'personal',
+      'entry_number', 9877
+    );
+    select * into second_entry from public.submit_entry(payload);
+
+    if (select count(*) from public.event_billing_lines
+        where line_key like 'horse-fee:' || fee.id || ':%'
+          and show_id = current_setting('test.show')::uuid) <> 2 then
+      raise exception 'TEST two horses on one account must create two per-horse charges';
+    end if;
+
+    insert into public.contacts(type, first_name, last_name)
+    values('payer', 'Second', 'Invoice payer') returning id into second_payer;
+    insert into public.directory_contacts(organization_discipline_id, contact_id)
+    select organization_discipline_id, second_payer
+    from public.directory_horses
+    where horse_id = current_setting('test.horse')::uuid
+    limit 1;
+    insert into public.classes(
+      organization_id, show_id, block_id, organization_discipline_id,
+      name, entry_fee, judge_fee, sort_order
+    )
+    select organization_id, show_id, block_id, organization_discipline_id,
+      'Second invoice payer class', 10, 0, 100
+    from public.classes where id = current_setting('test.class1')::uuid
+    returning id into payer_class;
+    perform public.submit_entry(jsonb_build_object(
+      'organization_id', current_setting('test.org'),
+      'show_id', current_setting('test.show'),
+      'horse_id', current_setting('test.horse'),
+      'class_id', payer_class,
+      'created_by_user_id', public.current_profile_id(),
+      'owner_contact_id', current_setting('test.payer'),
+      'payer_contact_id', second_payer,
+      'back_number_choice', 'personal',
+      'entry_number', 9876
+    ));
+    if (select count(*) from public.event_billing_lines
+        where line_key like 'horse-fee:' || fee.id || ':%'
+          and show_id = current_setting('test.show')::uuid) <> 3 then
+      raise exception 'TEST same horse on a second payer account must be charged again';
+    end if;
+
+    select charge_id into before_scratch
+    from public.event_billing_lines
+    where line_key = 'horse-fee:' || fee.id || ':' || current_setting('test.show') || ':'
+      || current_setting('test.payer') || ':' || second_horse;
+    update public.entries set status = 'scratched' where id = second_entry.id;
+    if (select charge_id from public.event_billing_lines
+        where line_key = 'horse-fee:' || fee.id || ':' || current_setting('test.show') || ':'
+          || current_setting('test.payer') || ':' || second_horse) is distinct from before_scratch then
+      raise exception 'TEST scratch must retain the per-horse charge';
+    end if;
+
+    perform public.save_show_horse_fee(
+      current_setting('test.show')::uuid,
+      fee.id,
+      fee.name_fr,
+      fee.name_en,
+      fee.amount,
+      fee.taxable,
+      false,
+      fee.sort_order
+    );
+    if exists(select 1 from public.event_billing_lines where line_key like 'horse-fee:' || fee.id || ':%') then
+      raise exception 'TEST disabling a fee must remove it from open accounts';
+    end if;
+
+    raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+  exception when others then
+    if sqlerrm <> 'TEST_SUBTRANSACTION_COMPLETE' then raise; end if;
+  end;
+end $$;
 rollback;

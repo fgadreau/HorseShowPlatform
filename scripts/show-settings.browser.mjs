@@ -27,6 +27,9 @@ try {
     const dialog = page.getByRole('dialog');
     const policy = dialog.getByLabel(locale === 'fr' ? 'Gestion des inscriptions' : 'Entry handling');
     await expect(policy).toBeVisible();
+    await expect(dialog.getByRole('heading', { name: locale === 'fr' ? 'Frais par cheval' : 'Per-horse fees' })).toBeVisible();
+    await expect(dialog.getByLabel(locale === 'fr' ? 'Nom français' : 'French name')).toBeVisible();
+    await expect(dialog.getByRole('button', { name: locale === 'fr' ? 'Ajouter le frais' : 'Add fee' })).toBeVisible();
     assert((await policy.boundingBox()).y < 650, 'Entry settings should be visible immediately');
     await policy.selectOption('manual');
     await page.screenshot({ path: '.tmp/show-settings-ui/settings-' + locale + '.png' });
@@ -53,7 +56,7 @@ try {
   await page.goto('http://127.0.0.1:5201/show-settings-test?fail=1');
   await page.getByRole('button', { name: 'Paramètres du concours', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Sauvegarder', exact: true }).click();
-  await expect(page.getByRole('dialog').getByRole('alert')).toContainText('TEST save failed');
+  await expect(page.getByRole('dialog').getByText('TEST save failed', { exact: true })).toBeVisible();
   assert.deepEqual(errors, []);
   console.log('PASS: direct show settings, manual entry mode, preserved payment settings, FR/EN, mobile, list access, read-only access and save failure');
 } finally { await browser?.close(); await server.close(); }

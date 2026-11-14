@@ -33,6 +33,7 @@ export const revenueCategoryLabels: Record<string, [string, string]> = {
   membership: ["Cartes de membre", "Memberships"], merch: ["Produits et services", "Products and services"],
   warmup: ["Paid warm-ups", "Paid warm-ups"], back_number: ["Dossards", "Back numbers"], other: ["Autres revenus", "Other revenue"],
   reservation: ["Réservations", "Reservations"], judge_fee: ["Frais de juges", "Judge fees"], stall_extra: ["Services de stalle", "Stall services"],
+  horse_fee: ["Frais par cheval", "Per-horse fees"],
   feed: ["Alimentation", "Feed"], ticket: ["Billetterie", "Tickets"], meal: ["Repas", "Meals"], admin_fee: ["Frais administratifs", "Administrative fees"], manual: ["Autres ventes et services", "Other sales and services"],
 };
 export const paymentMethodLabels: Record<string, [string, string]> = {

@@ -99,6 +99,7 @@ import type {
   PayoutScheduleBracket,
   ScheduleStartMode,
   Show,
+  ShowHorseFee,
   ShowAnnouncement,
   ShowAnnouncementInput,
   ShowDay,
@@ -1729,6 +1730,43 @@ export async function updateShow(id: string, input: ShowUpdateInput) {
     throw error;
   }
 
+  return data;
+}
+
+export async function listShowHorseFees(showId: string) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .rpc("list_show_horse_fees", { p_show: showId });
+
+  if (error) throw error;
+  return (data ?? []) as unknown as ShowHorseFee[];
+}
+
+export async function saveShowHorseFee(input: {
+  show_id: string;
+  id?: string | null;
+  name_fr: string;
+  name_en: string;
+  amount: number;
+  taxable: boolean;
+  is_active: boolean;
+  sort_order?: number;
+}) {
+  const client = requireSupabase();
+  const { data, error } = await client
+    .rpc("save_show_horse_fee", {
+      p_show: input.show_id,
+      p_fee: input.id ?? null,
+      p_name_fr: input.name_fr,
+      p_name_en: input.name_en,
+      p_amount: input.amount,
+      p_taxable: input.taxable,
+      p_is_active: input.is_active,
+      p_sort_order: input.sort_order ?? 0,
+    })
+    .single<ShowHorseFee>();
+
+  if (error) throw error;
   return data;
 }
 

@@ -11,9 +11,9 @@
 .show-settings-button:focus-visible { outline:3px solid #ae90a6;outline-offset:3px; }
 .assistant-modal.form-modal.show-settings-modal { max-width:800px; }
 .show-settings-modal .show-settings-editor { padding:0;border:0;box-shadow:none;background:transparent; }
-.show-settings-general,.show-settings-payments { display:grid;gap:16px; }
+.show-settings-general,.show-settings-payments,.show-settings-horse-fees { display:grid;gap:16px; }
 .show-settings-general { padding-top:18px;border-top:1px solid var(--border,#ded3dc); }
-.show-settings-general h3,.show-settings-payments h3 { margin:0;font-size:17px; }
+.show-settings-general h3,.show-settings-payments h3,.show-settings-horse-fees h3 { margin:0;font-size:17px; }
 .show-settings-help { margin:0;padding:13px 15px;border-radius:10px;background:#f5f0f5;color:#59485a;font-size:13px;line-height:1.6; }
 .show-settings-modal label { display:grid;gap:7px; }
 .show-settings-modal .check-row { display:flex; }
@@ -23,4 +23,13 @@
 .show-settings-advanced[open] { display:grid;gap:16px; }
 .show-settings-advanced[open] summary { margin-bottom:16px; }
 .show-settings-modal .form-actions { position:sticky;bottom:-20px;z-index:2;margin:0 -1px;padding:14px 0 20px;border-top:1px solid var(--border,#ded3dc);background:var(--surface,#fff); }
+.show-settings-horse-fees { padding-top:18px;border-top:1px solid var(--border,#ded3dc); }
+.show-horse-fee-list { display:grid;gap:12px; }
+.show-horse-fee-row { display:grid;gap:12px;padding:14px;border:1px solid var(--border,#ded3dc);border-radius:12px;background:#fff; }
+.show-horse-fee-fields { display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(110px,.35fr);gap:10px; }
+.show-horse-fee-actions { display:flex;align-items:center;justify-content:flex-end;flex-wrap:wrap;gap:14px; }
+.show-horse-fee-actions .secondary-button { min-height:40px; }
+.show-horse-fee-error { margin:0;color:#a12622;font-weight:650; }
+.show-horse-fee-success { margin:0;color:#287346;font-weight:650; }
+@media(max-width:760px) { .show-horse-fee-fields { grid-template-columns:1fr; } .show-horse-fee-actions { align-items:stretch;flex-direction:column; } }
 @media(max-width:640px) { .show-context-heading { align-items:stretch;flex-direction:column;gap:14px;padding:16px; } .show-settings-button { width:100%; } .show-settings-modal input,.show-settings-modal select { font-size:16px; } }
