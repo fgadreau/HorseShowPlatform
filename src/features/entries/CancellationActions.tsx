@@ -28,6 +28,7 @@ export function CancellationActions({ entry, entries, block, classes, profileId,
   const [scope, setScope] = useState("class");
   const [reason, setReason] = useState("");
   const [review, setReview] = useState<CancellationRequest | null>(null);
+  const [direct, setDirect] = useState(false);
   const [quote, setQuote] = useState<CancellationQuote | null>(null);
   const [creditMode, setCreditMode] = useState("full");
   const [credit, setCredit] = useState("");
@@ -40,19 +41,28 @@ export function CancellationActions({ entry, entries, block, classes, profileId,
   const [preview, setPreview] = useState<{ credit: { total: number }; fee: { total: number } } | null>(null);
   const requestId = useRef(crypto.randomUUID());
   const decisionInput = JSON.stringify({ version: quote?.version, signature: quote?.signature, credit_mode: creditMode, credit_amount: creditMode === "custom" ? Number(credit) : null, credit_tax_mode: creditMode === "custom" ? creditTax : null, fee_amount: Number(fee), fee_tax_mode: Number(fee) === 0 ? "exclusive" : feeTax, note });
-  const previewReady = Boolean(review && quote && fee !== "" && Number(fee) >= 0 && (Number(fee) === 0 || feeTax) && (creditMode !== "custom" || (credit !== "" && Number(credit) >= 0 && creditTax)));
+  const previewReady = Boolean((review || direct) && quote && fee !== "" && Number(fee) >= 0 && (Number(fee) === 0 || feeTax) && (creditMode !== "custom" || (credit !== "" && Number(credit) >= 0 && creditTax)));
+  useEffect(() => {
+    if (!direct) return;
+    let live = true; setQuote(null); setError(""); setBusy(true);
+    cancellationRpc<CancellationQuote>("staff_entry_cancellation_quote", { p_entry: entry.id, p_scope: scope }).then(value => { if (live) setQuote(value); }).catch(error => { if (live) setError(cancellationError(error, fr)); }).finally(() => { if (live) setBusy(false); });
+    return () => { live = false; };
+  }, [direct, entry.id, scope, fr]);
   useEffect(() => {
     let live = true; setPreview(null);
-    if (!previewReady || !review) return;
+    if (!previewReady || (!review && !direct)) return;
     const timer = setTimeout(() => {
-      cancellationRpc<{ credit: { total: number }; fee: { total: number } }>("preview_entry_cancellation", { p_request: review.id, p_decision: JSON.parse(decisionInput) }).then(value => { if (live) { setPreview(value); setError(""); } }).catch(error => { if (live) setError(cancellationError(error, fr)); });
+      cancellationRpc<{ credit: { total: number }; fee: { total: number } }>(direct ? "preview_staff_entry_cancellation" : "preview_entry_cancellation", { ...(direct ? { p_entry: entry.id, p_scope: scope } : { p_request: review!.id }), p_decision: JSON.parse(decisionInput) }).then(value => { if (live) { setPreview(value); setError(""); } }).catch(error => { if (live) setError(cancellationError(error, fr)); });
     }, 250);
     return () => { live = false; clearTimeout(timer); };
-  }, [decisionInput, previewReady, review?.id, fr]);
+  }, [decisionInput, previewReady, review?.id, direct, entry.id, scope, fr]);
   const relevant = requests.filter(r => r.entry_ids.includes(entry.id));
   const pending = relevant.find(r => r.status === "pending");
   const last = relevant[relevant.length - 1];
   const drawn = Boolean(block?.draw_prepared_at);
+  const targetEntryIds = direct ? quote?.entry_ids ?? [entry.id] : review?.entry_ids ?? [];
+  const reviewScope = direct ? scope : review?.scope;
+  function resetFinancials() { setQuote(null); setError(""); setCreditMode("full"); setCredit(""); setFee("0"); setFeeTax(""); setCreditTax(""); setNote(""); }
   async function run(action: () => Promise<unknown>) {
     setBusy(true); setError("");
     try { await action(); await context?.refresh(); onRefresh(); }
@@ -60,7 +70,7 @@ export function CancellationActions({ entry, entries, block, classes, profileId,
     finally { setBusy(false); }
   }
   async function openReview(r: CancellationRequest) {
-    setReview(r); setQuote(null); setError(""); setCreditMode("full"); setCredit(""); setFee("0"); setFeeTax(""); setCreditTax(""); setNote("");
+    setDirect(false); setReview(r); resetFinancials();
     setBusy(true);
     try { setQuote(await cancellationRpc<CancellationQuote>("entry_cancellation_quote", { p_request: r.id })); }
     catch (error) { setError(cancellationError(error, fr)); }
@@ -73,10 +83,11 @@ export function CancellationActions({ entry, entries, block, classes, profileId,
     {entry.status === "draft" && <button type="button" className="text-button" disabled={busy} onClick={() => run(() => cancellationRpc("confirm_existing_entry", { p_entry: entry.id }))}>{text("Confirmer cette inscription", "Confirm this entry")}</button>}
     {pending ? <>
       <span className="badge pending_checkout">{text("Annulation en attente · draw bloqué pour ce bloc", "Cancellation pending · this block’s draw is blocked")}</span>
-      {pending.requested_by === profileId && <button type="button" className="text-button" disabled={busy} onClick={() => run(() => cancellationRpc("withdraw_entry_cancellation", { p_request: pending.id }))}>{text("Retirer ma demande", "Withdraw my request")}</button>}
+      {!staff && pending.requested_by === profileId && <button type="button" className="text-button" disabled={busy} onClick={() => run(() => cancellationRpc("withdraw_entry_cancellation", { p_request: pending.id }))}>{text("Retirer ma demande", "Withdraw my request")}</button>}
       {staff && <button type="button" className="text-button" disabled={busy} onClick={() => openReview(pending)}>{text("Traiter la demande", "Review request")}</button>}
-    </> : ["active", "pending_checkout"].includes(entry.status) ? drawn ? <span className="muted-line">{text("Draw généré : procédure de scratch requise.", "Draw generated: use the scratch procedure.")}</span> : <button className="text-button" type="button" onClick={() => { requestId.current = crypto.randomUUID(); setScope("class"); setReason(""); setRequesting(true); setError(""); }}>{text("Demander l’annulation", "Request cancellation")}</button> : null}
-    {!pending && last && <span className="muted-line">{text("Dernière demande : ", "Last request: ")}{({ approved: text("approuvée", "approved"), rejected: text("refusée — inscription maintenue", "rejected — entry retained"), withdrawn: text("retirée", "withdrawn"), pending: "" })[last.status]}{last.decision_note ? ` · ${last.decision_note}` : ""}</span>}
+    </> : ["active", "pending_checkout"].includes(entry.status) ? drawn ? <span className="muted-line">{text("Draw généré : procédure de scratch requise.", "Draw generated: use the scratch procedure.")}</span> : <button className="text-button" type="button" onClick={() => { requestId.current = crypto.randomUUID(); setScope("class"); setReason(""); if (staff) { resetFinancials(); setReview(null); setDirect(true); } else { setRequesting(true); setError(""); } }}>{staff ? text("Annuler l’inscription", "Cancel entry") : text("Demander l’annulation", "Request cancellation")}</button> : null}
+    {!pending && last?.origin === "staff_direct" && <span className="muted-line">{text("Annulation effectuée par le secrétariat", "Cancelled by the office")}</span>}
+    {!pending && last && last.origin !== "staff_direct" && <span className="muted-line">{text("Dernière demande : ", "Last request: ")}{({ approved: text("approuvée", "approved"), rejected: text("refusée — inscription maintenue", "rejected — entry retained"), withdrawn: text("retirée", "withdrawn"), pending: "" })[last.status]}{last.decision_note ? ` · ${last.decision_note}` : ""}</span>}
     {error && <p role="alert">{error}</p>}
     {requesting && <ModalDialog className="entry-cancellation-modal" title={text("Demander une annulation", "Request cancellation")} onClose={() => setRequesting(false)}><form onSubmit={e => { e.preventDefault(); void run(async () => { await cancellationRpc("request_entry_cancellation", { p_request: requestId.current, p_entry: entry.id, p_scope: scope, p_reason: reason }); setRequesting(false); }); }}>
       <p>{text("L’inscription reste en vigueur jusqu’à la décision de la secrétaire. Le draw de ce bloc sera bloqué durant le traitement.", "The entry remains in effect until the secretary’s decision. This block’s draw will be blocked while the request is pending.")}</p>
@@ -84,17 +95,18 @@ export function CancellationActions({ entry, entries, block, classes, profileId,
       <label>{text("Motif (facultatif)", "Reason (optional)")}<textarea maxLength={2000} value={reason} onChange={e => setReason(e.target.value)} /></label>
       {error && <p role="alert">{error}</p>}<button className="primary-button" disabled={busy}>{text("Envoyer la demande", "Submit request")}</button>
     </form></ModalDialog>}
-    {review && <ModalDialog className="entry-cancellation-modal" title={text("Traiter l’annulation", "Review cancellation")} onClose={() => setReview(null)}><form onSubmit={e => { e.preventDefault(); void run(async () => { await cancellationRpc("decide_entry_cancellation", { p_request: review.id, p_approve: true, p_decision: JSON.parse(decisionInput) }); setReview(null); }); }}>
-      <p>{review.scope === "block" ? text("Annulation du bloc complet", "Full block cancellation") : text("Annulation d’une classe", "Single class cancellation")}</p>
-      <ul>{review.entry_ids.map(id => <li key={id}>{classes.find(c => c.id === entries.find(e => e.id === id)?.class_id)?.name ?? text("Classe non accessible", "Class unavailable")}</li>)}</ul>
-      {review.reason && <p>{review.reason}</p>}
+    {(review || direct) && <ModalDialog className="entry-cancellation-modal" title={direct ? text("Annuler une inscription", "Cancel an entry") : text("Traiter l’annulation", "Review cancellation")} onClose={() => { setReview(null); setDirect(false); }}><form onSubmit={e => { e.preventDefault(); void run(async () => { await cancellationRpc(direct ? "cancel_entry_as_staff" : "decide_entry_cancellation", { ...(direct ? { p_operation: requestId.current, p_entry: entry.id, p_scope: scope } : { p_request: review!.id, p_approve: true }), p_decision: JSON.parse(decisionInput) }); setReview(null); setDirect(false); }); }}>
+      {direct && <label>{text("Annuler", "Cancel")}<select aria-label={text("Portée de l’annulation", "Cancellation scope")} value={scope} disabled={busy} onChange={e => setScope(e.target.value)}><option value="class">{text("Cette classe seulement", "This class only")}</option><option value="block">{text("Toutes les classes de ce bloc pour ce cheval, ce cavalier et ce payeur", "All classes in this block for this horse, rider and payer")}</option></select></label>}
+      <p>{reviewScope === "block" ? text("Annulation du bloc complet", "Full block cancellation") : text("Annulation d’une classe", "Single class cancellation")}</p>
+      <ul>{targetEntryIds.map(id => <li key={id}>{classes.find(c => c.id === entries.find(e => e.id === id)?.class_id)?.name ?? text("Classe non accessible", "Class unavailable")}</li>)}</ul>
+      {review?.reason && <p>{review.reason}</p>}
       {quote && <><p>{text("Montant libéré, juges et taxes inclus : ", "Released charges including judges and tax: ")}{money(quote.total)}</p>
       <label>{text("Crédit au compte", "Account credit")}<select aria-label={text("Crédit au compte", "Account credit")} value={creditMode} onChange={e => setCreditMode(e.target.value)}><option value="full">{text("Total", "Full")}</option><option value="none">{text("Aucun", "None")}</option><option value="custom">{text("Montant personnalisé", "Custom amount")}</option></select></label>
       {creditMode === "custom" && <><label>{text("Montant du crédit", "Credit amount")}<input required min="0" step="0.01" type="number" value={credit} onChange={e => setCredit(e.target.value)} /></label>{taxChoice(creditTax, setCreditTax, text("Taxes du crédit", "Credit taxes"))}</>}
       <label>{text("Frais d’annulation (0 = aucuns frais)", "Cancellation fee (0 = no fee)")}<input required min="0" step="0.01" type="number" value={fee} onChange={e => setFee(e.target.value)} /></label>{Number(fee) > 0 && taxChoice(feeTax, setFeeTax, text("Taxes des frais", "Fee taxes"))}
       <p>{text("Le crédit et les frais seront séparés dans le compte ouvert de ce concours. Aucun remboursement Stripe n’est déclenché.", "Credit and fees are recorded separately on this show’s open account. No Stripe refund is triggered.")}</p></>}
-      {preview && quote && <dl className="cancellation-preview"><dt>{text("Crédit au compte, taxes incluses", "Account credit, tax included")}</dt><dd>{money(preview.credit.total)}</dd><dt>{text("Frais d’annulation, taxes incluses", "Cancellation fee, tax included")}</dt><dd>{money(preview.fee.total)}</dd><dt>{text("Réduction nette du compte", "Net account reduction")}</dt><dd>{money(Number(preview.credit.total) - Number(preview.fee.total))}</dd></dl>}{error && <p role="alert">{error}</p>}<label>{text("Note de décision", "Decision note")}<textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>
-      <div className="row-actions"><button disabled={busy} type="button" className="secondary-button" onClick={() => run(async () => { await cancellationRpc("decide_entry_cancellation", { p_request: review.id, p_approve: false, p_decision: { note } }); setReview(null); })}>{text("Refuser · maintenir l’inscription", "Reject · keep entry")}</button><button className="primary-button" disabled={busy || !quote || !preview}>{text("Approuver et appliquer", "Approve and apply")}</button></div>
+      {preview && quote && <dl className="cancellation-preview"><dt>{text("Crédit au compte, taxes incluses", "Account credit, tax included")}</dt><dd>{money(preview.credit.total)}</dd><dt>{text("Frais d’annulation, taxes incluses", "Cancellation fee, tax included")}</dt><dd>{money(preview.fee.total)}</dd><dt>{text("Réduction nette du compte", "Net account reduction")}</dt><dd>{money(Number(preview.credit.total) - Number(preview.fee.total))}</dd></dl>}{error && <p role="alert">{error}</p>}<label>{direct ? text("Note (facultatif)", "Note (optional)") : text("Note de décision", "Decision note")}<textarea maxLength={2000} value={note} onChange={e => setNote(e.target.value)} /></label>
+      <div className="row-actions">{direct ? <button type="button" className="secondary-button" disabled={busy} onClick={() => setDirect(false)}>{text("Retour", "Back")}</button> : <button disabled={busy} type="button" className="secondary-button" onClick={() => run(async () => { await cancellationRpc("decide_entry_cancellation", { p_request: review!.id, p_approve: false, p_decision: { note } }); setReview(null); })}>{text("Refuser · maintenir l’inscription", "Reject · keep entry")}</button>}<button className="primary-button" disabled={busy || !quote || !preview}>{direct ? text("Confirmer l’annulation", "Confirm cancellation") : text("Approuver et appliquer", "Approve and apply")}</button></div>
     </form></ModalDialog>}
   </div>;
 }

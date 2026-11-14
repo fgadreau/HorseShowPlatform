@@ -16,6 +16,7 @@ import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from 
 import { EntryEligibilityStatus, useEntryEligibilityAssessments } from "./EntryEligibilityStatus";
 
 function MyEntriesView({
+  canManageCancellations = false,
   warmupHorses,
   onRefresh,
   locale,
@@ -45,6 +46,7 @@ function MyEntriesView({
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
 }: {
+  canManageCancellations?: boolean;
   warmupHorses?: Horse[];
   onRefresh: () => void;
   locale: Locale;
@@ -218,7 +220,7 @@ function MyEntriesView({
                 {entry.status === "draft" && <button className="text-button danger-text" type="button" onClick={() => handleDeleteEntry(entry)}>
                   {uiText(locale, "Supprimer", "Delete")}
                 </button>}
-                <CancellationActions entries={entries} entry={entry} block={blocks.find(b => b.id === classes.find(c => c.id === entry.class_id)?.block_id)} classes={classes} profileId={profileId} locale={locale} onRefresh={onRefresh} />
+                <CancellationActions entries={entries} entry={entry} block={blocks.find(b => b.id === classes.find(c => c.id === entry.class_id)?.block_id)} classes={classes} profileId={profileId} locale={locale} staff={canManageCancellations} onRefresh={onRefresh} />
               </div>
             </div>
           )}

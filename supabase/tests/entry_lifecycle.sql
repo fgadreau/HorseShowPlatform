@@ -45,6 +45,8 @@ do $$declare r uuid:=gen_random_uuid();begin
  begin insert into public.entry_activation_events(entry_id,kind,provider_reference) values(current_setting('test.entry1')::uuid,'preauthorization','forged');raise exception 'TEST forged provider event forbidden';exception when insufficient_privilege then null;end;
  begin perform public.billing_stripe_observe(gen_random_uuid(),'acct_forged','{}');raise exception 'TEST browser cannot observe provider object';exception when insufficient_privilege then null;end;
  perform public.withdraw_entry_cancellation(r);
+ begin perform public.staff_entry_cancellation_quote(current_setting('test.entry1')::uuid,'class');raise exception 'TEST participant cannot use direct staff quote';exception when others then if sqlerrm<>'ENTRY_FORBIDDEN' then raise;end if;end;
+ begin perform public.cancel_entry_as_staff(gen_random_uuid(),current_setting('test.entry1')::uuid,'class','{}');raise exception 'TEST participant cannot cancel directly';exception when others then if sqlerrm<>'ENTRY_FORBIDDEN' then raise;end if;end;
 end $$;
 set local request.jwt.claim.sub='10000000-0000-0000-0000-000000000006';
 do $$begin
@@ -52,6 +54,68 @@ do $$begin
 end $$;
 reset role;
 select set_config('request.jwt.claim.sub',current_setting('test.staff_uid'),true);
+set local role authenticated;
+set local request.jwt.claim.sub='10000000-0000-0000-0000-000000000003';
+do $$declare q jsonb;result jsonb;begin
+ begin
+  q:=public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,'class');
+  result:=public.cancel_entry_as_staff(gen_random_uuid(),current_setting('test.entry2')::uuid,'class',jsonb_build_object('version',q->'version','signature',q->'signature','credit_mode','full','fee_amount',0,'fee_tax_mode','exclusive'));
+  if result->>'origin'<>'staff_direct' or (select status from public.entries where id=current_setting('test.entry2')::uuid)<>'cancelled' then raise exception 'TEST authenticated secretary can cancel another owner entry directly';end if;
+  raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+ exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
+end $$;
+reset role;
+select set_config('request.jwt.claim.sub',current_setting('test.staff_uid'),true);
+do $$declare scope text;q jsonb;decision jsonb;result jsonb;again jsonb;operation uuid;f uuid;pending uuid;begin
+ foreach scope in array array['class','block'] loop
+  begin
+   operation:=gen_random_uuid();
+   q:=public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,scope);
+   if exists(select 1 from public.entry_cancellation_requests where status='pending') then raise exception 'TEST direct quote must not create a pending request';end if;
+   perform public.entry_draw_assert_ready(current_setting('test.block')::uuid);
+   decision:=jsonb_build_object('version',q->'version','signature',q->'signature','credit_mode','full','fee_amount',12,'fee_tax_mode','exclusive');
+   result:=public.cancel_entry_as_staff(operation,current_setting('test.entry2')::uuid,scope,decision);
+   if (select status from public.entries where id=current_setting('test.entry2')::uuid)<>'cancelled' then raise exception 'TEST staff cancellation must apply immediately';end if;
+   if scope='block' and (select status from public.entries where id=current_setting('test.entry1')::uuid)<>'cancelled' then raise exception 'TEST direct block cancellation covers both classes';end if;
+   if scope='class' and (select status from public.entries where id=current_setting('test.entry1')::uuid)<>'active' then raise exception 'TEST direct class cancellation preserves other class';end if;
+   if not exists(select 1 from public.entry_cancellation_requests where id=operation and origin='staff_direct' and status='approved') or exists(select 1 from public.entry_cancellation_requests where status='pending') then raise exception 'TEST no committed pending request for staff direct action';end if;
+   f:=(q->>'folio_id')::uuid;
+   if (public.billing_snapshot(f)->>'subtotal')::numeric<>(case when scope='class' then 137 else 12 end) then raise exception 'TEST staff direct financial adjustment';end if;
+   again:=public.cancel_entry_as_staff(operation,current_setting('test.entry2')::uuid,scope,decision);
+   if again<>result then raise exception 'TEST direct cancellation retry must be idempotent';end if;
+   begin perform public.cancel_entry_as_staff(operation,current_setting('test.entry2')::uuid,scope,decision||'{"fee_amount":50}');raise exception 'TEST direct operation must reject changed retry';exception when others then if sqlerrm<>'ENTRY_IDEMPOTENCY_CONFLICT' then raise;end if;end;
+   if exists(select 1 from public.billing_payments where folio_id=f) then raise exception 'TEST direct cancellation must not create payment or refund';end if;
+   raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+  exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
+ end loop;
+ foreach scope in array array['closed','stale'] loop
+  begin
+   q:=public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,'class');operation:=gen_random_uuid();f:=(q->>'folio_id')::uuid;
+   decision:=jsonb_build_object('version',q->'version','signature',q->'signature','credit_mode','full','fee_amount',0,'fee_tax_mode','exclusive');
+   if scope='closed' then update public.billing_folios set state='closed',closed_at=clock_timestamp(),closed_by=public.current_profile_id() where id=f;
+   else update public.billing_folios set version=version+1 where id=f;end if;
+   begin perform public.cancel_entry_as_staff(operation,current_setting('test.entry2')::uuid,'class',decision);raise exception 'TEST direct cancellation must reject changed account';exception when others then if sqlerrm<>(case when scope='closed' then 'ENTRY_ACCOUNT_CLOSED' else 'BILLING_STALE_VERSION' end) then raise;end if;end;
+   if exists(select 1 from public.entry_cancellation_requests where id=operation) or (select status from public.entries where id=current_setting('test.entry2')::uuid)<>'active' then raise exception 'TEST failed direct cancellation must leave no request or entry mutation';end if;
+   raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+  exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
+ end loop;
+ begin
+  q:=public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,'class');operation:=gen_random_uuid();
+  decision:=jsonb_build_object('version',q->'version','signature',q->'signature','credit_mode','full','fee_amount',0,'fee_tax_mode','exclusive');
+  update public.blocks set draw_prepared_at=clock_timestamp() where id=current_setting('test.block')::uuid;
+  begin perform public.cancel_entry_as_staff(operation,current_setting('test.entry2')::uuid,'class',decision);raise exception 'TEST direct action after draw must use scratch';exception when others then if sqlerrm<>'ENTRY_DRAW_GENERATED_USE_SCRATCH' then raise;end if;end;
+  if exists(select 1 from public.entry_cancellation_requests where id=operation) then raise exception 'TEST failed direct action leaves no request';end if;
+  raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+ exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
+ begin
+  pending:=gen_random_uuid();perform public.request_entry_cancellation(pending,current_setting('test.entry1')::uuid,'class','Pending participant request');
+  begin perform public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,'block');raise exception 'TEST overlapping participant request must be processed individually';exception when others then if sqlerrm<>'ENTRY_CANCELLATION_ALREADY_PENDING' then raise;end if;end;
+  q:=public.staff_entry_cancellation_quote(current_setting('test.entry2')::uuid,'class');
+  perform public.cancel_entry_as_staff(gen_random_uuid(),current_setting('test.entry2')::uuid,'class',jsonb_build_object('version',q->'version','signature',q->'signature','credit_mode','full','fee_amount',0,'fee_tax_mode','exclusive'));
+  if (select status from public.entry_cancellation_requests where id=pending)<>'pending' then raise exception 'TEST direct cancellation must not silently decide another class request';end if;
+  raise exception 'TEST_SUBTRANSACTION_COMPLETE';
+ exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
+end $$;
 do $$declare mode text;f uuid;c uuid;en public.entries;payload jsonb;a jsonb;obj jsonb;result jsonb;balance numeric;r uuid;q jsonb;begin
  foreach mode in array array['payment','preauthorization'] loop
   begin
