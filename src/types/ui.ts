@@ -8,6 +8,7 @@ export type ViewKey =
   | "people"
   | "health"
   | "blocks"
+  | "control-room"
   | "entries"
   | "back-numbers"
   | "stalls"

@@ -286,8 +286,7 @@ function EntryEditForm({
             {uiText(locale, "Statut", "Status")}
             <select value={status} onChange={(event) => setStatus(event.target.value as Entry["status"])}>
               <option value={entry.status}>{entryStatusLabel(entry.status, locale)}</option>
-              {selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="scratched_pending_refund">{uiText(locale, "Scratch — ajustement à vérifier", "Scratch — adjustment to review")}</option>}
-              {allowPriceAdjustment && selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="scratched">{uiText(locale, "Scratch", "Scratched")}</option>}
+              {selectedBlock?.draw_prepared_at && ["active", "pending_checkout"].includes(entry.status) && <option value="scratched">{uiText(locale, "Scratch — frais maintenus", "Scratch — fees remain due")}</option>}
               {allowPriceAdjustment && selectedBlock?.draw_prepared_at && entry.status === "active" && <option value="completed">{uiText(locale, "Terminée", "Completed")}</option>}
             </select>
           </label>

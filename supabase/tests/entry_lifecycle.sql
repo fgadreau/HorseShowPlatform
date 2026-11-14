@@ -199,7 +199,7 @@ do $$declare sale public.manual_sales;begin
   raise exception 'TEST_SUBTRANSACTION_COMPLETE';
  exception when others then if sqlerrm<>'TEST_SUBTRANSACTION_COMPLETE' then raise;end if;end;
 end $$;
-do $$declare f uuid;r uuid:=gen_random_uuid();q jsonb;result jsonb;snap jsonb;other_block uuid;begin
+do $$declare f uuid;r uuid:=gen_random_uuid();q jsonb;result jsonb;snap jsonb;snap_before jsonb;other_block uuid;late_block uuid;late_class uuid;late_entry public.entries;publication public.block_draw_publications;begin
  select c.folio_id into f from public.event_billing_lines l join public.billing_charges c on c.id=l.charge_id where l.line_key='entry:'||current_setting('test.entry1');
  if (public.billing_snapshot(f)->>'received')::numeric<>0 then raise exception 'TEST unpaid fixture';end if;
  begin
@@ -246,5 +246,32 @@ do $$declare f uuid;r uuid:=gen_random_uuid();q jsonb;result jsonb;snap jsonb;ot
  perform public.withdraw_entry_cancellation(r);
  update public.blocks set draw_prepared_at=clock_timestamp() where id=current_setting('test.block')::uuid;
  begin perform public.request_entry_cancellation(gen_random_uuid(),current_setting('test.entry1')::uuid,'class','Too late');raise exception 'TEST post draw cancellation forbidden';exception when others then if sqlerrm<>'ENTRY_DRAW_GENERATED_USE_SCRATCH' then raise;end if;end;
+ snap_before:=public.billing_snapshot(f);
+ perform set_config('request.jwt.claim.sub','10000000-0000-0000-0000-000000000004',true);
+ update public.entries set status='scratched' where id=current_setting('test.entry1')::uuid;
+ if public.billing_snapshot(f)<>snap_before then raise exception 'TEST scratch after draw must retain every charge';end if;
+ perform set_config('request.jwt.claim.sub',current_setting('test.staff_uid'),true);
+ insert into public.blocks(organization_id,show_id,name,draw_prepared_at)
+ values(current_setting('test.org')::uuid,current_setting('test.show')::uuid,'Control room late block',clock_timestamp()) returning id into late_block;
+ insert into public.classes(organization_id,show_id,block_id,organization_discipline_id,name,entry_fee,judge_fee)
+ select organization_id,show_id,late_block,organization_discipline_id,'Control room late class',80,15 from public.classes where id=current_setting('test.class1')::uuid returning id into late_class;
+ select * into late_entry from public.submit_staff_late_entry(jsonb_build_object(
+  'organization_id',current_setting('test.org'),'show_id',current_setting('test.show'),'horse_id',current_setting('test.horse'),
+  'class_id',late_class,'owner_contact_id',current_setting('test.payer'),'payer_contact_id',current_setting('test.payer'),
+  'entry_number',9876,'late_fee_percent',25,'late_draw_placement','end'));
+ if late_entry.status<>'active' or late_entry.activation_basis<>'staff_confirmation' or late_entry.base_fee<>80
+   or late_entry.late_fee_amount<>20 or late_entry.total_fees<>100 or late_entry.late_draw_placement<>'end' then
+  raise exception 'TEST staff late entry must be confirmed with normal and optional late fees: %',late_entry;
+ end if;
+ insert into public.show_score_block_setups(block_id,organization_id,show_id,runs,judges,is_draw_imported)
+ values(late_block,current_setting('test.org')::uuid,current_setting('test.show')::uuid,'[{"id":"late-run","draw":1}]','[{"id":"judge-1","name":"Judge One"}]',true);
+ if public.showscore_public_class_exists(late_block) then raise exception 'TEST prepared draw must remain private before publication';end if;
+ perform public.mark_block_draw_generated(late_block);
+ publication:=public.publish_block_draw(late_block);
+ if publication.version<>1 or publication.superseded_at is not null
+   or (select draw_published_version from public.blocks where id=late_block)<>1 then
+  raise exception 'TEST official draw publication must snapshot and mark the current version';
+ end if;
+ if not public.showscore_public_class_exists(late_block) then raise exception 'TEST published draw must become visible to ShowScore';end if;
 end $$;
 rollback;

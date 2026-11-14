@@ -1,5 +1,5 @@
 import type {ViewKey} from '../../types/ui';
-export const showSections:Record<string,ViewKey>={overview:'shows',entries:'entries',reservations:'stalls',schedule:'blocks',accounts:'show-accounts',scoring:'scoring',results:'results',health:'health'};
+export const showSections:Record<string,ViewKey>={overview:'shows',control:'control-room',entries:'entries',reservations:'stalls',schedule:'blocks',accounts:'show-accounts',scoring:'scoring',results:'results',health:'health'};
 export function financeRoute(path=window.location.pathname){
  const p=path.split('/').filter(Boolean);
  if(p[0]==='me'&&p[1]==='accounts')return {view:'my-invoices' as ViewKey,org:'',show:'',folio:p[2]??''};

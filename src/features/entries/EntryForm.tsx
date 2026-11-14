@@ -71,6 +71,7 @@ function EntryForm({
   onVerifyGvlCogginsDocument,
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
+  staffLateEntry,
   onCreated,
 }: {
   locale?: Locale;
@@ -97,6 +98,11 @@ function EntryForm({
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  staffLateEntry?: {
+    chargeLateFee: boolean;
+    lateFeePercent: number;
+    placement: "negative" | "end";
+  };
   onCreated?: () => void;
 }) {
   const [warmupSessions, setWarmupSessions] = useState<Json[]>([]);
@@ -209,11 +215,12 @@ function EntryForm({
           organization,
           riderContact: selectedRiderContact,
           selectedShow,
+          staffLateEntry: Boolean(staffLateEntry),
           houseClassBlocked: houseBlocks.blocked.has(classRecord.id),
           houseClassChecking: Boolean(classRecord.class_template_id && !classRecord.governing_body_assignments.length && (houseBlocks.loading || houseBlocks.error)),
         }),
       ),
-    [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow, houseBlocks.loading, houseBlocks.error, houseBlocks.blocked],
+    [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow, staffLateEntry, houseBlocks.loading, houseBlocks.error, houseBlocks.blocked],
   );
   const evaluationByClassId = useMemo(() => new Map(showbillEvaluations.map((evaluation) => [evaluation.classRecord.id, evaluation])), [showbillEvaluations]);
   const dayBlocks = useMemo(
@@ -250,7 +257,7 @@ function EntryForm({
   const judgeFeePreviewLines = buildJudgeFeePreviewLines(checkoutPreview.lines);
   const judgeFeeByBlockId = new Map(judgeFeePreviewLines.map((item) => [item.line.evaluation.block!.id, item]));
   const selectedBlockIds = new Set(selectedEvaluations.flatMap((evaluation) => evaluation.block ? [evaluation.block.id] : []));
-  const requiresPreauthAcceptance = checkoutPreview.preauthRequired && checkoutPreview.invoiceTotal > 0 && selectedClassIds.length > 0;
+  const requiresPreauthAcceptance = !staffLateEntry && checkoutPreview.preauthRequired && checkoutPreview.invoiceTotal > 0 && selectedClassIds.length > 0;
   const confirmationMessage = !checkoutPreview.preauthRequired
     ? uiText(locale, "La confirmation active immédiatement l’inscription. Le paiement est suivi séparément par l’association.", "Confirmation activates the entry immediately. The association tracks payment separately.")
     : checkoutPreview.invoiceTotal === 0
@@ -414,6 +421,13 @@ function EntryForm({
           back_number_choice: organization.back_number_policy === "horse" ? backNumberSelection.choice : undefined,
           back_number_request_token: submissionBackNumberToken,
           base_fee: evaluation.fee ?? undefined,
+          ...(staffLateEntry
+            ? {
+                staff_override: true,
+                late_draw_placement: staffLateEntry.placement,
+                late_fee_percent: staffLateEntry.chargeLateFee ? staffLateEntry.lateFeePercent : 0,
+              }
+            : {}),
         });
         createdCount += 1;
         // A later failure must leave only the unsaved classes selected for retry.
@@ -820,6 +834,7 @@ function evaluateClass({
   organization,
   riderContact,
   selectedShow,
+  staffLateEntry,
 }: {
   houseClassBlocked?: boolean;
   houseClassChecking?: boolean;
@@ -838,10 +853,13 @@ function evaluateClass({
   organization: Organization | null;
   riderContact: Contact | null;
   selectedShow: Show | null;
+  staffLateEntry?: boolean;
 }): ClassEvaluation {
   const block = findById(blocks, classRecord.block_id) ?? null;
   const fee = classRecord.entry_fee ?? null;
-  const deadlineReadiness = buildEntryDeadlineReadiness(block, selectedShow, fee, organization?.currency ?? "CAD");
+  const deadlineReadiness = staffLateEntry
+    ? { canProceed: true, message: block?.draw_prepared_at ? { tone: "info" as const, message: uiText(locale, "Inscription tardive autorisée par l'association.", "Late entry authorized by the association.") } : null }
+    : buildEntryDeadlineReadiness(block, selectedShow, fee, organization?.currency ?? "CAD");
   const programLimitReadiness = buildEntryProgramLimitReadiness({
     classRecord,
     classes,

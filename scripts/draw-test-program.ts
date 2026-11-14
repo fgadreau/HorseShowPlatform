@@ -37,6 +37,17 @@ function main() {
   assertMaxThreeEntriesPerRiderClass(largeFixture);
   assertMinimumRiderSpacing(largeRuns, minimumGapWithEightHorsesBetween);
 
+  const endPlacementFixture = buildLargeDrawFixture();
+  const endPlacementEntry = endPlacementFixture.entries.find((entry) => entry.id === "entry-late-3");
+  if (!endPlacementEntry) throw new Error("late-entry fixture is missing");
+  endPlacementEntry.late_draw_placement = "end";
+  const endPlacementRuns = buildShowScoreRunsForClass(endPlacementFixture.block.id, endPlacementFixture.entries, endPlacementFixture);
+  const lastRun = endPlacementRuns[endPlacementRuns.length - 1];
+  assertEqual(lastRun.entryId, endPlacementEntry.id, "an end-placement late entry should run after the regular draw");
+  assertEqual(lastRun.draw, 43, "an end-placement late entry should receive the next positive draw");
+  assertEqual(lastRun.latePlacement, "end", "ShowScore should receive the chosen late-entry placement");
+  assertEqual(endPlacementRuns.slice(0, 2).map((run) => run.draw).join(","), "-2,-1", "negative late entries should retain ShowScore negative draws");
+
   const impossibleFixture = buildImpossibleSpacingFixture();
   const impossibleRuns = buildShowScoreRunsForClass(impossibleFixture.block.id, impossibleFixture.entries, impossibleFixture);
 

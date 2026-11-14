@@ -52,6 +52,7 @@ import {
   linkContactToDirectory,
   linkHorseToDirectory,
   prepareShowScoreClassSetup,
+  publishBlockDraw,
   savePayoutCalculationDraft,
   saveShowScorePaidWarmup,
   deleteShowScorePaidWarmup,
@@ -582,6 +583,7 @@ function HspApp() {
         try {
           const setup = await prepareShowScoreClassSetup({
             classRecord: block,
+            blockJudgeAssignments: context.blockJudgeAssignments,
             contacts: context.contacts,
             classes: context.classes,
             entries: context.entries,
@@ -591,6 +593,24 @@ function HspApp() {
           await refreshContext();
         } catch (error) {
           setNotice({ tone: "error", message: errorMessage(error) });
+          throw error;
+        }
+      }}
+      onPublishBlockDraw={async (block) => {
+        try {
+          const publication = await publishBlockDraw(block.id);
+          setNotice({
+            tone: "success",
+            message: uiText(
+              locale,
+              `Draw version ${publication.version} publié dans ShowScore et prêt pour le PDF officiel.`,
+              `Draw version ${publication.version} published to ShowScore and ready for the official PDF.`,
+            ),
+          });
+          await refreshContext();
+        } catch (error) {
+          setNotice({ tone: "error", message: errorMessage(error) });
+          throw error;
         }
       }}
       onSavePayoutCalculationDraft={async (input) => {
