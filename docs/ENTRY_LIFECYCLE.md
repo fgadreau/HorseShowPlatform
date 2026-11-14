@@ -3,6 +3,7 @@
 ## Règles appliquées
 
 - Le contexte actif affiche l’association et le concours dans l’en-tête. La sélection propose une recherche, les dates, le lieu et un repère de sélection. Les droits et les routes canoniques existants restent l’autorité.
+- Les paramètres du concours sont accessibles directement dans l’en-tête de chaque section. Le mode d’inscription actif est affiché avec un raccourci de modification; la fenêtre ouvre les inscriptions et paiements en premier. Le même accès est proposé dans la liste des concours.
 - Une soumission en gestion manuelle devient active immédiatement, même sans paiement. Une ancienne inscription brouillon doit encore être confirmée.
 - En mode carte, une inscription soumise attend une préautorisation vérifiée ou un paiement reçu et alloué. Une confirmation du navigateur ou une simple case de consentement ne suffit pas.
 - Une inscription entièrement gratuite devient active dès confirmation si aucun autre frais du compte n’est dû. Les frais annexes sont pris en compte.
@@ -34,6 +35,7 @@ Une préautorisation `requires_capture` vérifiée active les inscriptions couve
 ```sh
 npm run test:entry-lifecycle:sql
 npm run test:entry-lifecycle:browser
+npm run test:show-settings:browser
 node scripts/entry-submit.browser.mjs
 node scripts/billing/finance-browser.mjs
 node --test scripts/billing/recovery.test.mjs scripts/billing/presentation.test.mjs scripts/billing/navigation.test.mjs scripts/billing/stripe-service.test.mjs

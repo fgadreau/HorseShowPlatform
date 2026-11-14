@@ -10,7 +10,7 @@ import type { ViewKey } from "../../types/ui";
 import { uiText } from "../dashboard/shared";
 import { showPaymentSummary } from "../classes/classUtils";
 import { ShowAssistant } from "./ShowAssistant";
-import { ShowEditForm } from "./ShowEditForm";
+import { ShowSettingsDialog } from "./ShowSettingsDialog";
 
 function ShowsView({
   locale,
@@ -104,10 +104,10 @@ function ShowsView({
       </section>
 
       {editingShow ? (
-        <ShowEditForm
+        <ShowSettingsDialog
           locale={locale}
           show={editingShow}
-          onCancel={() => setEditingShow(null)}
+          onClose={() => setEditingShow(null)}
           onUpdateShow={async (id, input) => {
             await onUpdateShow(id, input);
             setEditingShow(null);
@@ -154,7 +154,7 @@ function ShowsView({
                     {show.status === "draft" ? uiText(locale, "Continuer", "Continue") : uiText(locale, "Checklist", "Checklist")}
                   </button>
                   <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
-                    {uiText(locale, "Modifier", "Edit")}
+                    {uiText(locale, "Paramètres du concours", "Show settings")}
                   </button>
                   <button className="text-button" type="button" onClick={() => setAnnouncementsShow(show)}>
                     <Megaphone size={14} />
