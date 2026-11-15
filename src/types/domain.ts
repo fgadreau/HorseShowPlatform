@@ -260,37 +260,11 @@ export type OrganizationMember = {
   created_at: string;
 };
 
-export type Invoice = {
-  id: string;
-  organization_id: string;
-  show_id: string | null;
-  invoice_number: string;
-  payer_contact_id: string;
-  status: "draft" | "sent" | "viewed" | "partially_paid" | "paid" | "overdue" | "void";
-  issue_date: string;
-  due_date: string | null;
-  subtotal: number;
-  tax_amount: number;
-  discount_amount: number;
-  total_amount: number;
-  total_paid: number;
-  balance_due: number;
-  created_at: string;
-};
-
-export type InvoiceLineItem = {
-  id: string;
-  organization_id: string;
-  invoice_id: string;
-  item_type: "entry" | "judge_fee" | "stall" | "extra" | "membership" | "fee" | "discount" | "tax" | "manual";
-  item_id: string | null;
-  description: string;
-  quantity: number;
-  unit_price: number;
-  total_price: number;
-  tax_applicable: boolean;
-  tax_amount: number;
-  created_at: string;
+export type BillingAccountSummary = {
+  id: string; organization_id: string; show_id: string | null; context_id: string;
+  account_number: string; payer_contact_id: string; state: "open" | "closed";
+  currency: string; total: number; paid: number; balance: number;
+  name_fr: string; name_en: string; needs_attention: boolean;
 };
 
 export type ProductCategory = "stall_extra" | "feed" | "merch" | "ticket" | "meal" | "admin_fee" | "manual";
@@ -321,7 +295,6 @@ export type ManualSale = {
   quantity: number;
   unit_price: number;
   tax_applicable: boolean;
-  invoice_id: string | null;
   source_payload: Record<string, unknown>;
   created_at: string;
   updated_at: string;
@@ -516,7 +489,6 @@ export type ContactOrganizationMembership = {
   status: "draft" | "active" | "expired" | "cancelled";
   valid_from: string;
   valid_until: string;
-  invoice_id: string | null;
   notes: string | null;
   sold_by_user_id: string | null;
   activated_at: string | null;

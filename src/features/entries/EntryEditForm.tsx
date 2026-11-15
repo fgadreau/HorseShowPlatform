@@ -8,7 +8,7 @@ import { contactLabel, findById, formatCurrency, formatDate, horseLabel, numeric
 import type { Locale } from "../../lib/i18n";
 import { buildEntryShowReadiness } from "../../lib/readiness";
 import { createContact, createHorse, createUploadedHorseHealthDocument, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility } from "../../services/supabaseServices";
-import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
+import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText, InlineHealthMessage, ReadinessChecklist, entryNumberValue } from "../dashboard/shared";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";

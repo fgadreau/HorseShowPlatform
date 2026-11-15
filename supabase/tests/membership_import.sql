@@ -1,7 +1,7 @@
 \set ON_ERROR_STOP on
 begin;
 set local request.jwt.claim.sub='10000000-0000-0000-0000-000000000001';
-create temp table membership_import_finance as select (select count(*) from public.invoices) invoices,(select count(*) from public.billing_charges) charges,(select count(*) from public.billing_payments) payments;
+create temp table membership_import_finance as select (select count(*) from public.billing_charges) charges,(select count(*) from public.billing_payments) payments;
 do $$declare org uuid:='30000000-0000-0000-0000-000000000001';paid uuid;free uuid;begin
  insert into public.organization_membership_types(organization_id,name,season_year,price,tax_applicable,valid_from,valid_until,is_public) values(org,'Imported season',extract(year from current_date),100,false,current_date-10,current_date+365,true) returning id into paid;
  insert into public.organization_membership_types(organization_id,name,season_year,price,tax_applicable,valid_from,valid_until,is_public) values(org,'Board membership',extract(year from current_date),0,false,current_date-10,current_date+365,false) returning id into free;
@@ -58,7 +58,7 @@ do $$begin
 end $$;
 reset role;
 do $$begin
- if exists(select 1 from membership_import_finance f where f.invoices<>(select count(*) from public.invoices) or f.charges<>(select count(*) from public.billing_charges) or f.payments<>(select count(*) from public.billing_payments)) then raise exception 'TEST imported cards must not generate invoices, charges or payments';end if;
- if exists(select 1 from public.contact_organization_memberships where acquisition_source<>'platform' and (invoice_id is not null or billing_charge_id is not null or status<>'active')) then raise exception 'TEST incorrect external entitlement';end if;
+ if exists(select 1 from membership_import_finance f where f.charges<>(select count(*) from public.billing_charges) or f.payments<>(select count(*) from public.billing_payments)) then raise exception 'TEST imported cards must not generate charges or payments';end if;
+ if exists(select 1 from public.contact_organization_memberships where acquisition_source<>'platform' and (billing_charge_id is not null or status<>'active')) then raise exception 'TEST incorrect external entitlement';end if;
 end $$;
 rollback;

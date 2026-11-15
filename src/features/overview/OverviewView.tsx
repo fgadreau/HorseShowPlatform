@@ -1,3 +1,4 @@
+import { accountBalanceLabel } from "../../lib/accountBalances";
 import { useEffect, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { CalendarDays, CheckCircle2, AlertCircle, ChevronDown, ChevronRight, CircleDollarSign, ClipboardList, MapPin, Plus, Tent, Trophy, Users, Warehouse } from "lucide-react";
@@ -6,7 +7,7 @@ import { contactLabel, errorMessage, formatCurrency, formatDate, showLabel } fro
 import type { Locale } from "../../lib/i18n";
 import type { AppContext } from "../../services/supabaseServices";
 import { createOrganization, slugify } from "../../services/supabaseServices";
-import type { Block, Contact, Discipline, Entry, Horse, Invoice, Organization, Show, StallBooking, StallOption } from "../../types/domain";
+import type { Block, Contact, Discipline, Entry, Horse, Organization, Show, StallBooking, StallOption } from "../../types/domain";
 import { uiText, showStatusLabel } from "../dashboard/shared";
 
 function OverviewView({
@@ -20,8 +21,7 @@ function OverviewView({
   entries,
   stallOptions,
   stallBookings,
-  invoices,
-  unpaidBalance,
+  billingAccounts,
   disciplines,
   onCreateOrganization,
 }: {
@@ -35,8 +35,7 @@ function OverviewView({
   entries: Entry[];
   stallOptions: AppContext["stallOptions"];
   stallBookings: AppContext["stallBookings"];
-  invoices: AppContext["invoices"];
-  unpaidBalance: number;
+  billingAccounts: AppContext["billingAccounts"];
   disciplines: Discipline[];
   onCreateOrganization: (input: Parameters<typeof createOrganization>[1]) => Promise<void>;
 }) {
@@ -55,16 +54,15 @@ function OverviewView({
   const showClasses = activeShowId ? blocks.filter((block) => block.show_id === activeShowId) : blocks;
   const showStallOptions = activeShowId ? stallOptions.filter((option) => option.show_id === activeShowId) : stallOptions;
   const showStallBookings = activeShowId ? stallBookings.filter((booking) => booking.show_id === activeShowId) : stallBookings;
-  const showInvoices = activeShowId ? invoices.filter((invoice) => invoice.show_id === activeShowId) : invoices;
+  const showAccounts = activeShowId ? billingAccounts.filter((invoice) => invoice.show_id === activeShowId) : billingAccounts;
   const draftEntries = entries.filter((entry) => entry.status === "draft").length;
   const activeEntries = showEntries.filter((entry) => entry.status === "active" || entry.status === "pending_checkout").length;
   const stallCapacity = showStallOptions.reduce((sum, option) => sum + Number(option.total_quantity ?? 0), 0);
   const stallsAvailable = showStallOptions.reduce((sum, option) => sum + Number(option.available_quantity ?? 0), 0);
   const stallsBooked = Math.max(0, stallCapacity - stallsAvailable);
   const stallUsage = stallCapacity ? Math.min(100, Math.round((stallsBooked / stallCapacity) * 100)) : 0;
-  const invoiceBalance = showInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
-  const paidInvoices = showInvoices.filter((invoice) => invoice.status === "paid").length;
-  const invoiceProgress = showInvoices.length ? Math.round((paidInvoices / showInvoices.length) * 100) : 0;
+  const paidAccounts = showAccounts.filter((invoice) => Number(invoice.balance) <= 0).length;
+  const accountProgress = showAccounts.length ? Math.round((paidAccounts / showAccounts.length) * 100) : 0;
   const entryProgress = showClasses.length ? Math.min(100, Math.round((showEntries.length / showClasses.length) * 100)) : 0;
   const showLocation = upcomingShow ? [upcomingShow.venue, upcomingShow.location].filter(Boolean).join(" - ") : "";
   const showUnitLabel = uiText(locale, "bloc", "schedule block");
@@ -133,7 +131,7 @@ function OverviewView({
         </div>
         <div className="overview-command-aside">
           <span className={`badge ${upcomingShow?.status ?? "draft"}`}>{upcomingShow ? upcomingShow.status : "setup"}</span>
-          <strong>{formatCurrency(invoiceBalance || unpaidBalance, currency)}</strong>
+          <strong>{accountBalanceLabel(showAccounts)}</strong>
           <small>{upcomingShow ? uiText(locale, "Solde lié au prochain concours", "Balance tied to next show") : uiText(locale, "Solde ouvert total", "Total open balance")}</small>
         </div>
       </section>
@@ -143,7 +141,7 @@ function OverviewView({
         <Metric detail={uiText(locale, `${contacts.length} contacts, ${horses.length} chevaux`, `${contacts.length} people, ${horses.length} horses`)} icon={Users} label={uiText(locale, "Répertoire", "Directory")} value={String(contacts.length + horses.length)} />
         <Metric detail={uiText(locale, `${draftEntries} brouillon${draftEntries === 1 ? "" : "s"} à réviser`, `${draftEntries} draft${draftEntries === 1 ? "" : "s"} need review`)} icon={ClipboardList} label={uiText(locale, "Inscriptions", "Entries")} value={String(entries.length)} />
         <Metric detail={uiText(locale, `${stallsBooked} réservées sur ${stallCapacity || 0}`, `${stallsBooked} reserved of ${stallCapacity || 0}`)} icon={Warehouse} label={uiText(locale, "Utilisation des réservations", "Reservation usage")} value={`${stallUsage}%`} />
-        <Metric detail={uiText(locale, `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} en contexte`, `${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} in scope`)} icon={CircleDollarSign} label={uiText(locale, "Solde dû", "Balance due")} value={formatCurrency(unpaidBalance, currency)} />
+        <Metric detail={uiText(locale, `${showAccounts.length} compte${showAccounts.length === 1 ? "" : "s"} en contexte`, `${showAccounts.length} account${showAccounts.length === 1 ? "" : "s"} in scope`)} icon={CircleDollarSign} label={uiText(locale, "Solde dû", "Balance due")} value={accountBalanceLabel(billingAccounts)} />
       </section>
 
       <section className="panel action-panel">
@@ -206,7 +204,7 @@ function OverviewView({
         <div className="progress-stack">
           <ProgressMeter label={uiText(locale, "Inscriptions vs blocs", "Entries vs schedule blocks")} value={entryProgress} detail={uiText(locale, `${showEntries.length} inscriptions dans ${showClasses.length} blocs`, `${showEntries.length} entries across ${showClasses.length} schedule blocks`)} />
           <ProgressMeter label={uiText(locale, "Inventaire de réservations utilisé", "Reservation inventory used")} value={stallUsage} detail={uiText(locale, `${stallsBooked} réservées, ${stallsAvailable} disponibles`, `${stallsBooked} booked, ${stallsAvailable} available`)} />
-          <ProgressMeter label={uiText(locale, "Factures payées", "Invoices paid")} value={invoiceProgress} detail={uiText(locale, `${paidInvoices} payées sur ${showInvoices.length} factures`, `${paidInvoices} paid of ${showInvoices.length} invoices`)} />
+          <ProgressMeter label={uiText(locale, "Comptes soldés", "Settled accounts")} value={accountProgress} detail={uiText(locale, `${paidAccounts} soldés sur ${showAccounts.length} comptes`, `${paidAccounts} paid of ${showAccounts.length} accounts`)} />
         </div>
       </section>
 

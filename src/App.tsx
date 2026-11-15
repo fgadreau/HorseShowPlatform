@@ -97,11 +97,10 @@ function matchPublicShowSlug() {
   return match ? match[1] : null;
 }
 
-const VetApp = lazy(() => import("./features/vet/VetApp").then(m => ({ default: m.VetApp })));
 
 export default function App() {
   if (window.location.pathname === "/vet" || window.location.pathname.startsWith("/vet/") || window.location.hostname.startsWith("vet.")) {
-    return <Suspense fallback={<LoadingScreen />}><VetApp /></Suspense>;
+    return <main className="setup-screen"><h1>Portail vétérinaire temporairement indisponible</h1><p>Le portail sera réactivé ultérieurement.</p><a href="/">Horse Show Platform</a></main>;
   }
   return <HspApp />;
 }

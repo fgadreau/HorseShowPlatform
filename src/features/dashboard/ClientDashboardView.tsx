@@ -1,14 +1,14 @@
+import { accountBalanceLabel } from "../../lib/accountBalances";
 import { AlertCircle, AlertTriangle, CalendarDays, ChevronRight, CircleDollarSign, ClipboardList, MapPin, UserCircle } from "lucide-react";
 import { ViewIntro } from "../../components/ui";
 import { formatCurrency, formatDate } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { Contact, ClassRecord, Entry, Horse, Invoice, Organization, Show, ShowDay, StallBooking, StallOption, UserProfile } from "../../types/domain";
+import type { Contact, ClassRecord, Entry, Horse, BillingAccountSummary, Organization, Show, ShowDay, StallBooking, StallOption, UserProfile } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { profileIsComplete } from "../profile/ProfileView";
 import { uiText } from "./shared";
 
 const ACTIVE_ENTRY_STATUSES: Entry["status"][] = ["draft", "pending_checkout", "active"];
-const DUE_INVOICE_STATUSES: Invoice["status"][] = ["sent", "viewed", "partially_paid", "overdue"];
 
 type UpcomingShow = {
   show: Show;
@@ -46,19 +46,7 @@ function entryStatusTone(status: Entry["status"]): "active" | "pending" | "neutr
   return "neutral";
 }
 
-function invoiceStatusLabel(status: Invoice["status"], locale: Locale) {
-  const map: Record<Invoice["status"], [string, string]> = {
-    draft: ["Brouillon", "Draft"],
-    sent: ["Envoyée", "Sent"],
-    viewed: ["Vue", "Viewed"],
-    partially_paid: ["Part. payée", "Partially paid"],
-    paid: ["Payée", "Paid"],
-    overdue: ["En retard", "Overdue"],
-    void: ["Annulée", "Void"],
-  };
-  const [fr, en] = map[status] ?? [status, status];
-  return uiText(locale, fr, en);
-}
+function accountStatusLabel(state: BillingAccountSummary["state"], locale: Locale) { return state === "closed" ? uiText(locale, "Fermé", "Closed") : uiText(locale, "Ouvert", "Open"); }
 
 function ShowCard({
   item,
@@ -116,7 +104,7 @@ function ClientDashboardView({
   classes,
   entries,
   horses,
-  invoices,
+  billingAccounts,
   organizations,
   profile,
   shows,
@@ -130,7 +118,7 @@ function ClientDashboardView({
   classes: ClassRecord[];
   entries: Entry[];
   horses: Horse[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organizations: Organization[];
   profile: UserProfile;
   shows: Show[];
@@ -143,8 +131,8 @@ function ClientDashboardView({
   today.setHours(0, 0, 0, 0);
 
   const activeEntries = entries.filter((e) => ACTIVE_ENTRY_STATUSES.includes(e.status));
-  const dueInvoices = invoices.filter((inv) => DUE_INVOICE_STATUSES.includes(inv.status) && Number(inv.balance_due ?? 0) > 0);
-  const totalDue = dueInvoices.reduce((sum, inv) => sum + Number(inv.balance_due ?? 0), 0);
+  const dueAccounts = billingAccounts.filter((inv) => Number(inv.balance ?? 0) > 0);
+  const balanceLabel = accountBalanceLabel(dueAccounts);
 
   const upcomingShows: UpcomingShow[] = shows
     .filter((show) => {
@@ -174,7 +162,6 @@ function ClientDashboardView({
       entries: activeEntries.filter((e) => e.show_id === show.id),
     }));
 
-  const currency = invoices[0] ? (shows.find((s) => s.id === invoices[0].show_id)?.default_currency ?? "CAD") : "CAD";
   const isProfileComplete = profileIsComplete(profile);
   const hasHorses = horses.length > 0;
   const setupWarnings = [
@@ -186,7 +173,7 @@ function ClientDashboardView({
       message: uiText(
         locale,
         "Ton nom et ton adresse sont requis pour t'inscrire à un concours et générer des factures.",
-        "Your name and address are required to enter a show and generate invoices.",
+        "Your name and address are required to enter a show and generate billing documents.",
       ),
       cta: uiText(locale, "Compléter mon profil", "Complete my profile"),
       view: "my-profile" as ViewKey,
@@ -211,11 +198,11 @@ function ClientDashboardView({
       <ViewIntro
         eyebrow={uiText(locale, "Mon espace", "My space")}
         title={uiText(locale, "Tableau de bord", "Dashboard")}
-        description={uiText(locale, "Un aperçu de tes inscriptions, réservations et factures.", "An overview of your entries, bookings, and invoices.")}
+        description={uiText(locale, "Un aperçu de tes inscriptions, réservations et comptes.", "An overview of your entries, bookings, and accounts.")}
         stats={[
           { label: uiText(locale, "Inscriptions actives", "Active entries"), value: String(activeEntries.length) },
-          { label: uiText(locale, "Factures dues", "Invoices due"), value: String(dueInvoices.length) },
-          { label: uiText(locale, "Solde dû", "Balance due"), value: totalDue > 0 ? formatCurrency(totalDue, currency) : "—" },
+          { label: uiText(locale, "Comptes avec solde", "Accounts due"), value: String(dueAccounts.length) },
+          { label: uiText(locale, "Solde dû", "Balance due"), value: balanceLabel },
           { label: uiText(locale, "Chevaux", "Horses"), value: String(horses.length) },
         ]}
       />
@@ -313,50 +300,50 @@ function ClientDashboardView({
         )}
       </section>
 
-      {/* Factures dues */}
+      {/* Comptes avec solde */}
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>{uiText(locale, "Factures dues", "Invoices due")}</h2>
+            <h2>{uiText(locale, "Comptes avec solde", "Accounts due")}</h2>
           </div>
-          {dueInvoices.length > 0 ? (
+          {dueAccounts.length > 0 ? (
             <button className="ghost-button" type="button" onClick={() => onViewChange("my-invoices")}>
               {uiText(locale, "Voir tout", "View all")}
             </button>
           ) : null}
         </div>
-        {dueInvoices.length > 0 ? (
+        {dueAccounts.length > 0 ? (
           <div className="client-invoices-list">
-            {dueInvoices.map((invoice) => {
+            {dueAccounts.map((invoice) => {
               const show = shows.find((s) => s.id === invoice.show_id);
-              const isOverdue = invoice.status === "overdue";
+              const isOverdue = invoice.state === "closed";
               return (
                 <div className={`client-invoice-row ${isOverdue ? "overdue" : ""}`} key={invoice.id}>
                   <div className="client-invoice-row-main">
                     {isOverdue ? <AlertCircle size={14} className="client-overdue-icon" /> : <CircleDollarSign size={14} />}
                     <div>
-                      <strong>{invoice.invoice_number}</strong>
+                      <a href={`/me/accounts/${invoice.id}`}><strong>{invoice.account_number}</strong></a>
                       {show ? <span className="client-invoice-show">{show.name}</span> : null}
                     </div>
                   </div>
                   <div className="client-invoice-row-right">
-                    <span className={`client-status-badge status-${isOverdue ? "negative" : "pending"}`}>{invoiceStatusLabel(invoice.status, locale)}</span>
-                    <strong className="client-invoice-amount">{formatCurrency(Number(invoice.balance_due), currency)}</strong>
+                    <span className={`client-status-badge status-${isOverdue ? "negative" : "pending"}`}>{accountStatusLabel(invoice.state, locale)}</span>
+                    <strong className="client-invoice-amount">{formatCurrency(Number(invoice.balance), invoice.currency)}</strong>
                   </div>
                 </div>
               );
             })}
-            {totalDue > 0 ? (
+            {dueAccounts.length > 0 ? (
               <div className="client-invoice-total">
                 <span>{uiText(locale, "Total dû", "Total due")}</span>
-                <strong>{formatCurrency(totalDue, currency)}</strong>
+                <strong>{balanceLabel}</strong>
               </div>
             ) : null}
           </div>
         ) : (
           <div className="client-empty-state">
             <CircleDollarSign size={28} className="client-empty-icon" />
-            <p>{uiText(locale, "Aucune facture en attente. Tout est à jour.", "No pending invoices. All clear.")}</p>
+            <p>{uiText(locale, "Aucun solde à payer.", "No outstanding balance.")}</p>
           </div>
         )}
       </section>

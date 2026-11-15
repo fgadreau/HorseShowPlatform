@@ -65,8 +65,7 @@ import type {
   IncentiveProgramInput,
   IncentiveProgramNomination,
   IncentiveProgramNominationInput,
-  Invoice,
-  InvoiceLineItem,
+  BillingAccountSummary,
   ManualSale,
   ManualSaleInput,
   NrhaRiderRanking,
@@ -191,8 +190,7 @@ export type AppContext = {
   entries: Entry[];
   stallOptions: StallOption[];
   stallBookings: StallBooking[];
-  invoices: Invoice[];
-  invoiceLineItems: InvoiceLineItem[];
+  billingAccounts: BillingAccountSummary[];
 };
 
 export type ContactIdentityCandidate = {
@@ -411,8 +409,7 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     entriesResult,
     stallOptionsResult,
     stallBookingsResult,
-    invoicesResult,
-    invoiceLineItemsResult,
+    accountsResult,
     showAnnouncementsResult,
     scoredRunsResult,
     blockRunEntriesResult,
@@ -456,8 +453,7 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     scopeQueryToOrganization(client.from("entries").select("*").order("created_at", { ascending: false }).returns<Entry[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("stall_options").select("*").order("created_at", { ascending: false }).returns<StallOption[]>(), loadedOrganizationId),
     scopeQueryToOrganization(client.from("stall_bookings").select("*").order("created_at", { ascending: false }).returns<StallBooking[]>(), loadedOrganizationId),
-    scopeQueryToOrganization(client.from("invoices").select("*").order("created_at", { ascending: false }).limit(20).returns<Invoice[]>(), loadedOrganizationId),
-    scopeQueryToOrganization(client.from("invoice_line_items").select("*").order("created_at", { ascending: false }).returns<InvoiceLineItem[]>(), loadedOrganizationId),
+    client.rpc("list_dashboard_billing_accounts", {p_org: loadedOrganizationId || null}),
     scopeQueryToOrganization(client.from("show_announcements").select("*").order("created_at", { ascending: false }).returns<ShowAnnouncement[]>(), loadedOrganizationId),
     scopeQueryToIds(client.from("scored_runs").select("*").order("scored_at", { ascending: false }).returns<ScoredRun[]>(), showIds, "show_id"),
     scopeQueryToIds(client.from("block_run_entries").select("*").order("order_of_go", { ascending: true }).returns<BlockRunEntry[]>(), showIds, "show_id"),
@@ -801,13 +797,10 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     throw stallBookingsResult.error;
   }
 
-  if (invoicesResult.error) {
-    throw invoicesResult.error;
+  if (accountsResult.error) {
+    throw accountsResult.error;
   }
 
-  if (invoiceLineItemsResult.error) {
-    throw invoiceLineItemsResult.error;
-  }
 
   const showAnnouncements = showAnnouncementsResult.error
     ? isMissingSchemaError(showAnnouncementsResult.error, "show_announcements")
@@ -929,8 +922,7 @@ export async function loadAppContext(user: User, requestedOrganizationId?: strin
     entries: entriesResult.data ?? [],
     stallOptions: stallOptionsResult.data ?? [],
     stallBookings: stallBookingsResult.data ?? [],
-    invoices: invoicesResult.data ?? [],
-    invoiceLineItems: invoiceLineItemsResult.data ?? [],
+    billingAccounts: accountsResult.data ?? [],
   };
 }
 
@@ -2209,12 +2201,12 @@ function pluralizedReference(count: number, singular: string, plural: string) {
 
 export async function deleteContact(id: string) {
   const client = requireSupabase();
-  const [ownedHorsesResult, entriesOwnerOrPayerResult, entriesRiderResult, stallBookingsResult, invoicesResult] = await Promise.all([
+  const [ownedHorsesResult, entriesOwnerOrPayerResult, entriesRiderResult, stallBookingsResult, accountsResult] = await Promise.all([
     client.from("horses").select("id", { count: "exact", head: true }).eq("primary_owner_contact_id", id),
     client.from("entries").select("id", { count: "exact", head: true }).or(`owner_contact_id.eq.${id},payer_contact_id.eq.${id}`),
     client.from("entries").select("id", { count: "exact", head: true }).eq("rider_contact_id", id),
     client.from("stall_bookings").select("id", { count: "exact", head: true }).or(`booker_contact_id.eq.${id},payer_contact_id.eq.${id}`),
-    client.from("invoices").select("id", { count: "exact", head: true }).eq("payer_contact_id", id),
+    client.rpc("list_dashboard_billing_accounts").then(({data,error}) => ({error, count: (data as BillingAccountSummary[] | null)?.filter(account => account.payer_contact_id === id).length ?? 0})),
   ]);
   const blockers = [
     {
@@ -2233,9 +2225,9 @@ export async function deleteContact(id: string) {
       plural: "reservations comme reservataire/payeur",
     },
     {
-      count: exactCount(invoicesResult),
-      singular: "facture comme payeur",
-      plural: "factures comme payeur",
+      count: exactCount(accountsResult),
+      singular: "compte financier comme payeur",
+      plural: "comptes financiers comme payeur",
     },
   ]
     .filter((reference) => reference.count > 0)
@@ -3975,7 +3967,7 @@ async function upsertHorseContact(input: {
   role: HorseContact["role"];
 }) {
   const client = requireSupabase();
-  const canPayInvoices = input.role === "owner" || input.role === "co-owner";
+  const canPayAccounts = input.role === "owner" || input.role === "co-owner";
   const { error } = await client.from("horse_contacts").upsert(
     {
       horse_id: input.horse_id,
@@ -3984,7 +3976,7 @@ async function upsertHorseContact(input: {
       can_create_entries: true,
       can_modify_entries: true,
       can_book_stalls: true,
-      can_pay_invoices: canPayInvoices,
+      can_pay_invoices: canPayAccounts,
     },
     { onConflict: "horse_id,contact_id,role" },
   );

@@ -133,9 +133,8 @@ import type {
   HorseContact,
   HorseExternalIdentifier,
   HorseHealthDocument,
-  Invoice,
-  InvoiceLineItem,
-  ManualSale,
+  BillingAccountSummary,
+    ManualSale,
   Organization,
   OrganizationBackNumber,
   OrganizationExternalCredentialRequirement,
@@ -167,7 +166,6 @@ import { ScoringView } from "../scoring/ScoringView";
 import { ControlRoomView } from "../controlRoom/ControlRoomView";
 import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
-import { BillingView } from "../billing/BillingView";
 import { SettingsView } from "../settings/SettingsView";
 import { IncentiveProgramsSettings } from "../settings/IncentiveProgramsSettings";
 import { ProfileView, profileIsComplete } from "../profile/ProfileView";
@@ -408,8 +406,7 @@ export function Dashboard({
   const entries = context?.entries ?? [];
   const stallOptions = context?.stallOptions ?? [];
   const stallBookings = context?.stallBookings ?? [];
-  const invoices = context?.invoices ?? [];
-  const invoiceLineItems = context?.invoiceLineItems ?? [];
+  const billingAccounts = context?.billingAccounts ?? [];
   const selectedOrganization = organizations.find((organization) => organization.id === selectedOrganizationId) ?? (financeRoute()?.org ? null : organizations[0] ?? null);
   const healthPolicyReferenceDate = todayDateValue();
   const selectedOrganizationHealthPolicies = selectedOrganization
@@ -454,8 +451,8 @@ export function Dashboard({
   const selectedOrganizationShowScorePaidWarmups = selectedOrganization
     ? showScorePaidWarmups.filter((warmup) => warmup.organization_id === selectedOrganization.id)
     : [];
-  const selectedOrganizationInvoices = selectedOrganization
-    ? invoices.filter((invoice) => invoice.organization_id === selectedOrganization.id)
+  const selectedOrganizationAccounts = selectedOrganization
+    ? billingAccounts.filter((invoice) => invoice.organization_id === selectedOrganization.id)
     : [];
   const selectedOrganizationEntryResults = selectedOrganization
     ? entryResults.filter((result) => selectedOrganizationShowIds.has(result.show_id))
@@ -543,9 +540,6 @@ export function Dashboard({
   const selectedOrganizationStallBookings = selectedOrganization
     ? stallBookings.filter((booking) => booking.organization_id === selectedOrganization.id)
     : [];
-  const selectedOrganizationInvoiceLineItems = selectedOrganization
-    ? invoiceLineItems.filter((item) => item.organization_id === selectedOrganization.id)
-    : [];
   const selectedShow = selectedOrganizationShows.find((show) => show.id === selectedShowId) ?? (financeRoute()?.show ? null : ([...selectedOrganizationShows].filter(s=>s.status!=='archived'&&s.end_date>=todayDateValue()).sort((a,b)=>a.start_date.localeCompare(b.start_date))[0]??[...selectedOrganizationShows].sort((a,b)=>b.start_date.localeCompare(a.start_date))[0]??null));
   const showRouteUnavailable = Boolean(financeRoute()?.show && !selectedShow);
   const activeShowId = selectedShow?.id ?? "";
@@ -588,13 +582,9 @@ export function Dashboard({
   const selectedShowStallBookings = selectedShow
     ? selectedOrganizationStallBookings.filter((booking) => booking.show_id === selectedShow.id)
     : selectedOrganizationStallBookings;
-  const selectedShowInvoices = selectedShow
-    ? selectedOrganizationInvoices.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
-    : selectedOrganizationInvoices;
-  const selectedShowInvoiceIds = new Set(selectedShowInvoices.map((invoice) => invoice.id));
-  const selectedShowInvoiceLineItems = selectedShow
-    ? selectedOrganizationInvoiceLineItems.filter((item) => selectedShowInvoiceIds.has(item.invoice_id))
-    : selectedOrganizationInvoiceLineItems;
+  const selectedShowAccounts = selectedShow
+    ? selectedOrganizationAccounts.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
+    : selectedOrganizationAccounts;
   const selectedShowManualSales = selectedShow
     ? selectedOrganizationManualSales.filter((sale) => !sale.show_id || sale.show_id === selectedShow.id)
     : selectedOrganizationManualSales;
@@ -642,26 +632,17 @@ export function Dashboard({
       personalContactIds.has(booking.payer_contact_id) ||
       (booking.horse_id ? personalHorseIds.has(booking.horse_id) : false),
   );
-  const personalInvoices = selectedOrganizationInvoices.filter((invoice) => personalContactIds.has(invoice.payer_contact_id));
-  const personalInvoiceIds = new Set(personalInvoices.map((invoice) => invoice.id));
-  const personalInvoiceLineItems = selectedOrganizationInvoiceLineItems.filter((item) => personalInvoiceIds.has(item.invoice_id));
+  const personalAccounts = selectedOrganizationAccounts.filter((invoice) => personalContactIds.has(invoice.payer_contact_id));
   const selectedShowPersonalEntries = selectedShow
     ? personalEntries.filter((entry) => entry.show_id === selectedShow.id)
     : personalEntries;
   const selectedShowPersonalStallBookings = selectedShow
     ? personalStallBookings.filter((booking) => booking.show_id === selectedShow.id)
     : personalStallBookings;
-  const selectedShowPersonalInvoices = selectedShow
-    ? personalInvoices.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
-    : personalInvoices;
-  const selectedShowPersonalInvoiceIds = new Set(selectedShowPersonalInvoices.map((invoice) => invoice.id));
-  const selectedShowPersonalInvoiceLineItems = selectedShow
-    ? personalInvoiceLineItems.filter((item) => selectedShowPersonalInvoiceIds.has(item.invoice_id))
-    : personalInvoiceLineItems;
+  const selectedShowPersonalAccounts = selectedShow
+    ? personalAccounts.filter((invoice) => !invoice.show_id || invoice.show_id === selectedShow.id)
+    : personalAccounts;
   const openShows = selectedOrganizationShows.filter((show) => show.status === "open").length;
-  const unpaidBalance = selectedOrganizationInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
-  const selectedShowUnpaidBalance = selectedShowInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
-  const selectedShowPersonalUnpaidBalance = selectedShowPersonalInvoices.reduce((sum, invoice) => sum + Number(invoice.balance_due ?? 0), 0);
   const shouldShowShowContext = selectedOrganizationShows.length > 0 && SHOW_CONTEXT_VIEW_KEYS.has(effectiveView);
   const notificationToday = todayDateValue();
   const notificationReferenceShow = [...selectedOrganizationShows]
@@ -683,7 +664,7 @@ export function Dashboard({
     externalCredentialIssuers,
     healthComplianceResults: notificationHealthCompliance.results,
     horses: selectedOrganizationHorses,
-    invoices: selectedOrganizationInvoices,
+    billingAccounts: selectedOrganizationAccounts,
     membershipRequirements: selectedOrganizationMembershipRequirements,
     organization: selectedOrganization,
     showDays: selectedOrganizationShowDays,
@@ -844,8 +825,7 @@ export function Dashboard({
             entries={selectedOrganizationEntries}
             stallOptions={selectedOrganizationStallOptions}
             stallBookings={selectedOrganizationStallBookings}
-            invoices={selectedOrganizationInvoices}
-            unpaidBalance={unpaidBalance}
+            billingAccounts={selectedOrganizationAccounts}
             disciplines={disciplines}
             onCreateOrganization={onCreateOrganization}
           />
@@ -865,7 +845,7 @@ export function Dashboard({
             blocks={selectedOrganizationBlocks}
             classes={selectedOrganizationClasses}
             entries={selectedOrganizationEntries}
-            invoices={selectedOrganizationInvoices}
+            billingAccounts={selectedOrganizationAccounts}
             organization={selectedOrganization}
             showAnnouncements={selectedOrganizationShowAnnouncements}
             showDays={selectedOrganizationShowDays}
@@ -1096,8 +1076,7 @@ export function Dashboard({
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={selectedOrganizationHorseHealthDocuments}
             horses={selectedOrganizationHorses}
-            invoiceLineItems={selectedShowInvoiceLineItems}
-            invoices={selectedShowInvoices}
+            billingAccounts={selectedShowAccounts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             products={selectedOrganizationProducts}
@@ -1168,24 +1147,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {!showRouteUnavailable && context && (effectiveView === "billing" || effectiveView === "show-accounts") ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={effectiveView==='show-accounts'?(financeRoute()?.show??activeShowId):''} personal={false} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
-            locale={locale}
-            contacts={selectedOrganizationContacts}
-            currency={selectedOrganization?.currency ?? "CAD"}
-            entries={selectedShowEntries}
-            horseContacts={selectedOrganizationHorseContacts}
-            horses={selectedOrganizationHorses}
-            invoices={selectedShowInvoices}
-            lineItems={selectedShowInvoiceLineItems}
-            manualSales={selectedShowManualSales}
-            organization={selectedOrganization}
-            products={selectedOrganizationProducts}
-            profileId={context?.profile.id ?? ""}
-            shows={activeShowList}
-            unpaidBalance={selectedShowUnpaidBalance}
-            onCancelManualSale={onCancelManualSale}
-            onCreateManualSale={onCreateManualSale}
-          />}/> : null}
+        {!showRouteUnavailable && context && (effectiveView === "billing" || effectiveView === "show-accounts") ? <FinanceView key={effectiveView+selectedOrganizationId} org={selectedOrganization?.id??''} show={effectiveView==='show-accounts'?(financeRoute()?.show??activeShowId):''} personal={false} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses}/> : null}
 
         {!showRouteUnavailable && effectiveView === "my-overview" && context ? (
           <ClientDashboardView
@@ -1194,7 +1156,7 @@ export function Dashboard({
             classes={selectedShowClasses}
             entries={selectedShowPersonalEntries}
             horses={personalHorses}
-            invoices={selectedShowPersonalInvoices}
+            billingAccounts={selectedShowPersonalAccounts}
             organizations={organizations}
             profile={context.profile}
             shows={activeShowList}
@@ -1329,8 +1291,7 @@ export function Dashboard({
             currency={selectedOrganization?.currency ?? "CAD"}
             horseHealthDocuments={personalHorseHealthDocuments}
             horses={selectedOrganizationPersonalHorses}
-            invoiceLineItems={selectedShowPersonalInvoiceLineItems}
-            invoices={selectedShowPersonalInvoices}
+            billingAccounts={selectedShowPersonalAccounts}
             organization={selectedOrganization}
             profileId={context?.profile.id ?? ""}
             showDays={selectedShowShowDays}
@@ -1343,22 +1304,7 @@ export function Dashboard({
           />
         ) : null}
 
-        {!showRouteUnavailable && context && effectiveView === "my-invoices" ? <FinanceView key={effectiveView+context.profile.id} org={selectedOrganization?.id??''} show={''} personal={true} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses} legacy={<BillingView
-            locale={locale}
-            contacts={selectedOrganizationPersonalContacts}
-            currency={selectedOrganization?.currency ?? "CAD"}
-            entries={selectedShowPersonalEntries}
-            horseContacts={selectedOrganizationHorseContacts}
-            horses={selectedOrganizationPersonalHorses}
-            invoices={selectedShowPersonalInvoices}
-            lineItems={selectedShowPersonalInvoiceLineItems}
-            manualSales={[]}
-            organization={selectedOrganization}
-            products={[]}
-            profileId={context?.profile.id ?? ""}
-            shows={activeShowList}
-            unpaidBalance={selectedShowPersonalUnpaidBalance}
-          />}/> : null}
+        {!showRouteUnavailable && context && effectiveView === "my-invoices" ? <FinanceView key={effectiveView+context.profile.id} org={selectedOrganization?.id??''} show={''} personal={true} identity={context?.profile.id??''} locale={locale} contacts={selectedOrganizationContacts} organizations={organizations} horses={selectedOrganizationHorses}/> : null}
 
         {!showRouteUnavailable && effectiveView === "programs" && context && selectedOrganization ? (
           <div className="content-grid">
