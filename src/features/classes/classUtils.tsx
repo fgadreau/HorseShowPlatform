@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { SearchSelect } from "../../components/ui";
 import { formatCurrency, formatDate, numericValue, findById } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
-import type { BackNumberPolicy, Block, ClassTemplate, Contact, ClassRecord, Entry, EligibilityRules, GoverningBodyAssignment, Horse, InvoiceLineItem, PayoutScheduleType, SanctioningBody, ScheduleStartMode, Show, ShowDay, ShowScoreBlockSetup } from "../../types/domain";
+import type { BackNumberPolicy, Block, ClassTemplate, Contact, ClassRecord, Entry, EligibilityRules, GoverningBodyAssignment, Horse, PayoutScheduleType, SanctioningBody, ScheduleStartMode, Show, ShowDay, ShowScoreBlockSetup } from "../../types/domain";
 import { governingBodyAssignmentsFromSelection, hasGoverningBodyCode, hasSelectedGoverningBodyCode, nrhaClassTypeFromAssignments, nrhaEligibilityPolicyFromAssignments, toggleGoverningBodyId } from "../../lib/governingBodies";
 import { uiText } from "../dashboard/shared";
 import type { InlineHealthMessage } from "../dashboard/shared";
@@ -770,34 +770,6 @@ function scheduleStartModeLabel(mode: ScheduleStartMode, locale: Locale = "fr") 
   }
 }
 
-function invoiceItemTypeLabel(type: InvoiceLineItem["item_type"], locale: Locale = "fr") {
-  switch (type) {
-    case "entry":
-      return uiText(locale, "Inscription", "Entry");
-    case "judge_fee":
-      return uiText(locale, "Frais de juge", "Judge fee");
-    case "stall":
-      return "Stall";
-    case "extra":
-      return "Extra";
-    case "membership":
-      return "Membership";
-    case "fee":
-      return uiText(locale, "Frais", "Fee");
-    case "discount":
-      return uiText(locale, "Rabais", "Discount");
-    case "tax":
-      return uiText(locale, "Taxe", "Tax");
-    case "manual":
-    default:
-      return uiText(locale, "Manuel", "Manual");
-  }
-}
-
-function invoiceQuantityLabel(quantity: number) {
-  return Number(quantity).toLocaleString("en-CA", { maximumFractionDigits: 2 });
-}
-
 function eligibilityRulesFromNotes(notes: string, extras: EligibilityRules = {}): EligibilityRules {
   const rules = { ...extras };
 
@@ -864,7 +836,6 @@ export {
   timeInputValue,
   classScheduleStartLabel,
   scheduleStartModeLabel,
-  invoiceQuantityLabel,
   eligibilityRulesFromNotes,
   eligibilityNotesFromRules,
 };

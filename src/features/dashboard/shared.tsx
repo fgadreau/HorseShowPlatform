@@ -17,9 +17,8 @@ import type {
   HorseExternalIdentifier,
   HorseHealthComplianceOverview,
   HorseHealthDocument,
-  Invoice,
-  InvoiceLineItem,
-  Organization,
+  BillingAccountSummary,
+    Organization,
   OrganizationBackNumber,
   OrganizationExternalCredentialRequirement,
   SanctioningBody,
@@ -398,7 +397,7 @@ export function buildNotificationItems(input: {
   externalCredentialIssuers: ExternalCredentialIssuer[];
   healthComplianceResults: HorseHealthComplianceOverview[];
   horses: Horse[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   membershipRequirements: OrganizationExternalCredentialRequirement[];
   organization: Organization | null;
   showDays: ShowDay[];
@@ -456,16 +455,16 @@ export function buildNotificationItems(input: {
     shows: input.shows,
   }).forEach((notification) => notifications.push(notification));
 
-  for (const invoice of input.invoices.filter((candidate) => !["paid", "void"].includes(candidate.status) && Number(candidate.balance_due ?? 0) > 0)) {
+  for (const invoice of input.billingAccounts.filter((candidate) => Number(candidate.balance ?? 0) > 0)) {
     const show = findById(input.shows, invoice.show_id);
     notifications.push({
-      actionLabel: "Voir facture",
+      actionLabel: "Voir les comptes",
       category: "billing",
-      detail: `#${formatInvoiceNumber(invoice.invoice_number)}: ${formatCurrency(invoice.balance_due, input.organization?.currency ?? "CAD")} à recevoir.`,
-      id: `invoice-${invoice.id}`,
-      meta: [show?.name, invoice.due_date ? `Échéance ${formatDate(invoice.due_date)}` : null].filter(Boolean).join(" - ") || "Facturation",
-      priority: invoice.status === "overdue" ? "critical" : "warning",
-      title: invoice.status === "overdue" ? "Facture en retard" : "Solde de facture ouvert",
+      detail: `#${invoice.account_number}: ${formatCurrency(invoice.balance, invoice.currency)} à recevoir.`,
+      id: `account-${invoice.id}`,
+      meta: show?.name || "Finance",
+      priority: invoice.state === "closed" ? "critical" : "warning",
+      title: invoice.state === "closed" ? "Compte fermé avec solde" : "Solde de compte ouvert",
       view: "billing",
     });
   }
@@ -496,7 +495,7 @@ export function buildNotificationItems(input: {
       blocks: input.blocks,
       classes: input.classes,
       entries: input.entries,
-      invoices: input.invoices,
+      billingAccounts: input.billingAccounts,
       showDays: input.showDays,
       showScoreClassSetups: input.showScoreClassSetups,
       stallOptions: input.stallOptions,
@@ -777,7 +776,7 @@ export function buildShowReadinessItems(
     blocks: Block[];
     classes: ClassRecord[];
     entries: Entry[];
-    invoices: Invoice[];
+    billingAccounts: BillingAccountSummary[];
     showDays: ShowDay[];
     showScoreClassSetups: ShowScoreBlockSetup[];
     stallOptions: StallOption[];
@@ -789,7 +788,7 @@ export function buildShowReadinessItems(
   const showClasses = context.classes.filter((classRecord) => classRecord.show_id === show.id);
   const showEntries = context.entries.filter((entry) => entry.show_id === show.id);
   const showStallOptions = context.stallOptions.filter((option) => option.show_id === show.id);
-  const showInvoices = context.invoices.filter((invoice) => invoice.show_id === show.id);
+  const showAccounts = context.billingAccounts.filter((invoice) => invoice.show_id === show.id);
   const preparedClassIds = new Set(context.showScoreClassSetups.filter((setup) => setup.show_id === show.id).map((setup) => setup.block_id));
   const preparedBlocks = showBlocks.filter((block) => preparedClassIds.has(block.id)).length;
 
@@ -845,8 +844,8 @@ export function buildShowReadinessItems(
     {
       key: "billing",
       title: uiText(locale, "Facturation", "Billing"),
-      detail: showInvoices.length ? uiText(locale, `${showInvoices.length} facture${showInvoices.length === 1 ? "" : "s"} liée${showInvoices.length === 1 ? "" : "s"} au concours.`, `${showInvoices.length} invoice${showInvoices.length === 1 ? "" : "s"} linked to the show.`) : uiText(locale, "Aucune facture liée au concours.", "No invoices linked to the show."),
-      done: showInvoices.length > 0,
+      detail: uiText(locale, `${showAccounts.length} comptes liés au concours.`, `${showAccounts.length} accounts linked to the show.`),
+      done: showAccounts.length > 0,
       view: "billing",
       actionLabel: uiText(locale, "Voir", "View"),
     },
@@ -860,10 +859,6 @@ export function buildShowReadinessItems(
 }
 
 
-export function formatInvoiceNumber(value: string) {
-  const normalized = value.trim();
-  return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, "0") : normalized;
-}
 
 export function classEntriesCloseDate(block: Block | null | undefined) {
   if (!block?.entries_close_at) {

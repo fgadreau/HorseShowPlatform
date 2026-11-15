@@ -7,7 +7,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { contactLabel, classLabel, findById, formatCurrency, formatDate, horseLabel, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, deleteEntry, updateEntry, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
-import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, Invoice, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
+import type { Block, Contact, ContactExternalIdentifier, ContactRole, ClassRecord, Entry, ExternalCredentialIssuer, Horse, HorseExternalIdentifier, HorseHealthDocument, NrhaRiderRanking, Organization, OrganizationExternalCredentialRequirement, Show, ShowDay } from "../../types/domain";
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "./EntryForm";
 import { EntryEditForm } from "./EntryEditForm";

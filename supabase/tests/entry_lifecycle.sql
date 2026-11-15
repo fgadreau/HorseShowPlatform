@@ -2,7 +2,6 @@
 \set ON_ERROR_STOP on
 begin;
 select set_config('test.org', :'org_id',true),set_config('test.show', :'show_id',true),set_config('request.jwt.claim.sub', :'staff_uid',true),set_config('test.staff_uid', :'staff_uid',true);
-create temp table entry_test_history as select md5(coalesce(jsonb_agg(to_jsonb(i) order by i.id)::text,'')) digest from public.invoices i;
 select public.billing_set_capabilities(current_setting('test.org')::uuid,null,true,true,false);
 select public.configure_reservation_billing(current_setting('test.show')::uuid,
  '{"name_fr":"Test inscriptions","name_en":"Entry test","account_prefix":"TEST-E-A","receipt_prefix":"TEST-E-R","invoice_prefix":"TEST-E-I","closing_policy":"manual","payment_policy":"received_only","activation_policy":"allocated_received","categories":["manual","stall_extra"],"staff_roles":["admin","secretary"],"period":"2026","timezone":"America/Toronto"}',
@@ -407,5 +406,35 @@ begin
   exception when others then
     if sqlerrm <> 'TEST_SUBTRANSACTION_COMPLETE' then raise; end if;
   end;
+end $$;
+-- Dashboard reads must use the same accounts and authorization as finance.
+reset role;
+select set_config('request.jwt.claim.sub',current_setting('test.staff_uid'),true);
+set local role authenticated;
+do $$declare dashboard jsonb;finance jsonb;begin
+ dashboard:=public.list_dashboard_billing_accounts(current_setting('test.org')::uuid);
+ finance:=public.list_billing_accounts(current_setting('test.org')::uuid,'{}',100,0);
+ if jsonb_array_length(dashboard)<>(finance->>'total')::integer then raise exception 'TEST dashboard must include every staff account exactly once';end if;
+ if not exists(select 1 from jsonb_array_elements(dashboard) a where a->>'payer_contact_id'=current_setting('test.payer') and a ? 'balance' and a ? 'currency') then raise exception 'TEST dashboard must expose current payer, balance and currency';end if;
+end $$;
+set local request.jwt.claim.sub='10000000-0000-0000-0000-000000000004';
+do $$declare dashboard jsonb;mine jsonb;begin
+ dashboard:=public.list_dashboard_billing_accounts(current_setting('test.org')::uuid);
+ mine:=public.list_my_billing_accounts(current_setting('test.org')::uuid,'{}',100,0);
+ if jsonb_array_length(dashboard)<>(mine->>'total')::integer then raise exception 'TEST participant dashboard must contain only their readable accounts';end if;
+end $$;
+set local request.jwt.claim.sub='10000000-0000-0000-0000-000000000006';
+do $$begin
+ if public.list_dashboard_billing_accounts(current_setting('test.org')::uuid)<>'[]'::jsonb then raise exception 'TEST dashboard must not expose another association';end if;
+end $$;
+reset role;
+set local role anon;
+do $$begin
+ begin perform public.list_dashboard_billing_accounts(null);raise exception 'TEST anonymous dashboard read must fail';exception when insufficient_privilege then null;end;
+end $$;
+reset role;
+do $$begin
+ if to_regclass('public.invoices') is not null or to_regclass('public.invoice_line_items') is not null or to_regclass('public.payments') is not null then raise exception 'TEST retired billing tables must be absent';end if;
+ if exists(select 1 from pg_proc p where p.pronamespace='public'::regnamespace and p.prokind='f' and p.prosrc ~ 'public\.(invoices|invoice_line_items|payments)\M') then raise exception 'TEST active functions must not reference retired tables';end if;
 end $$;
 rollback;
