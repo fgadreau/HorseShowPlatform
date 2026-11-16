@@ -43,6 +43,9 @@ begin
  blocked:=false;
  begin insert into public.entries(organization_id,show_id,horse_id,class_id,owner_contact_id,payer_contact_id,rider_contact_id,created_by_user_id,status) values(org,sh,horse,cl,rider,rider,rider,profile,'draft');exception when check_violation then blocked:=sqlerrm like '%HOUSE_ELIGIBILITY_BLOCKED%';end;
  if not blocked then raise exception 'Direct API insert bypassed house rules';end if;
+ blocked:=false;
+ begin insert into public.entries(organization_id,show_id,horse_id,class_id,owner_contact_id,payer_contact_id,rider_contact_id,created_by_user_id,status) values(org,sh,horse,cl,rider,rider,rider,profile,'completed');exception when check_violation then blocked:=sqlerrm like '%HOUSE_ELIGIBILITY_BLOCKED%';end;
+ if not blocked then raise exception 'Final status bypassed house eligibility on creation';end if;
  blocked:=false;begin perform public.grant_house_eligibility_override(cl,horse,rider,'');exception when others then blocked:=true;end;
  if not blocked then raise exception 'Empty reason accepted';end if;
  override_id:=public.grant_house_eligibility_override(cl,horse,rider,'Exception documentée du secrétariat');
