@@ -54,6 +54,7 @@ pas encore que tous les parcours client du show pilote ont été exécutés.
 | Chevaux et documents santé | Fixtures écrites par le processus Node de test; aucune preuve de création par les formulaires client |
 | Inscriptions et dossards | API avec la session authentifiée de l'administrateur jetable, dossard personnel explicite, contrôles serveur conservés; aucune preuve de création par le formulaire client |
 | Ordre de passage et transfert vers ShowScore | Interface HSP et données sauvegardées ShowScore |
+| Draw de présentation | Interface et RPC réels, participants/cases score vérifiés, versions du draw inchangées |
 | Annonceur, NS, scratch, écrans publics, chrono warm-up | Interfaces réelles ShowScore; NS/scratch seulement si au moins cinq participants |
 | Approbation, publication, retour HSP, championnat | Interfaces réelles et vérifications en base |
 | Calcul, révision, publication des bourses | Interface HSP et montants relus en base |

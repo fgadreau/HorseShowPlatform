@@ -275,6 +275,28 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     expect(championshipParticipantNames.every(Boolean)).toBe(true);
   });
 
+  await test.step("draw de présentation réel avec cases score vides et sans publication", async () => {
+    if (!crossAppFixture) throw new Error("Fixture du draw absente.");
+    const admin=createE2EAdminClient();
+    const before=await admin.from('blocks').select('draw_version,draw_published_version').eq('id',crossAppFixture.blockId).single();
+    if(before.error)throw before.error;
+    await navigateToShow(page,'control');
+    const toggle=page.locator('.control-block-toggle').filter({hasText:blockName});
+    if(await toggle.getAttribute('aria-expanded')!=='true')await toggle.click();
+    await page.getByRole('button',{name:'Draw de présentation',exact:true}).click();
+    const dialog=page.getByRole('dialog',{name:'Draw de présentation',exact:true});
+    await expect(dialog.locator('.presentation-draw-sheet tbody tr')).toHaveCount(participantCount);
+    await expect(dialog.locator('.presentation-score-box')).toHaveCount(participantCount);
+    for(const score of await dialog.locator('.presentation-score-box').allTextContents())expect(score.trim()).toBe('');
+    for(const participant of crossAppFixture.participantNames)await expect(dialog.locator('.presentation-draw-sheet')).toContainText(participant);
+    await testInfo.attach('draw-presentation-preprod',{body:await dialog.screenshot(),contentType:'image/png'});
+    await dialog.getByRole('button',{name:'Close modal',exact:true}).click();
+    const after=await admin.from('blocks').select('draw_version,draw_published_version').eq('id',crossAppFixture.blockId).single();
+    if(after.error)throw after.error;
+    expect(after.data).toEqual(before.data);
+    await navigateToShow(page,'scoring');
+  });
+
   await test.step("saisie des résultats par l’annonceur dans ShowScore", async () => {
     if (!crossAppFixture) throw new Error("Fixture HSP → ShowScore absente.");
     const config = readE2EConfig();
@@ -645,7 +667,7 @@ async function navigateTo(page: Page, view: string) {
   await expect(page.locator(`#primary-navigation [data-view="${view}"]`)).toHaveClass(/active/);
 }
 
-async function navigateToShow(page: Page, section: "schedule" | "scoring" | "results") {
+async function navigateToShow(page: Page, section: "schedule" | "scoring" | "results" | "control") {
   const state = readRunState();
   const admin = createE2EAdminClient();
   const { data: show, error } = await admin.from("shows").select("id")
