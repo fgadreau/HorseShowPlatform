@@ -10,7 +10,7 @@ const html = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewp
 import React from 'react';import {createRoot} from 'react-dom/client';import {SettingsView} from '/src/features/settings/SettingsView.tsx';import '/src/styles.css';
 window.calls=[];window.teamLoads=0;window.billingLoads=0;const locale=new URLSearchParams(location.search).get('locale')||'fr';
 const organization={id:'org',name:'Association équestre des Laurentides',slug:'laurentides',short_name:'AEL',country:'CA',state:'QC',currency:'CAD',tax_rate:14.975,tax_name:'TPS',tax_number:'TPS-TEST',secondary_tax_name:'TVQ',secondary_tax_number:'TVQ-TEST',back_number_policy:'horse'};
-const context={profile:{id:'me',first_name:'Alex',last_name:'Martin',type_user:'admin'},isPlatformAdmin:false,organizationMembers:[{organization_id:'org',user_id:'me',role:'admin'}],organizationDisciplines:[],disciplines:[],disciplineGoverningBodies:[],disciplineCredentialIssuers:[],organizationDisciplineGoverningBodies:[],sanctioningBodies:[],externalCredentialIssuers:[],externalCredentialProducts:[],eligibilityRequirements:[]};
+const context={profile:{id:'me',first_name:'Alex',last_name:'Martin',type_user:'admin'},isPlatformAdmin:false,organizationMembers:[{organization_id:'org',user_id:'me',role:'admin'}],organizationDisciplines:[],disciplines:[],disciplineGoverningBodies:[],disciplineCredentialIssuers:[],organizationDisciplineGoverningBodies:[],sanctioningBodies:[],externalCredentialIssuers:[],externalCredentialProducts:[],eligibilityRequirements:[],contacts:[]};
 const record=kind=>async(...args)=>window.calls.push({kind,args});
 createRoot(document.getElementById('root')).render(React.createElement(SettingsView,{locale,context,organization,externalCredentialIssuers:[],healthPolicy:null,healthPolicies:[],membershipRequirements:[],membershipTypes:[],products:[],onRefresh:()=>{},onCreateOrganizationMembershipType:record('createMembership'),onCreateOrganizationProduct:record('createProduct'),onSetExternalMembershipRequirement:record('requirement'),onSetOrganizationHealthPolicy:record('health'),onUpdateOrganizationHealthSettings:record('organization'),onUpdateOrganizationMembershipType:record('updateMembership'),onUpdateOrganizationProduct:record('updateProduct')}));</script></body></html>`;
 const server = await createServer({ configFile: false, envDir: false, plugins: [react(), { name: 'settings-test', enforce: 'pre', resolveId(source, importer) {
@@ -27,9 +27,9 @@ try {
   await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
   for(const locale of ['fr','en']) {
     const fr=locale==='fr'; await page.goto('http://127.0.0.1:5204/settings-test?locale='+locale);
-    await expect(page.locator('[data-settings-card]')).toHaveCount(10);
+    await expect(page.locator('[data-settings-card]')).toHaveCount(11);
     await expect(page.locator('[data-settings-card]:visible')).toHaveCount(2);
-    assert.deepEqual(await page.locator('[data-settings-card]').evaluateAll(nodes=>nodes.map(n=>n.dataset.settingsCard)),['identity','team','memberships','membership-import','membership-billing','products','disciplines','credentials','health','profile']);
+    assert.deepEqual(await page.locator('[data-settings-card]').evaluateAll(nodes=>nodes.map(n=>n.dataset.settingsCard)),['identity','team','memberships','membership-import','membership-billing','products','disciplines','house-ineligibility','credentials','health','profile']);
     assert.equal(await page.locator('.settings-section.is-open').count(),0);
     assert.deepEqual(await page.evaluate(()=>[window.teamLoads,window.billingLoads]),[0,0]);
     const search=page.getByRole('searchbox',{name:fr?'Rechercher un réglage':'Search settings',exact:true});
@@ -70,7 +70,7 @@ try {
     await page.getByRole('button',{name:fr?'Enregistrer les infos de facturation':'Save billing information',exact:true}).click();
     await expect.poll(()=>page.evaluate(()=>window.calls.length)).toBe(2);
     const saved=await page.evaluate(()=>window.calls[1]);assert.equal(saved.kind,'organization');assert.equal(saved.args[0],'org');assert.equal(saved.args[1].name,'Association pilote');assert.equal(saved.args[1].tax_rate,14.975);assert.equal(saved.args[1].currency,'CAD');assert.equal(saved.args[1].secondary_tax_number,'TVQ-TEST');
-    await page.getByRole('button',{name:fr?'Tout voir 10':'View all 10',exact:true}).click();
+    await page.getByRole('button',{name:fr?'Tout voir 11':'View all 11',exact:true}).click();
     await page.getByRole('button',{name:fr?'Tout replier':'Collapse all',exact:true}).click();
     await selector.selectOption('team');await expect(page.getByText('alex@example.test',{exact:true})).toBeVisible();
     await selector.selectOption('membership-billing');await expect(page.getByRole('heading',{name:fr?'Relier les cartes à la facturation':'Connect memberships to billing'})).toBeVisible();
@@ -80,7 +80,7 @@ try {
     await selector.selectOption('memberships');await expect(page.getByText(fr?'Aucun type de carte configuré.':'No membership type configured.',{exact:true})).toBeVisible();
     await page.setViewportSize({width:390,height:844});await page.screenshot({path:'.tmp/association-settings-ui/mobile-'+locale+'.png'});
     assert(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-    await page.getByRole('button',{name:fr?'Tout voir 10':'View all 10',exact:true}).click();await page.getByRole('button',{name:fr?'Tout replier':'Collapse all',exact:true}).click();
+    await page.getByRole('button',{name:fr?'Tout voir 11':'View all 11',exact:true}).click();await page.getByRole('button',{name:fr?'Tout replier':'Collapse all',exact:true}).click();
     assert.equal(await page.locator('.settings-section.is-open').count(),0);
     assert.equal(await page.evaluate(()=>window.calls.length),2,'Navigation must never save or mutate settings');
     await search.fill('coggins');
