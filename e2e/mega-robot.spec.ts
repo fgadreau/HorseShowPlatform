@@ -191,11 +191,11 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await blockForm.getByRole("combobox", { name: "Nombre de juges", exact: true }).selectOption("1");
     await blockForm.getByRole("textbox", { name: "Juge 1", exact: true }).fill("Juge E2E");
     await blockForm.getByRole("combobox", { name: "Mode de départ", exact: true }).selectOption("fixed");
-    await blockForm.getByRole("textbox", { name: "Heure", exact: true }).fill("09:00");
+    await blockForm.getByLabel("Heure", { exact: true }).fill("09:00");
     await selectSearchOption(blockForm.getByRole("combobox", { name: "Patron", exact: true }), "Reining #1");
     await blockForm.getByRole("textbox", { name: "Nom du bloc", exact: true }).fill(blockName);
     await blockForm.getByRole("textbox", { name: "Libellé d'horaire", exact: true }).fill("Open — annonceur");
-    await blockForm.getByRole("textbox", { name: /^Fermeture des inscriptions/ }).fill(pastDateTimeLocal());
+    await blockForm.getByLabel(/^Fermeture des inscriptions/).fill(pastDateTimeLocal());
     await blockForm.getByRole("button", { name: "Créer le bloc", exact: true }).click();
     await expect(blockForm).toBeHidden();
 
@@ -227,7 +227,7 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
     await payoutDetails.locator("label").filter({ hasText: /^Aperçu avec/ }).locator("input").fill(String(participantCount));
     await expect(payoutFields.locator(".payout-preview")).toContainText(moneyPattern(expectedPayout.netPurse));
     await payoutDetails.locator("label").filter({ hasText: /^Notes de paiement/ }).locator("textarea").fill(FULL_CLASS_CONFIG.payoutNotes);
-    await classForm.getByRole("textbox", { name: "Critères d'éligibilité", exact: true }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
+    await classForm.getByRole("textbox", { name: /^Critères d'éligibilité Maison/ }).fill(FULL_CLASS_CONFIG.eligibilityNotes);
     await classForm.getByRole("button", { name: "Créer la classe", exact: true }).click();
     await expect(classForm).toBeHidden();
 
