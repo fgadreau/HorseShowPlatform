@@ -35,6 +35,8 @@ jobs:
       - run: npm ci
       - run: npm run build
       - run: npm run test:accounting-export
+      - run: npm run test:nomination-csv
+      - run: npm run test:presentation-draw:browser
       - run: npm run test:association-team:browser
       - run: npm run test:association-settings:browser
       - run: npm run test:membership-csv

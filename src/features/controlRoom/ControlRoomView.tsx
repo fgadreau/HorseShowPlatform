@@ -1,3 +1,4 @@
+import { PresentationDrawDialog, type PresentationDraw } from "./PresentationDraw";
 import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import { AlertCircle, CalendarDays, ChevronDown, ChevronRight, Clock3, FileDown, FileText, ListOrdered, Plus, Radio, Send, Trophy, UserRoundPlus } from "lucide-react";
@@ -28,7 +29,7 @@ import type {
   ShowScorePaidWarmup,
 } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
-import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, loadCurrentBlockDrawPublication, updatePayoutCalculationStatus, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
+import { createContact, createEntry, createHorse, createUploadedHorseHealthDocument, getPresentationDraw, loadCurrentBlockDrawPublication, updatePayoutCalculationStatus, verifyGvlCogginsDocument, verifyNrhaEligibility, verifyNrhaHorse } from "../../services/supabaseServices";
 import { classScheduleStartLabel, compareScheduleClasses, showDayLabel } from "../classes/classUtils";
 import { uiText } from "../dashboard/shared";
 import { EntryForm } from "../entries/EntryForm";
@@ -84,6 +85,7 @@ export function ControlRoomView(props: ControlRoomViewProps) {
   const [lateEntryBlock, setLateEntryBlock] = useState<Block | null>(null);
   const [latePlacement, setLatePlacement] = useState<"negative" | "end">("negative");
   const [chargeLateFee, setChargeLateFee] = useState(true);
+  const [presentationDraw,setPresentationDraw]=useState<PresentationDraw|null>(null);
   const [printDraw, setPrintDraw] = useState<{ block: Block; publication: BlockDrawPublication } | null>(null);
   const effectiveDayId = orderedDays.some((day) => day.id === selectedDayId) ? selectedDayId : orderedDays[0]?.id ?? "unscheduled";
   const selectedDay = orderedDays.find((day) => day.id === effectiveDayId);
@@ -249,6 +251,7 @@ export function ControlRoomView(props: ControlRoomViewProps) {
         </ModalDialog>
       ) : null}
 
+      {presentationDraw ? <PresentationDrawDialog initial={presentationDraw} locale={locale} onClose={()=>setPresentationDraw(null)}/> : null}
       {printDraw ? (
         <ModalDialog className="control-draw-modal" eyebrow="PDF" title={uiText(locale, "Draw officiel", "Official draw")} description={`${printDraw.block.name} · v${printDraw.publication.version}`} onClose={() => setPrintDraw(null)}>
           <DrawSheet block={printDraw.block} classes={classes} locale={locale} publication={printDraw.publication} show={show} />
@@ -300,7 +303,7 @@ export function ControlRoomView(props: ControlRoomViewProps) {
         {expanded ? (
           <div className="control-block-detail">
             <div className="control-draw-preview">
-              <div className="control-section-head"><div><h3>{uiText(locale, "Ordre de passage", "Order of go")}</h3><p>{runs.length} {uiText(locale, "passages", "runs")}</p></div><div className="row-actions"><button className="ghost-button" type="button" onClick={() => setLateEntryBlock(block)}><Plus size={15} />{uiText(locale, "Inscription tardive", "Late entry")}</button>{publishedVersion > 0 ? <button className="ghost-button" disabled={busyKey === `pdf:${block.id}`} type="button" onClick={() => openOfficialDraw(block)}><FileText size={15} />PDF v{publishedVersion}</button> : null}</div></div>
+              <div className="control-section-head"><div><h3>{uiText(locale, "Ordre de passage", "Order of go")}</h3><p>{runs.length} {uiText(locale, "passages", "runs")}</p></div><div className="row-actions"><button className="ghost-button" type="button" onClick={() => setLateEntryBlock(block)}><Plus size={15} />{uiText(locale, "Inscription tardive", "Late entry")}</button>{version > 0 ? <button className="ghost-button" type="button" disabled={busyKey === `presentation:${block.id}`} onClick={()=>void runAction(`presentation:${block.id}`,async()=>setPresentationDraw(await getPresentationDraw(block.id)))}><FileDown size={15}/>{uiText(locale,"Draw de présentation","Presentation draw")}</button> : null}{publishedVersion > 0 ? <button className="ghost-button" disabled={busyKey === `pdf:${block.id}`} type="button" onClick={() => openOfficialDraw(block)}><FileText size={15} />PDF v{publishedVersion}</button> : null}</div></div>
               <div className="control-run-list">{runs.slice(0, 8).map((run) => <div className={run.scratch ? "scratch" : ""} key={run.id}><strong>{formatDraw(run.draw)}</strong><span>{run.horse || "—"}<small>{run.rider || "—"}{run.backNumber ? ` · #${run.backNumber}` : ""}</small></span><em>{run.scratch ? "SCRATCH" : run.draw < 0 ? uiText(locale, "Tardif", "Late") : ""}</em></div>)}{!runs.length ? <p className="muted-line">{uiText(locale, "Le draw n'est pas encore généré.", "The draw has not been created yet.")}</p> : null}</div>
             </div>
             <div className="control-results-preview">

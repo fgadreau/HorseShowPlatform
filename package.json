@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:presentation-draw:browser": "node scripts/presentation-draw.browser.mjs",
+    "test:nomination-csv": "node --test scripts/presentation-nomination-csv.test.mjs",
     "test:membership-import:browser": "node scripts/membership-import.browser.mjs",
     "test:membership-csv": "node --test scripts/membership-csv.test.mjs",
     "test:association-settings:browser": "node scripts/association-settings.browser.mjs",
