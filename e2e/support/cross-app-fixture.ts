@@ -62,6 +62,13 @@ export async function createCrossAppEntries(state: E2ERunState, blockName: strin
     .single<{ id: string }>();
   if (showError) throw showError;
 
+  if(!state.cleanupToken)throw new Error('E2E billing scope token missing');
+  const scope={p_org:state.organizationId,p_user:state.userId,p_token:state.cleanupToken};
+  const registered=await admin.rpc('e2e_register_scope',scope);
+  if(registered.error)throw new Error(`E2E scope registration: ${registered.error.message}`);
+  const configured=await admin.rpc('e2e_configure_show',{...scope,p_show:show.id});
+  if(configured.error)throw new Error(`E2E billing configuration: ${configured.error.message}`);
+
   const { error: showVisibilityError } = await admin
     .from("shows")
     .update({

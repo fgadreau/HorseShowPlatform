@@ -5,6 +5,7 @@ export const E2E_STATE_PATH = path.join(process.cwd(), ".tmp", "e2e", "run-state
 
 export type E2ERunState = {
   createdAt: string;
+  cleanupToken?: string;
   email: string;
   organizationId: string | null;
   organizationName: string;

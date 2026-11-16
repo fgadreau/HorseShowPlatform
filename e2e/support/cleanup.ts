@@ -40,8 +40,16 @@ export async function cleanupPreviousE2ERun() {
       if (validationDeleteError) throw validationDeleteError;
     }
 
-    const { error } = await admin.from("organizations").delete().eq("id", organizationId).eq("slug", state.organizationSlug);
-    if (error) throw error;
+    let cleaned=false;
+    if(state.cleanupToken){
+      const result=await admin.rpc('e2e_cleanup_scope',{p_org:organizationId,p_user:state.userId,p_token:state.cleanupToken});
+      if(result.error)throw new Error(`E2E scoped cleanup: ${result.error.message}`);
+      cleaned=result.data===true;
+    }
+    if(!cleaned){
+      const { error } = await admin.from("organizations").delete().eq("id", organizationId).eq("slug", state.organizationSlug);
+      if (error) throw error;
+    }
   }
 
   if (horseIds.length) {

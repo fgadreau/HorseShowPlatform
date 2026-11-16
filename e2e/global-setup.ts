@@ -42,6 +42,7 @@ export default async function globalSetup(_config: FullConfig) {
 
     writeRunState({
       createdAt: new Date().toISOString(),
+      cleanupToken: crypto.randomUUID(),
       email,
       organizationId,
       organizationName,
