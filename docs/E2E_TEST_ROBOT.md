@@ -28,6 +28,16 @@ La définition du workflow doit rester synchronisée sur `main` et `preprod`.
 Cette synchronisation porte sur le workflow seulement et ne constitue pas
 une promotion du code applicatif de préproduction vers la production.
 
+### Chargement du tableau de bord avec 25 inscriptions
+
+Le méga parcours a révélé un délai SQL dépassé dans
+`list_dashboard_billing_accounts` après la création des 25 contacts et inscriptions.
+Cette lecture de résumé ne doit pas construire les instantanés complets de
+documents. Elle agrège directement les frais et les paiements signés des seuls
+comptes autorisés, en conservant l’accès personnel/historique et l’accès staff.
+Les tests financiers vérifient aussi les totaux après crédit et remboursement,
+l’équivalence acheteur/secrétariat et le refus d’un utilisateur tiers.
+
 Le workflow du robot comporte trois résultats indépendants : le parcours réel
 HSP → ShowScore, les régressions navigateur des fonctions récentes et les contrats
 SQL dans une base Docker locale jetable. Un échec inter-apps ne masque plus les

@@ -1,10 +1,10 @@
 -- Synthetic transaction; real PostgreSQL authorization and ledger arithmetic.
 begin;
 do $$declare
- staff uuid:=gen_random_uuid();buyer uuid:=gen_random_uuid();sp uuid;bp uuid;org uuid:=gen_random_uuid();directory uuid:=gen_random_uuid();contact uuid:=gen_random_uuid();sh uuid;bl uuid;
+ staff uuid:=gen_random_uuid();buyer uuid:=gen_random_uuid();stranger uuid:=gen_random_uuid();sp uuid;bp uuid;org uuid:=gen_random_uuid();directory uuid:=gen_random_uuid();contact uuid:=gen_random_uuid();sh uuid;bl uuid;
  catalog jsonb;q jsonb;items jsonb;result jsonb;folio uuid;charge uuid;ctx uuid;pid uuid;aid uuid;rid uuid;ord uuid;pid2 uuid;aid2 uuid;charge2 uuid;request uuid:=gen_random_uuid();refund_request uuid:=gen_random_uuid();blocked boolean;snap jsonb;credit_total numeric;original jsonb;
 begin
- insert into auth.users(id,email,raw_user_meta_data) values(staff,staff||'@example.test','{}'),(buyer,buyer||'@example.test','{}');
+ insert into auth.users(id,email,raw_user_meta_data) values(staff,staff||'@example.test','{}'),(buyer,buyer||'@example.test','{}'),(stranger,stranger||'@example.test','{}');
  select id into sp from public.user_profiles where user_id=staff;select id into bp from public.user_profiles where user_id=buyer;
  insert into public.organizations(id,name,slug,currency) values(org,'Credit TEST',org::text,'CAD');
  insert into public.organization_members(organization_id,user_id,role) values(org,sp,'admin');
@@ -67,6 +67,13 @@ begin
  perform set_config('request.jwt.claim.sub',staff::text,true);set local role authenticated;
  snap:=public.billing_ui_detail(folio,false);
  if snap#>>'{refunds,0,state}'<>'succeeded' then raise exception 'Refund history missing';end if;
+ snap:=public.list_dashboard_billing_accounts(org);
+ if jsonb_array_length(snap)<>1 or (snap#>>'{0,paid}')::numeric<>287.44 or (snap#>>'{0,balance}')::numeric<>0 or snap#>>'{0,payer_contact_id}'<>contact::text then raise exception 'Dashboard refund summary wrong: %',snap;end if;
+ perform set_config('request.jwt.claim.sub',buyer::text,true);
+ if public.list_dashboard_billing_accounts(org)<>snap then raise exception 'Buyer dashboard summary differs from staff';end if;
+ perform set_config('request.jwt.claim.sub',stranger::text,true);
+ if public.list_dashboard_billing_accounts(org)<>'[]'::jsonb then raise exception 'Stranger read dashboard account';end if;
+ perform set_config('request.jwt.claim.sub',staff::text,true);
  snap:=public.get_billing_context_report(ctx,org);
  if (snap#>>'{totals,collected}')::numeric<>287.44 or (snap#>>'{totals,balance}')::numeric<>0 then raise exception 'Report refund totals wrong: %',snap;end if;
  snap:=public.preview_billing_accounting_export(ctx,'quickbooks_online','receipts',current_date,current_date,current_date);
@@ -74,6 +81,8 @@ begin
  -- Tiny credits must cumulatively reverse precisely the original tax amount.
  perform public.billing_credit_account(gen_random_uuid(),folio,charge,0.01,'Rounding test one');
  perform public.billing_credit_account(gen_random_uuid(),folio,charge,249.99,'Rounding remainder');
+ snap:=public.list_dashboard_billing_accounts(org);
+ if (snap#>>'{0,balance}')::numeric<>-287.44 or (snap#>>'{0,total}')::numeric<>0 then raise exception 'Dashboard lost signed credits: %',snap;end if;
  reset role;
  if (select sum(tax_amount) from public.billing_charges where id=charge or credit_for=charge)<>0 then raise exception 'Cumulative tax rounding incorrect';end if;
  -- A real ticket cancellation must also permit refund allocations to reversed fees.
