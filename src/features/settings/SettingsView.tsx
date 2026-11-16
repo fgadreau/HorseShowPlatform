@@ -1,4 +1,5 @@
 import {MembershipBillingSetup} from "./MembershipBillingSetup";
+import {HouseIneligibilitySettings} from './HouseIneligibilitySettings';
 import { AssociationTeamSettings } from "./AssociationTeamSettings";
 import { MembershipImportSettings } from './MembershipImportSettings';
 import { useEffect, useState } from "react";
@@ -523,6 +524,7 @@ function SettingsView({
       {context && organization ? <SettingsSection id="team"><AssociationTeamSettings key={organization.id} organizationId={organization.id} locale={locale} currentProfileId={context.profile.id} canAdminister={context.isPlatformAdmin || context.organizationMembers.some(member => member.organization_id === organization.id && member.user_id === context.profile.id && member.role === 'admin')} onRefresh={onRefresh} /></SettingsSection> : null}
 
       {context && organization ? <SettingsSection id="disciplines"><DisciplineRequirementsSettings context={context} organization={organization} onRefresh={onRefresh} /></SettingsSection> : null}
+      {context && organization ? <SettingsSection id="house-ineligibility"><HouseIneligibilitySettings organizationId={organization.id} contacts={context.contacts} locale={locale}/></SettingsSection> : null}
 
       <SettingsSection
         id="profile"

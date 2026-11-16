@@ -1,5 +1,6 @@
 import { WarmupRoster } from "../warmups/WarmupRoster";
 import { HouseClassExclusions } from "./HouseClassExclusions";
+import { HouseRulesEditor } from './HouseRulesEditor';
 import { useMemo, useState } from "react";
 import { ArrowDown, ArrowUp, CalendarDays, ChevronDown, ChevronRight, Clock, FileSpreadsheet, Plus } from "lucide-react";
 import { EmptyState, ModalDialog, SearchSelect, ViewIntro } from "../../components/ui";
@@ -635,7 +636,7 @@ function ClassesView({
                   <button className="text-button" type="button" onClick={() => setEditingRequirements({ scopeType: "class_template", id: classRecord.id, name: classRecord.name })}>
                     {uiText(locale, "Exigences", "Requirements")}
                   </button>
-                  {!classRecord.governing_body_assignments.length ? <button className="text-button" type="button" onClick={() => setEditingHouseExclusions(classRecord)}>{uiText(locale, "Inéligibilité", "Ineligibility")}</button> : null}
+                  {!classRecord.governing_body_assignments.some(a=>a.code.toUpperCase()==='NRHA') ? <button className="text-button" type="button" onClick={() => setEditingHouseExclusions(classRecord)}>{uiText(locale, "Éligibilité maison", "House eligibility")}</button> : null}
                   <button className="text-button danger-text" type="button" onClick={() => handleDeleteClassTemplate(classRecord)}>
                     {uiText(locale, "Supprimer", "Delete")}
                   </button>
@@ -705,7 +706,8 @@ function ClassesView({
       ) : null}
 
       {editingHouseExclusions ? <ModalDialog className="class-program-modal" eyebrow={uiText(locale, "Classe maison récurrente", "Recurring house class")} title={uiText(locale, "Liste d’inéligibilité", "Ineligibility list")} description={editingHouseExclusions.name} onClose={() => setEditingHouseExclusions(null)}>
-        <HouseClassExclusions key={editingHouseExclusions.id} template={editingHouseExclusions} contacts={contacts} locale={locale} />
+        <HouseRulesEditor key={`rules:${editingHouseExclusions.id}`} template={editingHouseExclusions} templates={classTemplates} locale={locale}/>
+        <HouseClassExclusions legacyOnly key={editingHouseExclusions.id} template={editingHouseExclusions} contacts={contacts} locale={locale} />
       </ModalDialog> : null}
       {creatingBlockTemplate ? (
         <ModalDialog className="class-program-modal" description={uiText(locale, "Catalogue réutilisable de l'association.", "Reusable association catalog.")} eyebrow={uiText(locale, "Horaire", "Schedule")} title={uiText(locale, "Nouveau bloc récurrent", "New recurring block")} onClose={() => setCreatingBlockTemplate(false)}>

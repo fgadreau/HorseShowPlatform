@@ -14,6 +14,8 @@ import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthCompl
 import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveProgramEntryStatuses, showDayLabel } from "../classes/classUtils";
 import { ClassEligibilityCheck, sameClassEligibilityGate, withClassEligibilityReadiness, type ClassEligibilityGate } from "./NrhaEligibilityCheck";
 import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
+import {useHouseClassBlocks} from './useHouseClassBlocks';
+import {HouseEligibilityPanel} from './HouseEligibilityPanel';
 
 function EntryEditForm({
   allowPriceAdjustment = false,
@@ -83,6 +85,7 @@ function EntryEditForm({
   const selectedNrhaRiderContact = selectedRiderContact ?? selectedOwnerContact;
   const selectedPayerContact = findById(contacts, payerContactId) ?? null;
   const skipsEntryReadiness = ["cancelled", "scratched", "scratched_pending_refund"].includes(status);
+  const house=useHouseClassBlocks(organization?.id,entry.show_id,horseId,riderContactId,Boolean(selectedClass?.class_template_id&&!selectedClass.governing_body_assignments.some(a=>a.code.toUpperCase()==='NRHA')&&!skipsEntryReadiness));
   const healthComplianceRevision = horseHealthDocuments.map((document) => `${document.id}:${document.status}:${document.updated_at}`).join("|");
   const healthComplianceOverview = useHorseHealthComplianceOverview({
     horseIds: selectedShow && organization ? horses.map((horse) => horse.id) : [],
@@ -126,7 +129,7 @@ function EntryEditForm({
     nrhaEligibilityGate?.applies && !nrhaEligibilityGate.canProceed
       ? nrhaEligibilityGate.message?.message ?? uiText(locale, "Vérification d'admissibilité requise.", "Eligibility check required.")
       : null;
-  const canUpdate = Boolean(selectedHorse && selectedClass && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed && nrhaEligibilityCanProceed);
+  const canUpdate = Boolean(selectedHorse && selectedClass && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed && nrhaEligibilityCanProceed && !house.loading && !house.error && !house.blocked.has(classId));
   const entryHeaderMessage = entryReadiness.canProceed
     ? entryProgramLimitReadiness.canProceed
       ? nrhaEligibilityBlockingMessage ?? horseLabel(selectedHorse ?? undefined)
@@ -166,6 +169,8 @@ function EntryEditForm({
 
   return (
     <section className="panel edit-panel">
+      {house.error?<p role="alert">{house.error}</p>:null}
+      <HouseEligibilityPanel rows={house.rows.filter(r=>r.class_id===classId)} classes={classes} horse={horseId} rider={riderContactId} locale={locale} canOverride={allowPriceAdjustment} onRefresh={house.retry}/>
       <div className="panel-header">
         <div>
           <h2>{uiText(locale, "Modifier l'inscription", "Edit entry")}</h2>

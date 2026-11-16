@@ -221,6 +221,7 @@ export function ControlRoomView(props: ControlRoomViewProps) {
             <label className="checkbox-line"><input checked={chargeLateFee} type="checkbox" onChange={(event) => setChargeLateFee(event.target.checked)} />{uiText(locale, `Ajouter les frais de retard (${show?.late_entry_fee_percent ?? 0} %)`, `Add late fee (${show?.late_entry_fee_percent ?? 0}%)`)}</label>
           </div>
           <EntryForm
+            canOverrideHouse
             locale={locale}
             blocks={[lateEntryBlock]}
             contacts={props.contacts}

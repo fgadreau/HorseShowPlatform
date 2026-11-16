@@ -125,7 +125,7 @@ function normalizeHeader(value: string) {
     .replace(/^_+|_+$/g, "");
 }
 
-function parseCsvRecords(content: string) {
+export function parseCsvRecords(content: string) {
   const delimiter = detectDelimiter(content);
   const records: string[][] = [];
   let record: string[] = [];

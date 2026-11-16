@@ -5,7 +5,7 @@ import type { Locale } from '../../lib/i18n';
 import './associationSettings.css';
 
 type Category = 'association' | 'members' | 'rules' | 'account';
-export type SettingsSectionId = 'identity' | 'team' | 'memberships' | 'membership-billing' | 'membership-import' | 'products' | 'disciplines' | 'credentials' | 'health' | 'profile';
+export type SettingsSectionId = 'identity' | 'team' | 'memberships' | 'membership-billing' | 'membership-import' | 'products' | 'disciplines' | 'credentials' | 'health' | 'profile' | 'house-ineligibility';
 const categoryLabels = {
   association: ['Association', 'Association'], members: ['Membres et ventes', 'Members and sales'],
   rules: ['Règles et conformité', 'Rules and compliance'], account: ['Mon compte', 'My account'],
@@ -13,6 +13,7 @@ const categoryLabels = {
 function sections(fr: boolean) {
   const text = (a: string, b: string) => fr ? a : b;
   return [
+    { id: 'house-ineligibility', category: 'rules', icon: ShieldCheck, title: text('Listes d’inéligibilité', 'Ineligibility lists'), description: text('Listes annuelles de cavaliers, import CSV et correspondances.', 'Annual rider lists, CSV import and matching.') },
     { id: 'identity', category: 'association', icon: Building2, title: text('Identité, coordonnées et taxes', 'Identity, contact and taxes'), description: text('Coordonnées de l’association, adresse de facturation, devise et taxes.', 'Association contact details, billing address, currency and taxes.') },
     { id: 'team', category: 'association', icon: UsersRound, title: text('Équipe et rôles', 'Team and roles'), description: text('Personnes autorisées et rôles partagés avec ShowScore.', 'Authorized people and roles shared with ShowScore.') },
     { id: 'memberships', category: 'members', icon: BadgeCheck, title: text('Cartes de membre', 'Memberships'), description: text('Types d’adhésion, tarifs, saisons et périodes de validité.', 'Membership types, prices, seasons and validity periods.') },
@@ -26,6 +27,7 @@ function sections(fr: boolean) {
   ] as const;
 }
 const searchKeywords: Record<SettingsSectionId, string> = {
+  'house-ineligibility': 'maison cavalier debutant gains liste ineligible ineligibilite csv import annee saison house rider eligibility year season',
   identity: 'nom contact courriel email telephone adresse address province pays country devise currency TPS TVQ GST QST HST taxes facturation billing',
   team: 'administrateur admin secretaire secretary scribe annonceur announcer permissions acces access equipe team roles showscore',
   memberships: 'adhesion membre membership carte tarif prix price saison season validite expiration',

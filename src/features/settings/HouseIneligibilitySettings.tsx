@@ -1,0 +1,37 @@
+import {useEffect,useMemo,useState} from 'react';
+import {SearchSelect} from '../../components/ui';
+import {requireSupabase} from '../../lib/supabase';
+import {contactLabel,errorMessage} from '../../lib/display';
+import {houseNameKey,parseHouseCsv} from '../../lib/houseIneligibilityCsv';
+import {houseRpc,type HouseList,type HouseEdition,type HousePerson} from '../../services/houseEligibility';
+import type {Contact} from '../../types/domain';
+import type {Locale} from '../../lib/i18n';
+
+export function HouseIneligibilitySettings({organizationId,contacts,locale}:{organizationId:string;contacts:Contact[];locale:Locale}){
+ const fr=locale==='fr',t=(a:string,b:string)=>fr?a:b;
+ const [lists,setLists]=useState<HouseList[]>([]),[editions,setEditions]=useState<HouseEdition[]>([]),[people,setPeople]=useState<HousePerson[]>([]);
+ const [listId,setListId]=useState(''),[year,setYear]=useState(new Date().getFullYear()),[name,setName]=useState(''),[manual,setManual]=useState(''),[revision,setRevision]=useState(0);
+ const [preview,setPreview]=useState<Array<{rider_name:string;rider_contact_id:string|null}>>([]),[source,setSource]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState(''),[message,setMessage]=useState('');
+ const contactItems=useMemo(()=>contacts.map(c=>({id:c.id,label:contactLabel(c),detail:[c.email,c.date_of_birth,c.city].filter(Boolean).join(' · ')})),[contacts]);
+ const edition=editions.find(e=>e.list_id===listId&&e.season_year===year);
+ useEffect(()=>{let live=true;void(async()=>{try{const client=requireSupabase();const a=await client.from('house_ineligibility_lists').select('*').eq('organization_id',organizationId).order('name');if(a.error)throw a.error;const ids=(a.data??[]).map(x=>x.id);const b=ids.length?await client.from('house_ineligibility_editions').select('*').in('list_id',ids):{data:[],error:null};if(b.error)throw b.error;if(live){setLists(a.data??[]);setEditions(b.data??[]);}}catch(e){if(live)setError(errorMessage(e));}})();return()=>{live=false;};},[organizationId,revision]);
+ useEffect(()=>{setPreview([]);setPeople([]);if(!edition)return;let live=true;void requireSupabase().from('house_ineligibility_people').select('id,rider_name,rider_contact_id').eq('edition_id',edition.id).order('rider_name').then(({data,error})=>{if(live){if(error)setError(error.message);else setPeople(data??[]);}});return()=>{live=false;};},[edition?.id,revision]);
+ async function run(action:()=>Promise<void>){setBusy(true);setError('');setMessage('');try{await action();setRevision(n=>n+1);}catch(e){setError(errorMessage(e));}finally{setBusy(false);}}
+ async function createEdition(){if(!listId)return;await run(async()=>{const r=await requireSupabase().from('house_ineligibility_editions').insert({list_id:listId,season_year:year});if(r.error)throw r.error;});}
+ function prepare(names:string[]){setPreview(names.map(rider_name=>{const matches=contacts.filter(c=>houseNameKey(contactLabel(c))===houseNameKey(rider_name));return {rider_name,rider_contact_id:matches.length===1?matches[0].id:null};}));}
+ async function importFile(file:File|undefined){if(!file)return;setError('');try{prepare(parseHouseCsv(await file.text()));setSource(file.name);}catch(e){setError(errorMessage(e));}}
+ return <div className="stack">
+  <p>{t('Une liste réutilisable, avec une édition par année civile. Les noms sans fiche liée restent vérifiés lors des inscriptions futures.','Reusable lists with one edition per calendar year. Unlinked names remain checked for future entries.')}</p>
+  {error?<p role="alert">{error}</p>:null}{message?<p role="status">{message}</p>:null}
+  <div className="form-grid"><label>{t('Nouvelle liste (sans année)','New list (without year)')}<input maxLength={150} value={name} onChange={e=>setName(e.target.value)}/></label><button className="secondary-button" disabled={busy||!name.trim()} type="button" onClick={()=>void run(async()=>{const r=await requireSupabase().from('house_ineligibility_lists').insert({organization_id:organizationId,name:name.trim()}).select().single();if(r.error)throw r.error;setListId(r.data.id);setName('');})}>{t('Créer la liste','Create list')}</button></div>
+  <div className="form-grid"><label>{t('Liste','List')}<select aria-label={t('Liste','List')} value={listId} onChange={e=>setListId(e.target.value)}><option value="">—</option>{lists.map(l=><option key={l.id} value={l.id}>{l.name}</option>)}</select></label><label>{t('Année civile','Calendar year')}<input type="number" min={2000} max={2200} value={year} onChange={e=>setYear(Number(e.target.value))}/></label></div>
+  {listId&&!edition?<button type="button" disabled={busy} className="secondary-button" onClick={()=>void createEdition()}>{t(`Créer l’édition ${year}`,`Create ${year} edition`)}</button>:null}
+  {edition?<>
+   <label>{t('Importer un CSV UTF-8 : nom_complet ou prenom,nom','Import UTF-8 CSV: nom_complet or prenom,nom')}<input key={edition.id} type="file" accept=".csv,text/csv" disabled={busy} onChange={e=>void importFile(e.target.files?.[0])}/></label>
+   <div className="form-grid"><label>{t('Ajouter un nom manuellement','Add a name manually')}<input value={manual} maxLength={200} onChange={e=>setManual(e.target.value)}/></label><button type="button" disabled={busy||manual.trim().length<2} onClick={()=>{prepare([manual.trim()]);setManual('');setSource('Ajout manuel');}}>{t('Préparer l’ajout','Prepare addition')}</button></div>
+   {preview.length?<div className="stack"><h3>{t('Vérifier les correspondances','Review matches')} ({preview.length})</h3><p>{t('Choisissez la bonne fiche en cas d’homonymie. Sans lien, un nom identique sera bloqué pour validation par le secrétariat. L’import ajoute ou met à jour les noms ; il ne retire pas les autres.','Choose the correct record for ambiguous names. Unlinked exact names are blocked for secretary review. Import adds or updates names without removing other entries.')}</p><div style={{maxHeight:400,overflow:'auto'}}>{preview.map((row,i)=><div className="form-grid" key={row.rider_name}><span>{row.rider_name}</span><div><SearchSelect allowEmpty clearLabel={t('Conserver sans lien','Keep unlinked')} emptyLabel={t('Aucune fiche — conserver le nom','No record — keep name')} items={contactItems} placeholder={row.rider_name} value={row.rider_contact_id??''} onChange={id=>setPreview(p=>p.map((r,j)=>j===i?{...r,rider_contact_id:id||null}:r))}/>{!row.rider_contact_id?<small>{t('Sans lien — nom conservé','Unlinked — name retained')}</small>:null}</div></div>)}</div><button type="button" className="primary-button" disabled={busy} onClick={()=>void run(async()=>{await houseRpc('import_house_ineligibility',{p_edition:edition.id,p_rows:preview});const r=await requireSupabase().from('house_ineligibility_editions').update({source_name:source}).eq('id',edition.id);if(r.error)throw r.error;setPreview([]);setMessage(t('Liste importée.','List imported.'));})}>{t('Confirmer l’import','Confirm import')}</button></div>:null}
+   <h3>{t('Cavaliers inéligibles','Ineligible riders')} ({people.length})</h3>
+   {people.map(p=><div className="panel-header" key={p.id}><span>{p.rider_name} <small>{p.rider_contact_id?t('Fiche liée','Linked record'):t('Nom sans fiche liée','Unlinked name')}</small></span><button type="button" className="text-button" disabled={busy} onClick={()=>void run(async()=>{const r=await requireSupabase().from('house_ineligibility_people').delete().eq('id',p.id);if(r.error)throw r.error;})}>{t('Retirer','Remove')}</button></div>)}
+  </>:null}
+ </div>;
+}

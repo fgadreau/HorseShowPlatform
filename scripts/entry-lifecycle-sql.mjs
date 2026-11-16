@@ -50,6 +50,8 @@ try {
   sql(readFileSync('supabase/tests/membership_import.sql', 'utf8'));
   sql(readFileSync('supabase/tests/accounting_exports.sql', 'utf8'));
   sql(readFileSync('supabase/tests/presentation_draw.sql', 'utf8'));
+  sql(readFileSync('supabase/tests/annual_house_eligibility.sql', 'utf8'));
+  console.log('PASS: annual house lists, rider age, membership, NRHA reference and audited overrides');
   console.log('PASS: presentation draw snapshots, scoped programs, nominators and unique horse/program nominations');
   console.log('PASS: accounting journals, CAD/USD separation, access checks and export deduplication');
   console.log('PASS: external memberships, contact matching, hidden/free cards, ownership and financial isolation');
