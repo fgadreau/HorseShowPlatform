@@ -98,6 +98,29 @@
 .finance .finance-reservation-lines dt { font-size: 13px; overflow-wrap: anywhere; }
 .finance .finance-reservation-lines dd { font-size: 13px; }
 .finance-reservation-print { display: none; }
+.finance-accounting > summary { cursor: pointer; color: var(--brand); font-size: 16px; font-weight: 750; }
+.finance-accounting > p { color: var(--text-muted); max-width: 850px; }
+.finance-accounting-controls { display: grid; grid-template-columns: repeat(5,minmax(130px,1fr)); gap: 12px; margin: 18px 0; }
+.finance-accounting-controls label, .finance-accounting-fields label { min-width: 0; font-size: 12px; font-weight: 700; color: var(--text-muted); }
+.finance-accounting-mapping, .finance-accounting-preview { padding: 16px; border: 1px solid var(--border); border-radius: 10px; margin-top: 14px; }
+.finance-accounting-mapping > header, .finance-accounting-preview > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.finance-accounting-mapping h3, .finance-accounting-preview h3 { margin: 0; }
+.finance-accounting-mapping header p, .finance-accounting-preview header p { margin: 4px 0; color: var(--text-muted); font-size: 12px; }
+.finance-accounting-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(100%,220px),1fr)); gap: 12px; margin: 14px 0; }
+.finance-accounting-fields small { font-weight: 400; overflow-wrap: anywhere; }
+.finance-accounting-fields input { width: 100%; }
+.finance-accounting-mapping details > summary, .finance-accounting-history > summary { cursor: pointer; color: var(--brand); font-weight: 700; }
+.finance-accounting-preview table { font-size: 12px; }
+.finance-accounting-preview td:nth-last-child(-n+2), .finance-accounting-preview th:nth-last-child(-n+2) { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.finance-accounting-preview tfoot th { border-top: 2px solid var(--border); }
+.finance-accounting-success, .finance-accounting-error, .finance-accounting-note { padding: 10px 12px; border-radius: 8px; font-size: 13px; }
+.finance-accounting-success { color: #216349; background: #e9f6ee; }
+.finance-accounting-error { color: #922b1e; background: #fff1ed; }
+.finance-accounting-note { color: #72501b; background: #fff8e8; }
+.finance-accounting-history { margin-top: 16px; }
+.finance-accounting-history ul { display: grid; gap: 8px; padding-left: 20px; }
+.finance-accounting-history small { color: var(--text-muted); }
+.finance-dashboard button.finance-accounting-refresh { margin-top: 14px; border: 0; color: var(--brand); }
 .finance-expenses { display: grid; gap: 0; }
 .finance-expense { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 15px; padding: 16px 0; border-bottom: 1px solid var(--border); }
 .finance-expense small { color: var(--text-muted); font-size: 12px; margin-top: 5px; }
@@ -139,8 +162,11 @@
  .finance-expense { grid-template-columns: minmax(0, 1fr) auto; gap: 10px; }
  .finance-expense button { grid-column: 1/-1; }
  .finance-breakdown dd { white-space: normal; text-align: right; }
+ .finance-accounting-controls { grid-template-columns: minmax(0,1fr); }
+ .finance-accounting-mapping, .finance-accounting-preview { padding: 12px; }
 }
 @media print {
+ .finance-accounting { display: none !important; }
  .finance-reservation-details { display: none !important; }
  .finance-reservation-print { display: block; }
  body:has(.finance-report) * { visibility: hidden; }
