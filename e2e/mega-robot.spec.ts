@@ -188,7 +188,8 @@ test("le méga robot complète un vrai parcours de préproduction", async ({ bro
 
     const blockForm = page.getByRole("dialog").getByTestId("block-create-form");
     await blockForm.getByRole("textbox", { name: "Manège / arène", exact: true }).fill("Arène E2E");
-    await blockForm.getByRole("textbox", { name: "Juge(s)", exact: true }).fill("Juge E2E");
+    await blockForm.getByRole("combobox", { name: "Nombre de juges", exact: true }).selectOption("1");
+    await blockForm.getByRole("textbox", { name: "Juge 1", exact: true }).fill("Juge E2E");
     await blockForm.getByRole("combobox", { name: "Mode de départ", exact: true }).selectOption("fixed");
     await blockForm.getByRole("textbox", { name: "Heure", exact: true }).fill("09:00");
     await selectSearchOption(blockForm.getByRole("combobox", { name: "Patron", exact: true }), "Reining #1");

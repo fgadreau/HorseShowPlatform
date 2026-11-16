@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:robot:recent": "node scripts/robot-recent.mjs",
     "test:tickets:browser": "node scripts/ticketing.browser.mjs",
     "test:presentation-draw:browser": "node scripts/presentation-draw.browser.mjs",
     "test:house-eligibility": "node --test scripts/house-eligibility.test.mjs",

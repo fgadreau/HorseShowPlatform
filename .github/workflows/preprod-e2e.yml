@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - preprod
+      # Maintenance runs use the deployed PREPROD app and disposable data.
+      - 'robot/**'
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
@@ -35,6 +37,46 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  recent-features:
+    name: Recent features (isolated browser regressions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:robot:recent
+      - name: Upload recent feature results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-recent-${{ github.run_id }}
+          path: .tmp/robot-recent/results.json
+          retention-days: 14
+
+  database-contracts:
+    name: Database, financial contracts and concurrency (local only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:entry-lifecycle:sql
+      - name: Upload SQL results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-sql-${{ github.run_id }}
+          path: .tmp/entry-lifecycle-tests/results.json
+          retention-days: 14
+
   robot:
     runs-on: ubuntu-latest
     timeout-minutes: 30
