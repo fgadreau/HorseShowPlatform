@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - preprod
+      # Maintenance branches run isolated checks without PREPROD credentials.
+      - 'robot/**'
   schedule:
     - cron: "0 7 * * *"
   workflow_dispatch:
@@ -30,12 +32,77 @@ on:
       VERCEL_AUTOMATION_BYPASS_SECRET:
         required: true
 
+permissions:
+  contents: read
+
 concurrency:
-  group: preprod-e2e
+  # The default-branch scheduler must not hold the lock needed by its child run.
+  group: ${{ github.ref == 'refs/heads/main' && 'preprod-e2e-dispatch' || 'preprod-e2e' }}
   cancel-in-progress: false
 
 jobs:
+  dispatch-preprod:
+    name: Start current preprod robot
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      # Scheduled workflows run from main. Dispatch on preprod rather than
+      # combining old main tests with the deployed preprod application.
+      # No checkout or PREPROD application secrets are needed by this job.
+      - name: Dispatch the preprod workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ROBOT_MODE: ${{ inputs.mode || 'mega' }}
+        run: gh workflow run preprod-e2e.yml --repo "$GITHUB_REPOSITORY" --ref preprod --field "mode=$ROBOT_MODE"
+
+  recent-features:
+    if: github.ref != 'refs/heads/main'
+    name: Recent features (isolated browser regressions)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:robot:recent
+      - name: Upload recent feature results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-recent-${{ github.run_id }}
+          path: .tmp/robot-recent/results.json
+          retention-days: 14
+
+  database-contracts:
+    if: github.ref != 'refs/heads/main'
+    name: Database, financial contracts and concurrency (local only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:entry-lifecycle:sql
+      - name: Upload SQL results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robot-sql-${{ github.run_id }}
+          path: .tmp/entry-lifecycle-tests/results.json
+          retention-days: 14
+
   robot:
+    if: github.ref == 'refs/heads/preprod'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment:
@@ -74,3 +141,4 @@ jobs:
             test-results/e2e
           if-no-files-found: ignore
           retention-days: 14
+
