@@ -1380,6 +1380,7 @@ export async function createIncentiveProgramNomination(input: IncentiveProgramNo
     source: input.source ?? "manual",
     nominated_on: input.nominated_on ?? new Date().toISOString().slice(0, 10),
     reference_number: input.reference_number?.trim() || null,
+    nominator_name: input.nominator_name?.trim() || null,
     notes: input.notes?.trim() || null,
     metadata: input.metadata ?? {},
   }).select("*").single<IncentiveProgramNomination>();
@@ -1421,6 +1422,7 @@ export async function purchaseIncentiveProgramNomination(input: {
 
 export type IncentiveNominationCsvRow = {
   program_code: string;
+  nominator_name: string;
   horse_name: string;
   registration_number: string;
   nrha_number: string;
@@ -5718,6 +5720,12 @@ export async function publishBlockDraw(blockId: string) {
   }
 
   return data;
+}
+
+export async function getPresentationDraw(blockId: string, source: "auto" | "generated" | "published" = "auto") {
+  const {data,error} = await requireSupabase().rpc("get_presentation_draw", {p_block:blockId,p_source:source});
+  if(error) throw error;
+  return data as import("../features/controlRoom/PresentationDraw").PresentationDraw;
 }
 
 export async function loadCurrentBlockDrawPublication(blockId: string) {

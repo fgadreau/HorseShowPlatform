@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import "./nominationSettings.css";
 import type { FormEvent } from "react";
 import { EmptyState, NoticeBanner } from "../../components/ui";
 import { errorMessage, formatCurrency } from "../../lib/display";
@@ -48,6 +49,7 @@ type AgePriceTierForm = {
 };
 
 type NominationForm = {
+  nominatorName: string;
   horseId: string;
   role: IncentiveProgramNomination["nomination_role"];
   seasonYear: string;
@@ -73,6 +75,8 @@ export function IncentiveProgramsSettings({ context, locale, organization, onRef
   const [selectedProgramId, setSelectedProgramId] = useState(programs[0]?.id ?? "");
   const [programForm, setProgramForm] = useState<ProgramForm>(() => emptyProgramForm());
   const [nominationForm, setNominationForm] = useState<NominationForm>(() => emptyNominationForm());
+  const [editingNominationId, setEditingNominationId] = useState("");
+  useEffect(() => {setNominationForm(emptyNominationForm());setEditingNominationId("");}, [selectedProgramId]);
   const [csvImportMode, setCsvImportMode] = useState<"standard" | "nrha">("standard");
   const [csvPreview, setCsvPreview] = useState<IncentiveNominationCsvPreview | null>(null);
   const [busy, setBusy] = useState("");
@@ -147,29 +151,38 @@ export function IncentiveProgramsSettings({ context, locale, organization, onRef
     }, uiText(locale, "Programme enregistré.", "Program saved."));
   }
 
+  function editNomination(n: IncentiveProgramNomination) {
+    setEditingNominationId(n.id);setNominationForm({horseId:n.horse_id,role:n.nomination_role,seasonYear:String(n.season_year),status:n.status,validFrom:n.valid_from??"",validUntil:n.valid_until??"",qualifyingStallionNominationId:n.qualifying_stallion_nomination_id??"",referenceNumber:n.reference_number??"",notes:n.notes??"",nominatorName:n.nominator_name??""});
+  }
+
   async function handleNominationSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedProgram || !nominationForm.horseId) return;
+    const original = selectedNominations.find(n=>n.id===editingNominationId);
     const season = Number(nominationForm.seasonYear) || new Date().getFullYear();
     await run("nomination", async () => {
-      await createIncentiveProgramNomination({
+      const payload: Parameters<typeof createIncentiveProgramNomination>[0] = {
         organization_id: organization.id,
         incentive_program_id: selectedProgram.id,
         horse_id: nominationForm.horseId,
         nomination_role: nominationForm.role,
         season_year: season,
+        nominator_name: nominationForm.nominatorName.trim() || null,
         status: nominationForm.status,
-        source: selectedProgram.program_type === "performance_incentive" ? "performance" : nominationForm.role === "foal" && programUsesStallion(selectedProgram) ? "stallion_progeny" : "manual",
-        nominated_on: new Date().toISOString().slice(0, 10),
-        valid_from: nominationForm.validFrom || `${season}-01-01`,
-        valid_until: nominationForm.validUntil || `${season}-12-31`,
+        source: original?.source ?? (selectedProgram.program_type === "performance_incentive" ? "performance" : nominationForm.role === "foal" && programUsesStallion(selectedProgram) ? "stallion_progeny" : "manual"),
+        nominated_on: original?.nominated_on ?? new Date().toISOString().slice(0, 10),
+        valid_from: nominationForm.validFrom || selectedProgram.valid_from || null,
+        valid_until: nominationForm.validUntil || selectedProgram.valid_until || null,
         qualifying_stallion_nomination_id: nominationForm.qualifyingStallionNominationId || null,
         reference_number: nominationForm.referenceNumber || null,
         notes: nominationForm.notes || null,
-        created_by_user_id: context.profile.id,
-      });
+        created_by_user_id: original?.created_by_user_id ?? context.profile.id,
+      };
+      if(editingNominationId) await updateIncentiveProgramNomination(editingNominationId,payload);
+      else await createIncentiveProgramNomination(payload);
+      setEditingNominationId("");
       setNominationForm(emptyNominationForm());
-    }, uiText(locale, "Nomination ajoutée.", "Nomination added."));
+    }, uiText(locale, "Nomination enregistrée.", "Nomination saved."));
   }
 
   async function handleCsvFile(file: File | undefined) {
@@ -251,21 +264,22 @@ export function IncentiveProgramsSettings({ context, locale, organization, onRef
 
       {selectedProgram ? <fieldset className="stack nested-fieldset">
         <legend>{uiText(locale, "Nominations du programme", "Program nominations")}</legend>
+        <p className="muted-line">{uiText(locale,"Une seule nomination par cheval dans ce programme. Le nominateur est conservé sur cette nomination, indépendamment de l’année.","One nomination per horse in this program. The nominator is stored on that nomination, independently of the year.")}</p>
         <div className="requirement-list">
           {selectedNominations.map((nomination) => {
             const horse = horses.find((candidate) => candidate.id === nomination.horse_id);
             return <div className="membership-type-row" key={nomination.id}>
-              <span className="membership-type-main"><strong>{horse?.name ?? nomination.horse_id}</strong>{`${nominationRoleLabel(nomination.nomination_role, locale)} · ${nomination.season_year} · ${nomination.reference_number ?? "—"}`}</span>
-              <div className="membership-type-actions"><small>{nominationStatusLabel(nomination.status, locale)}</small><button className="secondary-button" disabled={Boolean(busy)} type="button" onClick={() => void run(`status:${nomination.id}`, () => updateIncentiveProgramNomination(nomination.id, { status: nomination.status === "active" ? "withdrawn" : "active" }), uiText(locale, "Statut mis à jour.", "Status updated."))}>{nomination.status === "active" ? uiText(locale, "Retirer", "Withdraw") : uiText(locale, "Activer", "Activate")}</button></div>
+              <span className="membership-type-main"><strong>{horse?.name ?? nomination.horse_id}</strong>{nomination.nominator_name ? <small>{uiText(locale, "Nominé par", "Nominated by")}: {nomination.nominator_name}</small> : null}{`${nominationRoleLabel(nomination.nomination_role, locale)} · ${nomination.reference_number ?? "—"}`}</span>
+              <div className="membership-type-actions"><button className="secondary-button" type="button" onClick={() => editNomination(nomination)}>{uiText(locale,"Modifier","Edit")}</button><small>{nominationStatusLabel(nomination.status, locale)}</small><button className="secondary-button" disabled={Boolean(busy)} type="button" onClick={() => void run(`status:${nomination.id}`, () => updateIncentiveProgramNomination(nomination.id, { status: nomination.status === "active" ? "withdrawn" : "active" }), uiText(locale, "Statut mis à jour.", "Status updated."))}>{nomination.status === "active" ? uiText(locale, "Retirer", "Withdraw") : uiText(locale, "Activer", "Activate")}</button></div>
             </div>;
           })}
           {!selectedNominations.length ? <EmptyState label={uiText(locale, "Aucune nomination.", "No nominations.")} /> : null}
         </div>
         <form className="stack" onSubmit={handleNominationSubmit}>
           <div className="form-grid">
-            <label>{uiText(locale, "Cheval", "Horse")}<select required value={nominationForm.horseId} onChange={(event) => setNominationForm({ ...nominationForm, horseId: event.target.value })}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{horses.map((horse) => <option key={horse.id} value={horse.id}>{`${horse.name}${horse.registration_number ? ` · ${horse.registration_number}` : ""}`}</option>)}</select></label>
+            <label>{uiText(locale, "Cheval", "Horse")}<select required value={nominationForm.horseId} onChange={(event) => {const existing=selectedNominations.find(n=>n.horse_id===event.target.value);if(existing) editNomination(existing);else {setEditingNominationId("");setNominationForm({...emptyNominationForm(),horseId:event.target.value});}}}><option value="">{uiText(locale, "Choisir", "Choose")}</option>{horses.map((horse) => <option key={horse.id} value={horse.id}>{`${horse.name}${horse.registration_number ? ` · ${horse.registration_number}` : ""}`}</option>)}</select></label>
             <label>{uiText(locale, "Rôle", "Role")}<select value={nominationForm.role} onChange={(event) => setNominationForm({ ...nominationForm, role: event.target.value as IncentiveProgramNomination["nomination_role"] })}>{availableRoles.map((role) => <option key={role} value={role}>{nominationRoleLabel(role, locale)}</option>)}</select></label>
-            <label>{uiText(locale, "Saison", "Season")}<input min="1900" type="number" value={nominationForm.seasonYear} onChange={(event) => setNominationForm({ ...nominationForm, seasonYear: event.target.value })} /></label>
+            <label>{uiText(locale, "Nominateur du cheval", "Horse nominator")}<input maxLength={200} value={nominationForm.nominatorName} onChange={event=>setNominationForm({...nominationForm,nominatorName:event.target.value})} /></label>
             <label>{uiText(locale, "Statut", "Status")}<select value={nominationForm.status} onChange={(event) => setNominationForm({ ...nominationForm, status: event.target.value as IncentiveProgramNomination["status"] })}>{(["pending", "active", "expired", "rejected", "withdrawn"] as const).map((status) => <option key={status} value={status}>{nominationStatusLabel(status, locale)}</option>)}</select></label>
           </div>
           {nominationForm.role === "foal" && programUsesStallion(selectedProgram) ? <label>{uiText(locale, "Nomination de l’étalon admissible", "Qualifying stallion nomination")}<select required={nominationForm.status === "active"} value={nominationForm.qualifyingStallionNominationId} onChange={(event) => setNominationForm({ ...nominationForm, qualifyingStallionNominationId: event.target.value })}><option value="">{uiText(locale, "À confirmer", "To be confirmed")}</option>{stallionNominations.map((nomination) => <option key={nomination.id} value={nomination.id}>{`${horses.find((horse) => horse.id === nomination.horse_id)?.name ?? "Étalon"} · ${nomination.reference_number ?? nomination.season_year}`}</option>)}</select></label> : null}
@@ -275,11 +289,12 @@ export function IncentiveProgramsSettings({ context, locale, organization, onRef
             <label>{uiText(locale, "No de référence", "Reference number")}<input value={nominationForm.referenceNumber} onChange={(event) => setNominationForm({ ...nominationForm, referenceNumber: event.target.value })} /></label>
           </div>
           <label>{uiText(locale, "Notes", "Notes")}<textarea rows={2} value={nominationForm.notes} onChange={(event) => setNominationForm({ ...nominationForm, notes: event.target.value })} /></label>
-          <button className="primary-button" disabled={Boolean(busy) || !nominationForm.horseId} type="submit">{uiText(locale, "Ajouter la nomination", "Add nomination")}</button>
+          <button className="primary-button" disabled={Boolean(busy) || !nominationForm.horseId} type="submit">{editingNominationId ? uiText(locale,"Enregistrer la nomination","Save nomination") : uiText(locale, "Ajouter la nomination", "Add nomination")}</button>
+          {editingNominationId ? <button type="button" className="text-button" onClick={()=>{setEditingNominationId("");setNominationForm(emptyNominationForm());}}>{uiText(locale,"Annuler la modification","Cancel editing")}</button> : null}
         </form>
       </fieldset> : null}
 
-      <fieldset className="stack nested-fieldset">
+      <fieldset className="stack nested-fieldset nomination-csv-import">
         <legend>{uiText(locale, "Import CSV", "CSV import")}</legend>
         <label>{uiText(locale, "Type d’import", "Import type")}<select value={csvImportMode} onChange={(event) => { setCsvImportMode(event.target.value as "standard" | "nrha"); setCsvPreview(null); }}><option value="standard">{uiText(locale, "Chevaux du répertoire", "Directory horses")}</option><option value="nrha">{uiText(locale, "Profils NRHA", "NRHA profiles")}</option></select></label>
         {csvImportMode === "nrha" ? <p className="muted-line">{uiText(locale, "Le numéro NRHA sert à retrouver le profil cheval existant. La date de naissance AAAA-MM-JJ est obligatoire et doit concorder avec le profil.", "The NRHA number finds the existing horse profile. The YYYY-MM-DD date of birth is required and must match the profile.")}</p> : null}
@@ -321,7 +336,7 @@ function agePriceTiersFromForm(rows: AgePriceTierForm[]): IncentiveProgramAgePri
 
 function emptyNominationForm(): NominationForm {
   const season = new Date().getFullYear();
-  return { horseId: "", role: "horse", seasonYear: String(season), status: "active", validFrom: `${season}-01-01`, validUntil: `${season}-12-31`, qualifyingStallionNominationId: "", referenceNumber: "", notes: "" };
+  return { nominatorName: "", horseId: "", role: "horse", seasonYear: String(season), status: "active", validFrom: "", validUntil: "", qualifyingStallionNominationId: "", referenceNumber: "", notes: "" };
 }
 
 function uiText(locale: Locale, fr: string, en: string) {

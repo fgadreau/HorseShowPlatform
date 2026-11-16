@@ -854,6 +854,7 @@ export type IncentiveProgramInput = Pick<IncentiveProgram,
 >>;
 
 export type IncentiveProgramNomination = {
+  nominator_name?: string | null;
   id: string;
   organization_id: string;
   incentive_program_id: string;
@@ -888,6 +889,7 @@ export type IncentiveProgramNominationInput = Pick<IncentiveProgramNomination,
   | "valid_from"
   | "valid_until"
   | "qualifying_stallion_nomination_id"
+  | "nominator_name"
   | "reference_number"
   | "notes"
   | "metadata"

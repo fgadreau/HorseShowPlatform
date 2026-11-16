@@ -7,6 +7,7 @@ export type IncentiveNominationCsvPreview = {
 
 const columns: Array<keyof IncentiveNominationCsvRow> = [
   "program_code",
+  "nominator_name",
   "horse_name",
   "registration_number",
   "nrha_number",
@@ -24,6 +25,10 @@ const columns: Array<keyof IncentiveNominationCsvRow> = [
 
 const aliases: Record<string, keyof IncentiveNominationCsvRow> = {
   program_code: "program_code",
+  nominator_name: "nominator_name",
+  nominator: "nominator_name",
+  nominateur: "nominator_name",
+  nom_nominateur: "nominator_name",
   code_programme: "program_code",
   horse_name: "horse_name",
   nom_cheval: "horse_name",
@@ -56,7 +61,8 @@ const aliases: Record<string, keyof IncentiveNominationCsvRow> = {
   notes: "notes",
 };
 
-export const incentiveNominationCsvHeaders = columns.join(",");
+// Retain the old year column as an accepted alias, without requiring it in new files.
+export const incentiveNominationCsvHeaders = columns.filter(column => column !== "season_year").join(",");
 
 export function parseIncentiveNominationCsv(content: string, options: { requireNrhaProfile?: boolean } = {}): IncentiveNominationCsvPreview {
   const records = parseCsvRecords(content.replace(/^\uFEFF/, ""));
@@ -81,6 +87,7 @@ export function parseIncentiveNominationCsv(content: string, options: { requireN
     });
 
     const csvRowNumber = index + 2;
+    if (row.nominator_name.length > 200) errors.push({ row: csvRowNumber, message: "Le nom du nominateur est limité à 200 caractères." });
     if (!row.program_code) errors.push({ row: csvRowNumber, message: "Le code du programme est requis." });
     if (!row.horse_name && !row.registration_number && !row.nrha_number) errors.push({ row: csvRowNumber, message: "Le nom, le numéro d’enregistrement ou le numéro NRHA du cheval est requis." });
     if (options.requireNrhaProfile && !row.nrha_number) errors.push({ row: csvRowNumber, message: "Le numéro de profil NRHA est requis." });
