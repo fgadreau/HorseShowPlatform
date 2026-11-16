@@ -8,6 +8,26 @@ secrétariat, championnat, calcul des bourses et publication des résultats.
 
 ## Revue du parcours — 16 novembre 2026
 
+### Exécution planifiée et choix de la branche
+
+GitHub lance le cron depuis la branche par défaut `main`. Sur cette branche,
+le workflow sert uniquement à déclencher `preprod-e2e.yml` avec `ref=preprod` et
+le mode `mega` par défaut. Un lancement manuel depuis `main` est redirigé de la
+même façon et conserve le mode demandé. Le job de dispatch n’utilise aucune
+clé d’application PREPROD; sa permission Actions en écriture est limitée à ce
+job. Le verrou du dispatch est distinct de celui du robot lancé sur `preprod`.
+
+Le scénario exécuté est donc celui de la préproduction, incluant la sélection
+explicite de « Création manuelle » avant le champ Prénom. Le parcours réel garde
+sa condition `refs/heads/preprod`; aucune branche de maintenance ne reçoit les
+secrets PREPROD. Le succès du dispatch confirme seulement le lancement : les
+résultats du parcours, des régressions et des contrats SQL sont à lire dans
+l’exécution enfant sur `preprod`.
+
+La définition du workflow doit rester synchronisée sur `main` et `preprod`.
+Cette synchronisation porte sur le workflow seulement et ne constitue pas
+une promotion du code applicatif de préproduction vers la production.
+
 Le workflow du robot comporte trois résultats indépendants : le parcours réel
 HSP → ShowScore, les régressions navigateur des fonctions récentes et les contrats
 SQL dans une base Docker locale jetable. Un échec inter-apps ne masque plus les
