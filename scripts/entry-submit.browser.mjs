@@ -23,7 +23,7 @@ const f=${JSON.stringify(fixture)},mode=new URLSearchParams(location.search).get
 window.checks={};window.created=[];window.failedOnce=false;window.calls=[];
 const initial=['existing','different-rider'].includes(mode)?[{id:'existing',horse_id:'horse',class_id:'c1',rider_contact_id:mode==='different-rider'?'other-rider':'rider',owner_contact_id:'owner',status:'draft'}]:[];
 window.fixtureEntries=initial;
-window.fixtureClient={from(table){if(table!=='entries')throw Error('Unexpected query '+table);const filters=[];
+window.fixtureClient={rpc:async()=>({data:[{horse_id:'horse'}],error:null}),from(table){if(table!=='entries')throw Error('Unexpected query '+table);const filters=[];
  const result=()=>{const data=window.fixtureEntries.filter(e=>filters.every(fn=>fn(e)));return {data,count:data.length,error:null};};
  const q={select(){return q},eq(k,v){filters.push(e=>e[k]===v);return q},neq(k,v){filters.push(e=>e[k]!==v);return q},not(k,op,value){const inactive=value.slice(1,-1).split(',');filters.push(e=>!inactive.includes(e[k]));return q},returns(){return Promise.resolve(result())},then(ok,bad){return Promise.resolve(result()).then(ok,bad)}};return q;}};
 window.checkProgramLimits=assertEntryProgramLimits;

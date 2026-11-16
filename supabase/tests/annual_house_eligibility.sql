@@ -3,6 +3,7 @@ do $$declare
  staff uuid:=gen_random_uuid();outside_user uuid:=gen_random_uuid();profile uuid;org uuid:=gen_random_uuid();dir uuid:=gen_random_uuid();sh uuid:=gen_random_uuid();bl uuid:=gen_random_uuid();
  rider uuid:=gen_random_uuid();horse uuid:=gen_random_uuid();bt uuid:=gen_random_uuid();ct uuid:=gen_random_uuid();nrha_ct uuid:=gen_random_uuid();cl uuid:=gen_random_uuid();
  list uuid:=gen_random_uuid();edition uuid:=gen_random_uuid();a jsonb;blocked boolean;params jsonb;nrha uuid;issuer uuid;override_id uuid;
+ pro uuid:=gen_random_uuid();pro_current uuid:=gen_random_uuid();rows jsonb;plan jsonb;stall uuid:=gen_random_uuid();booking uuid:=gen_random_uuid();day uuid;
 begin
  insert into auth.users(id,email,raw_user_meta_data) values(staff,staff||'@example.test','{}'),(outside_user,outside_user||'@example.test','{}');
  select id into profile from public.user_profiles where user_id=staff;
@@ -32,6 +33,26 @@ begin
  update public.house_class_rules set age_basis='show_date',excluded_list_ids='{}' where class_template_id=ct;
  a:=public.assess_house_classes(org,sh,horse,rider)->0;
  if not(a->>'can_proceed')::boolean then raise exception 'Show-date age did not pass: %',a;end if;
+ -- Membership exclusion follows its stable code across annual card editions.
+ insert into public.organization_membership_types(id,organization_id,name,code,season_year,price,tax_applicable,valid_from,valid_until,is_public) values
+ (pro,org,'Carte pro 2025','PRO',2025,0,false,'2025-01-01','2025-12-31',false),
+ (pro_current,org,'Carte pro 2026','PRO',2026,0,false,'2026-01-01','2026-12-31',false);
+ rows:=jsonb_build_array(jsonb_build_object('contact_id',rider,'valid_from','2026-01-01','valid_until','2026-12-31'));
+ plan:=public.preview_membership_import(org,pro_current,rows,'complimentary');
+ perform public.apply_membership_import(gen_random_uuid(),org,pro_current,rows,'complimentary',plan->>'token');
+ update public.house_class_rules set excluded_membership_type_ids=array[pro] where class_template_id=ct;
+ a:=public.assess_house_classes(org,sh,horse,rider)->0;
+ if (a->>'can_proceed')::boolean then raise exception 'Current pro card bypassed stable membership code exclusion';end if;
+ reset role;
+ update public.contact_organization_memberships set status='cancelled' where contact_id=rider and membership_type_id=pro_current;
+ a:=public.assess_house_classes(org,sh,horse,rider)->0;
+ if not(a->>'can_proceed')::boolean then raise exception 'Cancelled pro card should not block';end if;
+ update public.contact_organization_memberships set status='active',valid_until='2026-09-30' where contact_id=rider and membership_type_id=pro_current;
+ a:=public.assess_house_classes(org,sh,horse,rider)->0;
+ if not(a->>'can_proceed')::boolean then raise exception 'Card expired before show should not block';end if;
+ delete from public.contact_organization_memberships where contact_id=rider and membership_type_id=pro_current;
+ set local role authenticated;
+ update public.house_class_rules set excluded_membership_type_ids='{}' where class_template_id=ct;
  update public.house_class_rules set require_membership=true where class_template_id=ct;
  a:=public.assess_house_classes(org,sh,horse,rider)->0;
  if (a->>'can_proceed')::boolean then raise exception 'Missing membership accepted';end if;
@@ -57,6 +78,20 @@ begin
  if (a->>'can_proceed')::boolean then raise exception 'Changed list did not invalidate old override';end if;
  update public.house_class_rules set excluded_list_ids='{}' where class_template_id=ct;
  reset role;
+ -- Only the horse's actual non-cancelled stall reservation for this show counts.
+ update public.organization_health_policies set coggins_required=false,influenza_required=false,rhino_required=false,association_review_required=false,identity_validation_requirement='none' where organization_id=org;
+ select id into day from public.show_days where show_id=sh order by day_date limit 1;
+ insert into public.stall_options(id,organization_id,show_id,name,price,total_quantity,available_quantity,category,requires_horse_assignment) values(stall,org,sh,'Horse stall',0,100,100,'stall',true);
+ insert into public.stall_bookings(id,organization_id,show_id,stall_option_id,horse_id,created_by_user_id,booker_contact_id,payer_contact_id,status,show_day_start_id,show_day_end_id,quantity,unit_price,total_price) values(booking,org,sh,stall,horse,profile,rider,rider,'reserved',day,day,1,0,0);
+ if not exists(select 1 from public.entry_stabled_horses(sh) h where h.horse_id=horse) then raise exception 'Reserved horse missing from selector source';end if;
+ update public.stall_bookings set status='cancelled' where id=booking;
+ if exists(select 1 from public.entry_stabled_horses(sh) h where h.horse_id=horse) then raise exception 'Cancelled stall included in selector';end if;
+ update public.stall_bookings set status='reserved' where id=booking;
+ update public.stall_options set category='camping' where id=stall;
+ if exists(select 1 from public.entry_stabled_horses(sh) h where h.horse_id=horse) then raise exception 'Camping included as horse stall';end if;
+ update public.stall_options set category='stall',requires_horse_assignment=false where id=stall;
+ if exists(select 1 from public.entry_stabled_horses(sh) h where h.horse_id=horse) then raise exception 'Tack stall included as horse stall';end if;
+ update public.stall_options set requires_horse_assignment=true where id=stall;
  select id into nrha from public.governing_bodies where code='NRHA';
  insert into public.class_template_governing_bodies(class_template_id,governing_body_id,reporting_class_code,eligibility_profile_code) values(nrha_ct,nrha,'1000','non_pro');
  update public.house_class_rules set nrha_reference_template_id=nrha_ct where class_template_id=ct;
@@ -74,6 +109,7 @@ begin
  if (a->>'can_proceed')::boolean or not(a->>'nrha_pending')::boolean then raise exception 'Expired check accepted';end if;
  perform set_config('request.jwt.claim.sub',outside_user::text,true);
  set local role authenticated;
+ if exists(select 1 from public.entry_stabled_horses(sh)) then raise exception 'Another user can see private stabled horse ids';end if;
  if exists(select 1 from public.house_ineligibility_people) then raise exception 'Private lists leaked';end if;
  blocked:=false;begin perform public.assess_house_classes(org,sh,horse,rider);exception when insufficient_privilege then blocked:=true;end;
  if not blocked then raise exception 'Outsider assessed another team';end if;

@@ -50,6 +50,15 @@ try{
  await page.getByRole('button',{name:'Retry checks',exact:true}).click();
  await expect.poll(()=>page.evaluate(()=>window.checks.length)).toBe(4);
  assert.deepEqual(await page.evaluate(()=>window.checks.map(check=>check.id)),['class0','class1','class2','class1']);
+ await open('entry');await page.getByRole('combobox',{name:'Search horse',exact:true}).click();
+ await expect(page.getByRole('option').filter({hasText:'Directory Only Horse'})).toHaveCount(0);
+ await expect(page.getByRole('option').filter({hasText:'Pilot Horse'})).toHaveCount(1);
+ await page.getByRole('option').filter({hasText:'Pilot Horse'}).click();
+ await page.evaluate(()=>{window.stabledHorseIds=['horse2'];});await page.getByRole('button',{name:'Refresh horses',exact:true}).click();
+ await expect(page.getByRole('combobox',{name:'Search horse',exact:true})).toHaveValue('');
+ await page.getByRole('combobox',{name:'Search horse',exact:true}).click();
+ await expect(page.getByRole('option').filter({hasText:'Pilot Horse'})).toHaveCount(0);
+ await expect(page.getByRole('option').filter({hasText:'Second Horse'})).toHaveCount(1);
  await open('exclusions');assert.equal(await page.getByRole('combobox',{name:'Exclude',exact:true}).count(),0);
  await choose('Search for a rider','Pilot Rider');await page.getByLabel('Internal reason (optional)').fill('Pilot rule');await page.getByRole('button',{name:'Add to list'}).click();
  await expect(page.getByRole('button',{name:'Remove from list'})).toBeVisible();

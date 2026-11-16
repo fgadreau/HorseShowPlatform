@@ -15,6 +15,7 @@ import { buildEntryDeadlineReadiness, buildEntryProgramLimitReadiness, inactiveP
 import { ClassEligibilityCheck, sameClassEligibilityGate, withClassEligibilityReadiness, type ClassEligibilityGate } from "./NrhaEligibilityCheck";
 import { entryClassBlockDetail, entryClassLabel, entryClassPatternDetail } from "./entryDisplay";
 import {useHouseClassBlocks} from './useHouseClassBlocks';
+import {useStabledHorses} from './useStabledHorses';
 import {HouseEligibilityPanel} from './HouseEligibilityPanel';
 
 function EntryEditForm({
@@ -77,6 +78,7 @@ function EntryEditForm({
   const [busy, setBusy] = useState(false);
   const [submitError, setSubmitError] = useState("");
   const selectedHorse = findById(horses, horseId) ?? null;
+  const stabled=useStabledHorses(entry.show_id,horses);
   const selectedClass = findById(classes, classId) ?? null;
   const selectedBlock = selectedClass ? findById(blocks, selectedClass.block_id) ?? null : null;
   const selectedShow = findById(shows, entry.show_id) ?? null;
@@ -129,7 +131,7 @@ function EntryEditForm({
     nrhaEligibilityGate?.applies && !nrhaEligibilityGate.canProceed
       ? nrhaEligibilityGate.message?.message ?? uiText(locale, "Vérification d'admissibilité requise.", "Eligibility check required.")
       : null;
-  const canUpdate = Boolean(selectedHorse && selectedClass && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed && nrhaEligibilityCanProceed && !house.loading && !house.error && !house.blocked.has(classId));
+  const canUpdate = Boolean(selectedHorse && selectedClass && payerContactId && entryReadiness.canProceed && entryProgramLimitReadiness.canProceed && nrhaEligibilityCanProceed && !house.loading && !house.error && !house.blocked.has(classId) && (horseId===entry.horse_id||stabled.horses.some(h=>h.id===horseId)));
   const entryHeaderMessage = entryReadiness.canProceed
     ? entryProgramLimitReadiness.canProceed
       ? nrhaEligibilityBlockingMessage ?? horseLabel(selectedHorse ?? undefined)
@@ -181,7 +183,8 @@ function EntryEditForm({
         <label>
           {uiText(locale, "Cheval", "Horse")}
           <SearchSelect
-            items={horses.map((horse) => {
+            disabled={stabled.loading}
+            items={stabled.horses.map((horse) => {
               const compliance = healthComplianceByHorseId.get(horse.id);
 
               return {
@@ -197,10 +200,13 @@ function EntryEditForm({
               };
             })}
             placeholder={uiText(locale, "Rechercher un cheval", "Search horse")}
-            value={horseId}
+            value={stabled.horses.some(h=>h.id===horseId)?horseId:''}
             onChange={setHorseId}
           />
         </label>
+        {stabled.error?<p role="alert">{stabled.error}</p>:null}
+        {!stabled.loading&&!stabled.horses.some(h=>h.id===entry.horse_id)?<p className="muted-line">{uiText(locale,'Le cheval de cette inscription n’a plus de stalle réservée à ce concours. Il peut être conservé pour gérer l’inscription existante ; les remplacements proposés ont une stalle.','This entry’s horse no longer has a reserved stall at this show. It can be retained to manage the existing entry; replacement horses must have a stall.')}</p>:null}
+        <button className="text-button" type="button" disabled={stabled.loading} onClick={stabled.refresh}>{uiText(locale,'Actualiser les chevaux','Refresh horses')}</button>
         <InlineHealthMessage
           value={
             selectedHealthCompliance
