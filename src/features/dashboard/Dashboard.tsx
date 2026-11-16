@@ -164,6 +164,7 @@ import { EntriesView } from "../entries/EntriesView";
 import { MyEntriesView } from "../entries/MyEntriesView";
 import { ScoringView } from "../scoring/ScoringView";
 import { ControlRoomView } from "../controlRoom/ControlRoomView";
+import {TicketsView} from '../tickets/TicketsView';
 import { ResultsView } from "../results/ResultsView";
 import { BackNumbersView, MyBackNumbersView } from "../backNumbers/BackNumbersView";
 import { SettingsView } from "../settings/SettingsView";
@@ -182,6 +183,8 @@ const SHOW_CONTEXT_VIEW_KEYS = new Set<ViewKey>([
   "results",
   "shows",
   "show-accounts",
+  "tickets",
+  "my-tickets",
   "my-overview",
   "my-entries",
   "my-stalls",
@@ -809,7 +812,7 @@ export function Dashboard({
           </div>
         </header>
 
-        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance">{selectedShow && <ShowContextHeader key={selectedShow.id} show={selectedShow} locale={locale} canEdit={canManageAssociation || isPlatformAdmin} onUpdateShow={onUpdateShow} />}<nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['control-room',locale==='fr'?'Poste de contrôle':'Show control'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
+        {shouldShowShowContext && !effectiveView.startsWith('my-') && <div className="finance">{selectedShow && <ShowContextHeader key={selectedShow.id} show={selectedShow} locale={locale} canEdit={canManageAssociation || isPlatformAdmin} onUpdateShow={onUpdateShow} />}<nav className="finance-tabs" aria-label={locale==='fr'?'Concours sélectionné':'Selected show'}>{[['shows',locale==='fr'?'Aperçu':'Overview'],['control-room',locale==='fr'?'Poste de contrôle':'Show control'],['entries',locale==='fr'?'Inscriptions':'Entries'],['stalls',locale==='fr'?'Réservations':'Reservations'],['blocks',locale==='fr'?'Horaire':'Schedule'],['tickets',locale==='fr'?'Billetterie':'Ticket sales'],['show-accounts',locale==='fr'?'Comptes du concours':'Show accounts']].filter(([key])=>!selectedShow?.event_only||['shows','tickets','blocks','show-accounts'].includes(key)).map(([key,label])=><button key={key} aria-current={effectiveView===key?'page':undefined} onClick={()=>handleViewChange(key as ViewKey)}>{label}</button>)}<label>{locale==='fr'?'Plus':'More'}<select value="" onChange={e=>handleViewChange(e.target.value as ViewKey)}><option value="">—</option><option value="health">{locale==='fr'?'Santé et conformité':'Health and compliance'}</option><option value="scoring">ShowScore</option><option value="results">{locale==='fr'?'Résultats':'Results'}</option></select></label></nav></div>}
         {notice ? <NoticeBanner notice={notice} /> : null}
         {showRouteUnavailable && <p role="alert">{locale==='fr'?'Concours indisponible ou non autorisé. Sélectionnez un concours accessible.':'Show unavailable or unauthorized. Select an accessible show.'}</p>}
 
@@ -840,7 +843,7 @@ export function Dashboard({
         ) : null}
 
         {!showRouteUnavailable && effectiveView === "shows" ? (
-          <ShowsView
+          <ShowsView onTicketEventCreated={async id=>{await onRefresh();setSelectedShowId(id);navigateBilling(`/associations/${selectedOrganization?.id}/shows/${id}/tickets`);}}
             locale={locale}
             blocks={selectedOrganizationBlocks}
             classes={selectedOrganizationClasses}
@@ -1016,6 +1019,7 @@ export function Dashboard({
           />
         ) : null}
 
+        {!showRouteUnavailable && (effectiveView==='tickets'||effectiveView==='my-tickets') ? <TicketsView key={`${effectiveView}:${selectedOrganization?.id}:${selectedShow?.id}`} organization={selectedOrganization} show={selectedShow} blocks={selectedShowBlocks} showDays={selectedShowShowDays} contacts={effectiveView==='tickets'?selectedOrganizationContacts:personalContacts} identity={context?.profile.id??''} locale={locale} staff={effectiveView==='tickets'} onRefresh={onRefresh}/> : null}
         {!showRouteUnavailable && effectiveView === "entries" ? (
           <EntriesView
             onRefresh={onRefresh}

@@ -1,0 +1,23 @@
+import React,{useState} from 'react';import {createRoot} from 'react-dom/client';
+import {TicketsView} from '../../../src/features/tickets/TicketsView';
+import {StandaloneTicketEvent} from '../../../src/features/tickets/StandaloneTicketEvent';
+import {EventBlockForm} from '../../../src/features/classes/EventBlockForm';
+import '../../../src/styles.css';
+const locale=new URLSearchParams(location.search).get('lang')==='en'?'en':'fr';
+const org={id:'org',name:'Association TEST',currency:'CAD',country:'CA',state:'QC'};
+const show={id:'show',organization_id:'org',name:'Festival TEST',start_date:'2099-06-01',end_date:'2099-06-01',status:'open',is_public:true};
+const block={id:'block',show_id:'show',organization_id:'org',name:'Souper TEST',block_type:'ticketed_event'};
+const contact={id:'buyer',first_name:'Camille',last_name:'TEST',linked_user_id:'profile'};
+window.calls=[];window.orders=[];window.used=0;window.mode='manual';window.settings={revision:2,block_id:'block',context_id:'ctx',is_active:true,payment_policy:'manual',capacity:10,sales_open_at:null,sales_close_at:null};
+window.options=[{id:'adult',name:'Adulte',price:20,taxable:false,tax_mode:'exclusive',capacity:8,is_active:true,sort_order:0},{id:'child',name:'Enfant',price:10,taxable:false,tax_mode:'exclusive',capacity:null,is_active:true,sort_order:1}];window.taxes=[{code:'GST',name:'TPS',rate:5,jurisdiction:'QC'}];
+const getItem=()=>({block:{...block,show_name:show.name,date:show.start_date},config:{...window.settings,payment_policy:window.mode},currency:'CAD',used:window.used,has_orders:window.orders.length>0,taxes:window.taxes,options:window.options,orders:window.orders});
+window.ticketClient={rpc:async(name,args)=>{window.calls.push({name,args});
+ if(name==='get_ticket_catalog')return {data:[getItem()],error:null};
+ if(name==='save_ticket_block'){window.settings={...window.settings,...args.p_config,revision:3};window.options=args.p_options;window.taxes=args.p_taxes;return {data:{},error:null};}
+ if(name==='ticket_quote'){const quantity=args.p_items.reduce((n,l)=>n+l.quantity,0);if(quantity+window.used>10)return {error:{message:'TICKET_CAPACITY_REACHED'}};const lines=args.p_items.map(l=>{const o=window.options.find(o=>o.id===l.option_id);return {...l,name:o.name,amounts:{subtotal:o.price*l.quantity,tax_amount:0,total:o.price*l.quantity}};});return {data:{signature:'server-quote',name:block.name,quantity,payment_policy:window.mode,currency:'CAD',lines,subtotal:lines.reduce((n,l)=>n+l.amounts.total,0),tax_amount:0,total:lines.reduce((n,l)=>n+l.amounts.total,0)},error:null};}
+ if(name==='purchase_tickets'){let order=window.orders.find(o=>o.id===args.p_request);if(!order){const lines=args.p_items.map(l=>({...l,name:window.options.find(o=>o.id===l.option_id).name}));order={id:args.p_request,buyer_contact_id:args.p_buyer,buyer_name:'Camille TEST',folio_id:'folio',preference:args.p_preference,payment_status:window.mode==='manual'?'reserved':'awaiting_payment',status:'active',created_at:'2026-11-16T12:00:00Z',total:50,paid_amount:0,currency:'CAD',lines};window.orders.push(order);window.used+=lines.reduce((n,l)=>n+l.quantity,0);}return {data:{order_id:order.id,folio_id:'folio',payment_policy:window.mode,total:50},error:null};}
+ if(name==='cancel_ticket_order'){const o=window.orders.find(o=>o.id===args.p_order);o.status='cancelled';o.payment_status='cancelled';o.cancellation_reason=args.p_reason;o.credit_mode=args.p_credit;window.used=0;return {data:null,error:null};}
+ if(name==='create_ticket_event')return {data:'new-event',error:null};
+ return {data:[],error:null};}};
+function App(){const [mode,setMode]=useState('member'),[revision,setRevision]=useState(0);return <main style={{maxWidth:1100,margin:'auto',padding:16}}><nav><button onClick={()=>setMode('member')}>Member</button><button onClick={()=>setMode('staff')}>Staff</button><button onClick={()=>setMode('standalone')}>Standalone</button><button onClick={()=>setMode('event')}>Schedule</button><button onClick={()=>{window.mode='pay_at_booking';setMode('member');setRevision(n=>n+1);}}>Immediate</button></nav>{mode==='standalone'?<StandaloneTicketEvent organizationId="org" locale={locale} onCreated={id=>{window.createdEvent=id;}}/>:mode==='event'?<EventBlockForm locale={locale} organization={org} shows={[show]} showDays={[]} defaultShowId="show" onCreateBlock={async input=>{window.eventInput=input;return block;}}/>:<TicketsView key={mode+revision} organization={org} show={show} blocks={[block]} showDays={[]} contacts={[contact]} identity="profile" locale={locale} staff={mode==='staff'} onRefresh={()=>{}}/>}</main>;}
+createRoot(document.getElementById('root')!).render(<App/>);

@@ -11,6 +11,7 @@ import { uiText } from "../dashboard/shared";
 import { showPaymentSummary } from "../classes/classUtils";
 import { ShowAssistant } from "./ShowAssistant";
 import { ShowSettingsDialog } from "./ShowSettingsDialog";
+import {StandaloneTicketEvent} from '../tickets/StandaloneTicketEvent';
 
 function ShowsView({
   locale,
@@ -29,6 +30,7 @@ function ShowsView({
   onDeleteShowAnnouncement,
   onUpdateShow,
   onViewChange,
+  onTicketEventCreated,
 }: {
   locale: Locale;
   blocks: Block[];
@@ -46,6 +48,7 @@ function ShowsView({
   onDeleteShowAnnouncement: (id: string) => Promise<void>;
   onUpdateShow: (id: string, input: Parameters<typeof updateShow>[1]) => Promise<void>;
   onViewChange: (view: ViewKey) => void;
+  onTicketEventCreated: (id:string)=>void;
 }) {
   const [editingShow, setEditingShow] = useState<Show | null>(null);
   const [assistantShow, setAssistantShow] = useState<Show | null>(null);
@@ -101,6 +104,7 @@ function ShowsView({
           <Plus size={18} />
           {uiText(locale, "Créer un concours", "Create show")}
         </button>
+        {organization?<StandaloneTicketEvent organizationId={organization.id} locale={locale} onCreated={onTicketEventCreated}/>:null}
       </section>
 
       {editingShow ? (
@@ -135,6 +139,7 @@ function ShowsView({
               <div className="table-row" data-show-slug={show.slug} key={show.id}>
                 <div>
                   <strong>{show.name}</strong>
+                  {show.event_only?<small>{uiText(locale,'Événement sans compétition','Non-competitive event')}</small>:null}
                   {show.is_public ? (
                     <a className="show-public-link muted-line" href={`/shows/${show.slug}`} rel="noopener noreferrer" target="_blank">
                       <ExternalLink size={12} />
@@ -147,12 +152,12 @@ function ShowsView({
                 </span>
                 <div>
                   <span className={`badge ${show.status}`}>{show.status}</span>
-                  <span className="muted-line">{showPaymentSummary(show)}</span>
+                  {!show.event_only?<span className="muted-line">{showPaymentSummary(show)}</span>:null}
                 </div>
                 <div className="row-actions">
-                  <button className="text-button" type="button" onClick={() => openAssistant(show)}>
+                  {show.event_only?<button className="text-button" type="button" onClick={()=>onTicketEventCreated(show.id)}>{uiText(locale,'Billetterie','Ticket sales')}</button>:<button className="text-button" type="button" onClick={() => openAssistant(show)}>
                     {show.status === "draft" ? uiText(locale, "Continuer", "Continue") : uiText(locale, "Préparation du concours", "Show readiness")}
-                  </button>
+                  </button>}
                   <button className="text-button" type="button" onClick={() => setEditingShow(show)}>
                     {uiText(locale, "Paramètres du concours", "Show settings")}
                   </button>

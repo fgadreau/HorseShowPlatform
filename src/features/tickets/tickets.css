@@ -1,0 +1,9 @@
+.ticket-workspace .ticket-option-row{display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:14px;align-items:center;border-bottom:1px solid #e1dce2;padding:10px 0}
+.ticket-option-row small{display:block;margin-top:4px;font-weight:400}
+.ticket-recap{border:1px solid #d5c8d3;border-radius:10px;padding:16px;background:#faf7fa}
+.ticket-table{overflow:auto;max-width:100%}
+.ticket-table table{border-collapse:collapse;width:100%;font-size:.9rem}
+.ticket-table th,.ticket-table td{padding:9px;text-align:left;vertical-align:top;border-bottom:1px solid #ddd;overflow-wrap:anywhere}
+.ticket-order{padding:12px 0;border-bottom:1px solid #ddd}
+.ticket-workspace>.panel{grid-column:1/-1;min-width:0}
+.ticket-report td:last-child button{display:block;margin-bottom:6px;text-align:left}

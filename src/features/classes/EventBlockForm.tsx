@@ -33,6 +33,7 @@ function EventBlockForm({
   const [showDayId, setShowDayId] = useState(defaultShowDayId ?? "");
   const [name, setName] = useState("");
   const [eventType, setEventType] = useState("");
+  const [ticketed,setTicketed]=useState(false);
   const [scheduledTime, setScheduledTime] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -53,7 +54,7 @@ function EventBlockForm({
         display_label: eventType || undefined,
         schedule_start_mode: scheduledTime ? "fixed" : "unscheduled",
         scheduled_time: scheduledTime ? `${scheduledTime}:00` : null,
-        block_type: "event",
+        block_type: ticketed?"ticketed_event":"event",
       });
       onCreated?.();
     } finally {
@@ -63,6 +64,7 @@ function EventBlockForm({
 
   return (
     <form className="form-grid" onSubmit={handleSubmit}>
+      <label>{uiText(locale,'Fonction du bloc','Block purpose')}<select value={ticketed?'tickets':'schedule'} onChange={e=>setTicketed(e.target.value==='tickets')}><option value="schedule">{uiText(locale,'Horaire seulement','Schedule only')}</option><option value="tickets">{uiText(locale,'Événement avec billetterie','Event with ticket sales')}</option></select>{ticketed?<small>{uiText(locale,'Définissez les options et les prix dans Billetterie après la création.','Define options and prices in Ticket sales after creating the block.')}</small>:null}</label>
       <div className="form-field">
         <label>{uiText(locale, "Concours", "Show")}</label>
         <SearchSelect

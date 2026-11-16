@@ -18,11 +18,11 @@ export function ShowContextHeader({ show, locale, canEdit, onUpdateShow }: {
   return <>
     <header className="show-context-heading">
       <div className="show-context-information"><strong>{show.name}</strong><span>{formatDate(show.start_date)} — {formatDate(show.end_date)} · {status}</span>
-        <div className="show-entry-policy"><span>{fr ? "Inscriptions" : "Entries"}</span><strong>{manual ? (fr ? "Gestion manuelle" : "Manual handling") : (fr ? "Carte · paiement ou préautorisation" : "Card · payment or authorization")}</strong>
+        {!show.event_only && <div className="show-entry-policy"><span>{fr ? "Inscriptions" : "Entries"}</span><strong>{manual ? (fr ? "Gestion manuelle" : "Manual handling") : (fr ? "Carte · paiement ou préautorisation" : "Card · payment or authorization")}</strong>
           {canEdit && <button type="button" className="text-button" aria-label={fr ? "Modifier la gestion des inscriptions" : "Change entry handling"} onClick={() => setEditing(true)}>{fr ? "Modifier" : "Change"}</button>}
-        </div>
+        </div>}
       </div>
-      {canEdit && <button className="show-settings-button" type="button" onClick={() => setEditing(true)}><Settings2 size={18} aria-hidden="true" />{fr ? "Paramètres du concours" : "Show settings"}</button>}
+      {canEdit && <button className="show-settings-button" type="button" onClick={() => setEditing(true)}><Settings2 size={18} aria-hidden="true" />{show.event_only?(fr?'Paramètres de l’événement':'Event settings'):(fr ? "Paramètres du concours" : "Show settings")}</button>}
     </header>
     {editing && <ShowSettingsDialog show={show} locale={locale} onClose={() => setEditing(false)} onUpdateShow={onUpdateShow} />}
   </>;

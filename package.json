@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:tickets:browser": "node scripts/ticketing.browser.mjs",
     "test:presentation-draw:browser": "node scripts/presentation-draw.browser.mjs",
     "test:house-eligibility": "node --test scripts/house-eligibility.test.mjs",
     "test:house-eligibility:browser": "node scripts/house-eligibility.browser.mjs",

@@ -5,6 +5,7 @@ export const associationNavigation: NavItem[] = [
   { key: "overview", labelKey: "overview", icon: Building2 },
   { key: "notifications", labelKey: "notifications", icon: Bell },
   { key: "shows", labelKey: "shows", icon: CalendarDays },
+  { key: "tickets", labelKey: "tickets", icon: CalendarDays },
   { key: "people", labelKey: "people", icon: Users },
   { key: "health", labelKey: "health", icon: HeartPulse },
   { key: "back-numbers", labelKey: "backNumbers", icon: Hash },
@@ -20,9 +21,10 @@ export const personalNavigation: NavItem[] = [
   { key: "my-horses", labelKey: "myHorses", icon: ClipboardList },
   { key: "my-riders", labelKey: "myRiders", icon: Users },
   { key: "my-entries", labelKey: "myEntries", icon: CalendarDays },
+  { key: "my-tickets", labelKey: "myTickets", icon: CalendarDays },
   { key: "my-back-numbers", labelKey: "myBackNumbers", icon: Hash },
   { key: "my-stalls", labelKey: "myStalls", icon: Tent },
   { key: "my-invoices", labelKey: "myInvoices", icon: CircleDollarSign },
 ];
 
-export const associationViewKeys = new Set<ViewKey>([...associationNavigation.map((item) => item.key), "blocks", "control-room", "entries", "stalls", "scoring", "results", "show-accounts"] as ViewKey[]);
+export const associationViewKeys = new Set<ViewKey>([...associationNavigation.map((item) => item.key), "blocks", "control-room", "entries", "stalls", "scoring", "results", "show-accounts", "tickets"] as ViewKey[]);
