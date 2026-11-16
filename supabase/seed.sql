@@ -478,81 +478,7 @@ where organization_id in (
   )
   and effective_from = '1900-01-01';
 
-insert into public.entries (
-  id,
-  organization_id,
-  show_id,
-  horse_id,
-  class_id,
-  created_by_user_id,
-  owner_contact_id,
-  rider_contact_id,
-  payer_contact_id,
-  status,
-  entry_number,
-  base_fee,
-  total_fees
-)
-values
-  ('90000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '80000000-0000-0000-0000-000000000001', '60000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000004', '70000000-0000-0000-0000-000000000001', '70000000-0000-0000-0000-000000000002', '70000000-0000-0000-0000-000000000001', 'active', 101, 150.00, 150.00),
-  ('90000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '80000000-0000-0000-0000-000000000002', '60000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006', '70000000-0000-0000-0000-000000000003', null, '70000000-0000-0000-0000-000000000003', 'active', 201, 145.00, 145.00)
-on conflict (id) do update
-set
-  status = excluded.status,
-  entry_number = excluded.entry_number,
-  base_fee = excluded.base_fee,
-  total_fees = excluded.total_fees,
-  updated_at = now();
-
-insert into public.invoices (
-  id,
-  organization_id,
-  show_id,
-  invoice_number,
-  payer_contact_id,
-  created_by_user_id,
-  status,
-  subtotal,
-  tax_amount,
-  total_amount,
-  total_paid
-)
-values
-  ('a0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', '40000000-0000-0000-0000-000000000001', '0001', '70000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000003', 'sent', 150.00, 19.50, 169.50, 0.00),
-  ('a0000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', '40000000-0000-0000-0000-000000000002', '0001', '70000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000006', 'sent', 145.00, 18.85, 163.85, 0.00)
-on conflict (id) do update
-set
-  invoice_number = excluded.invoice_number,
-  status = excluded.status,
-  subtotal = excluded.subtotal,
-  tax_amount = excluded.tax_amount,
-  total_amount = excluded.total_amount,
-  total_paid = excluded.total_paid,
-  updated_at = now();
-
-insert into public.invoice_line_items (
-  id,
-  organization_id,
-  invoice_id,
-  item_type,
-  item_id,
-  description,
-  quantity,
-  unit_price,
-  total_price,
-  tax_applicable,
-  tax_amount
-)
-values
-  ('b0000000-0000-0000-0000-000000000001', '30000000-0000-0000-0000-000000000001', 'a0000000-0000-0000-0000-000000000001', 'entry', '90000000-0000-0000-0000-000000000001', 'Open Reining entry', 1, 150.00, 150.00, true, 19.50),
-  ('b0000000-0000-0000-0000-000000000002', '30000000-0000-0000-0000-000000000002', 'a0000000-0000-0000-0000-000000000002', 'entry', '90000000-0000-0000-0000-000000000002', 'Org B Open Reining entry', 1, 145.00, 145.00, true, 18.85)
-on conflict (id) do update
-set
-  description = excluded.description,
-  quantity = excluded.quantity,
-  unit_price = excluded.unit_price,
-  total_price = excluded.total_price,
-  tax_amount = excluded.tax_amount;
+-- Entries and charges are created through the current account billing flow.
 
 insert into public.show_score_block_setups (
   block_id,
@@ -570,9 +496,9 @@ values (
   '40000000-0000-0000-0000-000000000001',
   '41000000-0000-0000-0000-000000000001',
   '8',
-  '[{"id":"90000000-0000-0000-0000-000000000001","entryId":"90000000-0000-0000-0000-000000000001","draw":1,"backNumber":"101","rider":"Phase1 Rider A","horse":"Phase One Whiz","owner":"Phase1 Owner A"}]'::jsonb,
+  '[]'::jsonb,
   '[{"id":"judge-1","name":"Phase1 Judge","order":1}]'::jsonb,
-  true
+  false
 )
 on conflict (block_id) do update
 set

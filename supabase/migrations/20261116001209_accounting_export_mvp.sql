@@ -227,7 +227,7 @@ language plpgsql security definer set search_path='' as $$
 declare c public.billing_contexts; actor uuid:=public.current_profile_id(); saved public.billing_accounting_profiles;begin
  select * into c from public.billing_contexts where id=p_context;
  if actor is null or c.id is null or not coalesce(public.is_platform_admin() or public.is_org_member(c.organization_id,array['admin','secretary']),false) then raise exception 'BILLING_FORBIDDEN' using errcode='42501';end if;
- if p_software not in ('quickbooks_online','xero','sage_50_ca') or jsonb_typeof(p_accounts)<>'object' or jsonb_typeof(p_options)<>'object' then raise exception 'ACCOUNTING_INVALID_PROFILE';end if;
+ if p_software is null or p_software not in ('quickbooks_online','xero','sage_50_ca') or jsonb_typeof(p_accounts) is distinct from 'object' or jsonb_typeof(p_options) is distinct from 'object' then raise exception 'ACCOUNTING_INVALID_PROFILE';end if;
  if exists(select 1 from jsonb_each(p_accounts) x where length(x.key)>80 or jsonb_typeof(x.value)<>'string' or length(btrim(x.value#>>'{}'))>160)
    or length(coalesce(p_options->>'journal_prefix',''))>24 or length(coalesce(p_options->>'tracking_name',''))>80 or length(coalesce(p_options->>'tracking_option',''))>160 then raise exception 'ACCOUNTING_INVALID_PROFILE';end if;
  insert into public.billing_accounting_profiles(organization_id,software,accounts,options,updated_by) values(c.organization_id,p_software,p_accounts,p_options,actor)
@@ -240,8 +240,8 @@ language plpgsql stable security definer set search_path='' as $$
 declare c public.billing_contexts;begin
  select * into c from public.billing_contexts where id=p_context;
  if public.current_profile_id() is null or c.id is null then raise exception 'BILLING_FORBIDDEN' using errcode='42501';end if;
- if (p_kind='show_close' and not coalesce(public.billing6_staff(c.id),false)) or (p_kind='receipts' and not coalesce(public.is_platform_admin() or public.is_org_member(c.organization_id,array['admin','secretary']),false)) then raise exception 'BILLING_FORBIDDEN' using errcode='42501';end if;
- if p_software not in ('quickbooks_online','xero','sage_50_ca') or p_kind not in ('show_close','receipts') or p_from is null or p_to is null or p_posting_date is null or p_to<p_from or p_to-p_from>366 then raise exception 'ACCOUNTING_INVALID_PERIOD';end if;
+ if not coalesce((p_kind='show_close' and public.billing6_staff(c.id)) or (p_kind='receipts' and (public.is_platform_admin() or public.is_org_member(c.organization_id,array['admin','secretary']))),false) then raise exception 'BILLING_FORBIDDEN' using errcode='42501';end if;
+ if p_software is null or p_software not in ('quickbooks_online','xero','sage_50_ca') or p_kind is null or p_kind not in ('show_close','receipts') or p_from is null or p_to is null or p_posting_date is null or p_to<p_from or p_to-p_from>366 then raise exception 'ACCOUNTING_INVALID_PERIOD';end if;
  return private.billing_accounting_payload(p_context,p_software,p_kind,p_from,p_to,p_posting_date);
 end $$;
 

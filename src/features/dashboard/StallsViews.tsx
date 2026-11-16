@@ -16,7 +16,7 @@ import {
 } from "../../services/supabaseServices";
 import { sourceBillingError } from "../finance/presentation";
 import { billingRpc } from "../../services/billingFolio";
-import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, Invoice, InvoiceLineItem, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallBookingInput, StallOption } from "../../types/domain";
+import type { Contact, ContactRole, ContactRoleName, Horse, HorseHealthDocument, BillingAccountSummary, Organization, OrganizationProduct, Show, ShowDay, StallBooking, StallBookingInput, StallOption } from "../../types/domain";
 import { healthComplianceReasonSummary, healthComplianceStatusLabel, healthComplianceTone, useHorseHealthComplianceOverview } from "../health/HealthComplianceSummary";
 
 function uiText(locale: Locale, fr: string, en: string) {
@@ -52,8 +52,7 @@ export function StallsView({
   currency,
   horseHealthDocuments,
   horses,
-  invoiceLineItems,
-  invoices,
+  billingAccounts,
   organization,
   profileId,
   products,
@@ -74,8 +73,7 @@ export function StallsView({
   currency: string;
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  invoiceLineItems: InvoiceLineItem[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   profileId: string;
   products: OrganizationProduct[];
@@ -173,7 +171,7 @@ export function StallsView({
                 currency={currency}
                 horseHealthDocuments={horseHealthDocuments}
                 horses={horses}
-                invoices={invoices}
+                billingAccounts={billingAccounts}
                 organization={organization}
                 profileId={profileId}
                 showDays={showDays}
@@ -189,7 +187,7 @@ export function StallsView({
             </ModalDialog>
           ) : null}
 
-          <StallBookingsTable locale={locale} bookings={bookings} contacts={contacts} currency={currency} horses={horses} invoiceLineItems={invoiceLineItems} invoices={invoices} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
+          <StallBookingsTable locale={locale} bookings={bookings} contacts={contacts} currency={currency} horses={horses} billingAccounts={billingAccounts} options={stallOptions} onDelete={handleDeleteBooking} onEdit={setEditingBooking} />
         </>
       ) : null}
 
@@ -204,7 +202,7 @@ export function StallsView({
             defaultStatus="reserved"
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
-            invoices={invoices}
+            billingAccounts={billingAccounts}
             organization={organization}
             profileId={profileId}
             showDays={showDays}
@@ -280,8 +278,7 @@ export function MyStallsView({
   currency,
   horseHealthDocuments,
   horses,
-  invoiceLineItems,
-  invoices,
+  billingAccounts,
   organization,
   profileId,
   showDays,
@@ -299,8 +296,7 @@ export function MyStallsView({
   currency: string;
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  invoiceLineItems: InvoiceLineItem[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   profileId: string;
   showDays: ShowDay[];
@@ -389,7 +385,7 @@ export function MyStallsView({
                 currency={currency}
                 horseHealthDocuments={horseHealthDocuments}
                 horses={horses}
-                invoices={invoices}
+                billingAccounts={billingAccounts}
                 organization={organization}
                 profileId={profileId}
                 showDays={showDays}
@@ -411,8 +407,8 @@ export function MyStallsView({
             contacts={contacts}
             currency={currency}
             horses={horses}
-            invoiceLineItems={invoiceLineItems}
-            invoices={invoices}
+
+            billingAccounts={billingAccounts}
             options={stallOptions}
             title={uiText(locale, "Mes réservations", "My reservations")}
             onDelete={handleDeleteBooking}
@@ -433,7 +429,7 @@ export function MyStallsView({
             defaultStatus="requested"
             horseHealthDocuments={horseHealthDocuments}
             horses={horses}
-            invoices={invoices}
+            billingAccounts={billingAccounts}
             organization={organization}
             profileId={profileId}
             showDays={showDays}
@@ -553,8 +549,7 @@ function StallBookingsTable({
   contacts,
   currency,
   horses,
-  invoiceLineItems,
-  invoices,
+  billingAccounts,
   options,
   title = "Reservations",
   onDelete,
@@ -565,8 +560,7 @@ function StallBookingsTable({
   contacts: Contact[];
   currency: string;
   horses: Horse[];
-  invoiceLineItems: InvoiceLineItem[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   options: StallOption[];
   title?: string;
   onDelete: (booking: StallBooking) => void;
@@ -596,8 +590,8 @@ function StallBookingsTable({
             </summary>
             {items.map((booking) => {
           const option = findById(options, booking.stall_option_id);
-          const invoice = invoiceForBooking(booking, invoices, invoiceLineItems);
-          const invoiceState = reservationInvoiceState(invoice, currency, locale);
+          const invoice = billingAccounts.find(account => account.show_id === booking.show_id && account.payer_contact_id === booking.payer_contact_id);
+          const invoiceState = reservationAccountState(invoice, currency, locale);
           return (
             <div className="table-row" key={booking.id}>
               <div>
@@ -1111,7 +1105,7 @@ function StallBookingForm({
   defaultStatus: StallBooking["status"];
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   profileId: string;
   showDays: ShowDay[];
@@ -1292,7 +1286,7 @@ function StallBookingForm({
     hasReservationItems,
     invalidHealthHorseNames: selectedInvalidHealth.map((item) => item.horse.name),
     blockingInvoiceMessage,
-    hasBlockingInvoiceBalance: Boolean(blockingInvoiceMessage),
+    hasBlockingAccountBalance: Boolean(blockingInvoiceMessage),
     missingCampingPayerCount,
     needsBeddingOption,
     needsHayOption,
@@ -2076,7 +2070,7 @@ function StallBookingEditForm({
   currency: string;
   horseHealthDocuments: HorseHealthDocument[];
   horses: Horse[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   profileId: string;
   showDays: ShowDay[];
@@ -2177,7 +2171,7 @@ function StallBookingEditForm({
                 ? blockingInvoiceMessage
                 : quantityTooHigh
                   ? uiText(locale, `Seulement ${editableAvailability} disponible pour ce produit.`, `Only ${editableAvailability} available for this product.`)
-                  : uiText(locale, `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`, `Invoice line: ${formatCurrency(totalPrice, currency)}.`)}
+                  : uiText(locale, `Ligne de facture: ${formatCurrency(totalPrice, currency)}.`, `BillingAccountSummary line: ${formatCurrency(totalPrice, currency)}.`)}
           </p>
         </div>
       </div>
@@ -2321,44 +2315,10 @@ function StallBookingEditForm({
   );
 }
 
-function invoiceForBooking(booking: StallBooking, invoices: Invoice[], lineItems: InvoiceLineItem[]) {
-  const lineItem = lineItems.find((item) => item.item_id === booking.id && (item.item_type === "stall" || item.item_type === "extra"));
-  return lineItem ? findById(invoices, lineItem.invoice_id) : undefined;
-}
-
-function reservationInvoiceState(invoice: Invoice | undefined, currency: string, locale: Locale = "fr") {
-  if (!invoice) {
-    return {
-      badgeClass: "warning",
-      confirmationLabel: uiText(locale, "Compte du concours", "Show account"),
-      detail: uiText(locale, "Les frais de réservation sont à consulter dans Mes comptes.", "View reservation charges in My accounts."),
-    };
-  }
-
-  const invoiceNumber = `#${formatInvoiceNumber(invoice.invoice_number)}`;
-  const balance = Number(invoice.balance_due ?? 0);
-
-  if (invoice.status === "void") {
-    return {
-      badgeClass: "void",
-      confirmationLabel: uiText(locale, "Facture annulée", "Invoice voided"),
-      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)}`,
-    };
-  }
-
-  if (invoice.status === "paid" || balance <= 0) {
-    return {
-      badgeClass: "paid",
-      confirmationLabel: uiText(locale, "Confirmée", "Confirmed"),
-      detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)}`,
-    };
-  }
-
-  return {
-    badgeClass: invoice.status === "overdue" ? "overdue" : "warning",
-    confirmationLabel: uiText(locale, "Solde ouvert", "Open balance"),
-    detail: `${invoiceNumber} - ${invoiceStatusLabel(invoice.status, locale)} - ${formatCurrency(balance, currency)}`,
-  };
+function reservationAccountState(account: BillingAccountSummary | undefined, currency: string, locale: Locale = "fr") {
+  if (!account) return {badgeClass: "warning", confirmationLabel: uiText(locale, "Compte du concours", "Show account"), detail: uiText(locale, "Consultez les frais dans les comptes du concours.", "View charges in show accounts.")};
+  const settled = Number(account.balance) <= 0;
+  return {badgeClass: settled ? "paid" : "warning", confirmationLabel: settled ? uiText(locale, "Compte soldé", "Account settled") : uiText(locale, "Solde du compte", "Account balance"), detail: account.account_number + " · " + formatCurrency(Number(account.balance), account.currency)};
 }
 
 function bookingStatusLabel(status: StallBooking["status"], locale: Locale = "fr") {
@@ -2376,32 +2336,6 @@ function bookingStatusLabel(status: StallBooking["status"], locale: Locale = "fr
     default:
       return status;
   }
-}
-
-function invoiceStatusLabel(status: Invoice["status"], locale: Locale = "fr") {
-  switch (status) {
-    case "draft":
-      return uiText(locale, "Brouillon", "Draft");
-    case "sent":
-      return uiText(locale, "Envoyée", "Sent");
-    case "viewed":
-      return uiText(locale, "Consultée", "Viewed");
-    case "partially_paid":
-      return uiText(locale, "Partiellement payée", "Partially paid");
-    case "paid":
-      return uiText(locale, "Payée", "Paid");
-    case "overdue":
-      return uiText(locale, "En retard", "Overdue");
-    case "void":
-      return uiText(locale, "Annulée", "Void");
-    default:
-      return status;
-  }
-}
-
-function formatInvoiceNumber(value: string) {
-  const normalized = value.trim();
-  return /^\d{1,4}$/.test(normalized) ? normalized.padStart(4, "0") : normalized;
 }
 
 function useReservationClosedBalanceMessage(showId: string, payerIds: string[], locale: Locale) {
@@ -2443,7 +2377,7 @@ function reservationCreateMessage({
   campingQuantityNumber,
   currency,
   dayOptions,
-  hasBlockingInvoiceBalance,
+  hasBlockingAccountBalance,
   hayAvailabilityTooLow,
   hayTotalQuantity,
   hasRequiredContactRoles,
@@ -2480,7 +2414,7 @@ function reservationCreateMessage({
   campingQuantityNumber: number;
   currency: string;
   dayOptions: ShowDay[];
-  hasBlockingInvoiceBalance: boolean;
+  hasBlockingAccountBalance: boolean;
   hayAvailabilityTooLow: boolean;
   hayTotalQuantity: number;
   hasRequiredContactRoles: boolean;
@@ -2527,7 +2461,7 @@ function reservationCreateMessage({
     return uiText(locale, "Le contact responsable doit être booker pour créer la réservation.", "The responsible contact must be a booker to create the reservation.");
   }
 
-  if (hasBlockingInvoiceBalance) {
+  if (hasBlockingAccountBalance) {
     return blockingInvoiceMessage;
   }
 

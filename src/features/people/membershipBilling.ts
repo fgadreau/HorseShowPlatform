@@ -5,7 +5,6 @@ export function membershipBillingError(error:unknown,locale:string){
  const code=error instanceof Error?error.message:String((error as {message?:string})?.message??error);
  const fr=locale==='fr';
  if(/MEMBERSHIP_(BILLING_NOT_CONFIGURED|PILOT_REQUIRED)/.test(code))return fr?'L’association doit configurer la facturation de cette carte avant l’achat. Aucune carte ni aucun frais n’a été créé.':'The association must configure billing for this membership before purchase. No membership or charge was created.';
- if(/MEMBERSHIP_LEGACY/.test(code))return fr?'Cette carte possède une ancienne facture. L’association doit la vérifier dans les réglages des cartes avant de poursuivre.':'This membership has a legacy invoice. The association must review it in membership settings before proceeding.';
  if(/MEMBERSHIP_(QUOTE_CHANGED|CONFIG_CHANGED)/.test(code))return fr?'Le prix ou les taxes ont changé. L’association doit vérifier la configuration avant de poursuivre.':'The price or taxes changed. The association must review the configuration before proceeding.';
  if(code==='MEMBERSHIP_PAYER_REQUIRED')return fr?'Choisis le payeur du nouveau compte.':'Choose the payer for the new account.';
  if(code==='MEMBERSHIP_TAX_CONFIG_REQUIRED')return fr?'Choisis les taxes de la carte et précise chaque taux applicable.':'Choose the membership taxes and specify each applicable rate.';

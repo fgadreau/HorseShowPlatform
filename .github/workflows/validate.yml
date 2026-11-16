@@ -34,6 +34,7 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npm run build
+      - run: npm run test:accounting-export
       - run: npm run test:association-team:browser
       - run: npm run test:association-settings:browser
       - run: npm run test:membership-csv
@@ -57,6 +58,7 @@ jobs:
       - run: npm run test:entry-lifecycle:browser
       - run: npm run test:show-settings:browser
       - run: node scripts/billing/association-finance.browser.mjs
+      - run: node scripts/billing/retirement.browser.mjs
       - run: node scripts/billing/invoice-print.browser.mjs
       - run: npm run test:horses:browser
       - run: npm run test:coggins

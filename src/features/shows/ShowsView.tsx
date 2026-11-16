@@ -5,7 +5,7 @@ import { EmptyState, ModalDialog, ViewIntro } from "../../components/ui";
 import { formatDate, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createShow, createShowAnnouncement, deleteShowAnnouncement, updateShow } from "../../services/supabaseServices";
-import type { Block, ClassRecord, Entry, Invoice, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
+import type { Block, ClassRecord, Entry, BillingAccountSummary, Organization, Show, ShowAnnouncement, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { uiText } from "../dashboard/shared";
 import { showPaymentSummary } from "../classes/classUtils";
@@ -17,7 +17,7 @@ function ShowsView({
   blocks,
   classes,
   entries,
-  invoices,
+  billingAccounts,
   organization,
   showAnnouncements,
   showDays,
@@ -34,7 +34,7 @@ function ShowsView({
   blocks: Block[];
   classes: ClassRecord[];
   entries: Entry[];
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   showAnnouncements: ShowAnnouncement[];
   showDays: ShowDay[];
@@ -235,7 +235,7 @@ function ShowsView({
           classes={classes}
           entries={entries}
           initialShow={assistantShow}
-          invoices={invoices}
+          billingAccounts={billingAccounts}
           organization={organization}
           showDays={showDays}
           showScoreClassSetups={showScoreClassSetups}

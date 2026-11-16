@@ -1,12 +1,13 @@
 -- Synthetic accounting journals only; the transaction is rolled back.
 begin;
+set local timezone='America/Toronto';
 do $$
 declare
  staff_user uuid:=gen_random_uuid();stranger_user uuid:=gen_random_uuid();staff_profile uuid;
  org uuid:=gen_random_uuid();show_now uuid:=gen_random_uuid();show_old uuid:=gen_random_uuid();ctx_now uuid:=gen_random_uuid();ctx_old uuid:=gen_random_uuid();
  payer uuid:=gen_random_uuid();customer uuid:=gen_random_uuid();product uuid:=gen_random_uuid();folio_now uuid:=gen_random_uuid();folio_old uuid:=gen_random_uuid();
  tps uuid:=gen_random_uuid();tvq uuid:=gen_random_uuid();old_tax uuid:=gen_random_uuid();charge_now uuid;charge_hsp uuid;charge_old uuid;payment_now uuid;payment_old uuid;
- request_id uuid:=gen_random_uuid();data jsonb;created jsonb;duplicate jsonb;blocked boolean;
+ request_id uuid:=gen_random_uuid();data jsonb;created jsonb;duplicate jsonb;blocked boolean;bad_kind text;
 begin
  insert into auth.users(id,email,raw_user_meta_data) values(staff_user,staff_user||'@example.test','{"first_name":"Accounting","last_name":"Staff"}'),(stranger_user,stranger_user||'@example.test','{"first_name":"Accounting","last_name":"Other"}');
  select id into staff_profile from public.user_profiles where user_id=staff_user;
@@ -40,7 +41,15 @@ begin
  perform set_config('request.jwt.claim.sub',stranger_user::text,true);perform set_config('request.jwt.claims',json_build_object('sub',stranger_user,'role','authenticated')::text,true);set local role authenticated;
  blocked:=false;begin perform public.preview_billing_accounting_export(ctx_now,'quickbooks_online','show_close',current_date,current_date,current_date);exception when insufficient_privilege then blocked:=true;end;
  if not blocked then raise exception 'TEST stranger previewed accounting data';end if;
+ foreach bad_kind in array array[null::text,'unsupported','receipts'] loop
+  blocked:=false;begin perform public.preview_billing_accounting_export(ctx_now,'quickbooks_online',bad_kind,current_date,current_date,current_date);exception when insufficient_privilege then blocked:=true;end;
+  if not blocked then raise exception 'TEST invalid or missing export kind bypassed accounting authorization';end if;
+ end loop;
  reset role;perform set_config('request.jwt.claim.sub',staff_user::text,true);perform set_config('request.jwt.claims',json_build_object('sub',staff_user,'role','authenticated')::text,true);set local role authenticated;
+ blocked:=false;begin perform public.preview_billing_accounting_export(ctx_now,null,'show_close',current_date,current_date,current_date);exception when others then if sqlerrm='ACCOUNTING_INVALID_PERIOD' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'TEST missing software accepted';end if;
+ blocked:=false;begin perform public.save_billing_accounting_profile(ctx_now,'quickbooks_online',null,'{}');exception when others then if sqlerrm='ACCOUNTING_INVALID_PROFILE' then blocked:=true;else raise;end if;end;
+ if not blocked then raise exception 'TEST null account mapping accepted';end if;
 
  data:=public.preview_billing_accounting_export(ctx_now,'quickbooks_online','show_close',current_date,current_date,current_date);
  if jsonb_array_length(data->'missing_accounts')<>4 or (data#>>'{totals,debits}')::numeric<>114.98 or (data#>>'{totals,credits}')::numeric<>114.98 or not (data->>'balanced')::boolean then raise exception 'TEST closing preview totals/mappings wrong: %',data;end if;

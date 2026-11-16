@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
-import { LegacyFinanceView } from "./LegacyFinanceView";
+import { AccountFinanceView } from "./AccountFinanceView";
 import { AssociationFinanceView } from "./AssociationFinanceView";
 import { financeRoute } from "./navigation";
 
-export type FinanceViewProps = Parameters<typeof LegacyFinanceView>[0];
+export type FinanceViewProps = Parameters<typeof AccountFinanceView>[0];
 
 export function FinanceView(props: FinanceViewProps) {
   const [url, setUrl] = useState(() => window.location.href);
@@ -14,6 +14,6 @@ export function FinanceView(props: FinanceViewProps) {
   }, []);
   // Keep existing payment, closing and immutable-document workflows intact.
   return props.personal || financeRoute(new URL(url).pathname)?.folio
-    ? <LegacyFinanceView {...props} />
+    ? <AccountFinanceView {...props} />
     : <AssociationFinanceView {...props} />;
 }

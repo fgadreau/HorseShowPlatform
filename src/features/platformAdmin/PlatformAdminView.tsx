@@ -66,7 +66,6 @@ export function PlatformAdminView({
 
   return (
     <div className="view-container">
-      <a href="/vet">Portail pilote de certificats vétérinaires</a>
       <ViewIntro
         eyebrow="Platform Admin"
         title={locale === "fr" ? "Paramètres de la plateforme" : "Platform settings"}

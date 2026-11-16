@@ -5,7 +5,7 @@ import { ModalDialog, ViewIntro } from "../../components/ui";
 import { formatDate, numericValue, showLabel } from "../../lib/display";
 import type { Locale } from "../../lib/i18n";
 import { createShow, slugify, updateShow } from "../../services/supabaseServices";
-import type { Block, ClassRecord, Entry, Invoice, Organization, Show, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
+import type { Block, ClassRecord, Entry, BillingAccountSummary, Organization, Show, ShowDay, ShowScoreBlockSetup, StallOption } from "../../types/domain";
 import type { ViewKey } from "../../types/ui";
 import { uiText, buildShowReadinessItems, type ShowReadinessItem } from "../dashboard/shared";
 import { showTimeInputValue } from "../classes/classUtils";
@@ -20,7 +20,7 @@ function ShowAssistant({
   classes,
   entries,
   initialShow,
-  invoices,
+  billingAccounts,
   organization,
   showDays,
   showScoreClassSetups,
@@ -35,7 +35,7 @@ function ShowAssistant({
   classes: ClassRecord[];
   entries: Entry[];
   initialShow: Show | null;
-  invoices: Invoice[];
+  billingAccounts: BillingAccountSummary[];
   organization: Organization | null;
   showDays: ShowDay[];
   showScoreClassSetups: ShowScoreBlockSetup[];
@@ -89,7 +89,7 @@ function ShowAssistant({
         blocks,
         classes,
         entries,
-        invoices,
+        billingAccounts,
         showDays,
         showScoreClassSetups,
         stallOptions,
