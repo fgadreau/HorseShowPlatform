@@ -40,7 +40,7 @@ const server = await createServer({ configFile: false, envDir: false, plugins: [
 });
 try {
   await server.listen();
-  browser = await chromium.launch({ executablePath: await executable.executablePath(), headless: true, args: executable.args.filter((arg) => !['--single-process', '--disable-web-security', '--disable-site-isolation-trials'].includes(arg) && !arg.startsWith('--disable-features=')) });
+  browser = await chromium.launch(process.platform==='linux'?{ executablePath: await executable.executablePath(), headless: true, args: executable.args.filter((arg) => !['--single-process', '--disable-web-security', '--disable-site-isolation-trials'].includes(arg) && !arg.startsWith('--disable-features=')) }:{channel:'chrome',headless:true});
   const page = await browser.newPage();
   page.setDefaultTimeout(10000);
   const errors = [];

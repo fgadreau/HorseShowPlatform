@@ -16,7 +16,9 @@ un échec et les tests SQL ne reçoivent aucune clé de préproduction.
 
 `npm run test:robot:recent` exécute les suites des rôles, paramètres du concours,
 imports de cartes, annulations, poste de contrôle, export comptable, retrait de
-l'ancienne facturation, nominations CSV, draw de présentation, éligibilités
+l'ancienne facturation, factures PDF/courriel (transport simulé), rapports NRHA
+avec/sans conversion, accès agent et fiches des chevaux, nominations CSV,
+draw de présentation, éligibilités
 maison (listes multiples, cartes incompatibles), chevaux avec stalle, horaire et
 billetterie. Cette dernière couvre les quantités et préférences, taxes, achat
 manuel ou immédiat, export/impression, annulation et événement autonome. Ces
@@ -29,6 +31,10 @@ paiements et crédits de billets, confidentialité et réservations simultanées
 la dernière place. Les résultats détaillés sont conservés dans les artefacts du
 workflow. Le formulaire du bloc utilise désormais « Nombre de juges » puis
 « Juge 1 », conformément à l'interface actuelle.
+
+Les branches `robot/**` exécutent uniquement les deux volets isolés. Le parcours
+réel demeure réservé à `preprod`, conformément à la protection de cet
+environnement GitHub ; les branches de maintenance ne reçoivent pas ses secrets.
 
 Le formulaire contact démarre sur l'import NRHA. Le robot choisit explicitement
 « Création manuelle » avant de remplir le prénom et le nom. Le deuxième prénom
