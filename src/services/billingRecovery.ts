@@ -11,6 +11,7 @@ function changed(){window.dispatchEvent(new Event('billing-command-change'));}
 // Keep this allowlist scoped to the RPC: the same code elsewhere is not proof.
 const staffRejections = ['BILLING_CAPABILITY_DISABLED', 'BILLING_UNEXPECTED_FIELD'];
 export const definitiveRejections:Readonly<Record<string,readonly string[]>> = {
+ billing_credit_account: ['BILLING_CAPABILITY_DISABLED','BILLING_INVALID_AMOUNT','BILLING_CREDIT_REASON_REQUIRED','BILLING_PAYMENT_PENDING','BILLING_FOLIO_CLOSED','BILLING_CREDIT_INVALID_CHARGE','BILLING_CREDIT_EXCEEDS_CHARGE','BILLING_TAX_CONFIG_REQUIRED'],
  finalize_own_billing_folio: ['BILLING_NOT_ADMISSIBLE', 'BILLING_STALE_RECAP'],
  prepare_own_billing_recap: ['BILLING_NOT_ADMISSIBLE'],
  add_billing_sale: [...staffRejections, 'BILLING_QUOTE_REQUIRED', 'BILLING_STALE_QUOTE', 'BILLING_HSP_SYSTEM_CHARGE', 'BILLING_HSP_ZERO_OPERATION_UNSUPPORTED', 'BILLING_SHOW_ARCHIVED', 'BILLING_CONTEXT_NOT_OPEN',

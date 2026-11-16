@@ -1,4 +1,5 @@
 import {createHmac,timingSafeEqual} from 'node:crypto';
+import {createRefundService} from './refunds.mjs';
 export function testConfig(env=process.env) {
  const secret=env.STRIPE_SECRET_KEY, publishable=env.STRIPE_PUBLISHABLE_KEY, webhook=env.STRIPE_WEBHOOK_SECRET;
  if(!secret?.startsWith('sk_test_')||!publishable?.startsWith('pk_test_')||!webhook?.startsWith('whsec_')) throw Error('BILLING_STRIPE_TEST_CONFIG_REQUIRED');
@@ -11,8 +12,12 @@ export function verifyEvent(raw,signature,secret,now=Date.now(),allowConnect=fal
  const expected=createHmac('sha256',secret).update(`${time}.`).update(raw).digest();
  if(!fields.some(([k,v])=>k==='v1'&&/^[a-f0-9]{64}$/i.test(v??'')&&timingSafeEqual(expected,Buffer.from(v,'hex'))))throw Error('BILLING_WEBHOOK_SIGNATURE');
  const event=JSON.parse(raw.toString('utf8'));
- if(event.livemode!==false||(event.account&&!allowConnect)||event.data?.object?.livemode!==false)throw Error('BILLING_TEST_ONLY');
+ if(!testEvent(event)||(event.account&&!allowConnect))throw Error('BILLING_TEST_ONLY');
  return event;
+}
+function testEvent(event){
+ const o=event.data?.object;
+ return event.livemode===false&&(o?.livemode===false||(event.type?.startsWith('refund.')&&o?.object==='refund'&&o.livemode===undefined));
 }
 export function stripeClient(config,transport=fetch) {
  return async (path,params,key,account)=>{
@@ -26,6 +31,7 @@ export function stripeClient(config,transport=fetch) {
 }
 export async function rpc(client,name,args) { const {data,error}=await client.rpc(name,args);if(error)throw Error(/^BILLING_[A-Z_]+$/.test(error.message)?error.message:'BILLING_SERVER_ERROR');return data; }
 export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
+ const refunds=createRefundService({admin,stripe,now});
  async function attempt(id){const a=await rpc(admin,'billing_stripe_attempt_private',{p_attempt:id});if(!a)throw Error('BILLING_FORBIDDEN');return a;}
  async function checkAccount(a){
   const platform=await stripe('/account');
@@ -68,10 +74,15 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
    intent=await scoped(`/payment_intents/${intent.id}/capture`,{amount_to_capture:String(Math.round(Number(a.planned_capture_amount)*100))},`hsp-test-capture-${a.id}`);
   }
   const result=await rpc(admin,'billing_stripe_observe',{p_attempt:a.id,p_platform:a.platform_account,p_object:a.charge_mode==='direct'?{...intent,hsp_verified_account:a.connected_account}:intent});
+  if(result.state==='succeeded'){
+   const pending=await rpc(admin,'billing_pending_refunds',{p_attempt:a.id});
+   for(const item of Array.isArray(pending)?pending:[])await refunds.sync(item.id);
+  }
   if(a.charge_mode==='direct'&&result.state==='succeeded'){
    const charge=await scoped(`/charges/${typeof intent.latest_charge==='string'?intent.latest_charge:intent.latest_charge?.id}`);
    if(charge.payment_intent!==intent.id||charge.livemode!==false)throw Error('BILLING_PROVIDER_ACCOUNT');
-   if(charge.amount_refunded>0||charge.disputed){await rpc(admin,'billing_provider_flag',{p_attempt:a.id,p_reference:charge.id,p_reason:charge.disputed?'external_dispute':'external_refund'});}
+   const managed=charge.amount_refunded>0?await rpc(admin,'billing_refund_provider_total',{p_attempt:a.id}):0;
+   if(charge.amount_refunded>Number(managed)||charge.disputed){await rpc(admin,'billing_provider_flag',{p_attempt:a.id,p_reference:charge.id,p_reason:charge.disputed?'external_dispute':'external_refund'});}
    if(Number(a.application_fee_amount)>0){
     if(!charge.application_fee)throw Error('BILLING_PROVIDER_RETRY');
     const fee=await stripe(`/application_fees/${typeof charge.application_fee==='string'?charge.application_fee:charge.application_fee.id}`);
@@ -92,6 +103,7 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   if(result.state==='anomaly')throw Error('BILLING_PROVIDER_ANOMALY');
  }
  return {sync,async action(user,body){
+  if(['refund','resume_refund'].includes(body?.action))return refunds.action(user,body);
   if(!body||Object.keys(body).some(k=>!['action','request_id','folio_id','amount','attempt_id'].includes(k)))throw Error('BILLING_UNEXPECTED_FIELD');
   let id=body.attempt_id;
   if(body.action==='begin')id=(await rpc(user,'begin_billing_stripe_attempt',{p_request:body.request_id,p_folio:body.folio_id,p_amount:body.amount})).attempt_id;
@@ -109,9 +121,18 @@ export function createPaymentService({admin,stripe,config,now=()=>Date.now()}) {
   return this.receiveEvent(event);
  },async receiveEvent(event){
   // Internal server entry for an already authenticated, durable sandbox inbox.
-  if(event.livemode!==false||event.data?.object?.livemode!==false)throw Error('BILLING_TEST_ONLY');
-  if(!event.type?.startsWith('payment_intent.')&&!['charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded'].includes(event.type))return;
+  if(!testEvent(event))throw Error('BILLING_TEST_ONLY');
+  if(!event.type?.startsWith('payment_intent.')&&!event.type?.startsWith('refund.')&&!['charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded'].includes(event.type))return;
   const platform=await stripe('/account');
+  if(event.type.startsWith('refund.')){
+   const refund=await stripe(`/refunds/${event.data.object.id}`,undefined,undefined,event.account);
+   if(refund.livemode===true||!refund.payment_intent)throw Error('BILLING_PROVIDER_ACCOUNT');
+   const intent=await stripe(`/payment_intents/${refund.payment_intent}`,undefined,undefined,event.account);
+   if(intent.livemode!==false||intent.id!==refund.payment_intent)throw Error('BILLING_PROVIDER_ACCOUNT');
+   if(event.account)await rpc(admin,'billing_stripe_receive_direct',{p_event:event.id,p_provider:refund.payment_intent,p_type:event.type,p_platform:platform.id,p_connected:event.account,p_live:event.livemode});
+   else await rpc(admin,'billing_stripe_receive',{p_event:event.id,p_provider:refund.payment_intent,p_type:event.type,p_platform:platform.id,p_live:event.livemode});
+   return;
+  }
   if(event.type.startsWith('application_fee.')){
    if(event.account)throw Error('BILLING_PROVIDER_ACCOUNT');
    const fee=await stripe(`/application_fees/${event.data.object.id}`);

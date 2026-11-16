@@ -53,6 +53,7 @@ try {
   sql(readFileSync('supabase/tests/presentation_draw.sql', 'utf8'));
   sql(readFileSync('supabase/tests/annual_house_eligibility.sql', 'utf8'));
   sql(readFileSync('supabase/tests/event_ticketing.sql', 'utf8'));
+  sql(readFileSync('supabase/tests/account_credits_refunds.sql', 'utf8'));
   sql(readFileSync('supabase/tests/e2e_robot.sql', 'utf8'));
   console.log('PASS: opt-in E2E billing adoption and token-scoped immutable fixture cleanup');
   console.log('PASS: ticket prices/taxes, capacities, purchases, payment allocations, cancellation credits and privacy');

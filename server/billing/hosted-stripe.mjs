@@ -1,9 +1,9 @@
 import {hostedHandler,machine,rawBody,json,withLane,UUID,safeError} from './hosted-core.mjs';
 import {testConfig,stripeClient,createPaymentService,verifyEvent,rpc} from './stripe.mjs';
-const eventTypes=new Set(['payment_intent.succeeded','payment_intent.processing','payment_intent.payment_failed','payment_intent.canceled','payment_intent.requires_action','payment_intent.amount_capturable_updated','charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded']);
+const eventTypes=new Set(['payment_intent.succeeded','payment_intent.processing','payment_intent.payment_failed','payment_intent.canceled','payment_intent.requires_action','payment_intent.amount_capturable_updated','charge.refunded','charge.dispute.created','charge.dispute.updated','application_fee.created','application_fee.refunded','refund.created','refund.updated','refund.failed']);
 export function compactEvent(event,scope,connected){
  if(!/^evt_[A-Za-z0-9]+$/.test(event.id??'')||!eventTypes.has(event.type))throw Error('BILLING_INVALID_EVENT');
- if(scope==='connect'?(event.account!==connected||event.type.startsWith('application_fee.')):(!!event.account||!event.type.startsWith('application_fee.')))throw Error('BILLING_INVALID_EVENT');
+ if(scope==='connect'?(event.account!==connected||event.type.startsWith('application_fee.')):(!!event.account||!event.type.startsWith('application_fee.')&&!event.type.startsWith('refund.')))throw Error('BILLING_INVALID_EVENT');
  const o=event.data.object;
  return {id:event.id,type:event.type,livemode:false,...(event.account?{account:event.account}:{}),data:{object:{id:o.id,livemode:false,...(o.charge?{charge:typeof o.charge==='string'?o.charge:o.charge.id}:{}),...(o.payment_intent?{payment_intent:typeof o.payment_intent==='string'?o.payment_intent:o.payment_intent.id}:{})}}};
 }
@@ -25,7 +25,7 @@ export function createHostedStripe(options={}){
   }
   if(action==='payment'){
    const client=await user(),body=JSON.parse((await rawBody(req)).toString());
-   const key=body.action==='begin'?'folio_id':'attempt_id';if(!UUID.test(body[key]??''))throw Error('BILLING_INVALID_REQUEST');
+   const key=['begin','begin_authorization','refund','resume_refund'].includes(body.action)?'folio_id':'attempt_id';if(!UUID.test(body[key]??''))throw Error('BILLING_INVALID_REQUEST');
    await scope({[key==='folio_id'?'p_folio':'p_attempt']:body[key]});return json(res,200,await payments.action(client,body));
   }
   machine(req,config);await rawBody(req);
