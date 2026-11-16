@@ -52,7 +52,7 @@ export default defineConfig({
     ? {
         command: "npm run dev",
         url: baseUrl,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: !process.env.CI && process.env.E2E_FRESH_SERVER !== "true",
         timeout: 120_000,
       }
     : undefined,

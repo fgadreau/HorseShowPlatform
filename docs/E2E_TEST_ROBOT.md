@@ -6,7 +6,35 @@ exécution. Son parcours inter-apps couvre : création du concours, contacts,
 bloc et classe, préparation des inscriptions, ordre de passage, saisie annonceur, approbation du
 secrétariat, championnat, calcul des bourses et publication des résultats.
 
-## Revue du parcours — 13 novembre 2026
+## Revue du parcours — 16 novembre 2026
+
+Le workflow du robot comporte trois résultats indépendants : le parcours réel
+HSP → ShowScore, les régressions navigateur des fonctions récentes et les contrats
+SQL dans une base Docker locale jetable. Un échec inter-apps ne masque plus les
+résultats des nouveaux modules. Aucune de ces étapes ne tolère silencieusement
+un échec et les tests SQL ne reçoivent aucune clé de préproduction.
+
+`npm run test:robot:recent` exécute les suites des rôles, paramètres du concours,
+imports de cartes, annulations, poste de contrôle, export comptable, retrait de
+l'ancienne facturation, factures PDF/courriel (transport simulé), rapports NRHA
+avec/sans conversion, accès agent et fiches des chevaux, nominations CSV,
+draw de présentation, éligibilités
+maison (listes multiples, cartes incompatibles), chevaux avec stalle, horaire et
+billetterie. Cette dernière couvre les quantités et préférences, taxes, achat
+manuel ou immédiat, export/impression, annulation et événement autonome. Ces
+écrans utilisent des services simulés : leur succès n'est pas présenté comme une
+preuve de paiement Stripe réel.
+
+Les contrats SQL rejouent toutes les migrations et vérifient notamment les
+éligibilités, nominations uniques cheval/programme, écritures et export comptable,
+paiements et crédits de billets, confidentialité et réservations simultanées de
+la dernière place. Les résultats détaillés sont conservés dans les artefacts du
+workflow. Le formulaire du bloc utilise désormais « Nombre de juges » puis
+« Juge 1 », conformément à l'interface actuelle.
+
+Les branches `robot/**` exécutent uniquement les deux volets isolés. Le parcours
+réel demeure réservé à `preprod`, conformément à la protection de cet
+environnement GitHub ; les branches de maintenance ne reçoivent pas ses secrets.
 
 Le formulaire contact démarre sur l'import NRHA. Le robot choisit explicitement
 « Création manuelle » avant de remplir le prénom et le nom. Le deuxième prénom
@@ -26,6 +54,7 @@ pas encore que tous les parcours client du show pilote ont été exécutés.
 | Chevaux et documents santé | Fixtures écrites par le processus Node de test; aucune preuve de création par les formulaires client |
 | Inscriptions et dossards | API avec la session authentifiée de l'administrateur jetable, dossard personnel explicite, contrôles serveur conservés; aucune preuve de création par le formulaire client |
 | Ordre de passage et transfert vers ShowScore | Interface HSP et données sauvegardées ShowScore |
+| Draw de présentation | Interface et RPC réels, participants/cases score vérifiés, versions du draw inchangées |
 | Annonceur, NS, scratch, écrans publics, chrono warm-up | Interfaces réelles ShowScore; NS/scratch seulement si au moins cinq participants |
 | Approbation, publication, retour HSP, championnat | Interfaces réelles et vérifications en base |
 | Calcul, révision, publication des bourses | Interface HSP et montants relus en base |

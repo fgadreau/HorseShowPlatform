@@ -4,7 +4,8 @@ import path from "node:path";
 
 loadEnvironmentFiles();
 
-const status = spawnSync("npx", ["supabase", "status", "-o", "env"], {
+const cliWorkdir = process.env.E2E_SUPABASE_WORKDIR?.trim();
+const status = spawnSync(process.execPath, ["node_modules/supabase/dist/supabase.js", "status", "-o", "env", ...(cliWorkdir ? ["--workdir",cliWorkdir] : [])], {
   cwd: process.cwd(),
   encoding: "utf8",
 });
@@ -21,18 +22,26 @@ if (!productionProjectRef) {
   process.exit(1);
 }
 
-const result = spawnSync("npx", ["playwright", "test", ...process.argv.slice(2)], {
+const baseUrl=process.env.E2E_BASE_URL || "http://127.0.0.1:5173";
+if(!['localhost','127.0.0.1'].includes(new URL(baseUrl).hostname))throw new Error('Le lanceur local exige une application localhost.');
+const result = spawnSync(process.execPath, ["node_modules/@playwright/test/cli.js", "test", ...process.argv.slice(2)], {
   cwd: process.cwd(),
   env: {
     ...process.env,
     E2E_ALLOW_WRITES: "true",
-    E2E_BASE_URL: process.env.E2E_BASE_URL || "http://127.0.0.1:5173",
+    E2E_BASE_URL: baseUrl,
+    E2E_FRESH_SERVER: "true",
     E2E_DEPLOY_ENV: "local",
     E2E_PRODUCTION_SUPABASE_PROJECT_REF: productionProjectRef,
     E2E_SUPABASE_PROJECT_REF: "local",
     E2E_SUPABASE_PUBLISHABLE_KEY: local.PUBLISHABLE_KEY || local.ANON_KEY,
     E2E_SUPABASE_SERVICE_ROLE_KEY: local.SECRET_KEY || local.SERVICE_ROLE_KEY,
     E2E_SUPABASE_URL: local.API_URL,
+    VITE_DEPLOY_ENV: "local",
+    VITE_SUPABASE_URL: local.API_URL,
+    VITE_SUPABASE_PROJECT_REF: "local",
+    VITE_SUPABASE_PUBLISHABLE_KEY: local.PUBLISHABLE_KEY || local.ANON_KEY,
+    VITE_SUPABASE_ANON_KEY: local.ANON_KEY || local.PUBLISHABLE_KEY,
   },
   stdio: "inherit",
 });
