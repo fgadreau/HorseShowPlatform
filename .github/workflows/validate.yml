@@ -36,6 +36,7 @@ jobs:
       - run: npm run build
       - run: npm run test:tickets:browser
       - run: npm run test:accounting-export
+      - run: npm run test:billing:credits:browser
       - run: npm run test:nomination-csv
       - run: npm run test:house-eligibility
       - run: npm run test:house-eligibility:browser

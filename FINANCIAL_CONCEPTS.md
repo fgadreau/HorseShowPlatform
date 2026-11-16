@@ -1,5 +1,31 @@
 # Horse Show Platform - Concepts Financiers (MVP)
 
+## Crédits et remboursements — implémentation du 16 novembre 2026
+
+Le compte client permet au personnel financier autorisé de créditer un frais de
+l’association sur un compte ouvert, avec un montant avant taxes et un motif.
+Les taxes historiques sont reprises au prorata; les arrondis cumulés empêchent
+de dépasser les taxes et le montant du frais d’origine. Le crédit reste lié au
+compte de ce concours ou de cette activité; aucun transfert vers un autre concours
+n’est créé. Les factures déjà émises restent immuables.
+
+Un paiement Stripe confirmé peut ensuite être remboursé partiellement ou
+complètement, dans la limite du crédit disponible et de la part remboursable de
+l’association. Les frais HSP sont exclus. La confirmation Stripe crée un paiement
+négatif et des allocations inverses, sans modifier les paiements ni les reçus
+d’origine. Les demandes en attente réservent l’opération; les reprises utilisent
+le même identifiant pour éviter les doublons. Les événements Stripe et le worker
+réconcilient les remboursements asynchrones. Les rapports et exports comptables
+consomment le même registre signé.
+
+Cette intégration conserve le mode Stripe test du dépôt. La migration
+`20261116144824_account_credits_refunds.sql` et le code serveur doivent être
+déployés ensemble. Aucun remboursement réel n’est lancé par les tests.
+
+Vérifications : `npm run test:billing:refunds`, `npm run test:billing:credits:sql`
+(copie PostgreSQL locale jetable) et `npm run test:billing:credits:browser`
+(interface avec transports simulés).
+
 ## 1. Vue d'ensemble - Model de Facturation
 
 Horse Show Platform MVP utilise un modèle de facturation simple mais flexible :
@@ -482,17 +508,12 @@ Scenario B : Partial Stripe + Manual payment, refund one payment
     - Check: $400
   - Owner demande refund, eligible = $500
   - System :
-    1. Refund Stripe $600 (full stripe payment) via API
-    2. Note: Payer over-refunded by $100 (can dispute with Stripe)
-    OR
-    1. Refund Stripe $500 only
-       BUT Stripe API doesn't support partial refund per original payment
-       So : Issue credit to account or full refund $600 then re-charge $100
-    3. Not ideal - may need manual intervention
+    1. Record the eligible $500 account credit.
+    2. Refund exactly $500 from the original $600 Stripe payment via API.
+    3. Consume the $500 credit when Stripe confirms the refund.
     
-  Best practice : Keep it simple at MVP
-  - Full refund if eligible
-  - If multiple payments, refund largest first or ask payer
+  Stripe supports partial refunds. Never refund more than the eligible credit
+  or the remaining refundable amount of the selected original payment.
 
 Scenario C : Manual payment (cash, check, e-transfer) refund
   - Secretary notes : "Cash refund $300 given to customer on [date]"

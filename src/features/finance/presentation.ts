@@ -9,6 +9,13 @@ export function billingError(message:string,locale:string,data?:Json){
  if(data?.state==='closed'&&/BILLING_(NOT_ADMISSIBLE|FOLIO_CLOSED|STALE_RECAP|STALE_VERSION)/.test(message))return closedLabel(locale);
  if(message==='BILLING_NOT_ADMISSIBLE'&&data){const reasons=(data.checkout?.reasons??[]).filter((r:string)=>r!=='RECAP_REQUIRED');if(reasons.length)return reasons.map((r:string)=>reasonText[r]?.[fr?0:1]??(fr?'Contactez l’association pour vérifier ce compte.':'Contact the association to review this account.')).join(' ');}
  const messages:Record<string,[string,string]>={
+ BILLING_CREDIT_REASON_REQUIRED:['Indiquez un motif de 5 à 1 000 caractères.','Enter a reason of 5 to 1,000 characters.'],
+ BILLING_CREDIT_INVALID_CHARGE:['Ce frais ne peut pas être crédité. Actualisez le compte.','This charge cannot be credited. Refresh the account.'],
+ BILLING_CREDIT_EXCEEDS_CHARGE:['Le crédit dépasse le montant encore ajustable de ce frais.','Credit exceeds the remaining adjustable charge amount.'],
+ BILLING_CHARGE_ALREADY_CREDITED:['Ce frais a déjà été crédité. Vérifiez ses ajustements avant de l’annuler.','This charge has already been credited. Review its adjustments before cancellation.'],
+ BILLING_REFUND_INVALID_PAYMENT:['Sélectionnez un paiement Stripe confirmé de ce compte.','Select a confirmed Stripe payment on this account.'],
+ BILLING_REFUND_EXCEEDS_CREDIT:['Le remboursement dépasse le crédit disponible ou le montant remboursable du paiement.','The refund exceeds available account credit or the remaining refundable payment amount.'],
+ BILLING_REFUND_PROVIDER_MISMATCH:['Le remboursement Stripe doit être vérifié par l’administration.','An administrator must review this Stripe refund.'],
  BILLING_PREAUTH_NOT_DUE:['La préautorisation n’est pas encore due selon les paramètres du concours.','Authorization is not yet due under the show settings.'],
  BILLING_PREAUTH_FULL_BALANCE_REQUIRED:['Le montant à préautoriser a changé. Actualisez le compte.','The authorization amount changed. Refresh the account.'],
  BILLING_PREAUTH_CAPTURE_BALANCE:['Le solde ne peut pas être encaissé sur cette préautorisation. Vérifiez le compte avant de poursuivre.','This balance cannot be captured from the authorization. Review the account before continuing.'],

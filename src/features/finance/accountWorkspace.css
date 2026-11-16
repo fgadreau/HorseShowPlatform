@@ -56,7 +56,9 @@
 .finance-account-form h3 { display: flex; align-items: center; gap: 8px; font-size: 16px; margin: 0; line-height: 1.4; }
 .finance-account-form h3 svg { flex-shrink: 0; color: var(--brand, #653c59); }
 .finance-account-form label { min-width: 0; font-size: 13px; font-weight: 600; }
-.finance-account-form input, .finance-account-form select { width: 100%; box-sizing: border-box; min-width: 0; }
+.finance-account-form input, .finance-account-form select, .finance-account-form textarea { width: 100%; box-sizing: border-box; min-width: 0; }
+.finance-adjustment-fields { display: grid; gap: 15px; min-width: 0; }
+.finance-account-form textarea { min-height: 80px; resize: vertical; }
 .finance-account-form button { width: 100%; min-height: 44px; margin-top: 4px; }
 .finance-form-intro { margin: 0; color: var(--text-muted, #716571); font-size: 13px; line-height: 1.6; }
 .finance-account-review > h3 { font-size: 16px; margin-top: 0; }

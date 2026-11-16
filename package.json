@@ -4,6 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "test:billing:refunds": "node --test --test-isolation=none scripts/billing/refunds.test.mjs scripts/billing/stripe-service.test.mjs",
+    "test:billing:credits:sql": "node scripts/billing/credits-sql-local.mjs",
+    "test:billing:credits:browser": "node scripts/billing/credits.browser.mjs",
     "test:robot:recent": "node scripts/robot-recent.mjs",
     "test:tickets:browser": "node scripts/ticketing.browser.mjs",
     "test:presentation-draw:browser": "node scripts/presentation-draw.browser.mjs",
