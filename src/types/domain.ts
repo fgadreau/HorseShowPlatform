@@ -183,6 +183,7 @@ export type NrhaRiderRanking = {
 };
 
 export type Show = {
+  event_only?: boolean;
   id: string;
   organization_id: string;
   name: string;
@@ -1194,7 +1195,7 @@ export type Block = {
   slate_id: string | null;
   name: string;
   display_label: string | null;
-  block_type: "competition" | "paid_warmup" | "event" | "break" | "ceremony";
+  block_type: "competition" | "paid_warmup" | "event" | "break" | "ceremony" | "ticketed_event";
   arena: string | null;
   pattern: string | null;
   custom_pattern: Record<string, unknown> | null;

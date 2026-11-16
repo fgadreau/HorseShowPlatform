@@ -6,6 +6,7 @@ import { createServer } from 'node:net';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 import { runEntryDrawRaces } from './entry-draw-races.mjs';
+import { runTicketCapacityRace } from './ticket-capacity-race.mjs';
 
 assert.equal(process.argv.length, 2, 'This test accepts no remote connection or container arguments');
 const host = execFileSync('docker', ['context', 'inspect', '--format', '{{.Endpoints.docker.Host}}'], { encoding: 'utf8' }).trim();
@@ -51,12 +52,15 @@ try {
   sql(readFileSync('supabase/tests/accounting_exports.sql', 'utf8'));
   sql(readFileSync('supabase/tests/presentation_draw.sql', 'utf8'));
   sql(readFileSync('supabase/tests/annual_house_eligibility.sql', 'utf8'));
+  sql(readFileSync('supabase/tests/event_ticketing.sql', 'utf8'));
+  console.log('PASS: ticket prices/taxes, capacities, purchases, payment allocations, cancellation credits and privacy');
   console.log('PASS: annual house lists, rider age, membership, NRHA reference and audited overrides');
   console.log('PASS: presentation draw snapshots, scoped programs, nominators and unique horse/program nominations');
   console.log('PASS: accounting journals, CAD/USD separation, access checks and export deduplication');
   console.log('PASS: external memberships, contact matching, hidden/free cards, ownership and financial isolation');
   console.log('PASS: association roles, shared ShowScore access, admin authorization and last-admin protection');
   await runEntryDrawRaces({ sql, container, variables });
+  await runTicketCapacityRace({ sql, container });
   report.passed = true;
   console.log('PASS: fresh migrations, activation, cancellation accounting and draw guards');
 } catch (error) {

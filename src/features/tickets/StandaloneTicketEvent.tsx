@@ -1,0 +1,10 @@
+import {useState} from 'react';
+import {ModalDialog} from '../../components/ui';
+import {billingRpc} from '../../services/billingFolio';
+import {ticketError} from './ticketService';
+import type {Locale} from '../../lib/i18n';
+export function StandaloneTicketEvent({organizationId,locale,onCreated}:{organizationId:string;locale:Locale;onCreated:(id:string)=>void}){
+ const fr=locale==='fr',t=(a:string,b:string)=>fr?a:b;
+ const [open,setOpen]=useState(false),[name,setName]=useState(''),[date,setDate]=useState(''),[location,setLocation]=useState(''),[busy,setBusy]=useState(false),[error,setError]=useState('');
+ return <><button className="secondary-button" type="button" onClick={()=>setOpen(true)}>{t('Créer un événement sans compétition','Create a non-competitive event')}</button>{open?<ModalDialog title={t('Événement autonome avec billetterie','Standalone ticketed event')} onClose={()=>{if(!busy)setOpen(false);}}><form className="stack" onSubmit={e=>{e.preventDefault();setBusy(true);setError('');void billingRpc('create_ticket_event',{p_org:organizationId,p_name:name,p_date:date,p_location:location}).then(id=>{setOpen(false);onCreated(id);}).catch(e=>setError(ticketError(e,fr))).finally(()=>setBusy(false));}}><p>{t('Une journée et un bloc avec billetterie, sans classes ni chevaux. Définissez ensuite vos billets et publiez les ventes.','One day and a ticketed block, without classes or horses. Then define your tickets and publish sales.')}</p><label>{t('Nom de l’événement','Event name')}<input required minLength={2} maxLength={150} value={name} onChange={e=>setName(e.target.value)}/></label><label>{t('Date','Date')}<input type="date" required value={date} onChange={e=>setDate(e.target.value)}/></label><label>{t('Lieu','Location')}<input maxLength={250} value={location} onChange={e=>setLocation(e.target.value)}/></label>{error?<p role="alert">{error}</p>:null}<button className="primary-button" disabled={busy||!name.trim()||!date} type="submit">{t('Créer et préparer les billets','Create and prepare tickets')}</button></form></ModalDialog>:null}</>;
+}
