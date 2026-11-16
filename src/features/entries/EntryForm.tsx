@@ -17,6 +17,7 @@ import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type N
 import { entryClassLabel, entryPatternLabel } from "./entryDisplay";
 import { EntryBackNumberField, type EntryBackNumberSelection } from "../backNumbers/EntryBackNumberField";
 import { useHouseClassBlocks } from "./useHouseClassBlocks";
+import {useStabledHorses} from './useStabledHorses';
 import {HouseEligibilityPanel} from './HouseEligibilityPanel';
 
 type ClassEvaluation = {
@@ -151,13 +152,15 @@ function EntryForm({
   const effectiveActiveDayId = activeDayId && selectedShowDays.some((day) => day.id === activeDayId) ? activeDayId : selectedShowDays[0]?.id || "unscheduled";
   const activeDay = findById(selectedShowDays, effectiveActiveDayId) ?? null;
   const activeDayIndex = Math.max(0, selectedShowDays.findIndex((day) => day.id === effectiveActiveDayId));
-  const visibleHorses = useMemo(() => {
+  const directoryHorses = useMemo(() => {
     if (!createdHorse || horses.some((horse) => horse.id === createdHorse.id)) {
       return horses;
     }
 
     return [createdHorse, ...horses];
   }, [createdHorse, horses]);
+  const stabled=useStabledHorses(selectedShowId,directoryHorses);
+  const visibleHorses=stabled.horses;
   const selectedHorse = findById(visibleHorses, horseId) ?? null;
   const selectedOwnerContact = findById(contacts, selectedHorse?.primary_owner_contact_id) ?? null;
   const selectedRiderContact = findById(contacts, riderContactId) ?? null;
@@ -490,7 +493,7 @@ function EntryForm({
             <span className="contact-picker-label">{uiText(locale, "Cheval", "Horse")}</span>
             <div className="contact-picker-row">
               <SearchSelect
-                disabled={!visibleHorses.length}
+                disabled={stabled.loading||!visibleHorses.length}
                 items={visibleHorses.map((horse) => {
                   const compliance = healthComplianceByHorseId.get(horse.id);
 
@@ -516,7 +519,7 @@ function EntryForm({
             </div>
           </div>
           {creatingHorse ? (
-            <ModalDialog className="horse-form-modal" description={uiText(locale, "Le cheval sera sélectionné dans l'inscription après sa création.", "The horse will be selected in the entry after it is created.")} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Ajouter un cheval", "Add horse")} onClose={() => setCreatingHorse(false)}>
+            <ModalDialog className="horse-form-modal" description={uiText(locale, "Après sa création, réservez une stalle pour ce cheval au concours avant de l’inscrire.", "After creating the horse, reserve a stall for this show before entering it.")} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Ajouter un cheval", "Add horse")} onClose={() => setCreatingHorse(false)}>
               <HorseForm
                 locale={locale}
                 contacts={contacts}
@@ -531,12 +534,13 @@ function EntryForm({
                 onVerifyNrhaHorse={onVerifyNrhaHorse}
                 onCreated={(horse) => {
                   setCreatedHorse(horse);
-                  handleEligibilityTeamChange(() => setHorseId(horse.id));
+                  setSubmitMessage({tone:'info',message:uiText(locale,'Cheval créé. Réservez sa stalle pour ce concours, puis actualisez la liste.','Horse created. Reserve its stall for this show, then refresh the list.')});
                   setCreatingHorse(false);
                 }}
               />
             </ModalDialog>
           ) : null}
+          <div className="row-actions"><small>{stabled.loading?uiText(locale,'Chargement des chevaux avec stalle…','Loading horses with stalls…'):stabled.error||(!visibleHorses.length?uiText(locale,'Aucun de vos chevaux n’a de stalle réservée à ce concours.','None of your horses has a reserved stall at this show.'):uiText(locale,'Chevaux avec stalle réservée pour ce concours.','Horses with a reserved stall for this show.'))}</small><button className="text-button" type="button" disabled={stabled.loading} onClick={stabled.refresh}>{uiText(locale,'Actualiser les chevaux','Refresh horses')}</button></div>
           <div className="form-grid">
             <ContactPicker
               contacts={contacts}
@@ -902,9 +906,9 @@ function evaluateClass({
       : !programLimitReadiness.canProceed
         ? programLimitReadiness.message
         : houseClassBlocked
-          ? { tone: "error" as const, message: uiText(locale, "Le cavalier est inéligible à cette classe maison selon la liste de l’association.", "The rider is ineligible for this house class according to the association’s list.") }
+          ? { tone: "error" as const, message: uiText(locale, "Le cavalier est inéligible à cette classe maison selon les règles de l’association.", "The rider is ineligible for this house class under the association’s rules.") }
           : houseClassChecking
-            ? { tone: "info" as const, message: uiText(locale, "Vérification de la liste d’inéligibilité de l’association…", "Checking the association’s ineligibility list…") }
+            ? { tone: "info" as const, message: uiText(locale, "Vérification de l’éligibilité maison…", "Checking house class eligibility…") }
         : nrhaGate.message && !nrhaGate.canProceed && nrhaGate.message.tone === "error"
           ? nrhaGate.message
           : null;
