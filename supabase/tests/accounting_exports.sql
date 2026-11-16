@@ -5,6 +5,7 @@ do $$
 declare
  staff_user uuid:=gen_random_uuid();stranger_user uuid:=gen_random_uuid();staff_profile uuid;
  org uuid:=gen_random_uuid();show_now uuid:=gen_random_uuid();show_old uuid:=gen_random_uuid();ctx_now uuid:=gen_random_uuid();ctx_old uuid:=gen_random_uuid();
+ show_usd uuid:=gen_random_uuid();ctx_usd uuid:=gen_random_uuid();folio_usd uuid:=gen_random_uuid();charge_usd uuid;payment_usd uuid;
  payer uuid:=gen_random_uuid();customer uuid:=gen_random_uuid();product uuid:=gen_random_uuid();folio_now uuid:=gen_random_uuid();folio_old uuid:=gen_random_uuid();
  tps uuid:=gen_random_uuid();tvq uuid:=gen_random_uuid();old_tax uuid:=gen_random_uuid();charge_now uuid;charge_hsp uuid;charge_old uuid;payment_now uuid;payment_old uuid;
  request_id uuid:=gen_random_uuid();data jsonb;created jsonb;duplicate jsonb;blocked boolean;bad_kind text;
@@ -38,6 +39,13 @@ begin
  values(org,folio_old,'CAD',50,'cash',now(),staff_profile,'{}',1) returning id into payment_old;
  insert into public.billing_payment_allocations(folio_id,payment_id,charge_id,amount) values(folio_now,payment_now,charge_now,114.98),(folio_old,payment_old,charge_old,50);
 
+ -- A USD receipt must never enter a CAD journal, even within the same period.
+ insert into public.shows(id,organization_id,name,slug,start_date,end_date) values(show_usd,org,'USD show TEST',show_usd::text,current_date,current_date);
+ insert into public.billing_contexts(id,organization_id,kind,show_id,currency,config,opens_at,created_by) values(ctx_usd,org,'event',show_usd,'USD','{"name_fr":"USD show TEST","timezone":"America/Toronto","staff_roles":["admin","secretary"]}',now(),staff_profile);
+ insert into public.billing_folios(id,organization_id,billing_context_id,payer_customer_account_id,currency,public_number,created_by) values(folio_usd,org,ctx_usd,customer,'USD','ACC-USD-'||folio_usd,staff_profile);
+ insert into public.billing_charges(organization_id,folio_id,currency,source_type,source_id,product_id,category,description,quantity,unit_price,subtotal,tax_amount,beneficiary_contact_id,actor_id,authorization_snapshot) values(org,folio_usd,'USD','secretary_sale',gen_random_uuid(),product,'merch','USD receipt TEST',1,50,50,0,payer,staff_profile,'{}') returning id into charge_usd;
+ insert into public.billing_payments(organization_id,folio_id,currency,amount,method,received_at,actor_id,authorization_snapshot,processing_fee_amount) values(org,folio_usd,'USD',50,'cash',now(),staff_profile,'{}',0) returning id into payment_usd;
+ insert into public.billing_payment_allocations(folio_id,payment_id,charge_id,amount) values(folio_usd,payment_usd,charge_usd,50);
  perform set_config('request.jwt.claim.sub',stranger_user::text,true);perform set_config('request.jwt.claims',json_build_object('sub',stranger_user,'role','authenticated')::text,true);set local role authenticated;
  blocked:=false;begin perform public.preview_billing_accounting_export(ctx_now,'quickbooks_online','show_close',current_date,current_date,current_date);exception when insufficient_privilege then blocked:=true;end;
  if not blocked then raise exception 'TEST stranger previewed accounting data';end if;
@@ -66,6 +74,8 @@ begin
  blocked:=false;begin perform public.create_billing_accounting_export(ctx_now,request_id,'quickbooks_online','show_close',current_date,current_date,current_date+1);exception when others then if sqlerrm='BILLING_IDEMPOTENCY_CONFLICT' then blocked:=true;else raise;end if;end;
  if not blocked then raise exception 'TEST changed request id retry accepted';end if;
 
+ data:=public.preview_billing_accounting_export(ctx_usd,'quickbooks_online','receipts',current_date,current_date,current_date);
+ if (data->>'source_count')::integer<>1 or (data#>>'{totals,debits}')::numeric<>50 or data#>>'{context,currency}'<>'USD' then raise exception 'TEST USD receipt export mixed currencies: %',data;end if;
  data:=public.preview_billing_accounting_export(ctx_now,'quickbooks_online','receipts',current_date,current_date,current_date);
  if (data->>'source_count')::integer<>2 or jsonb_array_length(data->'journals')<>2 or (data#>>'{totals,debits}')::numeric<>164.98 or (data#>>'{totals,credits}')::numeric<>164.98 then raise exception 'TEST receipt journals wrong: %',data;end if;
  if not exists(select 1 from jsonb_array_elements(data->'reconciliation') row where row->>'origin_context_id'=ctx_old::text and (row->>'association_amount')::numeric=50) then raise exception 'TEST prior-show receipt lost its origin';end if;
