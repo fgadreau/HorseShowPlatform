@@ -8,8 +8,8 @@ import { uiText } from "../dashboard/shared";
 
 type Exclusion = { id: string; rider_contact_id: string; reason: string };
 
-export function HouseClassExclusions({ template, contacts, locale }: {
-  template: ClassTemplate; contacts: Contact[]; locale: Locale;
+export function HouseClassExclusions({ template, contacts, locale, legacyOnly=false }: {
+  template: ClassTemplate; contacts: Contact[]; locale: Locale; legacyOnly?:boolean;
 }) {
   const [rows, setRows] = useState<Exclusion[]>([]);
   const [target, setTarget] = useState("");
@@ -51,13 +51,13 @@ export function HouseClassExclusions({ template, contacts, locale }: {
   }
   const items = contacts.map(contact => ({ id: contact.id, label: contactLabel(contact) }));
   return <div className="stack">
-    <p>{uiText(locale, "Cette liste s’applique uniquement à cette classe maison récurrente et aux concours de cette association qui l’utilisent. Une exclusion reste active jusqu’à son retrait. Les inscriptions existantes ne sont pas annulées.", "This list applies only to this recurring house class and shows from this association that use it. An exclusion stays active until removed. Existing entries are not cancelled.")}</p>
+    <p>{legacyOnly?uiText(locale,'Anciennes exclusions sans saison : elles restent actives jusqu’à leur retrait. Pour les nouvelles restrictions, utilisez les listes annuelles ci-dessus.','Legacy exclusions without a season remain active until removed. Use the annual lists above for new restrictions.'):uiText(locale, "Cette liste s’applique uniquement à cette classe maison récurrente et aux concours de cette association qui l’utilisent. Une exclusion reste active jusqu’à son retrait. Les inscriptions existantes ne sont pas annulées.", "This list applies only to this recurring house class and shows from this association that use it. An exclusion stays active until removed. Existing entries are not cancelled.")}</p>
     {error ? <p role="alert">{error}</p> : null}
-    <form className="stack form-section" onSubmit={save}>
+    {!legacyOnly?<form className="stack form-section" onSubmit={save}>
       <SearchSelect items={items} placeholder={uiText(locale, "Rechercher un cavalier", "Search for a rider")} value={target} onChange={setTarget} />
       <label>{uiText(locale, "Motif interne (facultatif)", "Internal reason (optional)")}<textarea maxLength={500} value={reason} onChange={event => setReason(event.target.value)} /></label>
       <div className="row-actions"><button className="primary-button" disabled={busy || !target} type="submit">{uiText(locale, "Ajouter à la liste", "Add to list")}</button></div>
-    </form>
+    </form>:null}
     {!rows.length ? <p className="muted-line">{uiText(locale, "Aucune exclusion pour cette classe.", "No exclusions for this class.")}</p> : null}
     {rows.map(row => <article className="form-section panel-header" key={row.id}>
       <div><strong>{contactLabel(contacts.find(contact => contact.id === row.rider_contact_id))}</strong><p className="muted-line">{uiText(locale, "Cavalier", "Rider")}{row.reason ? ` · ${row.reason}` : ""}</p></div>

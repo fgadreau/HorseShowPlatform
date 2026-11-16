@@ -17,6 +17,7 @@ import { buildClassEligibilityGateForEntry, formatNrhaEligibilityMessage, type N
 import { entryClassLabel, entryPatternLabel } from "./entryDisplay";
 import { EntryBackNumberField, type EntryBackNumberSelection } from "../backNumbers/EntryBackNumberField";
 import { useHouseClassBlocks } from "./useHouseClassBlocks";
+import {HouseEligibilityPanel} from './HouseEligibilityPanel';
 
 type ClassEvaluation = {
   canSelect: boolean;
@@ -72,6 +73,7 @@ function EntryForm({
   onVerifyNrhaEligibility,
   onVerifyNrhaHorse,
   staffLateEntry,
+  canOverrideHouse = false,
   onCreated,
 }: {
   locale?: Locale;
@@ -98,6 +100,7 @@ function EntryForm({
   onVerifyGvlCogginsDocument: (input: Parameters<typeof verifyGvlCogginsDocument>[0]) => Promise<HorseHealthDocument>;
   onVerifyNrhaEligibility: (input: Parameters<typeof verifyNrhaEligibility>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaEligibility>>>;
   onVerifyNrhaHorse: (input: Parameters<typeof verifyNrhaHorse>[0]) => Promise<Awaited<ReturnType<typeof verifyNrhaHorse>>>;
+  canOverrideHouse?: boolean;
   staffLateEntry?: {
     chargeLateFee: boolean;
     lateFeePercent: number;
@@ -161,7 +164,7 @@ function EntryForm({
   const selectedPayerId = payerContactId || selectedHorse?.primary_owner_contact_id || contacts[0]?.id || "";
   const selectedPayerContact = findById(contacts, selectedPayerId) ?? null;
   const teamIsDefined = Boolean(selectedShow && selectedHorse && selectedRiderContact && selectedPayerContact);
-  const hasHouseClasses = classes.some(item => item.show_id === selectedShowId && item.class_template_id && !item.governing_body_assignments.length);
+  const hasHouseClasses = classes.some(item => item.show_id === selectedShowId && item.class_template_id && !item.governing_body_assignments.some(a=>a.code.toUpperCase()==='NRHA'));
   const houseBlocks = useHouseClassBlocks(organization?.id, selectedShowId, horseId, riderContactId, teamIsDefined && hasHouseClasses);
   const selectedHorseAgeOnJan1 = horseAgeOnJan1ForShow(selectedHorse, selectedShow);
   const selectedRiderAgeOnJan1 = riderAgeOnJan1ForShow(selectedRiderContact, selectedShow);
@@ -217,7 +220,7 @@ function EntryForm({
           selectedShow,
           staffLateEntry: Boolean(staffLateEntry),
           houseClassBlocked: houseBlocks.blocked.has(classRecord.id),
-          houseClassChecking: Boolean(classRecord.class_template_id && !classRecord.governing_body_assignments.length && (houseBlocks.loading || houseBlocks.error)),
+          houseClassChecking: Boolean(classRecord.class_template_id && !classRecord.governing_body_assignments.some(a=>a.code.toUpperCase()==='NRHA') && (houseBlocks.loading || houseBlocks.error)),
         }),
       ),
     [blocks, contactExternalIdentifiers, classes, selectedRiderContact, entries, entryReadiness.canProceed, externalCredentialIssuers, horseExternalIdentifiers, locale, nrhaResults, nrhaRiderRankings, organization, selectedHorse, selectedShow, staffLateEntry, houseBlocks.loading, houseBlocks.error, houseBlocks.blocked],
@@ -639,6 +642,7 @@ function EntryForm({
           </div>
           <NrhaBulkSummaryLine locale={locale} summary={nrhaBulkSummary} />
           {houseBlocks.error ? <div role="alert"><p>{houseBlocks.error}</p><button className="ghost-button" type="button" onClick={houseBlocks.retry}>{uiText(locale, "Réessayer la vérification maison", "Retry house class checks")}</button></div> : null}
+          <HouseEligibilityPanel rows={houseBlocks.rows} classes={classes} horse={horseId} rider={riderContactId} locale={locale} canOverride={canOverrideHouse} onRefresh={houseBlocks.retry}/>
           {nrhaBulkSummary?.status === "error" ? <button className="ghost-button" type="button" onClick={() => setNrhaRetry(value => value + 1)}>{uiText(locale, "Réessayer les vérifications", "Retry checks")}</button> : null}
           <div className="entry-showbill-list">
             {warmupLoadError ? <p role="alert">{warmupLoadError}</p> : null}

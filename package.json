@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "test:presentation-draw:browser": "node scripts/presentation-draw.browser.mjs",
+    "test:house-eligibility": "node --test scripts/house-eligibility.test.mjs",
+    "test:house-eligibility:browser": "node scripts/house-eligibility.browser.mjs",
     "test:nomination-csv": "node --test scripts/presentation-nomination-csv.test.mjs",
     "test:membership-import:browser": "node scripts/membership-import.browser.mjs",
     "test:membership-csv": "node --test scripts/membership-csv.test.mjs",

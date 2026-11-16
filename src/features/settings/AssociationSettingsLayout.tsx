@@ -5,7 +5,7 @@ import type { Locale } from '../../lib/i18n';
 import './associationSettings.css';
 
 type Category = 'association' | 'members' | 'rules' | 'account';
-export type SettingsSectionId = 'identity' | 'team' | 'memberships' | 'membership-billing' | 'membership-import' | 'products' | 'disciplines' | 'credentials' | 'health' | 'profile';
+export type SettingsSectionId = 'identity' | 'team' | 'memberships' | 'membership-billing' | 'membership-import' | 'products' | 'disciplines' | 'credentials' | 'health' | 'profile' | 'house-ineligibility';
 const categoryLabels = {
   association: ['Association', 'Association'], members: ['Membres et ventes', 'Members and sales'],
   rules: ['Règles et conformité', 'Rules and compliance'], account: ['Mon compte', 'My account'],
@@ -20,12 +20,14 @@ function sections(fr: boolean) {
     { id: 'membership-billing', category: 'members', icon: CreditCard, title: text('Facturation des adhésions', 'Membership billing'), description: text('Relier les cartes de membre aux comptes et à la facturation.', 'Connect memberships to accounts and billing.') },
     { id: 'products', category: 'members', icon: ShoppingBag, title: text('Produits et extras', 'Products and extras'), description: text('Catalogue des ventes manuelles et des extras de réservation.', 'Catalog for manual sales and reservation extras.') },
     { id: 'disciplines', category: 'rules', icon: SlidersHorizontal, title: text('Disciplines et admissibilité', 'Disciplines and eligibility'), description: text('Répertoires, organismes sanctionneurs, adhésions et assurances exigées.', 'Directories, sanctioning bodies, required memberships and insurance.') },
+    { id: 'house-ineligibility', category: 'rules', icon: ShieldCheck, title: text('Listes d’inéligibilité', 'Ineligibility lists'), description: text('Listes annuelles de cavaliers, import CSV et correspondances.', 'Annual rider lists, CSV import and matching.') },
     { id: 'credentials', category: 'rules', icon: ShieldCheck, title: text('Numéros externes obligatoires', 'Required external numbers'), description: text('Identifiants requis dans les fiches des cavaliers de l’association.', 'Required identifiers in association rider records.') },
     { id: 'health', category: 'rules', icon: HeartPulse, title: text('Santé et dossards', 'Health and back numbers'), description: text('Documents sanitaires, validité, contrôles et attribution des dossards.', 'Health documents, validity, checks and back number assignment.') },
     { id: 'profile', category: 'account', icon: UserRound, title: text('Profil connecté', 'Signed-in profile'), description: text('Informations du compte actuellement connecté et identifiant du profil.', 'Current signed-in account information and profile identifier.') },
   ] as const;
 }
 const searchKeywords: Record<SettingsSectionId, string> = {
+  'house-ineligibility': 'maison cavalier debutant gains liste ineligible ineligibilite csv import annee saison house rider eligibility year season',
   identity: 'nom contact courriel email telephone adresse address province pays country devise currency TPS TVQ GST QST HST taxes facturation billing',
   team: 'administrateur admin secretaire secretary scribe annonceur announcer permissions acces access equipe team roles showscore',
   memberships: 'adhesion membre membership carte tarif prix price saison season validite expiration',

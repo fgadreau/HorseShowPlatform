@@ -115,6 +115,7 @@ function EntriesView({
       {creatingEntry ? (
         <ModalDialog className="entry-form-modal" description={uiText(locale, "Brouillon maintenant, paiement plus tard.", "Draft now, checkout later.")} eyebrow={uiText(locale, "Inscriptions", "Entries")} title={uiText(locale, "Nouvelle inscription", "New entry")} onClose={() => setCreatingEntry(false)}>
           <EntryForm
+            canOverrideHouse
             locale={locale}
             blocks={blocks}
             contacts={contacts}
