@@ -53,6 +53,8 @@ try {
   sql(readFileSync('supabase/tests/presentation_draw.sql', 'utf8'));
   sql(readFileSync('supabase/tests/annual_house_eligibility.sql', 'utf8'));
   sql(readFileSync('supabase/tests/event_ticketing.sql', 'utf8'));
+  sql(readFileSync('supabase/tests/e2e_robot.sql', 'utf8'));
+  console.log('PASS: opt-in E2E billing adoption and token-scoped immutable fixture cleanup');
   console.log('PASS: ticket prices/taxes, capacities, purchases, payment allocations, cancellation credits and privacy');
   console.log('PASS: annual house lists, rider age, membership, NRHA reference and audited overrides');
   console.log('PASS: presentation draw snapshots, scoped programs, nominators and unique horse/program nominations');

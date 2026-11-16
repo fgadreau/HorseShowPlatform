@@ -36,6 +36,23 @@ Les branches `robot/**` exécutent uniquement les deux volets isolés. Le parcou
 réel demeure réservé à `preprod`, conformément à la protection de cet
 environnement GitHub ; les branches de maintenance ne reçoivent pas ses secrets.
 
+### Fixture financière du parcours réel
+
+Le show jetable adopte désormais le moteur de comptes avant la création des
+inscriptions. Le serveur enregistre un périmètre associé au compte `e2e+...@example.test`,
+au slug exact de son association et à un jeton de nettoyage conservé seulement
+dans le processus Node. Cette préparation ne réactive pas l'ancienne facturation.
+
+Le mécanisme serveur est désactivé par défaut (`e2e_robot_settings.enabled=false`)
+et inaccessible aux rôles public, anonyme et authentifié. Il est activé explicitement
+sur PREPROD seulement. Les appels exigent le rôle serveur, le compte fictif exact,
+son association et son jeton ; aucun autre membre n'est accepté dans ce périmètre.
+Le nettoyage suit les dépendances enfants de cette association, conserve les
+parents globaux et restaure les modes des triggers sous les verrous de transaction.
+Il refuse tout périmètre contenant un paiement, un document financier ou une
+tentative Stripe : ce robot ne doit pas effacer une activité financière réelle.
+Les tests SQL vérifient ces refus et la restauration des protections.
+
 Le formulaire contact démarre sur l'import NRHA. Le robot choisit explicitement
 « Création manuelle » avant de remplir le prénom et le nom. Le deuxième prénom
 n'est plus saisi manuellement; les valeurs existantes et importées sont conservées.
